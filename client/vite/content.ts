@@ -239,6 +239,16 @@ export function loadClientContent(root: string): ClientContent {
   const vocations = Array.isArray(vocs)
     ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
     : [];
+  // The start_kit of each vocation (docs/02 "Equipo inicial"), for the creation screen.
+  const startKits: Record<string, { item: string; count: number }[]> = {};
+  for (const v of Array.isArray(vocs) ? vocs : []) {
+    if (!isObj(v) || typeof v["id"] !== "string" || !Array.isArray(v["start_kit"])) continue;
+    startKits[v["id"]] = v["start_kit"].flatMap((e) =>
+      isObj(e) && typeof e["item"] === "string"
+        ? [{ item: e["item"], count: num(e["count"], 1) }]
+        : [],
+    );
+  }
   let rawSpells: unknown;
   try {
     rawSpells = readYaml(join(root, "data", "spells.yaml"));
@@ -318,6 +328,7 @@ export function loadClientContent(root: string): ClientContent {
     ...(lookOptions ? { lookOptions } : {}),
     cosmetics: loadCosmetics(root),
     vocations,
+    startKits,
     spells,
     recipes,
     ...(forge ? { forge } : {}),

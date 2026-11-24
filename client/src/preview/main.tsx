@@ -337,7 +337,7 @@ function Preview(props: { game: Game }): JSX.Element {
 
 const root = document.getElementById("app");
 if (root) {
-  if (scene === "login" || scene === "characters") {
+  if (scene === "login" || scene === "characters" || scene === "createfirst") {
     render(<App content={content} t={t} locale={lang} />, root);
   } else {
     const defs: ItemDef[] = Object.values(content.items);

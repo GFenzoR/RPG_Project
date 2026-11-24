@@ -266,7 +266,7 @@ func (r *Repo) CreateCharacter(_ context.Context, c store.NewCharacter, maxPerAc
 		return store.Character{}, store.ErrNameTaken
 	}
 	r.names[key] = true
-	ch := store.Character{ID: r.id(), Name: c.Name, Vocation: c.Vocation, Level: 1}
+	ch := store.Character{ID: r.id(), Name: c.Name, Vocation: c.Vocation, Level: 1, Look: c.Look}
 	r.characters[c.AccountID] = append(r.characters[c.AccountID], ch)
 	r.looks[ch.ID] = c.Look
 	return ch, nil

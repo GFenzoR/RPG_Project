@@ -1,7 +1,7 @@
 # Guided tutorial of Puerto (T4.2, data/tutorial.yaml). Original texts.
 tutorial.step.first_steps: "You wake up in the Temple of the Lantern, in Lanternby. Walk {count} steps with the arrow keys, WASD or by clicking on the ground."
 tutorial.step.meet_priestess: "The temple's priestess welcomes those who come from the sea. Right-click her to talk."
-tutorial.step.open_backpack: "You carry a backpack. Open it with a double click on it in your equipment, or right-click it and pick «Open». What does not fit in it goes to your pockets, the row under your figure."
+tutorial.step.open_backpack: "Your vocation's weapon is already in your hand and you wear plain clothes. Your backpack holds biscuits and a poultice to heal yourself. Open it with a double click on it in your equipment, or right-click it and pick «Open». What does not fit in it goes to your pockets, the row under your figure."
 tutorial.step.pick_target: "Rats and gulls prowl the harbour, south-east of here. Pick a creature with a right click or from the battle list."
 tutorial.step.first_spell: "Your spells are already on the bar below: the first one on F1. With your target chosen, press F1 or click that slot."
 tutorial.step.first_victory: "Defeat your target. If you get hurt, step back and wait to recover."

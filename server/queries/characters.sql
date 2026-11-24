@@ -1,5 +1,5 @@
 -- name: ListCharactersByAccount :many
-SELECT id, name, vocation, level
+SELECT id, name, vocation, level, look_sex, look_body, look_skin, look_hair, look_hair_color, look_beard
 FROM characters
 WHERE account_id = sqlc.arg(account_id)
 ORDER BY id;

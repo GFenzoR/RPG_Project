@@ -130,6 +130,8 @@ type Accounts interface {
 	Authenticate(ctx context.Context, token string) (int64, error)
 	Logout(ctx context.Context, token string) error
 	Characters(ctx context.Context, accountID int64) ([]store.Character, error)
+	// MaxCharacters is how many characters an account may have (the list shows it).
+	MaxCharacters() int
 	CreateCharacter(ctx context.Context, accountID int64, name, vocation string, look *content.Look) (store.Character, error)
 	IssuePlayToken(ctx context.Context, accountID, characterID int64) (auth.Token, error)
 	// Lote 17: "sign out everywhere" and a password change from the game.
@@ -538,10 +540,23 @@ type characterJSON struct {
 	Name     string `json:"name"`
 	Vocation string `json:"vocation"`
 	Level    int    `json:"level"`
+	// Look is the saved body, for the list's preview; absent while the game has not picked
+	// one (a character created without a look, before its first login).
+	Look *lookJSON `json:"look,omitempty"`
 }
 
 func toJSON(c store.Character) characterJSON {
-	return characterJSON{ID: c.ID, Name: c.Name, Vocation: c.Vocation, Level: c.Level}
+	out := characterJSON{ID: c.ID, Name: c.Name, Vocation: c.Vocation, Level: c.Level}
+	if l := c.Look; l.Body != "" {
+		out.Look = &lookJSON{Sex: l.Sex, Body: l.Body, Skin: l.Skin, Hair: l.Hair, HairColor: l.HairColor, Beard: l.Beard}
+	}
+	return out
+}
+
+// charactersJSON is GET /api/characters: the characters and how many the account may have.
+type charactersJSON struct {
+	Characters    []characterJSON `json:"characters"`
+	MaxCharacters int             `json:"max_characters"`
 }
 
 func (a *api) listCharacters(w http.ResponseWriter, r *http.Request, accountID int64) {
@@ -554,7 +569,7 @@ func (a *api) listCharacters(w http.ResponseWriter, r *http.Request, accountID i
 	for i, c := range cs {
 		out[i] = toJSON(c)
 	}
-	writeJSON(w, http.StatusOK, map[string][]characterJSON{"characters": out})
+	writeJSON(w, http.StatusOK, charactersJSON{Characters: out, MaxCharacters: a.cfg.Auth.MaxCharacters()})
 }
 
 type createCharacterRequest struct {

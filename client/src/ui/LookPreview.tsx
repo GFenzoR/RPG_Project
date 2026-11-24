@@ -37,6 +37,8 @@ export function LookPreview(props: {
   testid?: string;
   /** Whole screen pixels per sprite pixel (default 4). */
   scale?: number;
+  /** Standing still, facing south, without the turn buttons (the character list). */
+  still?: boolean;
 }): JSX.Element {
   const { t } = props;
   const scale = props.scale ?? SCALE;
@@ -66,7 +68,7 @@ export function LookPreview(props: {
 
   // The walk in place: one frame every WALK_FRAME_MS, none with reduced motion.
   useEffect(() => {
-    if (reducedMotion()) return undefined;
+    if (reducedMotion() || props.still) return undefined;
     const timer = setInterval(() => setTick((n) => n + 1), WALK_FRAME_MS);
     return () => clearInterval(timer);
   }, []);
@@ -75,7 +77,7 @@ export function LookPreview(props: {
     const el = canvas.current;
     const ctx = el?.getContext("2d");
     if (!el || !ctx || !atlas || !props.tables) return;
-    const still = reducedMotion();
+    const still = reducedMotion() || props.still === true;
     const action = still ? "idle" : "walk";
     const frame = tick % clipFrames(atlas, props.look, action);
     const draws = previewDraws(atlas, props.look, worn, dir, action, frame, props.tables);
@@ -109,15 +111,17 @@ export function LookPreview(props: {
       data-dir={dir}
       data-atlas={atlas ? "ready" : failed ? "failed" : "loading"}
     >
-      <button
-        type="button"
-        class="look-turn"
-        aria-label={t("client.look.turn_left")}
-        data-testid="look-turn-left"
-        onClick={() => setDir((d) => turn(d, -1))}
-      >
-        ‹
-      </button>
+      {!props.still && (
+        <button
+          type="button"
+          class="look-turn"
+          aria-label={t("client.look.turn_left")}
+          data-testid="look-turn-left"
+          onClick={() => setDir((d) => turn(d, -1))}
+        >
+          ‹
+        </button>
+      )}
       <canvas
         ref={canvas}
         width={PREVIEW_VIEW.w * scale}
@@ -126,15 +130,17 @@ export function LookPreview(props: {
         role="img"
         aria-label={t("client.look.preview")}
       />
-      <button
-        type="button"
-        class="look-turn"
-        aria-label={t("client.look.turn_right")}
-        data-testid="look-turn-right"
-        onClick={() => setDir((d) => turn(d, 1))}
-      >
-        ›
-      </button>
+      {!props.still && (
+        <button
+          type="button"
+          class="look-turn"
+          aria-label={t("client.look.turn_right")}
+          data-testid="look-turn-right"
+          onClick={() => setDir((d) => turn(d, 1))}
+        >
+          ›
+        </button>
+      )}
     </div>
   );
 }

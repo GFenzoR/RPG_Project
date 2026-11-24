@@ -434,17 +434,23 @@ func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryIt
 }
 
 const listCharactersByAccount = `-- name: ListCharactersByAccount :many
-SELECT id, name, vocation, level
+SELECT id, name, vocation, level, look_sex, look_body, look_skin, look_hair, look_hair_color, look_beard
 FROM characters
 WHERE account_id = $1
 ORDER BY id
 `
 
 type ListCharactersByAccountRow struct {
-	ID       int64
-	Name     string
-	Vocation string
-	Level    int32
+	ID            int64
+	Name          string
+	Vocation      string
+	Level         int32
+	LookSex       string
+	LookBody      string
+	LookSkin      string
+	LookHair      string
+	LookHairColor string
+	LookBeard     string
 }
 
 func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error) {
@@ -461,6 +467,12 @@ func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) 
 			&i.Name,
 			&i.Vocation,
 			&i.Level,
+			&i.LookSex,
+			&i.LookBody,
+			&i.LookSkin,
+			&i.LookHair,
+			&i.LookHairColor,
+			&i.LookBeard,
 		); err != nil {
 			return nil, err
 		}

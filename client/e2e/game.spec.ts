@@ -896,7 +896,21 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
   errors.length = 0; // the 401 of opening the page without a session cookie
 
-  // The creation form offers the four vocations; create the druid there.
+  // docs/02 "Cuentas": with a character the list comes first, with "Crear personaje nuevo";
+  // the form has "Volver" back to it.
+  const chars = page.getByTestId("characters");
+  await expect(chars).toHaveAttribute("data-view", "list");
+  await expect(chars.getByText("Montaraz · Nivel 1")).toBeVisible();
+  await expect(page.getByTestId("create-character")).toHaveCount(0);
+  await shot(page, "18b-characters-list");
+  await page.getByTestId("new-character").click();
+  await expect(page.getByTestId("create-back")).toBeVisible();
+  await page.getByTestId("create-back").click();
+  await expect(chars).toHaveAttribute("data-view", "list");
+  await page.getByTestId("new-character").click();
+
+  // The creation form offers the four vocations, each with its style and its starting gear
+  // (docs/02 "Equipo inicial"); create the druid there.
   const form = page.getByTestId("create-character");
   const select = form.getByLabel("Vocación");
   await expect(select.locator("option")).toHaveText([
@@ -907,6 +921,10 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   ]);
   await form.getByLabel("Nombre").fill(druidName);
   await select.selectOption({ label: "Druida" });
+  await expect(form.getByTestId("vocation-style")).toHaveText(
+    "Cura a sus compañeros a distancia y castiga con hielo y naturaleza.",
+  );
+  await expect(form.getByTestId("vocation-kit")).toContainText("vara de retoño");
   // docs/02 "Apariencia": a look picked on the form, with the live figure beside it. The
   // druid is a woman (the owner, 2026-11-20): "Mujer" is the first picker.
   const druidLook = {
@@ -928,8 +946,13 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   await expect(pickers.locator('[data-look="sex:female"]')).toHaveText("Mujer");
   await shot(page, "19-create-druid");
   await form.getByRole("button", { name: "Crear personaje" }).click();
+  // Back to the list, with the new character marked and its figure.
   const list = page.getByTestId("characters");
+  await expect(list).toHaveAttribute("data-view", "list");
   await expect(list.getByText("Druida · Nivel 1")).toBeVisible();
+  const druidRow = list.locator("li[data-created]");
+  await expect(druidRow).toContainText(druidName);
+  await expect(druidRow.getByTestId("character-look")).toBeVisible();
   await expect(list.getByText("Montaraz · Nivel 1")).toBeVisible();
 
   // Play the druid: its spells fill the bar by level.

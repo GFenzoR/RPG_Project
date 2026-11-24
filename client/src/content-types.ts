@@ -401,6 +401,11 @@ export interface ClientContent {
   cosmetics?: CosmeticDef[];
   /** Vocation IDs a new character can pick (data/vocations.yaml, in file order). */
   vocations: string[];
+  /**
+   * Each vocation's start_kit (data/vocations.yaml, item ids): the creation screen shows
+   * the class's own pieces. Optional so fixtures can leave it out (then no kit line).
+   */
+  startKits?: Record<string, { item: string; count: number }[]>;
   /** data/spells.yaml in file order. */
   spells: SpellDef[];
   /** data/recipes.yaml in file order (T3.4). */

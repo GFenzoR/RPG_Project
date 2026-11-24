@@ -328,6 +328,8 @@ const SCENES = [
   "death",
   "login",
   "characters",
+  // docs/02 "Cuentas": an account without characters goes straight to the form.
+  "createfirst",
   "appearance",
 ];
 
@@ -343,12 +345,42 @@ try {
           if (url.pathname === "/api/characters" && scene === "characters")
             return route.fulfill({
               json: {
+                // At the limit: "Crear personaje nuevo" is disabled with its reason.
+                max_characters: 2,
                 characters: [
-                  { id: 1, name: "Aldric Varn", vocation: "guardian", level: 15 },
-                  { id: 2, name: "Brisa Molina", vocation: "ranger", level: 9 },
+                  {
+                    id: 1,
+                    name: "Aldric Varn",
+                    vocation: "guardian",
+                    level: 15,
+                    look: {
+                      sex: "male",
+                      body: "sturdy",
+                      skin: "tan",
+                      hair: "short",
+                      hair_color: "brown",
+                      beard: "full",
+                    },
+                  },
+                  {
+                    id: 2,
+                    name: "Brisa Molina",
+                    vocation: "ranger",
+                    level: 9,
+                    look: {
+                      sex: "female",
+                      body: "slender",
+                      skin: "olive",
+                      hair: "long",
+                      hair_color: "red",
+                      beard: "none",
+                    },
+                  },
                 ],
               },
             });
+          if (url.pathname === "/api/characters" && scene === "createfirst")
+            return route.fulfill({ json: { characters: [], max_characters: 10 } });
           if (url.pathname === "/api/auth/config") return route.fulfill({ json: {} });
           return route.fulfill({ status: 401, json: { error: "unauthorized" } });
         }
@@ -395,7 +427,8 @@ try {
       // Let the open animations end (and the icons arrive).
       await page.waitForTimeout(700);
       // docs/02 "Apariencia": the live figure walks in place; the shot waits for the atlas.
-      if (scene === "characters" || scene === "appearance") await page.waitForTimeout(600);
+      if (scene === "characters" || scene === "createfirst" || scene === "appearance")
+        await page.waitForTimeout(600);
       // Phones and tablets: the inventory and quest log scenes show their tab.
       if (
         INVENTORY_TAB.includes(scene) ||

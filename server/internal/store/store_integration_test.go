@@ -108,14 +108,16 @@ func TestCharacters(t *testing.T) {
 	if _, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: 999, Name: "Ghost", Vocation: "guardian", Health: 1}, 2); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("unknown account: %v", err)
 	}
-	if _, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: a, Name: "Old Tom", Vocation: "arcanist", Health: 1}, 2); err != nil {
+	if _, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: a, Name: "Old Tom", Vocation: "arcanist", Health: 1,
+		Look: store.Look{Sex: "male", Body: "human", Hair: "short"}}, 2); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.CreateCharacter(ctx, store.NewCharacter{AccountID: a, Name: "Third", Vocation: "guardian", Health: 1}, 2); !errors.Is(err, store.ErrCharacterLimit) {
 		t.Fatalf("limit: %v", err)
 	}
 	list, err := st.ListCharacters(ctx, a)
-	if err != nil || len(list) != 2 || list[0].Name != "Mira" || list[1].Vocation != "arcanist" {
+	if err != nil || len(list) != 2 || list[0].Name != "Mira" || list[1].Vocation != "arcanist" ||
+		list[1].Look != (store.Look{Sex: "male", Body: "human", Hair: "short"}) || list[0].Look != (store.Look{}) { // the list's preview
 		t.Fatalf("ListCharacters = %+v, %v", list, err)
 	}
 	if empty, err := st.ListCharacters(ctx, b); err != nil || empty == nil || len(empty) != 0 {

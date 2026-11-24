@@ -10,7 +10,9 @@ import type { GameUi } from "../game.ts";
 import type { AudioEngine } from "../audio/engine.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, accountApi, api } from "../net/api.ts";
-import type { Character } from "../net/api.ts";
+import type { Character, LookJSON } from "../net/api.ts";
+import { canCreate, canGoBack, firstView, kitLabel, ownKit } from "../state/characters.ts";
+import type { CharactersView, KitEntry } from "../state/characters.ts";
 import { ServerPicker } from "./ServerPicker.tsx";
 import { AccountSecurity, ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
 import { loadLastEmail, saveLastEmail } from "../state/last-email.ts";
@@ -23,7 +25,7 @@ import { LookPreview } from "./LookPreview.tsx";
 import { randomLook, startingLook } from "../state/look.ts";
 import { dressPlayer } from "../render/look.ts";
 import { outfitFor } from "../render/cosmetics.ts";
-import type { Look } from "@rpg/renderer/look";
+import type { Look, Worn } from "@rpg/renderer/look";
 
 type Screen =
   | { name: "loading" }
@@ -269,10 +271,15 @@ function Characters(props: {
 }): JSX.Element {
   const { t, content } = props;
   const [list, setList] = useState<Character[] | undefined>(undefined);
+  const [max, setMax] = useState(0);
+  // docs/02 "Cuentas" (owner, 2026-11-23): no characters → the form; else the list first.
+  const [view, setView] = useState<CharactersView>("list");
+  // The character just created: the list marks it.
+  const [created, setCreated] = useState<number | undefined>(undefined);
   const [name, setName] = useState("");
   const [vocation, setVocation] = useState(content.vocations[0] ?? "");
-  // The look (docs/02 "Apariencia"): it starts from the default outfit's body, and a new
-  // character wears the default outfit's clothes (it starts with no equipment).
+  // The look (docs/02 "Apariencia"): it starts from the default outfit's body, and the
+  // figure wears the default outfit's clothes (it shows the body, not the kit).
   const lookOptions = content.lookOptions;
   const plain = outfitFor(undefined, content);
   const [look, setLook] = useState<Look | undefined>(() =>
@@ -289,7 +296,11 @@ function Characters(props: {
   };
 
   useEffect(() => {
-    api.characters().then(setList, fail);
+    api.characterList().then((r) => {
+      setList(r.characters);
+      setMax(r.maxCharacters);
+      setView(firstView(r.characters.length));
+    }, fail);
   }, []);
 
   const play = async (c: Character): Promise<void> => {
@@ -303,14 +314,18 @@ function Characters(props: {
     }
   };
 
+  // After creating, back to the list with the new character marked: the player sees it
+  // there and presses "Jugar" (docs/02 "Cuentas").
   const createCharacter = async (e: Event): Promise<void> => {
     e.preventDefault();
     setBusy(true);
     setError(undefined);
     try {
       const c = await api.createCharacter(name.trim(), vocation, look);
-      setList((l) => [...(l ?? []), c]);
+      setList((l) => [...(l ?? []), look ? { ...c, look: lookJSON(look) } : c]);
+      setCreated(c.id);
       setName("");
+      setView("list");
     } catch (err) {
       fail(err);
     }
@@ -326,9 +341,13 @@ function Characters(props: {
     props.onLoggedOut();
   };
 
+  const count = list?.length ?? 0;
+  const canMake = canCreate(count, max);
+  const creating = list !== undefined && view === "create";
+
   return (
-    <div class="panel wide" data-testid="characters">
-      <h1>{t("client.characters.title")}</h1>
+    <div class="panel wide" data-testid="characters" data-view={list ? view : "loading"}>
+      <h1>{t(creating ? "client.characters.create_title" : "client.characters.title")}</h1>
       <VerifyNotice t={t} lang={props.lang} />
       {props.notice && (
         <p class="notice" role="status">
@@ -337,79 +356,204 @@ function Characters(props: {
       )}
       {list === undefined ? (
         <p>{t("client.loading")}</p>
-      ) : list.length === 0 ? (
-        <p>{t("client.characters.empty")}</p>
-      ) : (
-        <ul class="characters">
-          {list.map((c) => (
-            <li key={c.id}>
-              <span class="name">{c.name}</span>
-              <span class="meta">
-                {t(`vocation.${c.vocation}.name`)} ·{" "}
-                {t("client.characters.level", { level: c.level })}
-              </span>
-              <button type="button" disabled={busy} onClick={() => void play(c)}>
-                {t("client.characters.play")}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <form data-testid="create-character" onSubmit={(e) => void createCharacter(e)}>
-        <h2>{t("client.characters.create_title")}</h2>
-        <label>
-          {t("client.characters.name")}
-          <input
-            name="name"
-            required
-            minLength={3}
-            maxLength={20}
-            value={name}
-            onInput={(e) => setName(e.currentTarget.value)}
+      ) : !creating ? (
+        <>
+          <CharacterList
+            t={t}
+            content={content}
+            list={list}
+            created={created}
+            busy={busy}
+            clothes={clothes}
+            onPlay={(c) => void play(c)}
           />
-          <small>{t("client.characters.name_hint")}</small>
-        </label>
-        <label>
-          {t("client.characters.vocation")}
-          <select
-            name="vocation"
-            value={vocation}
-            onChange={(e) => setVocation(e.currentTarget.value)}
-          >
-            {content.vocations.map((v) => (
-              <option key={v} value={v}>
-                {t(`vocation.${v}.name`)}
-              </option>
-            ))}
-          </select>
-        </label>
-        {lookOptions && look && (
-          <div class="create-look" data-testid="create-look">
-            <h3>{t("client.characters.look")}</h3>
-            <LookPreview t={t} look={look} worn={clothes} tables={content.looks} />
-            <LookPickers
-              t={t}
-              options={lookOptions}
-              tables={content.looks}
-              look={look}
-              onChange={setLook}
-              onRandom={() => setLook(randomLook(lookOptions, Math.random))}
-            />
+          <div class="characters-new">
+            <button
+              type="button"
+              data-testid="new-character"
+              disabled={busy || !canMake}
+              aria-describedby={canMake ? undefined : "characters-limit"}
+              onClick={() => {
+                setError(undefined);
+                setView("create");
+              }}
+            >
+              {t("client.characters.new")}
+            </button>
+            {!canMake && (
+              <small id="characters-limit" data-testid="characters-limit">
+                {t("client.characters.limit", { max })}
+              </small>
+            )}
           </div>
-        )}
-        <button type="submit" disabled={busy}>
-          {t("client.characters.create")}
-        </button>
-      </form>
+        </>
+      ) : (
+        <form data-testid="create-character" onSubmit={(e) => void createCharacter(e)}>
+          {canGoBack(count) && (
+            <button
+              type="button"
+              class="link back"
+              data-testid="create-back"
+              onClick={() => {
+                setError(undefined);
+                setView("list");
+              }}
+            >
+              {t("client.characters.back")}
+            </button>
+          )}
+          {count === 0 && <p class="hint">{t("client.characters.first")}</p>}
+          <label>
+            {t("client.characters.name")}
+            <input
+              name="name"
+              required
+              minLength={3}
+              maxLength={20}
+              value={name}
+              onInput={(e) => setName(e.currentTarget.value)}
+            />
+            <small>{t("client.characters.name_hint")}</small>
+          </label>
+          <label>
+            {t("client.characters.vocation")}
+            <select
+              name="vocation"
+              value={vocation}
+              onChange={(e) => setVocation(e.currentTarget.value)}
+            >
+              {content.vocations.map((v) => (
+                <option key={v} value={v}>
+                  {t(`vocation.${v}.name`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <VocationInfo t={t} vocation={vocation} kits={content.startKits} />
+          {lookOptions && look && (
+            <div class="create-look" data-testid="create-look">
+              <h3>{t("client.characters.look")}</h3>
+              <LookPreview t={t} look={look} worn={clothes} tables={content.looks} />
+              <LookPickers
+                t={t}
+                options={lookOptions}
+                tables={content.looks}
+                look={look}
+                onChange={setLook}
+                onRandom={() => setLook(randomLook(lookOptions, Math.random))}
+              />
+            </div>
+          )}
+          <button type="submit" disabled={busy || !canMake}>
+            {t("client.characters.create")}
+          </button>
+        </form>
+      )}
       {error && (
         <p class="error" role="alert">
           {error}
         </p>
       )}
-      <AccountSecurity t={t} onSignedOut={props.onLoggedOut} />
+      {!creating && <AccountSecurity t={t} onSignedOut={props.onLoggedOut} />}
       <button type="button" class="link" onClick={() => void logout()}>
         {t("client.characters.logout")}
       </button>
+    </div>
+  );
+}
+
+/** A look as the HTTP API sends it, from the one the form chose. */
+function lookJSON(l: Look): LookJSON {
+  return {
+    sex: l.sex,
+    body: l.body,
+    skin: l.skin,
+    hair: l.hair,
+    hair_color: l.hairColor,
+    beard: l.beard,
+  };
+}
+
+/**
+ * The account's characters (docs/02 "Cuentas"): name, vocation, level, the saved figure
+ * when there is one, and "Jugar" for each. `created` is the one just made: marked.
+ */
+export function CharacterList(props: {
+  t: Translate;
+  content: ClientContent;
+  list: Character[];
+  created: number | undefined;
+  busy: boolean;
+  clothes: Worn;
+  onPlay(c: Character): void;
+}): JSX.Element {
+  const { t } = props;
+  if (props.list.length === 0) return <p>{t("client.characters.empty")}</p>;
+  return (
+    <ul class="characters" data-testid="character-list">
+      {props.list.map((c) => (
+        <li
+          key={c.id}
+          data-character={c.id}
+          data-created={c.id === props.created ? "" : undefined}
+          aria-current={c.id === props.created ? "true" : undefined}
+        >
+          {c.look && props.content.looks && (
+            <LookPreview
+              t={t}
+              look={{
+                sex: c.look.sex,
+                body: c.look.body,
+                skin: c.look.skin,
+                hair: c.look.hair,
+                hairColor: c.look.hair_color,
+                beard: c.look.beard,
+              }}
+              worn={props.clothes}
+              tables={props.content.looks}
+              scale={1}
+              still
+              testid="character-look"
+            />
+          )}
+          <span class="name">{c.name}</span>
+          <span class="meta">
+            {t(`vocation.${c.vocation}.name`)} · {t("client.characters.level", { level: c.level })}
+          </span>
+          <button type="button" disabled={props.busy} onClick={() => props.onPlay(c)}>
+            {t("client.characters.play")}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * One short line of the vocation's style and one of what it starts with (docs/02
+ * "Equipo inicial"): its own pieces by name; the clothes, food and poultice everyone gets
+ * are said once by the text.
+ */
+export function VocationInfo(props: {
+  t: Translate;
+  vocation: string;
+  kits: Record<string, KitEntry[]> | undefined;
+}): JSX.Element {
+  const { t, vocation } = props;
+  const own = props.kits ? ownKit(props.kits, vocation) : [];
+  const name = (item: string): string => t(`item.${item}.name`);
+  return (
+    <div class="vocation-info" data-testid="vocation-info" data-vocation={vocation}>
+      <p class="vocation-style" data-testid="vocation-style">
+        {t(`vocation.${vocation}.desc`)}
+      </p>
+      {props.kits?.[vocation] && (
+        <p class="vocation-kit" data-testid="vocation-kit">
+          {t("client.characters.kit", {
+            items: own.map((e) => kitLabel(e, name)).join(", "),
+          })}
+        </p>
+      )}
     </div>
   );
 }
