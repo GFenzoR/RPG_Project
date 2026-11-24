@@ -69,6 +69,39 @@ func TestPendingAndTouched(t *testing.T) {
 	}
 }
 
+// An acknowledged snapshot's sectors stop being written; one that gained bits after the
+// snapshot, or went only in a later one, stays.
+func TestSavedForgetsWrittenSectors(t *testing.T) {
+	m := New()
+	m.Reveal(0, 0, 3, 3, 7)   // sector (0,0)
+	m.Reveal(40, 0, 41, 1, 7) // sector (1,0)
+	if got := m.Snapshot(5); len(got) != 2 {
+		t.Fatalf("snapshot 5 = %d sectors", len(got))
+	}
+	m.Reveal(42, 0, 43, 1, 7) // (1,0) gains bits after snapshot 5
+	m.Saved(4)                // an older ack covers nothing
+	if len(m.TouchedKeys()) != 2 {
+		t.Fatalf("an older ack forgot sectors: %v", m.TouchedKeys())
+	}
+	m.Saved(5)
+	if got := m.TouchedKeys(); len(got) != 1 || got[0] != KeyOf(40, 0, 7) {
+		t.Fatalf("after ack 5: %v", got)
+	}
+	got := m.Snapshot(6)
+	if len(got) != 1 || !got[0].Bits.Has(10, 0) {
+		t.Fatalf("snapshot 6 = %v", got)
+	}
+	m.Saved(6)
+	if len(m.Touched()) != 0 || m.Snapshot(7) != nil {
+		t.Fatal("ack 6 left sectors touched")
+	}
+	var nilMap *Map
+	nilMap.Saved(1)
+	if nilMap.Snapshot(1) != nil {
+		t.Fatal("a nil map has a snapshot")
+	}
+}
+
 func TestMergeOrsAndTouches(t *testing.T) {
 	a := New()
 	a.Reveal(0, 0, 3, 3, 7)

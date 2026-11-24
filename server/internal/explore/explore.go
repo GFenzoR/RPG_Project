@@ -84,10 +84,13 @@ type SectorState struct {
 // Map is a character's explored tiles.
 type Map struct {
 	sectors map[Key]*Sector
-	// touched: the sectors that gained bits since the Map was made (or were marked with
-	// Touch): what a snapshot of this login writes. Never cleared: a dropped snapshot
-	// costs nothing, the next one carries them again.
-	touched map[Key]struct{}
+	// touched: the sectors whose bits the database may not have yet (gained since the Map
+	// was made, or marked with Touch): what a snapshot of this login writes. The value is
+	// the seq of the last snapshot that carried the sector's current bits (0: none yet);
+	// Saved(seq) forgets the ones that seq covers, so a long login does not write every
+	// sector it ever touched again with each save. A dropped snapshot costs nothing: its
+	// sectors stay until a later one is acknowledged.
+	touched map[Key]uint64
 	// pending: the sectors that gained bits since the last TakePending (the client's
 	// deltas).
 	pending map[Key]struct{}
@@ -95,7 +98,7 @@ type Map struct {
 
 // New returns an empty Map.
 func New() *Map {
-	return &Map{sectors: map[Key]*Sector{}, touched: map[Key]struct{}{}, pending: map[Key]struct{}{}}
+	return &Map{sectors: map[Key]*Sector{}, touched: map[Key]uint64{}, pending: map[Key]struct{}{}}
 }
 
 // Load returns a Map with the saved sectors (merged with OR when one repeats). Sectors on
@@ -137,7 +140,7 @@ func (m *Map) merge(s SectorState) bool {
 func (m *Map) Merge(sectors []SectorState) {
 	for _, s := range sectors {
 		if m.merge(s) {
-			m.touched[s.Key] = struct{}{}
+			m.touched[s.Key] = 0
 		}
 	}
 }
@@ -146,7 +149,7 @@ func (m *Map) Merge(sectors []SectorState) {
 func (m *Map) Touch(keys []Key) {
 	for _, k := range keys {
 		if m.sectors[k] != nil {
-			m.touched[k] = struct{}{}
+			m.touched[k] = 0
 		}
 	}
 }
@@ -215,7 +218,7 @@ func (m *Map) revealIn(k Key, lx0, ly0, lx1, ly1 int) bool {
 	}
 	if changed {
 		m.sectors[k] = s
-		m.touched[k] = struct{}{}
+		m.touched[k] = 0 // gained bits: no snapshot has these yet
 		m.pending[k] = struct{}{}
 	}
 	return changed
@@ -259,13 +262,40 @@ func (m *Map) TakePending() []Key {
 	return out
 }
 
-// Touched returns a copy of every touched sector, sorted by key: what a snapshot writes.
-// A nil Map has none.
+// Touched returns a copy of every touched sector, sorted by key. A nil Map has none.
 func (m *Map) Touched() []SectorState {
 	if m == nil {
 		return nil
 	}
 	return m.states(m.touched)
+}
+
+// Snapshot is Touched for the snapshot numbered seq: what it writes. Each sector is
+// recorded as carried by seq, so Saved(seq) (or a later ack) can forget it. A nil Map has
+// none.
+func (m *Map) Snapshot(seq uint64) []SectorState {
+	if m == nil {
+		return nil
+	}
+	out := m.states(m.touched)
+	for _, s := range out {
+		m.touched[s.Key] = seq
+	}
+	return out
+}
+
+// Saved is the ack of the snapshot numbered seq (snapshots are written in order): the
+// touched sectors whose current bits went in a snapshot up to seq are in the database and
+// stop being touched. Those that gained bits since stay. Nothing for a nil Map.
+func (m *Map) Saved(seq uint64) {
+	if m == nil {
+		return
+	}
+	for k, at := range m.touched {
+		if at != 0 && at <= seq {
+			delete(m.touched, k)
+		}
+	}
 }
 
 // TouchedKeys returns the touched sectors' keys, sorted.
@@ -284,7 +314,7 @@ func (m *Map) All() []SectorState {
 	return out
 }
 
-func (m *Map) states(keys map[Key]struct{}) []SectorState {
+func (m *Map) states(keys map[Key]uint64) []SectorState {
 	if len(keys) == 0 {
 		return nil
 	}

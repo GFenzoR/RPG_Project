@@ -683,12 +683,16 @@ sigue al personaje a otro dispositivo y el cliente nunca recibe casillas que no 
   delta por segundo con 128 B por sector que ganó bits (uno o dos caminando en línea recta:
   ≤ 0,3 KB/s); nada sobre lo ya explorado.
 - **Base de datos:** `character_explored` (migración 00028), una fila por sector. Cada
-  snapshot hace upsert de los sectores que ganaron bits durante el login (nunca borra: los
-  bits solo crecen), 128 B por sector tocado.
+  snapshot hace upsert de los sectores que ganaron bits y que la base todavía puede no
+  tener (nunca borra: los bits solo crecen), 128 B por sector. Cuando llega el ack de un
+  snapshot (`World.Saved`), sus sectores dejan de escribirse hasta que vuelvan a ganar
+  bits (`explore.Map.Snapshot` y `Saved`): un login largo no reescribe en cada save todo lo
+  que recorrió.
 - **Pista del objetivo:** se calcula solo cuando cambia la quest seguida (`flushHint`); el
   spawn más cercano de un `kill` recorre los spawns del mapa una vez.
 - **Cliente:** el terreno es un canvas de 160x160 px que se pinta solo cuando cambia lo
-  explorado, el centro o el zoom (no en cada frame).
+  explorado, el centro o el zoom (no en cada frame). Las claves de sector son números (no
+  strings) y `revealView` busca el sector una vez por fila y sector, no por casilla.
 
 ### Aspecto y equipo visible (lote 13, 2026-11-19)
 Cada `Creature` humanoide lleva su cuerpo (`BodyLook`, cinco ids de `data/looks.yaml`); el

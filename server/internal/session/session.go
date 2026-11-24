@@ -117,8 +117,9 @@ type Snapshot struct {
 	Cosmetics Cosmetics
 	// Look is the character's body (docs/02 "Apariencia").
 	Look content.Look
-	// Explored are the minimap sectors that gained explored tiles during the login (a
-	// copy): upserted, never deleted (explore.Map.Touched).
+	// Explored are the minimap sectors whose bits the database may not have yet: gained
+	// during the login and not covered by an acknowledged snapshot (a copy; explore.Map
+	// Snapshot and Saved). Upserted, never deleted.
 	Explored []explore.SectorState
 	// Final marks the snapshot taken when the player left the world.
 	Final bool

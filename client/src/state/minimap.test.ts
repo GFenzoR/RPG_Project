@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CARDINALS,
   MinimapState,
+  REQUEST_RETRY_MS,
   SECTOR_BYTES,
   colourItem,
   edgeArrow,
@@ -12,6 +13,7 @@ import {
   pixelToTile,
   roughDistance,
   sectorId,
+  tileColourItem,
   tileToPixel,
   viewTiles,
 } from "./minimap.ts";
@@ -118,17 +120,50 @@ describe("fog", () => {
     const ids: number[] = [];
     for (let sx = 0; sx < 6; sx++) for (let sy = 0; sy < 6; sy++) ids.push(sectorId(sx, sy));
     m.applyIndex([{ z: 7, sectors: ids }]);
-    const first = m.wanted(7, 0, 0, 191, 191);
+    const first = m.wanted(7, 0, 0, 191, 191, 0);
     expect(first).toHaveLength(16);
     expect(first.slice(0, 4).sort()).toEqual(
       [sectorId(2, 2), sectorId(2, 3), sectorId(3, 2), sectorId(3, 3)].sort(),
     );
-    const second = m.wanted(7, 0, 0, 191, 191);
+    const second = m.wanted(7, 0, 0, 191, 191, 10);
     expect(second).toHaveLength(16);
     expect(second.some((id) => first.includes(id))).toBe(false);
-    expect(m.wanted(7, 0, 0, 191, 191)).toHaveLength(4);
-    expect(m.wanted(7, 0, 0, 191, 191)).toEqual([]);
-    expect(m.wanted(8, 0, 0, 191, 191)).toEqual([]); // nothing explored there
+    expect(m.wanted(7, 0, 0, 191, 191, 20)).toHaveLength(4);
+    expect(m.wanted(7, 0, 0, 191, 191, 30)).toEqual([]);
+    expect(m.wanted(8, 0, 0, 191, 191, 30)).toEqual([]); // nothing explored there
+  });
+
+  it("asks again for a sector the server never answered, never for an answered one", () => {
+    const m = new MinimapState();
+    m.applyIndex([{ z: 7, sectors: [sectorId(0, 0), sectorId(1, 0)] }]);
+    expect(m.wanted(7, 0, 0, 63, 31, 1000)).toHaveLength(2);
+    expect(m.retryIn(1000)).toBe(REQUEST_RETRY_MS);
+    // The server answers (0,0) only: it dropped the part of the request... or all of it.
+    m.applySectors([
+      {
+        z: 7,
+        sector: sectorId(0, 0),
+        explored: bits([0, 0]),
+        palette: [],
+        tiles: new Uint8Array(),
+      },
+    ]);
+    expect(m.wanted(7, 0, 0, 63, 31, 1000 + REQUEST_RETRY_MS - 1)).toEqual([]);
+    expect(m.retryIn(1000 + REQUEST_RETRY_MS - 1)).toBe(1);
+    expect(m.wanted(7, 0, 0, 63, 31, 1000 + REQUEST_RETRY_MS)).toEqual([sectorId(1, 0)]);
+    // Out of view and past its wait: no timer spins for it.
+    expect(m.retryIn(1000 + 3 * REQUEST_RETRY_MS)).toBeUndefined();
+    m.applySectors([
+      {
+        z: 7,
+        sector: sectorId(1, 0),
+        explored: bits([0, 0]),
+        palette: [],
+        tiles: new Uint8Array(),
+      },
+    ]);
+    expect(m.retryIn(0)).toBeUndefined();
+    expect(m.wanted(7, 0, 0, 63, 31, 1e9)).toEqual([]);
   });
 });
 
@@ -212,5 +247,17 @@ describe("cardinal labels", () => {
       "client.minimap.south",
       "client.minimap.west",
     ]);
+  });
+});
+
+describe("tileColourItem", () => {
+  const items: Record<number, { blocks: boolean }> = { 1: { blocks: false }, 4: { blocks: false } };
+  const item = (id: number) => items[id] as never;
+  it("takes the server's colour over the client's stack, the stack without one", () => {
+    // A blocking tile whose top item is not in data/: the server colours it by that item
+    // (its map flags), the client's stack alone says ground.
+    expect(tileColourItem([1, 4], item, 4)).toBe(4);
+    expect(tileColourItem([1, 4], item, 0)).toBe(1);
+    expect(tileColourItem(undefined, item, 0)).toBe(0);
   });
 });

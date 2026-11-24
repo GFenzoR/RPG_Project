@@ -1240,10 +1240,15 @@ por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
   no, 1 + índice de `palette`). El item de una casilla es el de más arriba que bloquea el
   paso (muro, árbol, roca), o si no su suelo; **nunca** sale una casilla sin explorar.
   Presupuesto por jugador: 64 sectores de golpe, recarga de 32 por segundo; un pedido que
-  no entra se descarta entero, sin respuesta (el cliente pide otra vez lo que le falte).
+  no entra se descarta entero, sin respuesta, igual que uno de otro piso (el jugador puede
+  haber cambiado de piso mientras viajaba). El cliente da un sector por pedido recién
+  cuando le llega su respuesta: uno sin respuesta a los 2 s (`REQUEST_RETRY_MS`) lo pide
+  otra vez la próxima vez que lo tenga a la vista, aunque nada más haya cambiado.
 - **Deltas:** como mucho uno por segundo, `MinimapSectors` con los sectores que ganaron
   bits desde el anterior, solo con `explored` (sin `palette` ni `tiles`): esas casillas
-  están en la vista del cliente, que las colorea con el mapa que ya tiene. Nada mientras
+  están en la vista del cliente, que las colorea con el mapa que ya tiene. Una casilla que
+  ya vino en una respuesta se pinta con el item de la respuesta (el servidor conoce las
+  marcas del mapa que el cliente no tiene); el mapa propio, solo si no vino. Nada mientras
   el jugador camina por lo ya explorado. El cliente explora además su propia vista con la
   misma regla (31x21 del piso propio), así la niebla se abre con el paso.
 - `TrackQuest{quest_id}` (campo 41): sigue una quest **en curso** en el minimapa; vacío, o
@@ -1255,7 +1260,8 @@ por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
 - `ObjectiveHint{quest_id, step_id, center, radius}`: un círculo (radio euclídeo en
   casillas) alrededor de un punto **cercano** al lugar del paso, que puede estar en otro
   piso (`center.z`). Nunca es la casilla exacta: el centro se corre entre un cuarto y la
-  mitad del radio, siempre igual para el mismo personaje y paso (`quest.FuzzHint` con una
+  mitad del radio (cuando el lugar del paso es grande y no deja ese margen, se corre 1
+  casilla y el círculo crece para contenerlo), siempre igual para el mismo personaje y paso (`quest.FuzzHint` con una
   semilla de personaje, quest y paso: pedirlo muchas veces no lo promedia), y el lugar
   del paso entra entero en el círculo. Con `quest_id` y sin `center`: se sigue la quest
   pero su paso no tiene lugar (un `has_item` o un `flag_equals` sin `hint_area`, docs/06).

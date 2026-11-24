@@ -74,7 +74,7 @@ import type { SteerInput, StepChoice } from "./state/steering.ts";
 import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
-import { colourItem, parseHex } from "./state/minimap.ts";
+import { parseHex, tileColourItem } from "./state/minimap.ts";
 import type { MinimapState, ObjectiveHintView } from "./state/minimap.ts";
 import type { PocketsState } from "./state/pockets.ts";
 import { MotionTrail } from "./state/motion.ts";
@@ -941,7 +941,7 @@ export class Game {
 
   /**
    * What the minimap paints with: the explored state, the colour item of a tile (what the
-   * client has of it now, else what the server gave) and an item's colour (the atlas's
+   * server gave, else what the client has of it now) and an item's colour (the atlas's
    * average of its sprite; a plain shade by kind until the atlas is up or without one).
    */
   minimapSource(): {
@@ -953,7 +953,7 @@ export class Game {
     return {
       state: w.minimap,
       tileItem: (x, y, z) =>
-        colourItem(w.tile(x, y, z), (id) => w.item(id)) || w.minimap.serverItem(x, y, z),
+        tileColourItem(w.tile(x, y, z), (id) => w.item(id), w.minimap.serverItem(x, y, z)),
       colour: (item) => {
         let c = this.minimapColours.get(item);
         if (c) return c;

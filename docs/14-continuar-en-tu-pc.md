@@ -181,6 +181,16 @@ el punto 5:
   - **Integración y E2E** (Postgres y el navegador) los corre el lote al final:
     `store/play_integration_test.go` (upsert de sectores) y el screenshot
     `96c-minimap-tracked` de `e2e/sandbox.spec.ts`.
+  - **Riesgos menores anotados en la revisión:** la pista es fija por personaje y paso, así
+    que con varios personajes de la misma cuenta se podría triangular el objetivo (riesgo
+    bajo: es una quest, no un secreto). El upsert de `character_explored` reemplaza los
+    bits (`SET bits = EXCLUDED.bits`): es correcto porque la FIFO del Saver escribe los
+    snapshots de un personaje en orden; si eso cambiara, hacer un OR en SQL. El minimapa
+    colorea con el mapa vivo del servidor (`world.Map`), así que una puerta lejana ya
+    explorada se ve abierta o cerrada como está ahora; los objetos del mundo vivo, los
+    items tirados y los muebles de casa no están en ese mapa y no se ven (solo la marca
+    de bloqueo de un objeto vivo puede cambiar el color de una casilla que además tiene
+    un item del mapa: la regla de respaldo de `minimapItem`).
   - **Pisos de arriba:** desde la superficie se ven los pisos 0 a 7, pero solo se explora el
     propio; decidir con el dueño si mirar un techo debe explorar ese piso.
   - **`hint_area` en el contenido:** ninguna quest lo usa todavía; los pasos `has_item` (10

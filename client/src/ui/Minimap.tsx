@@ -148,6 +148,8 @@ export function Minimap(props: {
   const { t, mm, game } = props;
   const [prefs, setPrefs] = useState<MinimapPrefs>(() => loadPrefs(props.phone));
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  // Bumped when an unanswered request may go again: the effect below looks once more.
+  const [retry, setRetry] = useState(0);
   const canvas = useRef<HTMLCanvasElement>(null);
   const drag = useRef<{ x: number; y: number; id: number } | undefined>(undefined);
   const update = (p: MinimapPrefs): void => {
@@ -164,18 +166,27 @@ export function Minimap(props: {
   // Paint the terrain when what is explored, where it looks or the zoom changed; ask the
   // server for the explored sectors in view it has not sent yet.
   const key =
-    view && `${mm?.version}/${mm?.self.z}/${view.cx}/${view.cy}/${view.scale}/${prefs.open}`;
+    view &&
+    `${mm?.version}/${mm?.self.z}/${view.cx}/${view.cy}/${view.scale}/${prefs.open}/${retry}`;
   useEffect(() => {
     const el = canvas.current;
     if (!el || !view || !mm || !game || !prefs.open) return;
     const src = game.minimapSource();
     const tiles = viewTiles(view);
+    const now = performance.now();
     game.minimapRequest(
       mm.self.z,
-      src.state.wanted(mm.self.z, tiles.x0, tiles.y0, tiles.x1, tiles.y1),
+      src.state.wanted(mm.self.z, tiles.x0, tiles.y0, tiles.x1, tiles.y1, now),
     );
+    // A request the server dropped (another floor by then, over its budget) gets no
+    // answer: look again when it may be sent once more.
+    const wait = src.state.retryIn(now);
+    const timer = wait === undefined ? undefined : setTimeout(() => setRetry((r) => r + 1), wait);
+    const stop = (): void => {
+      if (timer !== undefined) clearTimeout(timer);
+    };
     const ctx = el.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return stop;
     const img = ctx.createImageData(view.width, view.height);
     paintTerrain(
       img,
@@ -186,6 +197,7 @@ export function Minimap(props: {
       src.colour,
     );
     ctx.putImageData(img, 0, 0);
+    return stop;
   }, [key]);
   if (!mm || !view) return null;
   const zoomTo = (step: number): void => {

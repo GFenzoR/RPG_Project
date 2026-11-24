@@ -430,7 +430,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		PvP:         w.pvpState(p),
 		Cosmetics:   p.cos,
 		Look:        p.look,
-		Explored:    p.explored.Touched(),
+		Explored:    p.explored.Snapshot(w.saveSeq),
 		Final:       final,
 	}
 }
@@ -481,6 +481,9 @@ func (w *World) Saved(characterID int64, seq uint64) game.Command {
 		}
 		w.confirmed(characterID, seq)
 		w.stashSaved(characterID, seq)
+		if p := w.byChar[characterID]; p != nil {
+			p.explored.Saved(seq) // its minimap sectors up to seq are written
+		}
 	})
 }
 

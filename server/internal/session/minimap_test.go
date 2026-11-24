@@ -151,6 +151,45 @@ func TestExploreOnLoginWalkAndSave(t *testing.T) {
 	}
 }
 
+// An acknowledged autosave's sectors are not written again by the next one: only what
+// the database may lack (the sectors that gained bits since) goes in a snapshot.
+func TestAcknowledgedSectorsAreNotSavedAgain(t *testing.T) {
+	h := newHarness(t, wideMap(t), func(c *session.Config) {
+		c.Items = testItems()
+		c.AutosaveEvery = 40
+	})
+	cl, p := h.join("Surveyor", at(40, 4)) // view x 25..55: sectors (0,0) and (1,0)
+	cl.take()
+	h.sim.RunTicks(45)
+	if len(h.saves) == 0 {
+		t.Fatal("no autosave")
+	}
+	first := h.saves[len(h.saves)-1]
+	if len(first.Explored) != 2 {
+		t.Fatalf("first autosave sectors: %v", first.Explored)
+	}
+	h.sim.Command(h.w.Saved(p.CharacterID(), first.Seq))
+	for range 4 { // only sector (1,0) gains bits
+		h.input(cl, walk(pb.Direction_DIRECTION_EAST))
+	}
+	h.sim.RunTicks(45)
+	if p.Pos().X < 44 {
+		t.Fatalf("did not walk: %v", p.Pos())
+	}
+	second := h.saves[len(h.saves)-1]
+	if second.Seq == first.Seq {
+		t.Fatal("no second autosave")
+	}
+	if len(second.Explored) != 1 || second.Explored[0].Key != explore.KeyOf(32, 0, 7) {
+		t.Fatalf("second autosave wrote again what was acknowledged: %v", second.Explored)
+	}
+	// Not acknowledged: the next snapshot carries it again.
+	h.sim.RunTicks(45)
+	if third := h.saves[len(h.saves)-1]; len(third.Explored) != 1 || third.Explored[0].Key != explore.KeyOf(32, 0, 7) {
+		t.Fatalf("an unacknowledged sector was dropped: %v", third.Explored)
+	}
+}
+
 // A MinimapRequest gets the colour item of explored tiles only (a wall on top of its
 // ground), nothing of an unexplored sector, nothing for another floor, and nothing past
 // the budget.

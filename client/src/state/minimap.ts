@@ -1,11 +1,12 @@
 // The minimap's state and geometry (docs/02 "Minimapa", docs/05 "Minimapa"). Pure logic
-// over plain data: no DOM, no canvas, no clock; ui/Minimap.tsx draws with it.
+// over plain data: no DOM, no canvas, no clock (callers pass now); ui/Minimap.tsx draws
+// with it.
 //
 // What the character explored comes from the server (MinimapIndex at login, MinimapSectors
 // answers and deltas); the client also explores its own view as it walks, with the same
 // rule as the server (the 31x21 window on its own floor), so the fog opens with the step
-// and not a second later. A tile is coloured by what the client has of it right now (the
-// map it was sent) or else by what a MinimapSectors answer said, and only when explored:
+// and not a second later. A tile is coloured by what a MinimapSectors answer said or else
+// by what the client has of it right now (the map it was sent), and only when explored:
 // an unexplored tile is black whatever is known of it.
 import type { ItemDef } from "../content-types.ts";
 
@@ -19,7 +20,12 @@ export const MAX_REQUEST_SECTORS = 16;
 /** The protocol's sector id within a floor: sx << 16 | sy. */
 export const sectorId = (sx: number, sy: number): number => ((sx << 16) | sy) >>> 0;
 
-const keyOf = (z: number, sx: number, sy: number): string => `${z}/${sx}/${sy}`;
+/** A request with no answer after this long is sent again (docs/05 "Minimapa"). */
+export const REQUEST_RETRY_MS = 2000;
+
+// A sector's key in the client's maps: floor, column and row in one number (sx and sy
+// are under 2048 on a 65536-tile map), so the per-tile reads build no strings.
+const keyOf = (z: number, sx: number, sy: number): number => z * 4194304 + sx * 2048 + sy;
 
 /** One sector of a MinimapSectors message, as the client reads it. */
 export interface SectorData {
@@ -41,12 +47,18 @@ export interface ObjectiveHintView {
 }
 
 export class MinimapState {
-  private readonly explored = new Map<string, Uint8Array>();
-  private readonly colours = new Map<string, { palette: readonly number[]; tiles: Uint8Array }>();
+  private readonly explored = new Map<number, Uint8Array>();
+  private readonly colours = new Map<number, { palette: readonly number[]; tiles: Uint8Array }>();
   /** Sectors the server has something of, per floor (MinimapIndex and later sectors). */
   private readonly indexed = new Map<number, Set<number>>();
-  /** Sectors asked for (or answered) since the last index: never asked again. */
-  private readonly asked = new Set<string>();
+  /** Sectors answered since the last index: never asked again. */
+  private readonly asked = new Set<number>();
+  /**
+   * Sectors asked for and not answered yet, with when (ms) the request went. The server
+   * drops a request silently (another floor by the time it arrives, over the budget), so
+   * one unanswered for REQUEST_RETRY_MS is asked again.
+   */
+  private readonly inFlight = new Map<number, number>();
   /** Grows with every change: the minimap draws again when it moves. */
   version = 0;
   /** The tracked objective's estimate; undefined: none. */
@@ -60,6 +72,7 @@ export class MinimapState {
     this.colours.clear();
     this.indexed.clear();
     this.asked.clear();
+    this.inFlight.clear();
     for (const f of floors) this.indexed.set(f.z, new Set(f.sectors));
     this.version++;
   }
@@ -74,6 +87,7 @@ export class MinimapState {
       const sy = s.sector & 0xffff;
       const k = keyOf(s.z, sx, sy);
       this.asked.add(k);
+      this.inFlight.delete(k);
       if (s.explored.length === SECTOR_BYTES) {
         this.orInto(k, s.explored);
         let set = this.indexed.get(s.z);
@@ -86,7 +100,7 @@ export class MinimapState {
     this.version++;
   }
 
-  private orInto(k: string, bits: Uint8Array): boolean {
+  private orInto(k: number, bits: Uint8Array): boolean {
     let cur = this.explored.get(k);
     if (!cur) this.explored.set(k, (cur = new Uint8Array(SECTOR_BYTES)));
     let changed = false;
@@ -110,18 +124,26 @@ export class MinimapState {
     const x1 = Math.min(x + Math.floor(width / 2), 0xffff);
     const y1 = Math.min(y + Math.floor(height / 2), 0xffff);
     let changed = false;
-    for (let ty = y0; ty <= y1; ty++)
-      for (let tx = x0; tx <= x1; tx++) {
-        const k = keyOf(z, Math.floor(tx / SECTOR), Math.floor(ty / SECTOR));
+    for (let ty = y0; ty <= y1; ty++) {
+      const sy = Math.floor(ty / SECTOR);
+      const row = (ty % SECTOR) * SECTOR;
+      // One sector lookup per row and sector the window crosses, not one per tile.
+      for (let tx = x0; tx <= x1;) {
+        const sx = Math.floor(tx / SECTOR);
+        const end = Math.min(x1, sx * SECTOR + SECTOR - 1);
+        const k = keyOf(z, sx, sy);
         let cur = this.explored.get(k);
         if (!cur) this.explored.set(k, (cur = new Uint8Array(SECTOR_BYTES)));
-        const i = (ty % SECTOR) * SECTOR + (tx % SECTOR);
-        const b = 1 << (i & 7);
-        if (((cur[i >> 3] ?? 0) & b) === 0) {
-          cur[i >> 3] = (cur[i >> 3] ?? 0) | b;
-          changed = true;
+        for (; tx <= end; tx++) {
+          const i = row + (tx % SECTOR);
+          const b = 1 << (i & 7);
+          if (((cur[i >> 3] ?? 0) & b) === 0) {
+            cur[i >> 3] = (cur[i >> 3] ?? 0) | b;
+            changed = true;
+          }
         }
       }
+    }
     if (changed) this.version++;
     return changed;
   }
@@ -145,15 +167,16 @@ export class MinimapState {
 
   /**
    * The sectors of floor z within tiles x0..x1, y0..y1 the server has something of and the
-   * client has not asked for yet, at most MAX_REQUEST_SECTORS, nearest to the centre
-   * first. They are marked asked: the caller sends them in one MinimapRequest.
+   * client has neither had answered nor asked for in the last REQUEST_RETRY_MS (now: ms,
+   * performance.now()), at most MAX_REQUEST_SECTORS, nearest to the centre first. They are
+   * marked in flight at now: the caller sends them in one MinimapRequest.
    */
-  wanted(z: number, x0: number, y0: number, x1: number, y1: number): number[] {
+  wanted(z: number, x0: number, y0: number, x1: number, y1: number, now: number): number[] {
     const set = this.indexed.get(z);
     if (!set || set.size === 0) return [];
     const cx = (x0 + x1) / 2 / SECTOR;
     const cy = (y0 + y1) / 2 / SECTOR;
-    const found: { id: number; k: string; d: number }[] = [];
+    const found: { id: number; k: number; d: number }[] = [];
     const sx0 = Math.max(Math.floor(x0 / SECTOR), 0);
     const sy0 = Math.max(Math.floor(y0 / SECTOR), 0);
     for (let sy = sy0; sy <= Math.floor(y1 / SECTOR); sy++)
@@ -161,12 +184,29 @@ export class MinimapState {
         const id = sectorId(sx, sy);
         const k = keyOf(z, sx, sy);
         if (!set.has(id) || this.asked.has(k)) continue;
+        const sent = this.inFlight.get(k);
+        if (sent !== undefined && now - sent < REQUEST_RETRY_MS) continue;
         found.push({ id, k, d: Math.hypot(sx + 0.5 - cx, sy + 0.5 - cy) });
       }
     found.sort((a, b) => a.d - b.d || a.id - b.id);
     const out = found.slice(0, MAX_REQUEST_SECTORS);
-    for (const f of out) this.asked.add(f.k);
+    for (const f of out) this.inFlight.set(f.k, now);
     return out.map((f) => f.id);
+  }
+
+  /**
+   * Milliseconds (from now) until the next unanswered request may be sent again, or
+   * undefined when none is waiting: the minimap looks again then even if nothing else
+   * changed. One already past its wait is asked again by the next wanted() that sees it,
+   * not here (it may be out of view).
+   */
+  retryIn(now: number): number | undefined {
+    let next: number | undefined;
+    for (const sent of this.inFlight.values()) {
+      const due = sent + REQUEST_RETRY_MS - now;
+      if (due > 0) next = next === undefined ? due : Math.min(next, due);
+    }
+    return next;
   }
 }
 
@@ -187,6 +227,20 @@ export function colourItem(
     if (item(id)?.blocks === true) return id;
   }
   return stack[0] ?? 0;
+}
+
+/**
+ * The item tile x, y is coloured by: what the server's answer gave (its minimapItem, with
+ * the map's flags the client lacks: a blocking tile whose items are not in data/ shows its
+ * top item), else colourItem over the stack the client holds (a tile explored after the
+ * answer, or never asked for).
+ */
+export function tileColourItem(
+  stack: readonly number[] | undefined,
+  item: (id: number) => ItemDef | undefined,
+  server: number,
+): number {
+  return server !== 0 ? server : colourItem(stack, item);
 }
 
 /** "#rrggbb" to [r, g, b]; a malformed value is a dull grey. */
