@@ -55,10 +55,11 @@ func runLeashed(t *testing.T, h *harness, m *session.Monster, center world.Pos, 
 }
 
 // A wolf chases a player who walks away beyond its leash: it never leaves its leash
-// area, gives up (back to full health, which who sees it is told), walks into its home
-// area and forgot who hurt it: the player who later kills it alone gets all the
-// experience.
-func TestLeashWolfGivesUpHealsAndForgets(t *testing.T) {
+// area (no pursuit in testBalance), gives up keeping its wounds (owner's request of
+// 2026-11-23: no full heal), walks into its home area and, without a memory
+// (combat.monster_pursuit.memory_ms 0), forgot who hurt it: the player who later kills it
+// alone gets all the experience.
+func TestLeashWolfGivesUpKeepsItsWoundsAndForgets(t *testing.T) {
 	const leash, radius = 4, 1
 	center := pos(20, 20)
 	h := leashHarness(t, leash, []*content.Monster{wolfDef()}, spawnAt("wolf", 20, 20, radius, 60))
@@ -78,18 +79,15 @@ func TestLeashWolfGivesUpHealsAndForgets(t *testing.T) {
 	h.input(cl, east(14))
 	cl.take()
 	runLeashed(t, h, wolf, center, radius+leash, 20, func() bool { return wolf.TargetID() == 0 })
-	if hp, maxHP := wolf.Health(); hp != maxHP {
-		t.Errorf("wolf gave up with %d/%d health, want full", hp, maxHP)
+	wounded, _ := wolf.Health()
+	if _, maxHP := wolf.Health(); wounded >= maxHP || wolf.DamageShareForTest(runner.ID()) != 0 {
+		t.Errorf("wolf gave up with %d/%d health remembering %d damage, want its wounds kept and 0", wounded, maxHP, wolf.DamageShareForTest(runner.ID()))
 	}
 	h.sim.Step() // flush
-	var last uint32
 	for _, ch := range find(cl.take(), (*pb.ServerMessage).GetCreatureHealth) {
 		if ch.GetId() == wolf.ID() {
-			last = ch.GetHealthPercent()
+			t.Errorf("the runner was told the wolf's health %d %% on giving up: it heals nothing", ch.GetHealthPercent())
 		}
-	}
-	if last != 100 {
-		t.Errorf("the runner last saw the wolf at %d %% health, want 100", last)
 	}
 	n := runLeashed(t, h, wolf, center, radius+leash, 10, func() bool { return chebyshev(wolf.Pos(), center) <= radius })
 	t.Logf("the wolf walked home in %d ticks", n)
@@ -318,8 +316,8 @@ func TestLeashCountsOnlyTheAttacksInUse(t *testing.T) {
 		h.input(cl, setTarget(wolf.ID()))
 		n := h.sim.RunUntil(func() bool { return wolf.TargetID() == 0 }, sim.MaxSeconds(8))
 		t.Logf("the wolf gave the ranger up after %d ticks", n)
-		if hp, maxHP := wolf.Health(); hp != maxHP {
-			t.Errorf("the wolf gave up at %d/%d health, want full", hp, maxHP)
+		if hp, maxHP := wolf.Health(); hp >= maxHP {
+			t.Errorf("the wolf gave up at %d/%d health, want its wounds kept", hp, maxHP)
 		}
 		if hp, maxHP := p.Health(); hp != maxHP {
 			t.Errorf("the ranger has %d/%d health: the wolf cast its low-health spell at full health", hp, maxHP)
@@ -405,7 +403,7 @@ func TestLeashAreaThatMissesHoldsNoTarget(t *testing.T) {
 // water from a wolf, inside the wolf's leash area but where the wolf could only get by
 // leaving it, shoots the wolf, which stands at the water. Its chase checks the way once a
 // second (pathRetry), not every tick; after stuckFor without one it gives the ranger up
-// (full health, damage forgotten) and walks home. Then, for shunFor and on that tile, the
+// (keeping its wounds, damage forgotten) and walks home. Then, for shunFor and on that tile, the
 // ranger is beyond its leash: the wolf does not pick it again, each arrow makes it turn
 // and give up again (it cannot be killed from there) and trains as against a target that
 // does not fight back (skills.afk.factor, 0.25 in testBalance: 4 shots, 1 try).
@@ -422,10 +420,11 @@ func TestLeashGivesUpATargetItCannotReach(t *testing.T) {
 		}
 		return wolf.TargetID() == 0
 	}, sim.MaxSeconds(8))
-	if hp, maxHP := wolf.Health(); hp != maxHP || wolf.DamageShareForTest(p.ID()) != 0 || h.w.CountItem(p, "test_arrow") == 60 {
-		t.Fatalf("the wolf gave up at %d/%d health, remembering %d damage (%d arrows left): want full and 0 after some shots",
+	if hp, maxHP := wolf.Health(); hp >= maxHP || wolf.DamageShareForTest(p.ID()) != 0 || h.w.CountItem(p, "test_arrow") == 60 {
+		t.Fatalf("the wolf gave up at %d/%d health, remembering %d damage (%d arrows left): want wounded and 0 after some shots",
 			hp, maxHP, wolf.DamageShareForTest(p.ID()), h.w.CountItem(p, "test_arrow"))
 	}
+	gaveUpAt, _ := wolf.Health()
 	t.Logf("the wolf gave up after searching a way in %d ticks", searching)
 	if searching > 4 {
 		t.Errorf("the wolf searched a way in %d ticks before giving up, want one a second (at most 4)", searching)
@@ -448,8 +447,9 @@ func TestLeashGivesUpATargetItCannotReach(t *testing.T) {
 	if held > 0 {
 		t.Errorf("the wolf held the ranger as its target for %d ticks over 4 shots, want none (it gives up within the tick of each shot)", held)
 	}
-	if hp, maxHP := wolf.Health(); len(h.w.Monsters()) != 1 || hp < maxHP-20 || wolf.Pos() != center {
-		t.Errorf("after 4 more shots the wolf is at %v with %d/%d health, want home at %v and (nearly) full", wolf.Pos(), hp, maxHP, center)
+	// Each of those arrows came from where it could not answer: giving up healed it.
+	if hp, maxHP := wolf.Health(); len(h.w.Monsters()) != 1 || hp != gaveUpAt || wolf.Pos() != center {
+		t.Errorf("after 4 more shots the wolf is at %v with %d/%d health, want home at %v with the %d it gave up with", wolf.Pos(), hp, maxHP, center, gaveUpAt)
 	}
 }
 

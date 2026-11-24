@@ -79,6 +79,8 @@ type monsterKind struct {
 	corpse *content.Item
 	// look is a humanoid's body and what it wears (look.go), shared by its Creatures.
 	look creatureLookMsgs
+	// pursuit is its pursuit and regeneration, resolved (pursuit.go).
+	pursuit pursuitKind
 }
 
 // kindAttack is one attack of a monster kind.
@@ -160,6 +162,25 @@ type Monster struct {
 	master   *Monster
 	summonOf int
 	summons  []*Monster
+	// Pursuit (pursuit.go): pursuing is whether m chases its target beyond its leash area
+	// now (its roam reaches its kind's chase cap); keep is the last decision, rolled on
+	// rolledOn until rollAt. lostAt is when its target went out of its sight (0: in it).
+	pursuing bool
+	keep     bool
+	rolledOn uint32
+	rollAt   game.Tick
+	lostAt   game.Tick
+	// calmAt is the last tick m dealt or took damage, regenAt when its next regeneration
+	// is due (regen).
+	calmAt  game.Tick
+	regenAt game.Tick
+	// foes are the players who hurt m in a fight it gave up, remembered for
+	// combat.monster_pursuit.memory_ms: it turns on them first (remembered).
+	foes []grudge
+	// stray: m is in World.strays (out of its home area); awaySince is the last tick it
+	// was home or had a target (trackStray).
+	stray     bool
+	awaySince game.Tick
 }
 
 // reach is the longest reach (Chebyshev) of the targeted attacks m may use now, those
@@ -197,6 +218,7 @@ type shun struct {
 func (m *Monster) setTarget(p *Player) {
 	m.target, m.stuckOn, m.checkAt = p, 0, 0
 	m.chaseWay = m.chaseWay[:0]
+	m.pursuing, m.lostAt = false, 0
 }
 
 // Speed returns the monster's effective speed.
@@ -205,6 +227,15 @@ func (m *Monster) Speed() int { return m.speed }
 type damageShare struct {
 	player uint32
 	amount int
+	// unanswered is the part of amount dealt from where m could not answer (beyondLeash),
+	// which it heals when it gives up (giveUp).
+	unanswered int
+}
+
+// grudge is a player a monster remembers after giving up on it, until a tick (pursuit.go).
+type grudge struct {
+	player uint32
+	until  game.Tick
 }
 
 // ID returns the monster's creature id.
@@ -271,6 +302,7 @@ func (w *World) initCombat() error {
 	w.pathRetry = ticksFor(c.MonsterPathRetryMs)
 	w.stuckFor = ticksFor(c.MonsterStuckMs)
 	w.shunFor = ticksFor(c.MonsterShunMs)
+	w.initPursuit()
 	w.monByID = map[uint32]*Monster{}
 	w.msectors = map[uint64][]*Monster{}
 	w.kinds = map[string]*monsterKind{}
@@ -307,6 +339,7 @@ func (w *World) initCombat() error {
 			k.corpse = it
 		}
 		k.prepareAttacks()
+		k.pursuit = w.pursuitOf(def)
 		for _, l := range def.Loot {
 			it := w.cfg.Items[l.Item]
 			if it == nil {
@@ -715,9 +748,10 @@ func (w *World) covers(m *Monster, ka *kindAttack, p world.Pos) bool {
 // think runs one tick of monster m's state machine.
 func (w *World) think(ctx *game.TickContext, m *Monster) {
 	b := m.kind.def.Behavior
-	if m.target != nil && !w.validTarget(m, m.target) {
-		m.setTarget(nil) // lost (gone, in a protection zone, out of sight): it walks home
+	if m.target != nil && !w.keepsTrack(ctx.Tick, m, m.target) {
+		m.setTarget(nil) // lost (gone, in a protection zone, out of sight too long): it walks home
 	}
+	w.trackStray(ctx.Tick, m)
 	if len(m.shunned) > 0 {
 		m.shunned = slices.DeleteFunc(m.shunned, func(s shun) bool { return ctx.Tick >= s.until })
 	}
@@ -731,10 +765,17 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 			// than wait in its lair for the next one to come in.
 			w.despawnSummons(ctx, m)
 		}
+		w.regen(ctx, m)
 		// Looking around is the expensive part of idling: once every targetScanTicks,
-		// staggered by id so monsters spread the work over ticks.
-		if b.Aggressive && (uint64(ctx.Tick)+uint64(m.id))%targetScanTicks == 0 {
-			if t := w.findTarget(ctx.Tick, m); t != nil {
+		// staggered by id so monsters spread the work over ticks. Who hurt it comes first
+		// (pursuit.go remembered), then, if aggressive, the closest player.
+		if (uint64(ctx.Tick)+uint64(m.id))%targetScanTicks == 0 {
+			w.forget(ctx.Tick, m)
+			t := w.remembered(ctx.Tick, m)
+			if t == nil && b.Aggressive {
+				t = w.findTarget(ctx.Tick, m)
+			}
+			if t != nil {
 				m.setTarget(t)
 				m.state = StateAlert
 				w.face(m, t.pos)
@@ -742,17 +783,21 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 			}
 		}
 		m.state = StateIdle
-		if !w.walkHome(ctx, m) {
-			w.wander(ctx, m)
+		if w.walkHome(ctx, m) {
+			w.straying(ctx, m)
+			return
 		}
+		w.wander(ctx, m)
 		return
 	}
 	t := m.target
 	ready := ctx.Tick >= m.readyAt
 	d := chebyshev(m.pos, t.pos)
+	w.judgePursuit(ctx, m, t)
 	if w.beyondLeash(ctx.Tick, m, t) {
-		// Its target left the leash area and its reach (or stands on a tile where m gave it
-		// up as out of its way): it turns to someone it may fight, or gives up and goes home.
+		// Its target left the leash area (and m chose not to follow, or it passed its chase
+		// cap) and its reach, or stands on a tile where m gave it up as out of its way: it
+		// turns to someone it may fight, or gives up and goes home.
 		w.dropTarget(ctx, m)
 		if m.target == nil {
 			w.walkHome(ctx, m)
@@ -765,7 +810,7 @@ func (w *World) think(ctx *game.TickContext, m *Monster) {
 	if m.kind.self {
 		w.monsterSelf(ctx, m) // a heal or a summon needs a fight, not a target in reach
 	}
-	leash := w.leash(m)
+	leash := w.bound(m)
 	roam := w.roam(m, leash)
 	switch {
 	case b.FleeAtHealthPct > 0 && m.health*100 <= b.FleeAtHealthPct*m.maxHealth:
@@ -868,8 +913,9 @@ func (w *World) wander(ctx *game.TickContext, m *Monster) {
 //
 // With balance combat.monster_leash_tiles > 0, a monster's home area is its spawn's
 // radius around the spawn's center (Chebyshev) and its leash area that radius plus the
-// leash. It picks targets, chases and flees only within the leash area; a target beyond
-// it and out of its reach, or one it cannot get to within it (chase, shunned), is
+// leash. It picks targets and flees only within the leash area, and chases within it or,
+// while it decided to pursue its target beyond it, within its chase cap (pursuit.go); a
+// target beyond that and out of its reach, or one it cannot get to (chase, shunned), is
 // dropped for another player fighting it from where it may go, or else given up
 // (dropTarget, giveUp); an idle monster out of its home area walks back (walkHome)
 // instead of wandering (docs/02-game-design.md, monsters section).
@@ -947,20 +993,33 @@ func (w *World) retarget(ctx *game.TickContext, m *Monster, old *Player, inReach
 	return true
 }
 
-// giveUp makes m drop its target: it heals to full health (telling who sees it), its
+// giveUp makes m drop its target: it keeps its wounds (it heals slowly out of combat,
+// regen), but for those dealt from where it could not answer (beyondLeash), which close at
+// once (telling who sees it): nobody whittles a monster down from beyond its leash. Its
 // conditions end (a burn would otherwise go on hurting it for whoever cast it, and could
-// kill it from outside the leash), it forgets who hurt it (nobody earns experience for
-// that fight) and goes idle. It still keeps away from whom it shunned.
+// kill it from outside the leash), what it summoned goes, and it goes idle. It forgets the
+// damage each one dealt (nobody earns experience for that fight: the next one starts
+// afresh), but remembers who hurt it for combat.monster_pursuit.memory_ms (foes: it turns
+// on them first when they come back). It still keeps away from whom it shunned.
 func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
 	m.setTarget(nil)
 	m.state = StateIdle
+	healed := 0
+	for _, s := range m.damage {
+		healed += s.unanswered
+		w.remember(ctx.Tick, m, s.player)
+	}
 	m.damage = m.damage[:0]
 	w.clearConditions(ctx, holder{m: m}, false)
 	w.despawnSummons(ctx, m) // the fight is over: what it called goes with it
-	if m.health >= m.maxHealth {
-		return
+	if healed > 0 && m.health < m.maxHealth {
+		m.health = min(m.health+healed, m.maxHealth)
+		w.healthChanged(m)
 	}
-	m.health = m.maxHealth
+}
+
+// healthChanged tells who sees m its new health bar.
+func (w *World) healthChanged(m *Monster) {
 	pct := healthPercent(m.health, m.maxHealth)
 	var msg *pb.ServerMessage // built once, for every observer that knows m
 	w.eachObserver(nil, m.pos, func(o *Player) {
@@ -975,13 +1034,14 @@ func (w *World) giveUp(ctx *game.TickContext, m *Monster) {
 
 // beyondLeash reports whether player p fights m from where m may not go and cannot hit
 // back: out of its attacks' reach (strikes: a beam or a circle that misses p's tile does
-// not hold it), and out of its leash area or on a tile where m shunned
-// it (no way within its leash area led there, chase). Hits from there train like hits on
+// not hold it), and out of the area it may fight in now (bound: its leash area, or its
+// chase cap while it pursues, pursuit.go) or on a tile where m shunned it (no way within
+// that area led there, chase). Hits from there heal when m gives up (giveUp). Hits from there train like hits on
 // a target that does not fight back (skills.afk.factor): a monster held by its leash is
 // no training dummy. On another tile a shunned player is a target like any other: an
 // unreachable one costs stuckFor again.
 func (w *World) beyondLeash(tick game.Tick, m *Monster, p *Player) bool {
-	l := w.leash(m)
+	l := w.bound(m)
 	if l < 0 || w.strikes(m, p.pos) {
 		return false
 	}
@@ -1225,6 +1285,7 @@ func (w *World) removeMonster(m *Monster, why pb.DisappearReason) {
 	})
 	w.munindex(m)
 	delete(w.monByID, m.id)
+	m.stray = false // World.strays lets it go
 	if b := m.master; b != nil {
 		b.summons = slices.DeleteFunc(b.summons, func(s *Monster) bool { return s == m })
 	}

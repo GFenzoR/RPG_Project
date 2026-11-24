@@ -57,6 +57,7 @@ func (w *World) combatSystem(ctx *game.TickContext) {
 		}
 	}
 	clear(w.thinkBuf)
+	w.thinkStrays(ctx)
 }
 
 // ---- intents ---------------------------------------------------------------------
@@ -212,7 +213,8 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 	w.reveal(ctx, p) // T3.2: attacking ends invisibility
 	w.markFight(ctx, p)
 	if dmg > 0 {
-		w.addShare(m, p.id, dmg)
+		// A hit from where m cannot answer (beyondLeash) is healed if m gives up (giveUp).
+		w.addShare(ctx.Tick, m, p.id, dmg, w.beyondLeash(ctx.Tick, m, p))
 		w.contribute(ctx, p)
 	}
 	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth), element)
@@ -227,14 +229,22 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 	return dmg
 }
 
-func (w *World) addShare(m *Monster, id uint32, dmg int) {
+// addShare adds dmg that player id dealt to m at tick now (unanswered: from where m could
+// not answer, beyondLeash) to its experience share; m was in a fight then (regen).
+func (w *World) addShare(now game.Tick, m *Monster, id uint32, dmg int, unanswered bool) {
+	m.calmAt = now
+	u := 0
+	if unanswered {
+		u = dmg
+	}
 	for i := range m.damage {
-		if m.damage[i].player == id {
-			m.damage[i].amount += dmg
+		if s := &m.damage[i]; s.player == id {
+			s.amount += dmg
+			s.unanswered += u
 			return
 		}
 	}
-	m.damage = append(m.damage, damageShare{player: id, amount: dmg})
+	m.damage = append(m.damage, damageShare{player: id, amount: dmg, unanswered: u})
 }
 
 // hitEvents tells everyone who sees pos about a hit of element on creature id: the
@@ -293,6 +303,7 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 			continue
 		}
 		m.nextAttack[i] = ctx.Tick + m.kind.ticks[m.phase][i]
+		m.calmAt = ctx.Tick // dealing damage (or trying to) keeps it from regenerating
 		w.fought(ctx, m, t)
 		if a.Chance < 1 && ctx.Rand.Float64() >= a.Chance {
 			continue

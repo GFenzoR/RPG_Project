@@ -285,8 +285,9 @@ func (w *World) conditionHit(ctx *game.TickContext, h holder, c *condition) {
 	}
 	dmg := min(combat.Resist(c.damage, m.kind.def.Resistances[el]), m.health)
 	m.health -= dmg
+	m.calmAt = ctx.Tick
 	if dmg > 0 && c.source != 0 {
-		w.addShare(m, c.source, dmg)
+		w.addShare(ctx.Tick, m, c.source, dmg, false)
 		w.contribute(ctx, w.playerByID(c.source))
 	}
 	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth), el)

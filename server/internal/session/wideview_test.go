@@ -276,9 +276,9 @@ func TestObserversShareOneMessage(t *testing.T) {
 
 	h.do(func(ctx *game.TickContext) {
 		w.SetHealth(10)
-		h.w.GiveUpForTest(ctx, w)
+		h.w.HealthChangedForTest(w) // as when it regenerates or heals what it could not answer
 	})
-	sharedMsg(t, "the wolf gives up, healed", w.ID(), healthOf, ccl, acl, bcl)
+	sharedMsg(t, "the wolf's health bar", w.ID(), healthOf, ccl, acl, bcl)
 
 	h.sim.Command(h.w.Leave(ccl))
 	h.sim.Step()

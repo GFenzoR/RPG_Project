@@ -518,9 +518,32 @@ func (w *World) FullViewForTest(p *Player) *pb.MapArea {
 // FaceForTest turns m towards p as a fight does (tests only, loop goroutine).
 func (w *World) FaceForTest(m *Monster, p world.Pos) { w.face(m, p) }
 
-// GiveUpForTest makes m give up its fight: full health, told to who sees it (tests only,
-// loop goroutine).
+// GiveUpForTest makes m give up its fight (tests only, loop goroutine).
 func (w *World) GiveUpForTest(ctx *game.TickContext, m *Monster) { w.giveUp(ctx, m) }
+
+// HealthChangedForTest tells who sees m its health bar (tests only, loop goroutine).
+func (w *World) HealthChangedForTest(m *Monster) { w.healthChanged(m) }
+
+// PursuingForTest reports whether m chases its target beyond its leash area now.
+func (m *Monster) PursuingForTest() bool { return m.pursuing }
+
+// PursuitChanceForTest is the chance that m keeps chasing p where p stands (pursuitChance).
+func (w *World) PursuitChanceForTest(m *Monster, p *Player) float64 {
+	return w.pursuitChance(m, p, chebyshev(p.pos, m.slot.spawn.Center), w.leash(m))
+}
+
+// CalmForTest has m deal or take damage now, as far as its regeneration knows (regen).
+func (m *Monster) CalmForTest(ctx *game.TickContext) { m.calmAt = ctx.Tick }
+
+// MoveMonsterForTest puts m on p without a step (tests only, loop goroutine).
+func (w *World) MoveMonsterForTest(m *Monster, p world.Pos) {
+	w.munindex(m)
+	m.pos = p
+	w.mindex(m)
+}
+
+// StraysForTest is how many monsters World.strays holds.
+func (w *World) StraysForTest() int { return len(w.strays) }
 
 // DespawnForTest takes m out of the world without a death (DISAPPEAR_REASON_DESPAWN), as
 // the summons of a monster that died or gave up go (despawnSummons).

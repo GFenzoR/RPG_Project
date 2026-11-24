@@ -101,6 +101,7 @@ func BenchmarkTickMonsters(b *testing.B) {
 	}
 	b.Run("players=100/monsters=1024/leash", func(b *testing.B) { benchMonsters(b, 1024, false, benchLeash) })
 	b.Run("players=100/monsters=1024/areas", func(b *testing.B) { benchMonsters(b, 1024, false, benchAreas) })
+	b.Run("players=100/monsters=1024/pursuit", func(b *testing.B) { benchMonsters(b, 1024, false, benchPursuit) })
 }
 
 // Variants of benchMonsters.
@@ -108,6 +109,9 @@ const (
 	benchPlain = iota
 	benchLeash
 	benchAreas
+	// benchPursuit is benchLeash with data/balance.yaml's pursuit, regeneration and strays
+	// (pursuit.go).
+	benchPursuit
 )
 
 func benchMonsters(b *testing.B, n int, portal bool, variant int) {
@@ -128,6 +132,12 @@ func benchMonsters(b *testing.B, n int, portal bool, variant int) {
 	switch variant {
 	case benchLeash:
 		bal.Combat.MonsterLeashTiles = 6
+	case benchPursuit:
+		bal.Combat.MonsterLeashTiles = 6
+		bal.Combat.MonsterPursuit = content.Pursuit{Persistence: 0.5, MaxChaseTiles: 16, LoseSightMs: 4000, RollMs: 3000,
+			InsistTargetHpPct: 25, MemoryMs: 180000}
+		bal.Combat.MonsterRegen = content.MonsterRegenRate{DelayMs: 10000, IntervalMs: 5000, Pct: 1}
+		bal.Combat.MonsterStrayMs = 300000
 	case benchAreas:
 		wolf.Attacks = append(wolf.Attacks, content.MonsterAttack{Type: "spell", Element: "fire", Min: 1, Max: 4,
 			IntervalMs: 2000, Chance: 1, Area: &content.AttackArea{Shape: content.AreaCircle, Radius: 2, Center: content.AreaSelf}})

@@ -186,12 +186,13 @@ func TestQuestDropForgottenWhenTheWardenGivesUp(t *testing.T) {
 		t.Fatalf("the warden remembers %d damage from the runner, want 10", warden.DamageShareForTest(runner.ID()))
 	}
 	// Out of the leash (9 from the center), out of its reach (spell range 4) and in its
-	// sight (the warden stands at x 32 or more): it gives up, heals and forgets.
+	// sight (the warden stands at x 32 or more): it gives up and forgets (it keeps its
+	// wounds: the runner hit it from inside, combat.monster_pursuit.memory_ms is 0 here).
 	h.sim.Command(gameFunc(func() { h.w.Teleport(runner, pos(39, 44)) }))
 	h.sim.Step()
 	h.sim.RunUntil(func() bool { return warden.TargetID() == 0 }, sim.MaxSeconds(5))
-	if cur, full := warden.Health(); cur != full || warden.DamageShareForTest(runner.ID()) != 0 {
-		t.Fatalf("after giving up: health %d/%d, runner's damage %d (want full and 0)",
+	if cur, full := warden.Health(); cur != full-10 || warden.DamageShareForTest(runner.ID()) != 0 {
+		t.Fatalf("after giving up: health %d/%d, runner's damage %d (want 10 short of full and 0)",
 			cur, full, warden.DamageShareForTest(runner.ID()))
 	}
 	// Far from the forge (no respawn under anyone's eyes is needed: the warden lives).
