@@ -1,9 +1,11 @@
+# Weights are realistic grams per unit (docs/02 "Unidades", "Cargas realistas"); the UI
+# shows them in g or kg.
 - id: fishing_rod
   kind: tool
   sprite: tools/fishing_rod
   name: item.fishing_rod.name
   description: item.fishing_rod.desc
-  weight: 800
+  weight: 600
   tradeable: true
   tool: { use: fishing }
   value: 140
@@ -13,7 +15,7 @@
   sprite: tools/rope
   name: item.rope.name
   description: item.rope.desc
-  weight: 1450
+  weight: 1500
   tradeable: true
   tool: { use: rope }
   value: 45
@@ -23,7 +25,7 @@
   sprite: tools/pickaxe
   name: item.pickaxe.name
   description: item.pickaxe.desc
-  weight: 4200
+  weight: 2800
   tradeable: true
   tool: { use: mining }
   value: 120
@@ -33,7 +35,7 @@
   sprite: tools/shovel
   name: item.shovel.name
   description: item.shovel.desc
-  weight: 3000
+  weight: 1800
   tradeable: true
   tool: { use: shovel }
   value: 40
@@ -49,7 +51,7 @@
   sprite: containers/backpack
   name: item.backpack.name
   description: item.backpack.desc
-  weight: 1650
+  weight: 1000
   tradeable: true
   container: { slots: 24 }
   value: 12
@@ -60,7 +62,7 @@
   sprite: tools/felling_axe
   name: item.felling_axe.name
   description: item.felling_axe.desc
-  weight: 3900
+  weight: 2500
   tradeable: true
   tool: { use: woodcutting }
   value: 110
@@ -70,7 +72,7 @@
   sprite: tools/smithing_hammer
   name: item.smithing_hammer.name
   description: item.smithing_hammer.desc
-  weight: 2600
+  weight: 1200
   tradeable: true
   tool: { use: smithing }
   value: 95

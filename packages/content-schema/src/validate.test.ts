@@ -427,7 +427,7 @@ describe("validator diagnostics", () => {
     );
     edit("data/attributes.yaml", "text: attribute.speed", "text: attribute.nowhere");
     edit("data/attributes.yaml", "- id: ice_protection", "- id: fire_protection");
-    edit("data/items/weapons.yaml", "  weight: 3300\n", "  weight: 3300\n  stackable: true\n");
+    edit("data/items/weapons.yaml", "  weight: 1150\n", "  weight: 1150\n  stackable: true\n");
     const out = messages(root);
     expect(out.some((m) => m.includes("the first band is level 1"))).toBe(true);
     expect(out.some((m) => m.includes("min is greater than max"))).toBe(true);
@@ -1381,7 +1381,7 @@ describe("validator diagnostics", () => {
     edit("data/spells.yaml", "{ id: slowed, range: 4,", "{ id: slowed, range: 7,");
     const out = messages(root);
     expect(
-      out.some((m) => m.startsWith("error data/items/weapons.yaml:126:") && m.includes("<= 6")),
+      out.some((m) => m.startsWith("error data/items/weapons.yaml:128:") && m.includes("<= 6")),
     ).toBe(true);
     const spells = out.filter((m) => m.startsWith("error data/spells.yaml:") && m.includes("<= 6"));
     expect(new Set(spells.map((m) => m.split(":")[1])).size).toBe(3);

@@ -115,50 +115,50 @@ function expected(line: Line, b: number): Record<string, number | undefined> {
   const value = (f: number): number => nice((VALUE[i] ?? NaN) * f);
   switch (line) {
     case "sword":
-      return { attack: a, defense: Math.round(0.5 * a), weight: 3000 + 150 * i, value: value(1) };
+      return { attack: a, defense: Math.round(0.5 * a), weight: 1000 + 100 * i, value: value(1) };
     case "club":
       return {
         attack: a + 1,
         defense: Math.round(0.4 * a),
-        weight: 3800 + 400 * i,
+        weight: 700 + 350 * i,
         value: value(1),
       };
     case "axe":
       return {
         attack: a + 2,
         defense: Math.round(0.3 * a),
-        weight: 4000 + 300 * i,
+        weight: 900 + 250 * i,
         value: value(1),
       };
     case "bow":
-      return { attack: BOW[i], range: b === 1 ? 5 : 6, weight: 2400 + 300 * i, value: value(1) };
+      return { attack: BOW[i], range: b === 1 ? 5 : 6, weight: 700 + 100 * i, value: value(1) };
     case "crossbow":
       return {
         attack: (BOW[i] ?? NaN) - 4,
         range: 5,
-        weight: 3200 + 400 * (b - 3),
+        weight: 3000 + 250 * (b - 3),
         value: value(0.9),
       };
     case "wand":
-      return { attack: WAND[i], range: 4, weight: 1200 + 100 * i, value: value(1) };
+      return { attack: WAND[i], range: 4, weight: 300 + 20 * i, value: value(1) };
     case "staff":
-      return { attack: WAND[i], range: 4, weight: 1400 + 100 * i, value: value(1) };
+      return { attack: WAND[i], range: 4, weight: 1500 + 100 * i, value: value(1) };
     case "shield":
-      return { defense: SHIELD[i], weight: 3500 + 600 * i, value: value(0.75) };
+      return { defense: SHIELD[i], weight: 3000 + 600 * i, value: value(0.75) };
     case "heavy":
-      return { armor: HEAVY[i], weight: 8000 + 1000 * (b - 3), value: value(0.9) };
+      return { armor: HEAVY[i], weight: 4000 + 5000 * (b - 3), value: value(0.9) };
     case "robe":
-      return { armor: ROBE[i], weight: 2000 + 300 * i, value: value(0.6) };
+      return { armor: ROBE[i], weight: 1400 + 100 * i, value: value(0.6) };
     case "head":
-      return { armor: LIMB[i], weight: 800 + 400 * i, value: value(0.4) };
+      return { armor: LIMB[i], weight: 200 + 480 * i, value: value(0.4) };
     case "legs":
-      return { armor: LIMB[i], weight: 1600 + 500 * i, value: value(0.4) };
+      return { armor: LIMB[i], weight: 700 + 750 * i, value: value(0.4) };
     case "feet":
-      return { armor: LIMB[i], weight: 1200 + 400 * i, value: value(0.4) };
+      return { armor: LIMB[i], weight: 1000 + 300 * i, value: value(0.4) };
     case "amulet":
-      return { armor: AMULET[i], weight: 300, value: value(0.8) };
+      return { armor: AMULET[i], weight: 60, value: value(0.8) };
     case "ring":
-      return { armor: RING[i], weight: 100, value: value(0.6) };
+      return { armor: RING[i], weight: 15, value: value(0.6) };
   }
 }
 

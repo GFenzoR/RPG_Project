@@ -1,3 +1,5 @@
+# Weights are realistic grams per unit (docs/02 "Unidades", "Cargas realistas"); the UI
+# shows them in g or kg.
 # The forge's materials (docs/02-game-design.md "Forja", balance.yaml forge). Each refine
 # attempt at an anvil spends temper stones of the item's band: the lesser stone for items
 # of level 1-9, the greater for 10-49, the radiant for 50 and up. Smiths sell them and some
@@ -42,7 +44,7 @@
   sprite: materials/warding_amber
   name: item.warding_amber.name
   description: item.warding_amber.desc
-  weight: 50
+  weight: 20
   stackable: true
   max_stack: 100
   tradeable: true

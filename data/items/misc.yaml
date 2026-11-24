@@ -1,8 +1,10 @@
+# Weights are realistic grams per unit (docs/02 "Unidades", "Cargas realistas"); the UI
+# shows them in g or kg.
 - id: copper_coin
   kind: currency
   sprite: currency/copper_coin
   name: item.copper_coin.name
-  weight: 12
+  weight: 3
   stackable: true
   max_stack: 100
   tradeable: true
@@ -16,7 +18,7 @@
   sprite: currency/silver_coin
   name: item.silver_coin.name
   description: item.silver_coin.desc
-  weight: 10
+  weight: 5
   stackable: true
   max_stack: 100
   tradeable: true
@@ -28,7 +30,7 @@
   sprite: currency/gold_coin
   name: item.gold_coin.name
   description: item.gold_coin.desc
-  weight: 10
+  weight: 8
   stackable: true
   max_stack: 100
   tradeable: true
@@ -40,7 +42,7 @@
   sprite: materials/wolf_pelt
   name: item.wolf_pelt.name
   description: item.wolf_pelt.desc
-  weight: 900
+  weight: 1500
   stackable: true
   max_stack: 100
   tradeable: true
@@ -51,7 +53,7 @@
   sprite: food/raw_fish
   name: item.raw_fish.name
   description: item.raw_fish.desc
-  weight: 500
+  weight: 400
   stackable: true
   max_stack: 100
   tradeable: true
@@ -64,7 +66,7 @@
   sprite: food/ship_biscuit
   name: item.ship_biscuit.name
   description: item.ship_biscuit.desc
-  weight: 200
+  weight: 100
   stackable: true
   max_stack: 100
   tradeable: true
@@ -76,7 +78,7 @@
   sprite: food/boar_meat
   name: item.boar_meat.name
   description: item.boar_meat.desc
-  weight: 900
+  weight: 400
   stackable: true
   max_stack: 100
   tradeable: true
@@ -88,7 +90,7 @@
   sprite: food/seaweed_poultice
   name: item.seaweed_poultice.name
   description: item.seaweed_poultice.desc
-  weight: 300
+  weight: 150
   stackable: true
   max_stack: 100
   tradeable: true
@@ -100,7 +102,7 @@
   sprite: materials/gull_feather
   name: item.gull_feather.name
   description: item.gull_feather.desc
-  weight: 6
+  weight: 5
   stackable: true
   max_stack: 100
   tradeable: true
@@ -111,7 +113,7 @@
   sprite: materials/crab_claw
   name: item.crab_claw.name
   description: item.crab_claw.desc
-  weight: 300
+  weight: 200
   stackable: true
   max_stack: 100
   tradeable: true
@@ -122,7 +124,7 @@
   sprite: materials/bat_wing
   name: item.bat_wing.name
   description: item.bat_wing.desc
-  weight: 70
+  weight: 30
   stackable: true
   max_stack: 100
   tradeable: true
@@ -133,7 +135,7 @@
   sprite: materials/boar_tusk
   name: item.boar_tusk.name
   description: item.boar_tusk.desc
-  weight: 400
+  weight: 300
   stackable: true
   max_stack: 100
   tradeable: true
@@ -144,7 +146,7 @@
   sprite: materials/spider_silk
   name: item.spider_silk.name
   description: item.spider_silk.desc
-  weight: 50
+  weight: 20
   stackable: true
   max_stack: 100
   tradeable: true
@@ -155,7 +157,7 @@
   sprite: materials/beetle_carapace
   name: item.beetle_carapace.name
   description: item.beetle_carapace.desc
-  weight: 1200
+  weight: 400
   stackable: true
   max_stack: 100
   tradeable: true
@@ -166,7 +168,7 @@
   sprite: materials/iron_ore
   name: item.iron_ore.name
   description: item.iron_ore.desc
-  weight: 2000
+  weight: 1200
   stackable: true
   max_stack: 100
   tradeable: true
@@ -201,7 +203,7 @@
   sprite: materials/tarnished_locket
   name: item.tarnished_locket.name
   description: item.tarnished_locket.desc
-  weight: 150
+  weight: 60
   quest: true
   tradeable: true
   value: 120
@@ -211,7 +213,7 @@
   sprite: quest/bosun_logbook
   name: item.bosun_logbook.name
   description: item.bosun_logbook.desc
-  weight: 400
+  weight: 500
   quest: true
   tradeable: false
   notes: Chapter 1 quest item (ch1_shipwreck). Given by puerto_foreman, taken by harbor_master. No value, so no NPC buys it.
@@ -222,7 +224,7 @@
   sprite: materials/birch_log
   name: item.birch_log.name
   description: item.birch_log.desc
-  weight: 1800
+  weight: 2500
   stackable: true
   max_stack: 100
   tradeable: true
@@ -233,7 +235,7 @@
   sprite: materials/tree_resin
   name: item.tree_resin.name
   description: item.tree_resin.desc
-  weight: 150
+  weight: 200
   stackable: true
   max_stack: 100
   tradeable: true
@@ -244,7 +246,7 @@
   sprite: materials/iron_ingot
   name: item.iron_ingot.name
   description: item.iron_ingot.desc
-  weight: 1600
+  weight: 1000
   stackable: true
   max_stack: 100
   tradeable: true
@@ -255,7 +257,7 @@
   sprite: food/grilled_fish
   name: item.grilled_fish.name
   description: item.grilled_fish.desc
-  weight: 450
+  weight: 300
   stackable: true
   max_stack: 100
   tradeable: true
@@ -267,7 +269,7 @@
   sprite: food/roast_boar
   name: item.roast_boar.name
   description: item.roast_boar.desc
-  weight: 850
+  weight: 500
   stackable: true
   max_stack: 100
   tradeable: true
@@ -279,7 +281,7 @@
   sprite: food/harbour_stew
   name: item.harbour_stew.name
   description: item.harbour_stew.desc
-  weight: 700
+  weight: 600
   stackable: true
   max_stack: 100
   tradeable: true
@@ -293,7 +295,7 @@
   sprite: materials/stag_antler
   name: item.stag_antler.name
   description: item.stag_antler.desc
-  weight: 1100
+  weight: 1500
   stackable: true
   max_stack: 100
   tradeable: true
@@ -304,7 +306,7 @@
   sprite: materials/toad_gland
   name: item.toad_gland.name
   description: item.toad_gland.desc
-  weight: 120
+  weight: 50
   stackable: true
   max_stack: 100
   tradeable: true
@@ -315,7 +317,7 @@
   sprite: materials/glowcap
   name: item.glowcap.name
   description: item.glowcap.desc
-  weight: 60
+  weight: 40
   stackable: true
   max_stack: 100
   tradeable: true
@@ -326,7 +328,7 @@
   sprite: materials/thorn_heartwood
   name: item.thorn_heartwood.name
   description: item.thorn_heartwood.desc
-  weight: 900
+  weight: 1500
   stackable: true
   max_stack: 100
   tradeable: true
@@ -337,7 +339,7 @@
   sprite: materials/crawler_chitin
   name: item.crawler_chitin.name
   description: item.crawler_chitin.desc
-  weight: 700
+  weight: 600
   stackable: true
   max_stack: 100
   tradeable: true
@@ -348,7 +350,7 @@
   sprite: materials/elm_log
   name: item.elm_log.name
   description: item.elm_log.desc
-  weight: 2100
+  weight: 3500
   stackable: true
   max_stack: 100
   tradeable: true
@@ -359,7 +361,7 @@
   sprite: food/glowcap_broth
   name: item.glowcap_broth.name
   description: item.glowcap_broth.desc
-  weight: 600
+  weight: 500
   stackable: true
   max_stack: 100
   tradeable: true
@@ -371,7 +373,7 @@
   sprite: quest/smuggler_tally
   name: item.smuggler_tally.name
   description: item.smuggler_tally.desc
-  weight: 80
+  weight: 20
   stackable: true
   max_stack: 100
   quest: true
@@ -383,7 +385,7 @@
   sprite: quest/sealed_coffer
   name: item.sealed_coffer.name
   description: item.sealed_coffer.desc
-  weight: 2500
+  weight: 4000
   quest: true
   tradeable: false
   notes: Chapter 2 quest item (ch2_coffer), the coffer stolen from the wreck of Chapter 1. Dropped by hollow crawlers in the smugglers' cave; taken by bosque_druid. No value, so no NPC buys it.
@@ -395,7 +397,7 @@
   sprite: materials/ash_pelt
   name: item.ash_pelt.name
   description: item.ash_pelt.desc
-  weight: 1300
+  weight: 1500
   stackable: true
   max_stack: 100
   tradeable: true
@@ -406,7 +408,7 @@
   sprite: materials/salamander_scale
   name: item.salamander_scale.name
   description: item.salamander_scale.desc
-  weight: 150
+  weight: 30
   stackable: true
   max_stack: 100
   tradeable: true
@@ -417,7 +419,7 @@
   sprite: materials/slag_core
   name: item.slag_core.name
   description: item.slag_core.desc
-  weight: 1800
+  weight: 4000
   stackable: true
   max_stack: 100
   tradeable: true
@@ -428,7 +430,7 @@
   sprite: materials/wyrm_scale
   name: item.wyrm_scale.name
   description: item.wyrm_scale.desc
-  weight: 400
+  weight: 200
   stackable: true
   max_stack: 100
   tradeable: true
@@ -439,7 +441,7 @@
   sprite: materials/ember_ore
   name: item.ember_ore.name
   description: item.ember_ore.desc
-  weight: 1600
+  weight: 1300
   stackable: true
   max_stack: 100
   tradeable: true
@@ -450,7 +452,7 @@
   sprite: materials/embersteel_ingot
   name: item.embersteel_ingot.name
   description: item.embersteel_ingot.desc
-  weight: 1400
+  weight: 1000
   stackable: true
   max_stack: 100
   tradeable: true
@@ -461,7 +463,7 @@
   sprite: quest/ember_root
   name: item.ember_root.name
   description: item.ember_root.desc
-  weight: 600
+  weight: 400
   tradeable: false
   notes: Chapter 3 key (ch3_gate). bosque_druid hands it over to whoever set ember_root_found in Chapter 2; volcan_forge_echo takes it and shapes the ember key that opens the sealed gate. No value, so no NPC buys it.
 
@@ -470,7 +472,7 @@
   sprite: quest/delver_chart
   name: item.delver_chart.name
   description: item.delver_chart.desc
-  weight: 90
+  weight: 50
   quest: true
   tradeable: false
   notes: Chapter 3 quest item (ch3_gate). Obsidian delvers drop it; volcan_keeper takes one.
@@ -480,7 +482,7 @@
   sprite: quest/forge_seal
   name: item.forge_seal.name
   description: item.forge_seal.desc
-  weight: 2200
+  weight: 1500
   quest: true
   tradeable: false
   notes: Chapter 3 quest item (ch3_warden). Always dropped by the slagbound warden; volcan_keeper takes it.
@@ -490,7 +492,7 @@
   sprite: quest/ember_key
   name: item.ember_key.name
   description: item.ember_key.desc
-  weight: 300
+  weight: 150
   tradeable: false
   key: forge_gate
   notes: Opens and locks the forge gate (door key forge_gate, data/items/doors.yaml). volcan_forge_echo shapes it from the ember root in ch3_gate, and shapes another for whoever finished ch3_gate and lacks one. No value, so no NPC buys it.
@@ -502,7 +504,7 @@
   sprite: quest/ember_key
   name: item.morvund_key.name
   description: item.morvund_key.desc
-  weight: 300
+  weight: 100
   tradeable: false
   key: morvund_gate
   notes: Opens and locks the Morvund gallery gate (door key morvund_gate, data/items/doors.yaml). No value, so no NPC buys it.
@@ -513,7 +515,7 @@
   sprite: tools/brass_key
   name: item.pruebas_key.name
   description: item.pruebas_key.desc
-  weight: 100
+  weight: 80
   tradeable: false
   key: pruebas_gate
   notes: Opens and locks the practice gate of the sandbox island (door key pruebas_gate, data/items/doors.yaml). pruebas_merchant sells it. No value, so no NPC buys it.

@@ -2,11 +2,14 @@
 # Our own numbers (CLAUDE.md legal rule): never copy another game's constants.
 # start_kit (2026-11-23): what a new character gets once, at its first login (docs/02
 # "Equipo inicial"): each piece in the slot it fits, the rest in the backpack.
+# Capacity is in grams, a realistic human load (owner, 2026-11-23; docs/02 "Unidades"):
+# 36-45 kg at level 1 (the guardian strongest, the arcanist weakest), about 80-120 kg at
+# level 75. TestHuntLootFits (server/internal/sim) checks a hunt's loot still fits.
 - id: guardian
   name: vocation.guardian.name
   description: vocation.guardian.desc
-  start: { health: 145, mana: 20, capacity: 420000, speed: 205 }
-  per_level: { health: 14, mana: 4, capacity: 23000, speed: 3 }
+  start: { health: 145, mana: 20, capacity: 45000, speed: 205 }
+  per_level: { health: 14, mana: 4, capacity: 1000, speed: 3 }
   regen: { health: 3, mana: 1, interval_ms: 7000 }
   skill_factors:
     fist: 1.13
@@ -31,8 +34,8 @@
 - id: arcanist
   name: vocation.arcanist.name
   description: vocation.arcanist.desc
-  start: { health: 140, mana: 75, capacity: 380000, speed: 205 }
-  per_level: { health: 6, mana: 28, capacity: 11000, speed: 3 }
+  start: { health: 140, mana: 75, capacity: 36000, speed: 205 }
+  per_level: { health: 6, mana: 28, capacity: 600, speed: 3 }
   regen: { health: 1, mana: 3, interval_ms: 4000 }
   skill_factors:
     fist: 1.45
@@ -58,8 +61,8 @@
 - id: ranger
   name: vocation.ranger.name
   description: vocation.ranger.desc
-  start: { health: 145, mana: 40, capacity: 405000, speed: 205 }
-  per_level: { health: 9, mana: 13, capacity: 19000, speed: 3 }
+  start: { health: 145, mana: 40, capacity: 42000, speed: 205 }
+  per_level: { health: 9, mana: 13, capacity: 800, speed: 3 }
   regen: { health: 2, mana: 2, interval_ms: 5500 }
   skill_factors:
     fist: 1.25
@@ -86,8 +89,8 @@
 - id: druid
   name: vocation.druid.name
   description: vocation.druid.desc
-  start: { health: 140, mana: 75, capacity: 380000, speed: 205 }
-  per_level: { health: 6, mana: 27, capacity: 11500, speed: 3 }
+  start: { health: 140, mana: 75, capacity: 37000, speed: 205 }
+  per_level: { health: 6, mana: 27, capacity: 650, speed: 3 }
   regen: { health: 1, mana: 3, interval_ms: 4000 }
   skill_factors:
     fist: 1.45
