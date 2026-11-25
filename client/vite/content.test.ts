@@ -4,8 +4,17 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadContent } from "@rpg/map-format";
-import { delta } from "../src/state/geometry.ts";
-import { findPath } from "../src/state/path.ts";
+import {
+  CreatureKind,
+  CreatureSchema,
+  ItemStackSchema,
+  MapAreaSchema,
+  MapFloorSchema,
+  TileSchema,
+  create,
+} from "@rpg/protocol";
+import { Steering } from "../src/state/steering.ts";
+import { WorldState } from "../src/state/world.ts";
 import {
   GAME_SITE_KEYS,
   dialogTopics,
@@ -338,24 +347,90 @@ describe("client content (T0.5)", () => {
       expect(byId.get(id)?.blocks, id).toBe(true);
     for (const id of ["cut_bush", "grass_tuft", "tall_grass", "wildflowers", "reeds", "bench"])
       expect(byId.get(id)?.blocks, id).toBe(false);
-    // A row of grass, 0..4, with one thing on its middle tile and open rows beside it.
+    // The click itself (state/steering.ts walkTo: pathPassable over WorldState.free, what
+    // game.ts runs every frame), on a 5x3 lawn the server sent with one thing on its middle
+    // tile, the player at its west end: the tiles stepped on up to the east end.
+    const num = (id: string): number => {
+      const n = Object.entries(content.items).find(([, d]) => d.id === id)?.[0];
+      expect(n, id).toBeDefined();
+      return Number(n);
+    };
     const walk = (onTheWay: string): string[] => {
-      const passable = (x: number, y: number): boolean =>
-        x >= 0 &&
-        x <= 4 &&
-        y >= 0 &&
-        y <= 2 &&
-        !(x === 2 && y === 1 && byId.get(onTheWay)?.blocks === true);
-      const steps = findPath({ x: 0, y: 1, z: 7 }, { x: 4, y: 1, z: 7 }, passable, {
-        diagonalCost: 1.414,
-        maxSteps: 20,
+      const w = new WorldState(content);
+      w.apply(
+        {
+          case: "welcome",
+          value: {
+            $typeName: "game.v1.Welcome",
+            creatureId: 7,
+            serverTime: 0n,
+            tickMs: 50,
+            maxQueuedSteps: 4,
+            viewWidth: 31,
+            viewHeight: 21,
+            attackEvents: false,
+          },
+        },
+        0,
+      );
+      const grass = create(ItemStackSchema, { itemId: num("grass") });
+      const area = create(MapAreaSchema, {
+        x: 100,
+        y: 200,
+        width: 5,
+        height: 3,
+        palette: [
+          create(TileSchema, { items: [grass] }),
+          create(TileSchema, {
+            items: [grass, create(ItemStackSchema, { itemId: num(onTheWay) })],
+          }),
+        ],
+        floors: [
+          create(MapFloorSchema, { z: 7, tiles: [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0] }),
+        ],
+        creatures: [
+          create(CreatureSchema, {
+            id: 7,
+            kind: CreatureKind.PLAYER,
+            name: "me",
+            pos: { x: 100, y: 201, z: 7 },
+            speed: 200,
+          }),
+        ],
       });
-      expect(steps, onTheWay).toBeDefined();
-      let [x, y] = [0, 1];
-      return (steps ?? []).map((d) => {
-        const [dx, dy] = delta(d);
-        return `${(x += dx)},${(y += dy)}`;
+      w.apply(
+        { case: "fullMapView", value: { $typeName: "game.v1.FullMapView", area, walkEpoch: 1 } },
+        0,
+      );
+      const s = new Steering({
+        portals: content.portals,
+        diagonalCost: content.movement.diagonalCost,
+        maxPathTiles: content.movement.maxPathTiles,
       });
+      expect(s.walkTo(w, { x: 104, y: 201, z: 7 }, 0), onTheWay).toBe(true);
+      const stepped: string[] = [];
+      for (let t = 0; t <= 20_000 && s.goal; t += 10) {
+        if (s.next(w, t, {})?.kind !== "walk") continue;
+        const p = w.predicted[0];
+        if (!p) throw new Error("a walk without a predicted step");
+        stepped.push(`${p.to.x - 100},${p.to.y - 200}`);
+        // The server takes the step.
+        w.apply(
+          {
+            case: "creatureMove",
+            value: {
+              $typeName: "game.v1.CreatureMove",
+              id: 7,
+              from: { $typeName: "game.v1.Position", ...p.from },
+              to: { $typeName: "game.v1.Position", ...p.to },
+              durationMs: p.walk.duration,
+              walkSeq: p.seq,
+            },
+          },
+          t,
+        );
+      }
+      return stepped;
     };
     expect(walk("bush")).not.toContain("2,1");
     expect(walk("bush").at(-1)).toBe("4,1");

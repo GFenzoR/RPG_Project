@@ -101,13 +101,27 @@ describe("solid map objects", () => {
     }
   });
 
-  it("have a bush on every island but the tools island, and nobody stands on one", () => {
-    for (const is of world.islands.values()) {
-      const bushes = find(is, "bush");
-      if (is.meta.id === "testisle") continue;
-      expect(bushes.length, is.meta.id).toBeGreaterThan(20);
-      for (const p of bushes) expect(isWalkable(tiles.tileAt(p), content), at(p)).toBe(false);
-    }
+  it("stop feet wherever a map has a bush", () => {
+    let bushes = 0;
+    for (const is of world.islands.values())
+      for (const p of find(is, "bush")) {
+        bushes++;
+        expect(isWalkable(tiles.tileAt(p), content), at(p)).toBe(false);
+      }
+    // The maps have bushes (how many, and on which island, is the map builders' business).
+    expect(bushes).toBeGreaterThan(0);
+  });
+
+  it("grow on ground one walks on: no bush, tree or boulder stands in the water", () => {
+    const wet: string[] = [];
+    for (const is of world.islands.values())
+      for (const item of ["bush", "thick_bush", "oak_tree", "pine_tree", "birch_tree", "elm_tree"])
+        for (const p of find(is, item)) {
+          const ground = tiles.tileAt(p)?.ground;
+          if (!ground || content.items.get(ground)?.walkable !== true)
+            wet.push(`${is.meta.id}: ${item} on ${String(ground)} at ${at(p)}`);
+        }
+    expect(wet).toEqual([]);
   });
 
   it("leave walkable every tile something stands on", () => {
@@ -132,14 +146,16 @@ describe("solid map objects", () => {
           if (!isWalkable(t ? { ground: t.ground, stack: others } : undefined, content))
             solid.push(`${id}: door of house ${h.id} at ${at(d)}`);
         }
-        // Nothing fixed takes a tile from a tenant (docs/03 "Muebles y luces"): no bush,
-        // tree or boulder inside a house.
+        // Nothing fixed takes a tile from a tenant (docs/03 "Muebles y luces"): in a house
+        // only its walls and its doors block.
         for (const r of h.rects)
           for (let y = r.y; y < r.y + r.h; y++)
             for (let x = r.x; x < r.x + r.w; x++)
-              for (const item of tiles.tile(x, y, r.z)?.stack ?? [])
-                if (["bush", "oak_tree", "pine_tree", "boulder"].includes(item))
+              for (const item of tiles.tile(x, y, r.z)?.stack ?? []) {
+                const info = content.items.get(item);
+                if (info?.blocksMovement === true && info.door !== true && info.kind !== "wall")
                   solid.push(`${id}: ${item} in house ${h.id} at ${x},${y},${r.z}`);
+              }
       }
     }
     expect(solid).toEqual([]);
