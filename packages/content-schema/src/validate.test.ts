@@ -169,7 +169,18 @@ describe("validator diagnostics", () => {
       ["reeds", "reed"],
       ["sack_of_bush", "sacks"],
     ]);
-    edit("data/items/decoration.yaml", "- id: sack_of_bush\n", "- id: old_bush\n");
+    // A compound written in one word ends in its family (thornbush: "bush"), after three
+    // letters or more: a rush is no "ush", as a rope_spot is no pot.
+    edit("data/solid_families.yaml", "  - bushes\n", "  - bushes\n  - ush\n");
+    edit("data/items/decoration.yaml", "- id: sack_of_bush\n", "- id: thornbush\n");
+    expect(named()).toEqual([
+      ["reeds", "reed"],
+      ["thornbush", "bushes"],
+    ]);
+    edit("data/items/decoration.yaml", "- id: thornbush\n", "- id: rush\n");
+    expect(named()).toEqual([["reeds", "reed"]]);
+    edit("data/solid_families.yaml", "  - bushes\n  - ush\n", "  - bushes\n");
+    edit("data/items/decoration.yaml", "- id: rush\n", "- id: old_bush\n");
     expect(named()).toEqual([
       ["old_bush", "bushes"],
       ["reeds", "reed"],

@@ -444,6 +444,13 @@ class TheWholeImport(unittest.TestCase):
             art.wind_record("bush", 40, 32)
         with self.assertRaisesRegex(ValueError, "one of tree, palm"):
             art.wind_record("kite", 3, 32)
+        # The same plant words as the content validator's PLANT_WORD (one regex literal there).
+        validate = os.path.join(os.path.dirname(__file__), "..", "..", "packages", "content-schema", "src",
+                                "validate.ts")
+        with open(validate, encoding="utf-8") as handle:
+            literal = handle.read().split("const PLANT_WORD =", 1)[1].split(";", 1)[0].strip()
+        self.assertTrue(literal.startswith("/") and literal.endswith("/"), literal)
+        self.assertEqual(literal[1:-1], art.PLANT_WORD.pattern)
         self.assertTrue(art.names_plant("jungle_fern"))
         self.assertTrue(art.names_plant("decor/wildflowers"))
         self.assertFalse(art.names_plant("planter_box"))

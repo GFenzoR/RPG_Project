@@ -47,6 +47,12 @@ func between(h *harness, m *world.Map, is *world.Island, both bool, items ...str
 	for _, id := range items {
 		ids = append(ids, h.w.ItemForTest(id).Numeric)
 	}
+	return betweenIDs(m, is, both, nil, ids)
+}
+
+// betweenIDs is between by numeric id, for a map no world runs yet; ok, if given, must
+// accept the two sides.
+func betweenIDs(m *world.Map, is *world.Island, both bool, ok func(west, east world.Pos) bool, ids []uint16) (on, west, east world.Pos, found bool) {
 	for _, s := range is.Sectors() {
 		for _, st := range s.Stacks {
 			if !slices.ContainsFunc(st.Items, func(id uint16) bool { return slices.Contains(ids, id) }) {
@@ -59,7 +65,7 @@ func between(h *harness, m *world.Map, is *world.Island, both bool, items ...str
 			}
 			w, okW := p.Step(world.West)
 			e, okE := p.Step(world.East)
-			if okW && standable(m, w) && (!both || okE && standable(m, e)) {
+			if okW && standable(m, w) && (!both || okE && standable(m, e)) && (ok == nil || ok(w, e)) {
 				return p, w, e, true
 			}
 		}
@@ -214,6 +220,107 @@ func TestTreesBlockSightOnTheMap(t *testing.T) {
 	}
 	if !tree || !bush || !chop {
 		t.Fatalf("looked at a tree %v, a bush %v, a tree to cut %v: the map has none between open ground", tree, bush, chop)
+	}
+}
+
+// A tree is cover on the real map, a bush is not (docs/02 "Línea de visión"): a monster
+// that spits from afar never takes for target the player standing behind a trunk two tiles
+// away, and takes the one standing behind a bush.
+func TestTreesCoverFromMonstersOnTheMap(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	m, err := compile.Compile(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := content.LoadItems(filepath.Join(root, "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nums := func(ids ...string) []uint16 {
+		var out []uint16
+		for _, id := range ids {
+			out = append(out, items[id].Numeric)
+		}
+		return out
+	}
+	// Both sides outside every protection zone (no monster hunts in one), on plain ground.
+	wild := func(west, east world.Pos) bool {
+		return m.Flags(west)&world.FlagProtection == 0 && m.Flags(east)&world.FlagProtection == 0
+	}
+	type place struct {
+		is             *world.Island
+		on, west, east world.Pos
+	}
+	find := func(ids []uint16, far *place) (place, bool) {
+		for _, is := range m.Islands() {
+			ok := func(west, east world.Pos) bool {
+				// Out of sight of the other pair: each monster has one player to see.
+				return wild(west, east) && (far == nil || west.Z != far.on.Z ||
+					max(dist(west.X, far.on.X), dist(west.Y, far.on.Y)) > 40)
+			}
+			if on, west, east, found := betweenIDs(m, is, true, ok, ids); found {
+				return place{is, on, west, east}, true
+			}
+		}
+		return place{}, false
+	}
+	tree, okT := find(nums("oak_tree", "pine_tree", "birch_tree", "elm_tree"), nil)
+	if !okT {
+		t.Fatal("no tree between open ground outside the protection zones")
+	}
+	bush, okB := find(nums("bush"), &tree)
+	if !okB {
+		t.Fatal("no bush between open ground outside the protection zones")
+	}
+	spitter := func(id string, at world.Pos) world.Spawn {
+		return world.Spawn{ID: id, Center: at, RespawnSeconds: 600,
+			Monsters: []world.SpawnMonster{{Monster: "mire_toad", Count: 1}}}
+	}
+	spells, err := content.LoadSpells(filepath.Join(root, "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := dataHarnessWith(t, func(cfg *session.Config) {
+		cfg.Map, cfg.Quests, cfg.Spells = m, realQuests(t), spells
+		for _, is := range m.Islands() {
+			is.Spawns = nil
+		}
+		tree.is.Spawns = append(tree.is.Spawns, spitter("cover_tree", tree.east))
+		bush.is.Spawns = append(bush.is.Spawns, spitter("cover_bush", bush.east))
+	})
+	stand := func(id int64, at world.Pos) *session.Player {
+		c := session.Character{ID: id, AccountID: id, Name: fmt.Sprintf("Bait%d", id), Vocation: "guardian",
+			Level: 30, Health: 400, HasPos: true, Pos: at}
+		_, p := h.joinChar(c)
+		if p.Pos() != at {
+			t.Fatalf("joined at %v, want %v", p.Pos(), at)
+		}
+		return p
+	}
+	hidden, seen := stand(9930, tree.west), stand(9931, bush.west)
+	toad := func(at world.Pos) *session.Monster {
+		for _, mo := range h.w.Monsters() {
+			if mo.Pos() == at {
+				return mo
+			}
+		}
+		t.Fatalf("no monster spawned at %v", at)
+		return nil
+	}
+	behindTree, behindBush := toad(tree.east), toad(bush.east)
+	hunted := false
+	for range 100 { // 5 s
+		h.sim.Step()
+		if behindTree.TargetID() != 0 {
+			t.Fatalf("the monster at %v took a target through the tree at %v", behindTree.Pos(), tree.on)
+		}
+		hunted = hunted || behindBush.TargetID() == seen.ID()
+	}
+	if hp, _ := hidden.Health(); hp != 400 {
+		t.Fatalf("behind the tree at %v: health %d, want 400", tree.on, hp)
+	}
+	if !hunted {
+		t.Fatalf("the monster at %v never took the player over the bush at %v", bush.east, bush.on)
 	}
 }
 

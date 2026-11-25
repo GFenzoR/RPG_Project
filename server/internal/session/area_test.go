@@ -431,3 +431,26 @@ func TestEscapeNeedsNoRope(t *testing.T) {
 		t.Fatalf("a rope spot up from the vault: %v", err)
 	}
 }
+
+// A character saved on a house tile that something solid fills now (a bush in a rented
+// garden, made solid) wakes up at its temple, not beside it: besideSolid never guesses
+// inside a house, whose tiles answer to its owner and its guests.
+func TestSavedOnASolidHouseTileGoesToTheTemple(t *testing.T) {
+	m := worldtest.WithHouses(t, worldtest.Map(t, 0, 0, 7,
+		"############",
+		"#.v#.......#",
+		"#..#.......#",
+		"#..........T",
+		"############",
+	), world.House{ID: "garden", Name: "house.garden.name", Rent: 10,
+		Rects: []world.HouseRect{{X: 1, Y: 1, Z: 7, W: 2, H: 2}}, Doors: []world.Pos{pos(1, 2)}, Exit: pos(1, 3)})
+	h := newHarness(t, m)
+	vein, temple := pos(2, 1), pos(11, 3)
+	if m.Flags(vein)&(world.BlockFlags|world.FlagHouse) != world.FlagBlocksMovement|world.FlagHouse {
+		t.Fatalf("the vein at %v must be a solid house tile one sees over: flags %b", vein, m.Flags(vein))
+	}
+	_, p := h.join("Gardener", &vein)
+	if p.Pos() != temple {
+		t.Fatalf("saved on the solid house tile %v, logged in at %v, want the temple %v", vein, p.Pos(), temple)
+	}
+}

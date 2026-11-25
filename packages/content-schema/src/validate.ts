@@ -1143,7 +1143,8 @@ class Validator {
    * data/solid_families.yaml (docs/06 "Qué bloquea el paso"): a map object (pickupable:
    * false, of any kind but a ground, which one walks on, and a wall, which blocks unless it
    * says otherwise) whose id has the word of a solid family (the id split at "_", one or
-   * many: stacked_crates has "crate", a vine has "vines") writes blocks_movement, true or
+   * many: stacked_crates has "crate", a vine has "vines"; or a word that ends in it: signpost
+   * has "post") writes blocks_movement, true or
    * false, so that a new bush or crate is never walkable because nobody thought of it.
    * A decoration of such a family (kind: decoration: nobody wears it or stacks it) that
    * writes neither pickupable nor blocks_movement is asked for both: left out, pickupable means yes (Go:
@@ -1155,10 +1156,22 @@ class Validator {
     const families = new Set(
       isObj(solid.data) ? asList(solid.data["families"]).filter((f) => typeof f === "string") : [],
     );
-    // The family of a word of an id, said in the singular or in the plural.
+    // The family of a word of an id, said in the singular or in the plural: the word itself,
+    // or its ending (a compound written in one word: signpost has "post", bookshelf has
+    // "shelf", flowerbeds has "bed") after three letters or more (a rope_spot is no pot), the
+    // longest family first.
+    const forms = (word: string): string[] => [
+      word,
+      word.replace(/s$/, ""),
+      word.replace(/es$/, ""),
+      `${word}s`,
+      `${word}es`,
+    ];
+    const byLength = [...families].sort((a, b) => b.length - a.length || (a < b ? -1 : 1));
     const familyOf = (word: string): string | undefined =>
-      [word, word.replace(/s$/, ""), word.replace(/es$/, ""), `${word}s`, `${word}es`].find((w) =>
-        families.has(w),
+      forms(word).find((w) => families.has(w)) ??
+      byLength.find((f) =>
+        forms(f).some((w) => w.length > 0 && word.length >= w.length + 3 && word.endsWith(w)),
       );
     for (const { item, src, path } of this.items) {
       const unsaid =

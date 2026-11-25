@@ -394,7 +394,9 @@ Un objeto del mapa bloquea lo que su sprite muestra. Antes se caminaba sobre los
   objeto fijo del mapa (`pickupable: false`, de cualquier `kind` salvo `ground`, que se
   pisa, y `wall`, que bloquea por defecto: un cajón registrable `kind: container` cuenta)
   cuyo id tiene una de esas palabras (el id partido en `_`: `thick_bush` tiene `bush`; en
-  singular o en plural: `stacked_crates` tiene `crate`, `barrels` tiene `barrel`) no
+  singular o en plural: `stacked_crates` tiene `crate`, `barrels` tiene `barrel`; o
+  una palabra compuesta que termina en ella tras tres letras o más: `signpost` tiene
+  `post`, `bookshelf` tiene `shelf`, pero `rope_spot` no es un `pot`) no
   escribe `blocks_movement`, con `true` o con `false`. El miembro plano o abierto de una
   familia lo dice en voz alta (`cut_bush`, `forge_gate_open`, `bench`:
   `blocks_movement: false`). Un `kind: decoration` de una familia que no escribe
@@ -421,7 +423,24 @@ Un objeto del mapa bloquea lo que su sprite muestra. Antes se caminaba sobre los
   (`placement` y `besideSolid` de `server/internal/session/player.go`; test
   `TestBushesAreSolidOnTheMap`). Sobre un muro, un árbol o una casilla sin mapa sigue
   despertando en su templo: ahí nunca hubo suelo y el servidor no adivina de qué lado
-  dejarlo (`TestSavedOnAWallGoesToTheTemple`).
+  dejarlo (`TestSavedOnAWallGoesToTheTemple`). También despierta en su templo quien quedó
+  guardado sobre un arbusto de una casilla de casa (el jardín de una casa alquilada): una
+  casa responde a su dueño y sus invitados, y el servidor no lo deja adentro ni elige la
+  calle (`TestSavedOnASolidHouseTileGoesToTheTemple`). Si el arbusto ahora sólido separa
+  dos zonas caminables, despierta en cualquiera de los dos lados (primero el noroeste):
+  nadie se para a voluntad en una casilla sólida, y cuando se guardó esa casilla las unía.
+- **Un personaje guardado sobre la casilla de un objeto del mundo vivo** (los restos de un
+  `thick_bush` o una `cracked_rock` rotos, el hueco de una roca empujada, una reja
+  abierta) despierta ahí mismo mientras la casilla esté libre, y al lado cuando el objeto
+  ya volvió, aunque tape la vista (`rotten_barricade`, `heavy_crate`). Esas casillas no
+  pertenecen a ninguna zona caminable (las zonas se numeran una vez, con el objeto en
+  pie), y antes mandaban al personaje a su templo, aunque fuera de otra isla: un viaje
+  gratis. Las zonas vecinas son todas de la misma sala o todas de afuera
+  (`checkLivingRooms`), así que nadie entra a una sala sin su llave
+  (`TestLivingSavedOnAnObjectWakesThere`).
+- **Cobertura:** un árbol entre un monstruo y un jugador lo esconde (el monstruo no lo
+  toma de blanco ni le escupe); un arbusto no (`TestTreesCoverFromMonstersOnTheMap`, en
+  el mapa real).
 - **Mundo vivo:** una planta sólida (arbusto, árboles) nunca se pisa; se dobla o se sacude
   cuando alguien pasa por una casilla vecina (`livingworld/README.md`, "Plantas").
 
