@@ -227,7 +227,7 @@
           }
         },
         "monster_regen": {
-          "description": "Out-of-combat regeneration of monsters: without a target and delay_ms after last dealing or taking damage, pct % of the maximum health (at least 1) every interval_ms. Absent or pct 0 = none.",
+          "description": "Out-of-combat regeneration of monsters: without a target and delay_ms after last dealing or taking damage, pct % of the maximum health every interval_ms (fractions of a point carry over). Absent or pct 0 = none.",
           "type": "object",
           "additionalProperties": false,
           "properties": {

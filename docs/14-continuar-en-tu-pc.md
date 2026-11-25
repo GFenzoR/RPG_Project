@@ -390,6 +390,18 @@ el punto 5:
     `thinkStrays` recorre cada tick a los monstruos fuera de su radio de casa, también a
     los que pelean dentro de la correa (un recorrido sin asignaciones; solo piensa el que
     no pensó ese tick). Las cifras de docs/07 las midió el autor, sin bots.
+  - **Tercera revisión (hecho):** (1) un monstruo con objetivo piensa aunque su sector se
+    duerma (antes, quien peleaba solo y cambiaba de piso lo dejaba dormido con la pelea
+    abierta: sin rendirse, con sus quemaduras activas y sin regenerar); un autor en otro
+    piso está fuera de su alcance. (2) La regeneración acumula la fracción (ya no "al
+    menos 1" por intervalo) y recorta el reparto de daño a las heridas que quedan.
+    (3) `World.strays` ya no busca duplicados con un recorrido (`Monster.listed`).
+    **Sigue a confirmar por el dueño:** el daño sin responder de un arquero o mago que
+    kitea dentro de la zona de confort se cura cuando el monstruo se rinde; la
+    alternativa (cerrar solo el daño hecho desde donde el monstruo no puede ir) vuelve a
+    abrir "disparar desde adentro y salir de la correa", por eso no se cambió sin su
+    decisión. Sin test: el errante de un spawn sin casilla libre, que reaparece cada
+    `monster_stray_ms` (solo sin nadie mirando).
   - **Una manada** es un spawn: dos spawns vecinos del mismo tipo deciden aparte.
   - **Integración y E2E** los corre el lote al final: mirar en `make play` a un lobo
     siguiendo fuera del corral y volviendo herido.

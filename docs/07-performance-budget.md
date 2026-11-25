@@ -28,11 +28,15 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   persigue más allá (`session/pursuit.go`), su tope `max_chase_tiles` (a lo sumo 40), con
   el mismo límite de nodos y la misma cuota del tick. La persecución cuesta una distancia
   y una tirada cada `roll_ms` por monstruo; la regeneración, una resta por tick a los que
-  están sin objetivo; los errantes (`World.strays`, fuera de casa) piensan aunque su
-  sector no esté activo: son pocos y solo caminan. `BenchmarkTickMonsters/.../pursuit`
+  están sin objetivo; los monstruos con objetivo y los errantes (`World.strays`, fuera de casa)
+  piensan aunque su sector no esté activo: son pocos (los que pelean ya pensaron ese tick
+  en su sector; solo paga el que quedó sin nadie cerca, hasta que se rinde y llega a
+  casa). `BenchmarkTickMonsters/.../pursuit`
   (correa de 6 con la persecución, la regeneración y los errantes de `data/balance.yaml`):
   medido el 2026-11-24 (i7-13650HX, 3 corridas): `/leash` 8,66 → 8,92 µs por tick
-  (+3 %), `/pursuit` 8,95 µs, sin asignaciones nuevas (16 por tick).
+  (+3 %), `/pursuit` 8,95 µs, sin asignaciones nuevas (16 por tick). Vuelto a medir el
+  2026-11-25 con los monstruos con objetivo en `World.strays` (`-benchmem -count 3`):
+  `/leash` 8,96 µs, `/pursuit` 9,13 µs (+2 %), 16 asignaciones por tick las dos.
 - Comandos por tick (lote 16): la cola común y el carril de ciclo de vida (logins, logouts,
   acuses de guardado) drenan cada uno hasta `MaxCommandsPerTick` (2048), así que un tick
   ejecuta como mucho el doble, 4096. Es a propósito: un aluvión de logins tras un reinicio

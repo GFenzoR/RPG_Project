@@ -326,15 +326,18 @@ func (w *World) forget(tick game.Tick, m *Monster) {
 	})
 }
 
-// regen heals an idle, wounded m regen pct % of its maximum health (at least 1) for every
+// regen heals an idle, wounded m regen pct % of its maximum health for every
 // interval due since regen delay went by without a fight (calmAt: the last tick it had a
 // target, dealt or took damage): counted from the ticks, so time it spent where nobody
 // was (no think) counts too. What it heals comes first out of the wounds it never
 // answered (mend), so a later giveUp does not close them again. Who sees it gets the new
 // health bar, without the effect and the number of a heal. Healed to full it forgets the
 // damage of the fights it remembers: nobody earns experience from a fight it recovered
-// from. The rate is its own kind's, a summon's too (unlike its pursuit, chaser: how fast a
-// body heals is not its master's decision).
+// from. The fraction of a point carries over (regenRem, in millionths of a point), so a
+// monster of 15 health with 1 % heals a point every 7 intervals, not one per interval.
+// What it heals also comes out of the damage it remembers (trimShares). The rate is its
+// own kind's, a summon's too (unlike its pursuit, chaser: how fast a body heals is not its
+// master's decision).
 func (w *World) regen(ctx *game.TickContext, m *Monster) {
 	pk := &m.kind.pursuit
 	if pk.regenEvery == 0 || m.health >= m.maxHealth {
@@ -346,14 +349,42 @@ func (w *World) regen(ctx *game.TickContext, m *Monster) {
 	}
 	n := 1 + int((ctx.Tick-due)/pk.regenEvery)
 	m.regenAt = due + game.Tick(n)*pk.regenEvery
-	per := max(int(float64(m.maxHealth)*pk.regenPct/100+0.5), 1)
-	heal := min(n*per, m.maxHealth-m.health)
-	m.health += heal
-	if m.health >= m.maxHealth {
-		m.damage = m.damage[:0]
+	const point = 1_000_000
+	due64 := int64(n)*int64(math.Round(float64(m.maxHealth)*pk.regenPct*point/100)) + m.regenRem
+	heal := int(min(due64/point, int64(m.maxHealth-m.health)))
+	m.regenRem = due64 % point
+	if heal == 0 {
+		return
 	}
+	m.health += heal
 	m.mend(heal)
+	if m.health >= m.maxHealth {
+		m.damage, m.regenRem = m.damage[:0], 0
+	} else {
+		m.trimShares()
+	}
 	w.healthChanged(m)
+}
+
+// trimShares cuts the damage shares of m, once it regenerated, to the wounds it still has,
+// each in proportion (one cut to nothing goes): who wounds it, lets it heal and comes back
+// within memory_ms does not hold a share of more health than it took from it, against who
+// finishes it. The total experience never depended on the shares; their split and the
+// owner of the loot do.
+func (m *Monster) trimShares() {
+	left, sum := m.maxHealth-m.health, 0
+	for i := range m.damage {
+		sum += m.damage[i].amount
+	}
+	if sum <= left {
+		return
+	}
+	for i := range m.damage {
+		s := &m.damage[i]
+		s.amount = s.amount * left / sum
+		s.unanswered = min(s.unanswered, s.amount)
+	}
+	m.damage = slices.DeleteFunc(m.damage, func(s damageShare) bool { return s.amount <= 0 })
 }
 
 // mend takes heal health m just got back (its regeneration, its own heal) out of the
@@ -371,27 +402,27 @@ func (m *Monster) mend(heal int) {
 	}
 }
 
-// trackStray keeps a monster with a leash that stands out of its home area in
-// World.strays, so it thinks (and walks home) even when its sector has no player near: the
-// player it chased logged out or went far. Home, it leaves the list. awaySince is the last
-// tick it was home or had a target.
+// trackStray keeps in World.strays, so it thinks even when its sector has no player near, a
+// monster that has a target (its target went up a stair, sailed or walked far: it must
+// still lose it and give up, which ends its conditions and starts its regeneration; asleep
+// it would keep that fight for whenever its target came back) and one with a leash that
+// stands out of its home area (it walks home: the player it chased logged out or went
+// far). Idle at home, it leaves the list. awaySince is the last tick it was home or had a
+// target. listed: World.strays holds it (thinkStrays lets it go), so it is never added
+// twice.
 func (w *World) trackStray(tick game.Tick, m *Monster) {
-	if w.leash(m) < 0 {
-		return
+	away := false
+	if w.leash(m) >= 0 {
+		sp := m.slot.spawn
+		away = chebyshev(m.pos, sp.Center) > int(sp.Radius)
 	}
-	sp := m.slot.spawn
-	away := chebyshev(m.pos, sp.Center) > int(sp.Radius)
 	if !away || m.target != nil {
 		m.awaySince = tick
 	}
-	switch {
-	case !away:
-		m.stray = false
-	case !m.stray:
-		m.stray = true
-		if !slices.Contains(w.strays, m) {
-			w.strays = append(w.strays, m)
-		}
+	m.stray = away || m.target != nil
+	if m.stray && !m.listed {
+		m.listed = true
+		w.strays = append(w.strays, m)
 	}
 }
 
@@ -424,12 +455,18 @@ func (w *World) retire(ctx *game.TickContext, m *Monster) {
 }
 
 // thinkStrays has the strays that did not think this tick (their sector has no player
-// near) think: they walk home. Those home or gone leave the list.
+// near) think: they lose their target, they walk home. Those idle at home or gone leave
+// the list.
 func (w *World) thinkStrays(ctx *game.TickContext) {
 	if len(w.strays) == 0 {
 		return
 	}
-	w.strays = slices.DeleteFunc(w.strays, func(m *Monster) bool { return !m.stray })
+	w.strays = slices.DeleteFunc(w.strays, func(m *Monster) bool {
+		if !m.stray {
+			m.listed = false
+		}
+		return !m.stray
+	})
 	w.thinkBuf = append(w.thinkBuf[:0], w.strays...)
 	for _, m := range w.thinkBuf {
 		if m.stray && m.thought != ctx.Tick {

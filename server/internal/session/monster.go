@@ -174,12 +174,17 @@ type Monster struct {
 	// is due (regen).
 	calmAt  game.Tick
 	regenAt game.Tick
+	// regenRem is the fraction of a health point its regeneration still owes it, in
+	// millionths (regen).
+	regenRem int64
 	// foes are the players who hurt m in a fight it gave up, remembered for
 	// combat.monster_pursuit.memory_ms: it turns on them first (remembered).
 	foes []grudge
-	// stray: m is in World.strays (out of its home area); awaySince is the last tick it
-	// was home or had a target (trackStray). removed: it left the world (removeMonster).
+	// stray: m thinks even where no player is near (it has a target or is out of its home
+	// area, trackStray); listed: World.strays holds it; awaySince is the last tick it was
+	// home or had a target. removed: it left the world (removeMonster).
 	stray     bool
+	listed    bool
 	removed   bool
 	awaySince game.Tick
 }
@@ -750,6 +755,9 @@ func (w *World) hits(m *Monster, p *Player) bool {
 // that target, never hit it and still answer it (review of the monster abilities: a
 // ranger across the water trained on an ember wyrmling at the full rate, unhurt).
 func (w *World) strikes(m *Monster, p world.Pos) bool {
+	if p.Z != m.pos.Z {
+		return false // no attack goes through a floor
+	}
 	if chebyshev(m.pos, p) <= 1 {
 		return true
 	}
@@ -1108,8 +1116,12 @@ func (w *World) healthChanged(m *Monster) {
 // that area led there, chase). Hits from there train like hits on
 // a target that does not fight back (skills.afk.factor): a monster held by its leash is
 // no training dummy. On another tile a shunned player is a target like any other: an
-// unreachable one costs stuckFor again.
+// unreachable one costs stuckFor again. A player on another floor always is, leash or
+// not: a condition's author who went up a stair does not go on hurting m from there.
 func (w *World) beyondLeash(tick game.Tick, m *Monster, p *Player) bool {
+	if p.pos.Z != m.pos.Z {
+		return true // monsters take no stairs, leash or not: right above it is out of its way
+	}
 	l := w.bound(m)
 	if l < 0 || w.strikes(m, p.pos) {
 		return false

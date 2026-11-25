@@ -1725,7 +1725,13 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     (la ventana clásica de 15x11 + 1; mientras tanto lo sigue hacia donde está,
     `TestPursuitLosesSight`; con 0 lo pierde en el acto, como antes), en cuanto entra a
     una zona de protección (`TestPursuitProtectionZone`) y en cuanto cambia de piso (los
-    monstruos no usan portales, `TestPursuitFloorChange`). Un invisible se pierde en el
+    monstruos no usan portales, `TestPursuitFloorChange`). Un monstruo con objetivo
+    piensa aunque su sector se quede sin jugadores cerca (`World.strays`), así que
+    también se rinde si quien peleaba solo con él sube una escalera, toma un barco o se
+    teletransporta: no guarda la pelea dormido para seguirla cuando vuelva
+    (`TestPursuitFloorChangeAlone`). Quien está en otro piso está fuera de su alcance
+    aunque en planta quede dentro de la correa: una quemadura suya termina sin dañar
+    (`TestPursuitBurnFromAnotherFloorEnds`). Un invisible se pierde en el
     acto, como siempre. Nunca entra a una zona de protección. **Perder a su objetivo es
     rendirse** (segunda revisión): hace lo mismo que con uno que salió de su correa, o
     sea pasa a otro jugador que lo esté peleando desde donde puede ir (también mientras
@@ -1758,16 +1764,21 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   que tuvo objetivo, o hizo o recibió daño: una pelea larga sin golpes, huyendo o sin
   alcanzar a su objetivo, no le deja regeneración acumulada para cobrar al terminar,
   `TestPursuitRegenStartsWhenTheFightEnds`), recupera `pct` % (1 %) de su vida
-  máxima, al menos 1, cada `interval_ms` (5 s): una curación completa tarda unos 8
-  minutos, así que quien se va a curar y vuelve lo encuentra todavía herido. Se cuenta por
+  máxima cada `interval_ms` (5 s): una curación completa tarda unos 8
+  minutos, así que quien se va a curar y vuelve lo encuentra todavía herido. La fracción
+  de punto se acumula: una rata de 15 de vida recupera 1 punto cada 7 intervalos, no 1
+  por intervalo (`TestPursuitRegenCarriesTheFraction`). Se cuenta por
   ticks: el tiempo que pasó sin pensar (nadie cerca) también suma, y lo recupera de golpe
   la próxima vez que piensa (`TestPursuitRegeneration`). Quien lo ve recibe la barra de
   vida nueva, sin número verde ni efecto de curación. **En combate (con objetivo) no
   regenera**, salvo con un hechizo `heal_self`. Lo que recupera, regenerando o con
   `heal_self`, sale primero del daño sin responder, así rendirse después no cierra dos
   veces la misma herida (`TestPursuitRegenAndGiveUpDoNotHealTwice`,
-  `TestPursuitOwnHealAndGiveUpDoNotHealTwice`). Al volver a vida llena olvida el daño de
-  las peleas que recordaba. El ritmo es el de su propio tipo, también para un invocado
+  `TestPursuitOwnHealAndGiveUpDoNotHealTwice`). Lo que regenera también sale del reparto
+  de daño que recuerda: las partes se recortan, en proporción, a las heridas que le
+  quedan, así quien lo hiere, lo deja regenerar y vuelve no acumula más parte que la vida
+  que le quitó (`TestPursuitRegenTakesFromTheShares`). Al volver a vida llena olvida el
+  daño de las peleas que recordaba. El ritmo es el de su propio tipo, también para un invocado
   (la persecución de un invocado es la de quien lo llamó; cuánto sana su cuerpo, no). El
   custodio regenera 0,5 % (unos 16 minutos).
 - **Errantes y respawn:** un monstruo fuera de su área de casa sigue contando como vivo

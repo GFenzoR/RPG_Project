@@ -96,7 +96,7 @@ combat:
     insist_boost: 0.5
     memory_ms: 180000
   # Out-of-combat regeneration: without a target and delay_ms after its last fight (the
-  # last tick it had a target, dealt or took damage), pct % of its maximum health (at least 1) every interval_ms. 1 % every 5 s: a
+  # last tick it had a target, dealt or took damage), pct % of its maximum health every interval_ms (fractions of a point carry over). 1 % every 5 s: a
   # full heal takes about 8 minutes, so a player who walks off to heal and comes back
   # finds it still hurt. data/monsters may override each field (regen: {...}).
   monster_regen: { delay_ms: 10000, interval_ms: 5000, pct: 1 }
