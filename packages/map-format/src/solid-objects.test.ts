@@ -54,6 +54,24 @@ const WALKED_OVER = [
   "flower_box",
 ];
 
+/**
+ * What was walked over until it was made solid (the owner's report of 2026-11-24). Whoever
+ * makes another item of the maps solid adds it here: "cut no way" then checks that it parts
+ * no place from another.
+ */
+const MADE_SOLID = ["bush"];
+/** What grows or lies on ground one walks on, never in the water. */
+const ON_DRY_GROUND = [
+  "bush",
+  "thick_bush",
+  "oak_tree",
+  "pine_tree",
+  "birch_tree",
+  "elm_tree",
+  "boulder",
+  "mossy_boulder",
+];
+
 /** Every tile of an island holding `item`, on any floor. */
 function find(is: Island, item: string): Position[] {
   const out: Position[] = [];
@@ -115,7 +133,7 @@ describe("solid map objects", () => {
   it("grow on ground one walks on: no bush, tree or boulder stands in the water", () => {
     const wet: string[] = [];
     for (const is of world.islands.values())
-      for (const item of ["bush", "thick_bush", "oak_tree", "pine_tree", "birch_tree", "elm_tree"])
+      for (const item of ON_DRY_GROUND)
         for (const p of find(is, item)) {
           const ground = tiles.tileAt(p)?.ground;
           if (!ground || content.items.get(ground)?.walkable !== true)
@@ -163,9 +181,13 @@ describe("solid map objects", () => {
 
   it("cut no way on any island: what one walked to with bushes underfoot is still one place", () => {
     const walk = (t: Tile | undefined): boolean => isPassableBreaking(t, content);
-    // The same tiles as before the bushes were solid: a bush stops nobody.
+    // The same tiles as before they were solid: none of MADE_SOLID stops anybody.
     const before = (t: Tile | undefined): boolean =>
-      walk(t ? { ground: t.ground, stack: t.stack.filter((id) => id !== "bush") } : undefined);
+      walk(
+        t
+          ? { ground: t.ground, stack: t.stack.filter((id) => !MADE_SOLID.includes(id)) }
+          : undefined,
+      );
     for (const is of world.islands.values()) {
       const was = areas(is, before);
       const now = areas(is, walk);
@@ -184,7 +206,7 @@ describe("solid map objects", () => {
       expect(cuts).toEqual([]);
       // And the bushes were looked at: the areas of before have their tiles, the ones of
       // now do not.
-      for (const p of find(is, "bush")) {
+      for (const p of MADE_SOLID.flatMap((item) => find(is, item))) {
         if (!before(tiles.tileAt(p))) continue; // under something else that blocks
         expect(was.has(at(p)), at(p)).toBe(true);
         expect(now.has(at(p)), at(p)).toBe(false);
