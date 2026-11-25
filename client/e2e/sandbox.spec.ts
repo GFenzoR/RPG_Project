@@ -814,3 +814,165 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
   expect(await page.evaluate(() => window.__rpgClient?.ready)).toBe(true);
   expect(errors).toEqual([]);
 });
+
+// Footprints under the feet (livingworld/README.md "Huellas"): on the beach of Thimblewick
+// the own player's prints are dropped by the walk drawn, one per footfall, alternating
+// either side of the path and a stride apart, straight and on a diagonal. The screenshots
+// are cut round the player, mid-walk and at the end of each trail.
+test("sandbox footprints: one print per footfall on sand, straight and diagonal", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Caminante");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const say = page.getByTestId("say").getByRole("textbox");
+  const standing = async (): Promise<{ x: number; y: number }> => {
+    let at = { x: 0, y: 0 };
+    await expect
+      .poll(
+        async () => {
+          const s = await page.evaluate(() => window.__rpgClient?.self());
+          if (s && !s.pending && !s.walking) at = { x: s.x, y: s.y };
+          return s !== undefined && !s.pending && !s.walking;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(true);
+    return at;
+  };
+  const tp = async (x: number, y: number): Promise<void> => {
+    await say.fill(`/tp ${x} ${y} 7`);
+    await say.press("Enter");
+    await expect.poll(async () => (await standing()).x, { timeout: 20_000 }).toBe(x);
+    await say.blur();
+    await page.waitForTimeout(400);
+  };
+  const falls = () => page.evaluate(() => window.__rpgClient?.footfalls());
+  /** A screenshot cut round tile (x, y): the trail next to the character. */
+  const around = async (name: string, x: number, y: number): Promise<void> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    const scale = (await page.evaluate(() => window.__rpgClient?.scale())) ?? 1;
+    if (!p) throw new Error("no tile on screen");
+    const t = 32 * scale;
+    await page.screenshot({
+      path: join(shots, `${name}.png`),
+      clip: {
+        x: Math.max(0, p.x - 5 * t),
+        y: Math.max(0, p.y - 4 * t),
+        width: 11 * t,
+        height: 8 * t,
+      },
+    });
+  };
+
+  // The beach west of the dock: the sand tiles the client knows there, and the longest
+  // runs of them east and along a diagonal.
+  await tp(2084, 2129);
+  const runs = await page.evaluate(() => {
+    const c = window.__rpgClient;
+    const sand = c?.itemNumber("sand");
+    const ok = (x: number, y: number): boolean =>
+      c?.tile(x, y, 7)?.[0] === sand && c?.walkable(x, y, 7) === true;
+    const best = (dx: number, dy: number): { x: number; y: number; n: number } => {
+      let top = { x: 0, y: 0, n: 0 };
+      for (let y = 2118; y <= 2136; y++)
+        for (let x = 2070; x <= 2100; x++) {
+          let n = 0;
+          while (n < 8 && ok(x + dx * n, y + dy * n)) n++;
+          if (n > top.n) top = { x, y, n };
+        }
+      return top;
+    };
+    return {
+      east: best(1, 0),
+      diagonals: [
+        { keys: ["ArrowDown", "ArrowRight"], dx: 1, dy: 1, ...best(1, 1) },
+        { keys: ["ArrowUp", "ArrowRight"], dx: 1, dy: -1, ...best(1, -1) },
+      ],
+    };
+  });
+  expect(runs.east.n, "a run of sand to walk east on").toBeGreaterThanOrEqual(4);
+
+  // East along the beach: hold the key, shoot mid-walk, let go, shoot the trail.
+  await tp(runs.east.x, runs.east.y);
+  const before = (await falls())?.total ?? 0;
+  await page.keyboard.down("ArrowRight");
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+      timeout: 15_000,
+    })
+    .toBeGreaterThanOrEqual(runs.east.x + 2);
+  await around("99h-footprints-east-walking", runs.east.x + 2, runs.east.y);
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+      timeout: 15_000,
+    })
+    .toBeGreaterThanOrEqual(runs.east.x + runs.east.n - 1);
+  await page.keyboard.up("ArrowRight");
+  const end = await standing();
+  await around("99i-footprints-east-trail", end.x, end.y);
+  const east = await falls();
+  const own = east?.own ?? [];
+  const fresh = (east?.total ?? 0) - before;
+  expect(fresh).toBeGreaterThanOrEqual(4);
+  expect(east?.footprints ?? 0).toBeGreaterThanOrEqual(4);
+  // The feet alternate, each print half a tile (a stride) after the one before, a little
+  // to its own side of the path.
+  const walked = own.slice(-fresh).filter((f) => f.x > (runs.east.x + 0.5) * 32);
+  for (let i = 1; i < walked.length; i++) {
+    const a = walked[i - 1];
+    const b = walked[i];
+    if (!a || !b) continue;
+    expect(b.side).toBe(-a.side);
+    expect(Math.abs(b.x - a.x - 16)).toBeLessThan(1.5); // drawn on whole device pixels
+    expect(Math.sign(b.y - a.y)).toBe(b.side);
+    expect(Math.abs(b.y - a.y)).toBeLessThan(4);
+  }
+
+  // A diagonal, where the beach has one: both keys held.
+  const d = runs.diagonals.sort((a, b) => b.n - a.n)[0];
+  if (d && d.n >= 3) {
+    await tp(d.x, d.y);
+    const from = (await falls())?.own.at(-1);
+    for (const k of d.keys) await page.keyboard.down(k);
+    await expect
+      .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+        timeout: 15_000,
+      })
+      .toBeGreaterThanOrEqual(d.x + d.n - 1);
+    for (const k of d.keys) await page.keyboard.up(k);
+    const stop = await standing();
+    await around("99j-footprints-diagonal-trail", stop.x, stop.y);
+    const after = (await falls())?.own ?? [];
+    const last = after.at(-1);
+    const prev = after.at(-2);
+    expect(last).not.toEqual(from);
+    if (last && prev) {
+      // A stride on a diagonal: 8 px across and 8 down, give or take the feet's stance.
+      expect(last.side).toBe(-prev.side);
+      expect(Math.abs(Math.abs(last.x - prev.x) - 8)).toBeLessThan(5);
+      expect(Math.abs(Math.abs(last.y - prev.y) - 8)).toBeLessThan(5);
+    }
+  } else console.log(`no diagonal run of sand on the beach (${JSON.stringify(runs.diagonals)})`);
+
+  // Standing still leaves nothing more.
+  const still = (await falls())?.total;
+  await page.waitForTimeout(800);
+  expect((await falls())?.total).toBe(still);
+  expect(errors).toEqual([]);
+});
