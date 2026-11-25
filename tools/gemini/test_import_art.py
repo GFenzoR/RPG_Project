@@ -427,6 +427,28 @@ class TheWholeImport(unittest.TestCase):
         self.assertLessEqual(len(colours), 4)
         self.assertEqual(flat[0].getpixel((0, 0)), flat[1].getpixel((0, 0)))  # one shade for both browns
 
+    def test_a_plant_carries_its_wind_metadata_and_a_required_pivot(self):
+        # The same plant types as the atlas manifest's wind hints (tools/spritepack tiles.ts).
+        tiles = os.path.join(os.path.dirname(__file__), "..", "spritepack", "src", "tiles.ts")
+        with open(tiles, encoding="utf-8") as handle:
+            block = handle.read().split("WIND_HINT_KINDS = [", 1)[1].split("]", 1)[0]
+        self.assertEqual(tuple(word.strip(' ",\n') for word in block.split(",") if word.strip(' ",\n')),
+                         art.WIND_KINDS)
+        self.assertEqual(art.wind_record("palm", 30, 96),
+                         {"kind": "palm", "pivot": 30,
+                          "sprites_yaml": "<sprite>: { wind: { kind: palm, pivot: 30 } }"})
+        self.assertIsNone(art.wind_record("none", None, 32))
+        with self.assertRaisesRegex(ValueError, "needs --pivot"):
+            art.wind_record("tree", None, 96)
+        with self.assertRaisesRegex(ValueError, "outside the 32 px frame"):
+            art.wind_record("bush", 40, 32)
+        with self.assertRaisesRegex(ValueError, "one of tree, palm"):
+            art.wind_record("kite", 3, 32)
+        self.assertTrue(art.names_plant("jungle_fern"))
+        self.assertTrue(art.names_plant("decor/wildflowers"))
+        self.assertFalse(art.names_plant("planter_box"))
+        self.assertFalse(art.names_plant("walk_s_0"))
+
     def test_the_wrong_number_of_names_is_refused(self):
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "s.png")

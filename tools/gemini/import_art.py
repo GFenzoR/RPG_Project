@@ -707,6 +707,43 @@ def lightness_range(im: Image.Image) -> tuple[float, float] | None:
 # --- the command -----------------------------------------------------------------------------
 
 
+# The plant types of the wind (livingworld/README.md "Viento"): the same list as WIND_KINDS
+# of livingworld/client/src/wind.ts and WIND_HINT_KINDS of tools/spritepack/src/tiles.ts
+# (test_import_art.py reads the second from its file).
+WIND_KINDS = ("tree", "palm", "bush", "tall_grass", "reed", "flower", "vine", "cactus", "dead_tree")
+# Words that name a plant in a frame's name: an object named so, imported with no --wind,
+# gets a warning (the content validator's PLANT_WORD, packages/content-schema validate.ts).
+PLANT_WORD = re.compile(
+    r"(tree|bush|shrub|grass|reeds?|flowers?|vines?|ferns?|palm|cactus|cacti|bamboo|sapling|hedge|ivy|weeds?"
+    r"|plants?|bramble|thicket|seaweed|kelp|lianas?)$")
+
+
+def names_plant(name: str) -> bool:
+    return any(PLANT_WORD.search(word) for word in re.split(r"[_/]", name))
+
+
+def wind_record(kind: str, pivot: int | None, height: int) -> dict | None:
+    """The wind metadata of an imported plant: its type and its pivot, always given.
+
+    The pivot is where the trunk or stem ends, in px over the frame's bottom edge: the
+    drawing does not say it, so whoever imports the plant does, after looking at the
+    preview. `none` (a plant that never sways) gives no record. The record goes into
+    import.json with the line to paste under `tiles:` of assets/sprites.yaml; `make
+    spritegen` then writes data/livingworld/wind_sprites.yaml and `make sway-preview` shows
+    the plant swaying.
+    """
+    if kind == "none":
+        return None
+    if kind not in WIND_KINDS:
+        raise ValueError("--wind is one of %s, or none" % ", ".join(WIND_KINDS))
+    if pivot is None:
+        raise ValueError("--wind %s needs --pivot N: where the trunk or stem ends, px over the frame's bottom" % kind)
+    if not 0 <= pivot < height:
+        raise ValueError("--pivot %d is outside the %d px frame" % (pivot, height))
+    return {"kind": kind, "pivot": pivot,
+            "sprites_yaml": "<sprite>: { wind: { kind: %s, pivot: %d } }" % (kind, pivot)}
+
+
 def parse_size(text: str) -> tuple[int, int]:
     found = re.fullmatch(r"(\d+)(?:x(\d+))?", text.strip())
     if not found:
@@ -927,7 +964,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-outline", action="store_true",
                         help="clamp the darkest pixels into the band too (always so for ground and effect)")
     parser.add_argument("--auto-grid", action="store_true", help="take the grid that cuts the least drawing")
+    parser.add_argument("--wind", default="", help="a plant: its wind type (%s) or none" % ", ".join(WIND_KINDS))
+    parser.add_argument("--pivot", type=int, default=None,
+                        help="with --wind: where the trunk or stem ends, px over the frame's bottom edge")
     args = parser.parse_args(argv)
+    try:
+        wind = wind_record(args.wind, args.pivot, parse_size(args.size)[1]) if args.wind else None
+    except ValueError as error:
+        raise SystemExit(str(error))
     grid = parse_grid(args.grid) if args.grid or args.cut == "grid" else None
     names = [n.strip() for n in args.names.split(",") if n.strip()]
     if not names and args.prefix:
@@ -941,6 +985,18 @@ def main(argv: list[str] | None = None) -> int:
                           args.anchor, args.margin, colours, None if args.no_palette else load_palette(), args.auto_grid,
                           None if args.no_outline else load_outlines(), args.cut, mirror, args.shared_colours,
                           args.scale or None)
+    if wind or (not args.wind and args.layer == "object" and any(names_plant(os.path.splitext(f["file"])[0]) for f in record["frames"])):
+        # A plant: its wind metadata rides with the import, or the import says it is missing.
+        if wind:
+            record["wind"] = wind
+            print("plant: under tiles: of assets/sprites.yaml put  %s  then make spritegen and make sway-preview"
+                  % wind["sprites_yaml"])
+        else:
+            record["warnings"].append(
+                "this looks like a plant: import it with --wind <type> --pivot N (or --wind none): "
+                "make validate refuses a plant item with no wind metadata")
+        with open(os.path.join(out_dir, "import.json"), "w", encoding="utf-8") as handle:
+            json.dump(record, handle, indent=1, ensure_ascii=False)
     for line in record["warnings"]:
         print("warning: %s" % line)
     if args.cut != "grid":
