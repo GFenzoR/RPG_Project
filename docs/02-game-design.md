@@ -871,7 +871,8 @@ un trozo de mano de 500 g (así minar no llena la capacidad en unos golpes).
 
 **Una cacería entra en la mochila.** `TestHuntLootFits` (`server/internal/sim`) arma a cada
 vocación cada cinco niveles, del 1 al 50, con el kit de las simulaciones de balance
-(`kitFor`, `casterKit`, `crossbowKit`), la mochila, las herramientas que uno lleva siempre
+(`kitFor`, `casterKit`, `crossbowKit`; desde el nivel 50, la armadura de la banda 5 con
+su cota de 14 kg, `wyrmArmor`, porque esos kits se quedan en la del nivel 30), la mochila, las herramientas que uno lleva siempre
 (soga y pala, 3,3 kg), una bolsa de monedas (100 de cobre y 10 de plata), provisiones (10
 galletas; 10 brebajes de vida el guardián, 20 de maná los magos, 5 y 5 más 100 flechas o
 virotes el montaraz) y le suma el botín esperado de **60 muertes** (unos 30 minutos a
@@ -891,7 +892,7 @@ capacidades o botín, regenerarla):
 | 15 | minero ahogado | 23,5 kg | 24,8 kg (montaraz) | 63 |
 | 25 | reptante hueco | 30,8 kg | 32,8 kg (montaraz) | 64 |
 | 30 | sabueso de ceniza | 25,2 kg | 29,4 kg (montaraz) | 70 |
-| 50 | dragoncillo de ascua | 17,6 kg | 45,5 kg (montaraz) | 155 |
+| 50 | dragoncillo de ascua | 17,6 kg | 38,3 kg (montaraz) | 131 |
 
 El más justo desde el nivel 15 es el montaraz de ballesta (coraza, escudo, ballesta y 100
 virotes); antes, los magos, por sus 20 brebajes de maná (7 kg).

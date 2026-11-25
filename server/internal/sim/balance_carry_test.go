@@ -37,18 +37,35 @@ const heavyKills = 15
 // is hunted at one of them (TestHuntLootFits fails if one is not).
 var carryLevels = []int{1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50}
 
+// wyrmArmor is the band 5 armor (level 50), which the kits of the balance sims stop short
+// of: the heaviest set a level 50 character wears, with the 14 kg scale mail for the
+// guardian and the ranger and the robe for the casters.
+func wyrmArmor(voc string) ([]string, string) {
+	body := "wyrmscale_mail"
+	if voc == "arcanist" || voc == "druid" {
+		body = "duskweave_robe"
+	}
+	return []string{"wyrmcrest_helm", body, "wyrmhide_greaves", "wyrmhide_boots", "wyrmtooth_amulet"}, "wyrmscale_pavise"
+}
+
 // carryKit is what a vocation wears at level: the kits of the careers
-// (balance_vocations_test.go), the guardian's of the melee sims.
+// (balance_vocations_test.go), the guardian's of the melee sims; from level 50 the band 5
+// armor in place of theirs (wyrmArmor).
 func carryKit(voc string, level int) hunterKit {
+	var k hunterKit
 	switch voc {
 	case "guardian":
-		k := kitFor(level)
-		return hunterKit{weapon: k.weapon, armor: k.armor, shield: k.shield}
+		g := kitFor(level)
+		k = hunterKit{weapon: g.weapon, armor: g.armor, shield: g.shield}
 	case "ranger":
-		return crossbowKit(level) // the heavier ranger: plate, shield and a crossbow
+		k = crossbowKit(level) // the heavier ranger: plate, shield and a crossbow
 	default:
-		return casterKit(voc, level)
+		k = casterKit(voc, level)
 	}
+	if level >= 50 {
+		k.armor, k.shield = wyrmArmor(voc)
+	}
+	return k
 }
 
 // supply is a stack a hunter brings.
@@ -103,6 +120,7 @@ func huntersOf(level int) []string {
 func (d *balanceData) carried(t *testing.T, voc string, level int) int {
 	t.Helper()
 	k := carryKit(voc, level)
+	d.wearable(t, voc, level, append([]string{k.weapon, k.shield}, k.armor...)...)
 	g := d.item(t, "backpack").Weight
 	for _, id := range append([]string{k.weapon, k.shield}, k.armor...) {
 		if id != "" {
@@ -203,3 +221,18 @@ func TestCapacityIsRealistic(t *testing.T) {
 }
 
 func kg(grams int) float64 { return float64(grams) / 1000 }
+
+// TestCarryKitWearsTheHeavyBands: the hunt check weighs the armor a character really wears
+// at the top of carryLevels, the 14 kg scale mail of band 5, not the level 30 cuirass the
+// kits of the sims stop at (review of feat/metric-units).
+func TestCarryKitWearsTheHeavyBands(t *testing.T) {
+	d := loadData(t)
+	for _, voc := range []string{"guardian", "ranger"} {
+		if !slices.Contains(carryKit(voc, 50).armor, "wyrmscale_mail") {
+			t.Errorf("level 50 %s: kit %v without the scale mail", voc, carryKit(voc, 50).armor)
+		}
+		if at30, at50 := d.carried(t, voc, 30), d.carried(t, voc, 50); at50 < at30+5000 {
+			t.Errorf("%s carries %.1f kg at 50 and %.1f kg at 30: the band 5 armor is not weighed", voc, kg(at50), kg(at30))
+		}
+	}
+}
