@@ -6,11 +6,13 @@
 // client looks up by name. The masks are white or near white: the client tints them
 // (a footprint takes its surface's colour). Original art, 32x32 in the 3/4 style.
 import type { Image, Rgba } from "@rpg/spritepack";
-import { disc, line, px } from "../draw.ts";
+import { disc, line, opaque, px } from "../draw.ts";
 import { hex } from "../palette.ts";
 import type { Rng } from "../draw.ts";
 import type { Recipe, RecipeBook } from "../recipe.ts";
 import { TRAIL } from "./trail.ts";
+import { plantWind } from "../wind.ts";
+import type { WindMeta } from "../wind.ts";
 
 const WHITE: Rgba = [255, 255, 255, 255];
 const LIGHT: Rgba = [214, 214, 214, 255];
@@ -38,42 +40,54 @@ function blades(
   }
 }
 
+/**
+ * A stem from under (x, y) down to the plant or the ground: a flower or a seed head never
+ * floats loose, so the wind moves it with its plant (assets/README.md "Plantas y viento").
+ */
+function stemDown(img: Image, x: number, y: number, color: Rgba): void {
+  for (let yy = y + 1; yy <= 30 && !opaque(img, x, yy); yy++) px(img, x, yy, color);
+}
+
 const GRASS = ["#22401a", "#33592a", "#4a7232", "#668e3e", "#86aa52"].map(hex);
 const DRY = ["#4a4420", "#625a29", "#7c7234", "#988c43", "#b0a455"].map(hex);
 const REED = ["#2c3a1c", "#3d4e24", "#53652e", "#6a7a38"].map(hex);
 const PETALS = ["#c9a0dc", "#e8d36a", "#e6e6e6", "#d7745f"].map(hex);
 
-const plant = (draw: (img: Image, rand: Rng) => void): Recipe => ({
+/** A small plant: every one says how it takes the wind (wind.ts plantWind). */
+const plant = (wind: WindMeta, draw: (img: Image, rand: Rng) => void): Recipe => ({
   kind: "object",
+  wind,
   draw: (img, rand) => draw(img, rand),
 });
 
 const PLANTS: RecipeBook = {
-  "livingworld/plants/grass_tuft": plant((img, rand) => {
+  "livingworld/plants/grass_tuft": plant(plantWind("tall_grass"), (img, rand) => {
     blades(img, rand, 12, 9, 23, 5, 10, GRASS);
   }),
-  "livingworld/plants/tall_grass": plant((img, rand) => {
+  "livingworld/plants/tall_grass": plant(plantWind("tall_grass"), (img, rand) => {
     blades(img, rand, 16, 5, 27, 10, 18, GRASS);
     blades(img, rand, 6, 8, 24, 12, 20, DRY);
   }),
-  "livingworld/plants/wildflowers": plant((img, rand) => {
+  "livingworld/plants/wildflowers": plant(plantWind("flower"), (img, rand) => {
     blades(img, rand, 12, 6, 26, 5, 11, GRASS);
     for (let i = 0; i < 6; i++) {
       const x = 8 + Math.round(rand() * 16);
       const y = 18 + Math.round(rand() * 6);
       const c = PETALS[i % PETALS.length] as Rgba;
+      stemDown(img, x, y, GRASS[1] as Rgba);
       px(img, x, y, c);
       px(img, x + 1, y, c);
       px(img, x, y - 1, c);
       px(img, x + 1, y - 1, hex("#f2e27a"));
     }
   }),
-  "livingworld/plants/reeds": plant((img, rand) => {
+  "livingworld/plants/reeds": plant(plantWind("reed"), (img, rand) => {
     blades(img, rand, 10, 7, 25, 14, 22, REED);
     // Brown seed heads on the tallest stems.
     for (let i = 0; i < 4; i++) {
       const x = 9 + Math.round(rand() * 14);
       const y = 8 + Math.round(rand() * 5);
+      stemDown(img, x, y + 3, REED[1] as Rgba);
       line(img, x, y, x, y + 3, hex("#5a3a22"));
       line(img, x + 1, y + 1, x + 1, y + 2, hex("#6e4a2c"));
     }

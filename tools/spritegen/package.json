@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@rpg/living-world": "workspace:*",
     "@rpg/spritepack": "workspace:*"
   },
   "devDependencies": {

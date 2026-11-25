@@ -42,8 +42,40 @@ export interface TileMeta {
   flat?: true;
 }
 
+/**
+ * The plant types of the wind (livingworld/README.md "Viento"): the same list as WIND_KINDS
+ * of livingworld/client/src/wind.ts (a test of tools/spritegen compares them).
+ */
+export const WIND_HINT_KINDS = [
+  "tree",
+  "palm",
+  "bush",
+  "tall_grass",
+  "reed",
+  "flower",
+  "vine",
+  "cactus",
+  "dead_tree",
+] as const;
+
+/**
+ * How a plant sprite that no spritegen recipe draws (a pack's, Gemini's) takes the wind:
+ * its type and where its trunk or stem ends. tools/spritegen copies it into
+ * data/livingworld/wind_sprites.yaml (make spritegen); it does not go into atlas.json.
+ */
+export interface WindHint {
+  kind: (typeof WIND_HINT_KINDS)[number];
+  /** Px over the sprite's bottom edge: nothing moves below it. Always given. */
+  pivot: number;
+  stiffness?: number;
+  amplitude?: number;
+  flutter?: number;
+}
+
 /** One entry of the `tiles` section of assets/sprites.yaml. */
 export interface TileEntry {
+  /** A plant: how it sways (WindHint). */
+  wind?: WindHint;
   ms?: number;
   sync?: TileSync;
   anchor?: "bc";
@@ -78,6 +110,7 @@ const ENTRY_KEYS = new Set([
   "light",
   "particles",
   "steps",
+  "wind",
   "notes",
 ]);
 /** Largest light radius, tiles. */
@@ -135,7 +168,45 @@ export function parseTileEntry(
     else fail(`steps must be one of ${STEP_KINDS.join(", ")}`);
   }
   if (r["notes"] !== undefined && typeof r["notes"] !== "string") fail("notes must be a string");
+  if (r["wind"] !== undefined) {
+    const wind = parseWindHint(r["wind"], fail);
+    if (wind) entry.wind = wind;
+  }
   return entry;
+}
+
+const WIND_KEYS = new Set(["kind", "pivot", "stiffness", "amplitude", "flutter"]);
+
+function parseWindHint(raw: unknown, fail: (message: string) => void): WindHint | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    fail("wind must be a mapping: { kind: <plant type>, pivot: <px over the bottom edge> }");
+    return undefined;
+  }
+  const r = raw as Record<string, unknown>;
+  for (const key of Object.keys(r)) if (!WIND_KEYS.has(key)) fail(`wind: unknown key "${key}"`);
+  const kind = WIND_HINT_KINDS.find((k) => k === r["kind"]);
+  if (!kind) {
+    fail(`wind.kind must be one of ${WIND_HINT_KINDS.join(", ")}`);
+    return undefined;
+  }
+  const pivot = r["pivot"];
+  if (typeof pivot !== "number" || !Number.isInteger(pivot) || pivot < 0) {
+    fail(
+      "wind.pivot is required: where the trunk or stem ends, whole px over the sprite's bottom edge",
+    );
+    return undefined;
+  }
+  const hint: WindHint = { kind, pivot };
+  const share = (key: "stiffness" | "amplitude" | "flutter", max: number): void => {
+    const v = r[key];
+    if (v === undefined) return;
+    if (typeof v !== "number" || v < 0 || v > max) fail(`wind.${key} must be from 0 to ${max}`);
+    else hint[key] = v;
+  };
+  share("stiffness", 1);
+  share("amplitude", 4);
+  share("flutter", 0.95);
+  return hint;
 }
 
 /**

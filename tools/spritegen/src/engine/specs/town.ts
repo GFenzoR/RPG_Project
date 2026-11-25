@@ -21,6 +21,7 @@
 // - flag_pole: a pole on a stone foot with a gilt knob; the flag is four cards hung one from
 //   the other that turn in a chain, so a wave runs along it (a loop).
 import type { KeySpec, PartSpec, ShapeSpec, SpriteSpec } from "../spec.ts";
+import { plantWind } from "../../wind.ts";
 
 /** Four square legs of side `s` under a top of half sizes hx, hy, from z 0 to z1. */
 function legs(hx: number, hy: number, s: number, z1: number): ShapeSpec[] {
@@ -733,6 +734,8 @@ const blossom = (x: number, y: number, z: number, m: "berry" | "gold" | "paper")
 export const FLOWER_BOX: SpriteSpec = {
   sprite: "decor/flower_box",
   size: "object",
+  // The planter stays put: only the leaves and flowers over its rim move, and little.
+  wind: plantWind("flower", { pivot: 16, amplitude: 1 }),
   figure: { height: [14, 24], width: [22, 28] },
   seenOn: "ground/stone_floor",
   parts: [

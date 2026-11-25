@@ -1,6 +1,7 @@
 // What a recipe is: a function that draws one sprite path (assets/sprites/<path>.png).
 import type { Image } from "@rpg/spritepack";
 import type { Rng } from "./draw.ts";
+import type { WindMeta } from "./wind.ts";
 
 /**
  * - ground: fully opaque, tiles seamlessly in a grid (the test checks it).
@@ -40,6 +41,12 @@ export interface Recipe {
    * contact shadow instead, and a painted one would make two.
    */
   shadow?: ShadowOptions | false;
+  /**
+   * A plant (tree, bush, grass, reed, flower, vine, cactus...): how it takes the wind
+   * (wind.ts plantWind). Every plant recipe declares it; `make spritegen` writes it to
+   * data/livingworld/wind_sprites.yaml and the client sways the sprite with no more code.
+   */
+  wind?: WindMeta;
   /**
    * Draws into img (already sized, transparent). rand and seed come from the sprite path,
    * so a recipe is reproducible and independent of the others.

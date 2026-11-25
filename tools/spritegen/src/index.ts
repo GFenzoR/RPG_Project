@@ -22,12 +22,27 @@ import { MAX_ORB_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { RECIPES, recipesAt } from "./recipes/index.ts";
 import { corpsePath, monsterIds } from "./recipes/corpses.ts";
 import { renderRecipe, TILE } from "./render.ts";
+import { swayScene, swaySheet, windProblems, windSprites, writeWindSprites } from "./wind.ts";
+import type { SwayScene } from "./wind.ts";
 
 export { RECIPES, recipesAt } from "./recipes/index.ts";
 export type { Recipe, RecipeBook, RecipeKind, ShadowOptions } from "./recipe.ts";
 export { UI_ICON_BOX, UI_SLOT_BOX, UI_STATUS_BOX, uiIconBox } from "./recipe.ts";
 
 export { TILE } from "./render.ts";
+export {
+  drawnRows,
+  plantWind,
+  spriteWind,
+  SWAY_SCENES,
+  swaySheet,
+  TRUNK_KINDS,
+  WIND_KINDS,
+  WIND_SIDE_MARGIN,
+  WIND_SPRITES_FILE,
+  windSpritesYaml,
+} from "./wind.ts";
+export type { WindMeta } from "./wind.ts";
 
 /**
  * Recipe paths in a stable (sorted) order, optionally only those starting with `only`, of
@@ -86,6 +101,69 @@ export function buildSprites(root: string, only?: string): { path: string; bytes
     writeFileSync(file, png);
     return { path, bytes: png.length };
   });
+}
+
+/**
+ * Every plant sprite's wind metadata under root and the problems of their drawings
+ * (wind.ts): what data/livingworld/wind_sprites.yaml must hold.
+ */
+export function plantWinds(root: string): ReturnType<typeof windSprites> {
+  const book = recipesAt(root);
+  return windSprites(root, book, (path) => render(path, mustGet(path, book)), spriteFile);
+}
+
+/** Writes data/livingworld/wind_sprites.yaml (make spritegen); returns the drawings' problems. */
+export function buildWind(root: string): string[] {
+  const book = recipesAt(root);
+  return writeWindSprites(root, book, (path) => render(path, mustGet(path, book)), spriteFile);
+}
+
+/** The plants' drawing problems and a wind_sprites.yaml out of date (spritegen check). */
+export function checkWind(root: string): string[] {
+  const book = recipesAt(root);
+  return windProblems(root, book, (path) => render(path, mustGet(path, book)), spriteFile);
+}
+
+/**
+ * The sway preview (wind.ts swaySheet): every plant sprite under `only` swaying over a few
+ * frames with the client's own maths, as a PNG to look at with Read.
+ */
+export function swayPng(root: string, only: string | undefined, scale: number): Buffer {
+  return encodePng(scaleImage(swaySheet(root, swayEntries(root, only)), scale));
+}
+
+/** The plant sprites with wind under `only`, drawn: what the sway previews show. */
+function swayEntries(
+  root: string,
+  only: string | undefined,
+): Parameters<typeof swaySheet>[1][number][] {
+  const book = recipesAt(root);
+  const { sprites } = plantWinds(root);
+  const entries = Object.keys(sprites)
+    .filter((p) => !only || p.startsWith(only))
+    .sort()
+    .map((path) => ({
+      path,
+      image: book[path]
+        ? render(path, mustGet(path, book))
+        : decodePng(readFileSync(spriteFile(root, path))),
+      wind: sprites[path] as NonNullable<(typeof sprites)[string]>,
+    }));
+  if (entries.length === 0) throw new Error("spritegen: no plant sprite with wind under --only");
+  return entries;
+}
+
+/**
+ * One moment (`ms`) of a scene of plants in the wind (wind.ts swayScene): a wood or a town
+ * square made of the plant sprites under `only`, as a PNG at the game's zoom.
+ */
+export function swayScenePng(
+  root: string,
+  only: string | undefined,
+  scene: SwayScene,
+  ms: number,
+): Buffer {
+  return encodePng(swayScene(root, swayEntries(root, only), scene, ms));
 }
 
 /** Player outfit frames, which no data/ file names: outfits/<id>/<dir>_<frame>. */

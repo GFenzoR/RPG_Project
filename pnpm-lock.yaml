@@ -197,6 +197,9 @@ importers:
 
   tools/spritegen:
     dependencies:
+      '@rpg/living-world':
+        specifier: workspace:*
+        version: link:../../livingworld/client
       '@rpg/spritepack':
         specifier: workspace:*
         version: link:../spritepack

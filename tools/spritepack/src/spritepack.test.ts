@@ -433,12 +433,18 @@ tiles:
   ground/water: { ms: 220, sync: world, particles: spray }
   ground/grass: { weight: 0.6 }
   ground/sand: { steps: dust }
-  decor/tree: { anchor: bc, particles: pollen }
+  decor/tree: { anchor: bc, particles: pollen, wind: { kind: tree, pivot: 10, amplitude: 1.5 } }
   doors/gate: { joins_walls: true }
 `,
     );
     const r = buildAtlas(root);
     expect(errors(r)).toEqual([]);
+    // A plant's wind hint is for tools/spritegen (wind_sprites.yaml): not part of the atlas.
+    expect(
+      parseManifest(readFileSync(join(root, "assets/sprites.yaml"), "utf8")).manifest.tiles.get(
+        "decor/tree",
+      )?.wind,
+    ).toEqual({ kind: "tree", pivot: 10, amplitude: 1.5 });
     expect(r.atlas?.index.tiles).toEqual({
       // The look's frames are part of the sprite's entry, not one of their own.
       // Border pieces lie flat on their tile's ground: the renderer draws them with it.
@@ -473,8 +479,23 @@ tiles:
 tiles:
   ground/sand: { ms: 200 }
   ground/nothing: { anchor: bc }
-  ground/grass: { sync: sometimes, particles: smoke, steps: splash }
+  ground/grass: { sync: sometimes, particles: smoke, steps: splash, wind: { kind: tree } }
+  ground/sand/decal_2: { wind: { kind: balloon, pivot: 3 } }
+  walls/stone: { wind: { kind: vine, pivot: 2, flutter: 1.5, sway: 2 } }
 `,
+    );
+    // A plant's wind hint (livingworld/README.md "Viento"): a known type and always a pivot.
+    expect(errors(buildAtlas(root))).toContainEqual(
+      expect.stringMatching(/ground\/grass: wind\.pivot is required/),
+    );
+    expect(errors(buildAtlas(root))).toContainEqual(
+      expect.stringMatching(/wind\.kind must be one of tree, palm, bush/),
+    );
+    expect(errors(buildAtlas(root))).toContainEqual(
+      expect.stringMatching(/walls\/stone: wind\.flutter must be from 0 to 0\.95/),
+    );
+    expect(errors(buildAtlas(root))).toContainEqual(
+      expect.stringMatching(/walls\/stone: wind: unknown key "sway"/),
     );
     expect(errors(buildAtlas(root))).toContainEqual(
       expect.stringMatching(/ground\/grass: sync must be world, tile or random/),

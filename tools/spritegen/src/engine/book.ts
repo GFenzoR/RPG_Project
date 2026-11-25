@@ -94,6 +94,8 @@ export function engineRecipes(specs: readonly SpriteSpec[]): RecipeBook {
         height: h,
         // Engine creatures stand on the renderer's contact shadow (shadow: ellipse).
         ...(size.kind === "creature" ? { shadow: false as const } : {}),
+        // A plant: the sprite itself carries its wind metadata (not the frames of a loop).
+        ...(spec.wind && path === spec.sprite ? { wind: spec.wind } : {}),
         draw: (img) => img.data.set(frameImage(spec, path, ref).data),
       };
       book[path] = recipe;
