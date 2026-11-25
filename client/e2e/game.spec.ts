@@ -630,21 +630,21 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   await expect(page.getByTestId("logout-countdown")).toHaveText(/^\d+$/);
   await shot(page, "07c-logout-locked");
 
-  // Every swing trains fists (no weapon yet): the skills window (toolbar, K) shows the
-  // progress.
+  // Every swing trains the sword (the start kit's cutlass, docs/02 "Equipo inicial"): the
+  // skills window (toolbar, K) shows the progress.
   await openWindow(page, "skills");
   const skills = page.getByTestId("skills-panel");
-  await expect(skills.getByText("Puños")).toBeVisible();
+  await expect(skills.getByText("Espada")).toBeVisible();
   await expect
     .poll(
       () =>
         page.evaluate(
-          () => window.__rpgClient?.skills().find((s) => s.id === "fist")?.percent ?? 0,
+          () => window.__rpgClient?.skills().find((s) => s.id === "sword")?.percent ?? 0,
         ),
       { timeout: 30_000 },
     )
     .toBeGreaterThan(0);
-  await expect(skills.locator('[data-skill="fist"] [role="progressbar"]')).not.toHaveAttribute(
+  await expect(skills.locator('[data-skill="sword"] [role="progressbar"]')).not.toHaveAttribute(
     "aria-valuenow",
     "0",
   );
@@ -832,7 +832,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   const battle = page.getByTestId("battle-list");
 
   // The server and its world are shared by the suite (and by --repeat-each): earlier tests
-  // hurt or kill testisle's 3 wolves, so the nearest one may be hurt, die to our fists
+  // hurt or kill testisle's 3 wolves, so the nearest one may be hurt, die to our wand
   // before it is in the bolt's range, or none may be in view at all. Then every F1 is
   // refused with "you need a target" (the CI failure: target lost, empty battle list).
   // targetWolf attacks the healthiest wolf in view and, with none in view, waits for one
@@ -874,13 +874,17 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   // the projectile or its energy effect on screen. They live 250 ms and a bolt can kill the
   // wolf, so watch for them in the page rather than only right after each F1 (on a busy
   // CPU the bolt's messages can come after the next poll has seen the target gone). If the
-  // target is lost with no bolt (killed by our fists, out of view), take another wolf.
+  // target is lost with no bolt (killed by the wand, out of view), take another wolf.
+  // The start kit's wand (docs/02 "Equipo inicial") shoots the same energy projectile on its
+  // own every round, so a projectile alone is not the spell: it counts while F1 is in the
+  // cooldown the server starts when it accepts the cast (2 s for the arc bolt).
   await page.evaluate(() => {
     const w = window as unknown as { e2eBolt?: boolean };
     w.e2eBolt = false;
     const watch = setInterval(() => {
       const m = window.__rpgClient?.magic(300);
-      if ((m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13)) {
+      const cast = document.querySelector('[data-testid="hotbar"] [data-hotkey="F1"] .cd') !== null;
+      if (cast && ((m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13))) {
         w.e2eBolt = true;
         clearInterval(watch);
       }
@@ -926,7 +930,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   await expect(hotbar.locator('[data-hotkey="F1"] .cd')).toBeVisible();
   await hotbar.screenshot({ path: join(shots, "12-hotbar.png") });
 
-  // A9: bolts (and fists) until a wolf dies, and its fall on screen: the server's
+  // A9: bolts (and the wand) until a wolf dies, and its fall on screen: the server's
   // CreatureDisappear says DEATH (docs/17 ANI-7). A lost target is replaced.
   let fell = false;
   const fall = shotPose(page, "11b-death", "death", 150_000);
@@ -3044,7 +3048,7 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
   // The attacker cannot log out in the middle of the fight.
   await hunterP.getByRole("button", { name: "Salir del juego" }).click();
   await expect(hunterP.getByTestId("game-log")).toContainText(
-    "Peleaste contra un jugador hace poco: todavía no puedes salir del juego.",
+    "Peleaste contra un jugador hace poco: podrás salir del juego en",
   );
   await expect(hunterP.getByTestId("battle-list")).toBeVisible();
   await shot(preyP, "50-pvp-aggressor-skull");
