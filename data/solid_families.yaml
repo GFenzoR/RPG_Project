@@ -1,0 +1,48 @@
+# Families of map objects that stand in a person's way (docs/06 "Qué bloquea el paso").
+# make validate reads it: a map object (kind: decoration, pickupable: false) whose id has
+# one of these words (the id split at "_": thick_bush has "bush") must say what it does
+# with blocks_movement, true or false. Nothing here blocks by itself: the item says so.
+# It exists so that a new bush, crate or statue is never walkable by oversight; the
+# family's flat or open member (cut_bush, forge_gate_open, a bench) says
+# blocks_movement: false out loud. Only the validator reads it, never the server.
+families:
+  # plants
+  - tree
+  - bush
+  - shrub
+  - hedge
+  - vines
+  # rock
+  - boulder
+  - rock
+  - vein
+  - statue
+  - pillar
+  - column
+  # town props
+  - well
+  - fountain
+  - barrel
+  - crate
+  - sacks
+  - pot
+  - post
+  - pole
+  - stall
+  - fence
+  - barricade
+  - gate
+  - portcullis
+  # furniture
+  - table
+  - shelf
+  - chest
+  - anvil
+  - forge
+  - hearth
+  - brazier
+  - sign
+  - board
+  - bench
+  - bed
+  - box

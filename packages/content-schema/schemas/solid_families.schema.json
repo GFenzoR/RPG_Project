@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/solid_families.schema.json",
+  "title": "Families of solid map objects (data/solid_families.yaml)",
+  "description": "docs/06 \"Qué bloquea el paso\": words of item ids (split at \"_\") that name a family of objects that physically stand in the way (tree, bush, crate...). A map object (kind: decoration, pickupable: false) of one of them must write blocks_movement, true or false. Read by the validator only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["families"],
+  "properties": {
+    "families": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9]*$" }
+    }
+  }
+}

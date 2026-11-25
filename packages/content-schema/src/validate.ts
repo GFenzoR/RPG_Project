@@ -379,6 +379,9 @@ class Validator {
 
     for (const src of this.loadDir(dataDir, "news", "news", known)) this.checkNews(src);
 
+    const solid = single("solid_families.yaml", "solid_families", false);
+    if (solid) this.checkSolidFamilies(solid);
+
     this.loadLivingWorld(dataDir, known);
 
     for (const entry of readdirSync(dataDir).sort()) {
@@ -1143,6 +1146,31 @@ class Validator {
    * has a key, every key can be picked up (a player carries it) and no door is a key.
    * Unknown pairs are checkRefs' to report. Where doors stand is map-format's.
    */
+  /**
+   * data/solid_families.yaml (docs/06 "Qué bloquea el paso"): a map object (kind:
+   * decoration, pickupable: false) whose id has the word of a solid family (the id split
+   * at "_") writes blocks_movement, true or false, so that a new bush or crate is never
+   * walkable because nobody thought of it. The border pieces (sprite borders/...) are the
+   * fringe of a ground named after it (border_rock_n would be no rock): never asked.
+   */
+  private checkSolidFamilies(solid: SourceFile): void {
+    const families = new Set(
+      isObj(solid.data) ? asList(solid.data["families"]).filter((f) => typeof f === "string") : [],
+    );
+    for (const { item, src, path } of this.items) {
+      if (item["kind"] !== "decoration" || item["pickupable"] !== false) continue;
+      if (typeof item["blocks_movement"] === "boolean") continue;
+      if (String(item["sprite"]).startsWith("borders/")) continue;
+      const family = (idOf(item) ?? "").split("_").find((w) => families.has(w));
+      if (family !== undefined)
+        this.error(
+          src,
+          path,
+          `"${String(item["id"])}" is of the solid family "${family}" (data/solid_families.yaml): say blocks_movement: true, or blocks_movement: false if one walks over it`,
+        );
+    }
+  }
+
   private checkDoors(): void {
     const byId = new Map<string, Obj>();
     const keys = new Set<string>();

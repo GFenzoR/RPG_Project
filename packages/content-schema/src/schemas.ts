@@ -27,6 +27,7 @@ export type SchemaName =
   | "borders"
   | "outfits"
   | "looks"
+  | "solid_families"
   | "cosmetics"
   | "sounds"
   | "i18n"

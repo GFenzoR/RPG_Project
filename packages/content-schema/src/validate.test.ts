@@ -76,6 +76,7 @@ describe("repository content", () => {
       "borders",
       "outfits",
       "cosmetics",
+      "solid_families",
       "sounds",
       "livingworld-objects",
       "livingworld-ambience",
@@ -117,6 +118,37 @@ describe("validator diagnostics", () => {
       }
     }
   };
+  it('wants every object of a solid family to say whether it blocks (docs/06 "Qué bloquea el paso")', () => {
+    const solid = (): string[] => messages(root).filter((m) => m.includes("solid family"));
+    expect(solid()).toEqual([]);
+    // The owner's report of 2026-11-24: a bush nobody said blocks was walkable.
+    const said = "  name: item.bush.name\n  pickupable: false\n  blocks_movement: true\n";
+    const silent = "  name: item.bush.name\n  pickupable: false\n";
+    edit("data/items/decoration.yaml", said, silent);
+    expect(solid()).toEqual([
+      expect.stringMatching(
+        /^error data\/items\/decoration\.yaml:\d+.*"bush" is of the solid family "bush".*blocks_movement/,
+      ),
+    ]);
+    // Saying it does not block is an answer too (cut_bush, a bench, an open gate).
+    edit("data/items/decoration.yaml", silent, silent + "  blocks_movement: false\n");
+    expect(solid()).toEqual([]);
+    // The word anywhere in the id counts (thick_bush), and only map objects: what a player
+    // carries (tree_resin) is no obstacle, and a border piece is the fringe of its ground.
+    edit(
+      "data/items/livingworld.yaml",
+      "  description: item.thick_bush.desc\n  pickupable: false\n  blocks_movement: true\n",
+      "  description: item.thick_bush.desc\n  pickupable: false\n",
+    );
+    edit("data/solid_families.yaml", "  - tree\n", "  - tree\n  - resin\n  - grass\n");
+    const named = solid().map((m) => /"(\w+)" is of the solid family "(\w+)"/.exec(m)?.slice(1, 3));
+    expect(named.sort()).toEqual([
+      ["grass_tuft", "grass"],
+      ["tall_grass", "grass"],
+      ["thick_bush", "bush"],
+    ]);
+  });
+
   it('checks each vocation\'s start_kit (docs/02 "Equipo inicial")', () => {
     const kitErrors = (): string[] =>
       messages(root).filter((m) => m.startsWith("error") && m.includes("vocations.yaml"));
@@ -1723,13 +1755,16 @@ describe("validator diagnostics", () => {
     writeFileSync(file("data/ids.lock.yaml"), head + chest + lock.slice(items));
   };
 
+  // A chest is of a solid family (data/solid_families.yaml): it says that it blocks.
+  const FIXED = "pickupable: false\n  blocks_movement: true";
+
   it("checks reward chests: fixed, unique ids, one stack of what a backpack holds, never retired nor the forge's amber", () => {
     const chest = (id: string, n: number, rewards: string, extra?: string): void =>
       addItem(
         id,
         n,
         `chest: { id: ${id.replace("test_chest", "cache")}, rewards: [${rewards}] }`,
-        extra,
+        extra ?? FIXED,
       );
     chest(
       "test_chest_a",
@@ -1741,6 +1776,7 @@ describe("validator diagnostics", () => {
       "test_chest_b",
       60002,
       "chest: { id: cache_a, rewards: [{ item: warding_amber, count: 1 }] }",
+      FIXED,
     );
     chest(
       "test_chest_c",
@@ -1835,6 +1871,7 @@ steps:
       "test_chest",
       60000,
       "chest: { id: test_cache, rewards: [{ item: belaying_pin, count: 1 }] }",
+      FIXED,
     );
     expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
   });
