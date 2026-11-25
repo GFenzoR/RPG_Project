@@ -332,10 +332,22 @@ el punto 5:
     dispositivo, o si la app de escritorio no dispara `pagehide` al cerrarse, no aparece
     (el personaje queda link-dead igual: lo decide el servidor). Mostrarlo en cualquier
     dispositivo pediría que la lista de personajes sepa quién está link-dead (el loop lo
-    publicaría como `PublishedOnline`).
-  - **E2E** (lo corre el lote al final): el de la pelea con el lobo mira el botón
-    bloqueado y la cuenta (`07c-logout-locked`), recarga en la pelea, ve el aviso
-    (`07d-stayed-in-fight`) y vuelve a entrar al mismo personaje todavía en combate.
+    publicaría como `PublishedOnline`). Hay una nota por personaje y solo la ve la cuenta
+    dueña, en la lista de personajes (nunca en el login).
+  - **Aviso falso si el servidor se cae o se reinicia en una pelea:** un socket que se
+    cierra sin `Disconnect` se ve igual que una red perdida, así que el cliente dice
+    "quedó en el mundo" aunque el servidor ya no tenga al personaje (`staysAfter` en
+    `client/src/state/stayed.ts`). No pierde nada: el personaje quedó como en su último
+    guardado. Se arreglaría con lo mismo de arriba (que la lista sepa quién está
+    link-dead).
+  - **E2E** (lo corre el lote al final; el de la revisión no se corrió): el de la pelea
+    con el lobo mira el botón bloqueado y la cuenta (`07c-logout-locked`), se asegura de
+    que haya un golpe reciente (vuelve a atacar, o a los lobos si murió), recarga en la
+    pelea, ve el aviso (`07d-stayed-in-fight`) y, con la página en la lista de
+    personajes, le pregunta al servidor: `GET /api/status` no bajó de jugadores y
+    `characters.last_save_at` no cambió (un personaje que sale se guarda al instante).
+    Después vuelve a entrar al mismo personaje todavía en combate, o con la pantalla de
+    muerte si el lobo lo mató link-dead.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores

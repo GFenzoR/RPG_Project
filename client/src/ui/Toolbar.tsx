@@ -103,13 +103,17 @@ export function Toolbar(props: {
         class="tool tool-logout"
         data-testid="logout"
         data-locked={locked === undefined ? undefined : ""}
-        aria-label={t("client.game.logout")}
+        aria-label={
+          locked === undefined
+            ? t("client.game.logout")
+            : t("client.game.logout_locked_label", { seconds: locked })
+        }
         title={logoutTitle(t, locked)}
         onClick={() => props.onLogout()}
       >
         <Icon name="logout" />
         {locked !== undefined && (
-          <span class="tool-count" data-testid="logout-countdown">
+          <span class="tool-count" data-testid="logout-countdown" aria-hidden="true">
             {t("client.status.badge_seconds", { seconds: locked })}
           </span>
         )}

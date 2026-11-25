@@ -27,7 +27,7 @@ import { GameView, emptyGameUi } from "./GameView.tsx";
 import { loadControls } from "../state/controls.ts";
 import { loadCameraShake, loadChatBubbles, loadNameSize } from "../state/ui-prefs.ts";
 import { logoutLockMs } from "../state/status.ts";
-import { rememberStayed, staysAfter, takeStayed } from "../state/stayed.ts";
+import { endNotice, stayedText, takeStayed, watchLeaving } from "../state/stayed.ts";
 import type { GameSettings } from "./GameView.tsx";
 import { LookPickers } from "./LookPickers.tsx";
 import { LookPreview } from "./LookPreview.tsx";
@@ -88,12 +88,7 @@ function Screens({
   settings,
 }: AppProps): JSX.Element {
   const [screen, setScreen] = useState<Screen>({ name: "loading" });
-  // A game closed in a fight last time (state/stayed.ts): the first screen says the
-  // character stayed in the world until the fight ended.
-  const [notice, setNotice] = useState<string | undefined>(() => {
-    const note = takeStayed(safeStorage(), Date.now());
-    return note && t("client.characters.stayed_in_fight", { name: note.name });
-  });
+  const [notice, setNotice] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     // A still-valid session cookie skips the login.
@@ -181,11 +176,8 @@ function Screens({
             character={screen.character}
             sessionToken={screen.sessionToken}
             onEnd={(reason, inFight) => {
-              const ended = t(disconnectKey(reason));
               setNotice(
-                inFight && staysAfter(reason)
-                  ? `${ended} ${t("client.characters.stayed_in_fight", { name: screen.character.name })}`
-                  : ended,
+                endNotice(t, t(disconnectKey(reason)), reason, inFight, screen.character.name),
               );
               toCharacters();
             }}
@@ -307,6 +299,10 @@ function Characters(props: {
   const [clothes] = useState(() => dressPlayer(plain, {}).worn);
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  // Characters of this account left in a fight when the game closed (state/stayed.ts):
+  // read once the session has shown they are its own, never on the login screen.
+  const [stayed, setStayed] = useState<string[]>([]);
+  const notice = [props.notice, ...stayed].filter(Boolean).join(" ");
 
   const fail = (err: unknown): void => {
     if (err instanceof ApiError && err.code === "unauthorized") return props.onLoggedOut();
@@ -319,6 +315,13 @@ function Characters(props: {
       setList(r.characters);
       setMax(r.maxCharacters);
       setView(firstView(r.characters.length));
+      const now = Date.now();
+      const notes = takeStayed(
+        safeStorage(),
+        now,
+        r.characters.map((c) => c.name),
+      );
+      setStayed(notes.map((n) => stayedText(t, n, now)));
     }, fail);
   }, []);
 
@@ -368,9 +371,9 @@ function Characters(props: {
     <div class="panel wide" data-testid="characters" data-view={list ? view : "loading"}>
       <h1>{t(creating ? "client.characters.create_title" : "client.characters.title")}</h1>
       <VerifyNotice t={t} lang={props.lang} />
-      {props.notice && (
+      {notice && (
         <p class="notice" role="status">
-          {props.notice}
+          {notice}
         </p>
       )}
       {list === undefined ? (
@@ -636,12 +639,9 @@ function GameScreen(props: {
     }, KEEPALIVE_MS);
     // Closing the tab, reloading or quitting the desktop app in a fight leaves the
     // character in the world link-dead (docs/02): the next start says so.
-    const leaving = (): void => {
-      if (inFight()) rememberStayed(storage, { name: props.character.name, at: Date.now() });
-    };
-    window.addEventListener("pagehide", leaving);
+    const unwatch = watchLeaving(window, inFight, storage, props.character.name);
     return () => {
-      window.removeEventListener("pagehide", leaving);
+      unwatch();
       window.clearInterval(keepalive);
       g.destroy();
     };

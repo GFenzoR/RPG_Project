@@ -1,8 +1,8 @@
 // The locked "Salir del juego" (docs/02 "Bloqueo de logout en combate"): the views render as
 // plain functions (no hooks), walked like ui/Toolbar.test.ts.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { VNode } from "preact";
-import { LogoutTextButton, lockSeconds, logoutTitle } from "./LogoutButton.tsx";
+import { LogoutTextButton, lockSeconds, logoutTitle, scheduleLockRedraw } from "./LogoutButton.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import { defaultWindows } from "./windows.ts";
 import { logoutLockMs } from "../state/status.ts";
@@ -59,12 +59,50 @@ describe("the logout lock", () => {
 
     const locked = button(8);
     expect(locked?.props["data-locked"]).toBe("");
-    expect(locked?.props["aria-label"]).toBe("client.game.logout");
+    // A screen reader hears the lock and its seconds, not only "Leave game"; the digits
+    // drawn over the icon are for the eyes.
+    expect(free?.props["aria-label"]).toBe("client.game.logout");
+    expect(locked?.props["aria-label"]).toBe('client.game.logout_locked_label{"seconds":8}');
     expect(locked?.props.title).toBe('client.game.logout_locked_hint{"seconds":8}');
     const count = nodes(locked).find((v) => v.props["data-testid"] === "logout-countdown");
     expect(count?.props.children).toBe('client.status.badge_seconds{"seconds":8}');
+    expect(count?.props["aria-hidden"]).toBe("true");
     locked?.props.onClick?.();
     expect(asked).toBe(1); // the server decides and answers combat.logout_locked
+  });
+
+  describe("its countdown", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("draws again when the seconds left change, once, and not when the player may leave", () => {
+      vi.useFakeTimers();
+      let drawn = 0;
+      // 7.4 s left shows 8: at 7 s left it must show 7.
+      scheduleLockRedraw(7400, () => drawn++);
+      vi.advanceTimersByTime(399);
+      expect(drawn).toBe(0);
+      vi.advanceTimersByTime(20);
+      expect(drawn).toBe(1);
+      vi.advanceTimersByTime(5000);
+      expect(drawn).toBe(1); // the next render schedules the next one
+      // On a whole second, the next one is a second away.
+      scheduleLockRedraw(3000, () => drawn++);
+      vi.advanceTimersByTime(900);
+      expect(drawn).toBe(1);
+      vi.advanceTimersByTime(200);
+      expect(drawn).toBe(2);
+      expect(scheduleLockRedraw(undefined, () => drawn++)).toBeUndefined();
+      vi.advanceTimersByTime(5000);
+      expect(drawn).toBe(2);
+    });
+
+    it("is cancelled when the lock is drawn again or the button goes away", () => {
+      vi.useFakeTimers();
+      let drawn = 0;
+      scheduleLockRedraw(2500, () => drawn++)?.();
+      vi.advanceTimersByTime(5000);
+      expect(drawn).toBe(0);
+    });
   });
 
   it("writes the countdown on the phone menu's text button", () => {

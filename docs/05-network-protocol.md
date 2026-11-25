@@ -1787,7 +1787,10 @@ Reglas en `02-game-design.md` ("Condiciones").
   (`statusSlack`): una pelea mueve el fin del bloqueo con cada golpe y así cuesta a lo
   sumo una lista por segundo. El cliente cuenta para atrás lo último que supo: su ícono
   puede terminar hasta 1 s antes o después que el bloqueo, y la lista sin él llega en el
-  tick en que el bloqueo termina de verdad.
+  tick en que el bloqueo termina de verdad. El botón "Salir del juego" bloqueado cuenta
+  con ese mismo `remaining_ms`: puede verse libre hasta 1 s antes de tiempo, y un `Logout`
+  en ese segundo se rechaza como siempre (`combat.logout_locked` o `pvp.logout_locked`,
+  con su `seconds`).
 - **Daño periódico**: cada golpe es un golpe más (`Effect 10 + elemento`, `FloatingText`,
   `CreatureHealth`, `PlayerStats` al afectado).
 - **Velocidad**: el afectado recibe `PlayerStats.speed` y quien lo ve `CreatureSpeed`; los

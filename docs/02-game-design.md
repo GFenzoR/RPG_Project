@@ -1752,13 +1752,22 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   desconectar durante una batalla"): el estado "En combate" de la bandeja ("Estados del
   personaje") cuenta los segundos, y el botón "Salir del juego" (barra de herramientas y
   menú del teléfono) se ve bloqueado mientras dure: gris, con los segundos encima y un
-  tooltip que dice por qué y qué pasa si se cierra el juego. Un click igual manda el
-  `Logout` (decide el servidor) y el rechazo flota sobre el mapa. Si el juego se cerró en
+  tooltip que dice por qué y qué pasa si se cierra el juego; un lector de pantalla oye lo
+  mismo en el nombre del botón (`client.game.logout_locked_label`, "Salir del juego (en
+  combate: 8 s)"). Un click igual manda el `Logout` (decide el servidor) y el rechazo
+  flota sobre el mapa. La cuenta del botón es la del cliente, desde lo último que supo
+  del servidor: puede quedar libre hasta 1 s antes de tiempo (docs/05 "Estados",
+  `statusSlack`), y un click en ese segundo se rechaza igual. Si el juego se cerró en
   combate (pestaña, recarga, app de escritorio) o el servidor cortó la conexión en combate
   por algo que no saca al personaje (red, cliente lento, cambio de contraseña, cerrar
-  sesión en todos lados), la siguiente pantalla de login o la lista de personajes lo dice
-  una vez (`client.characters.stayed_in_fight`; una nota en el `localStorage` del
-  navegador, `client/src/state/stayed.ts`: solo en ese navegador).
+  sesión en todos lados), la siguiente lista de personajes lo dice una vez (una nota por
+  personaje en el `localStorage` del navegador, `client/src/state/stayed.ts`: solo en ese
+  navegador). La lista muestra solo las notas de los personajes de la cuenta que entró;
+  la pantalla de login no muestra ninguna, para que nadie lea el nombre sin autenticarse
+  en un navegador compartido. Mientras la nota tiene menos de 2 min (el tope de
+  link-dead) dice que al volver a entrar se retoma el personaje
+  (`client.characters.stayed_in_fight`); después, y hasta los 10 min, solo que quedó en
+  el mundo hasta que terminó la pelea (`client.characters.stayed_in_fight_earlier`).
 - **Cerrar la conexión en combate** (cerrar la pestaña o el juego, perder la red, un cliente
   lento que el servidor corta, un reseteo de contraseña) no saca al personaje: queda en el
   mundo sin conexión ("link-dead"). No actúa (suelta su objetivo, se para, lo que su

@@ -27,6 +27,7 @@ client.characters.first: "Crea tu primer personaje: elige su nombre, su vocació
 client.characters.limit: "Tienes el máximo de {max} personajes por cuenta."
 client.characters.kit: "Empieza con: {items}."
 client.characters.stayed_in_fight: "{name} quedó en el mundo porque estaba en combate: sale solo cuando termina la pelea. Si vuelves a entrar antes, lo retomas donde está."
+client.characters.stayed_in_fight_earlier: "{name} quedó en el mundo porque estaba en combate cuando cerraste el juego: sale solo cuando termina la pelea."
 client.game.connecting: "Conectando…"
 client.game.load_failed: "No se pudieron cargar los gráficos del juego. Revisa tu conexión y vuelve a intentarlo: tu sesión sigue abierta."
 client.game.load_retry: "Reintentar"

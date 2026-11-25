@@ -654,25 +654,96 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   // leaves the character in the world, link-dead, while the wolf keeps biting it (docs/02
   // "Bloqueo de logout en combate"). The character list says so, and playing again takes
   // over that same character, still in its fight: the logout is still locked.
-  await expect(
-    page.getByTestId("conditions").locator('[data-condition="in_combat"]'),
-  ).toBeVisible();
+  const inCombat = page.getByTestId("conditions").locator('[data-condition="in_combat"]');
+  const death = page.getByTestId("death-screen");
+  // The fight must be going on when the page reloads: by now the wolf may be dead (the
+  // lock ran out) or the player may have died and woken up at the temple. Go back to the
+  // wolves if so, attack one if none is the target, and wait for a blow given or taken
+  // within the last 1.5 s: the 12 s lock is then almost whole.
+  await expect
+    .poll(
+      async () => {
+        if (await death.isVisible()) {
+          await death
+            .getByRole("button", { name: "Aceptar" })
+            .click({ timeout: 1_000 })
+            .catch(() => undefined);
+          return false;
+        }
+        const state = await page.evaluate(() => {
+          const c = window.__rpgClient;
+          const target = c?.target();
+          return {
+            wolves: c?.battle().length ?? 0,
+            target,
+            fresh:
+              target !== undefined &&
+              (c?.attacks(1_500) ?? []).some((a) => a.id === target || a.targetId === target),
+          };
+        });
+        if (state.target === undefined) {
+          const at = await self(page);
+          if (state.wolves === 0 && at && !at.walking) await click(at.x, at.y - 5);
+          await battle
+            .getByRole("button", { name: /lobo/ })
+            .first()
+            .click({ timeout: 1_000 })
+            .catch(() => undefined);
+          return false;
+        }
+        return state.fresh && (await inCombat.isVisible());
+      },
+      { timeout: 90_000, intervals: [500] },
+    )
+    .toBe(true);
+
+  // What the server says, not the page: how many players are in the world (GET
+  // /api/status, published by the game loop on every join and leave) and when the
+  // character was last saved (a character that leaves is saved at once).
+  const serverCtx = await playwright.request.newContext({ baseURL: serverURL });
+  const online = async (): Promise<number> =>
+    ((await (await serverCtx.get("/api/status")).json()) as { players: number }).players;
+  const savedAt = (): string =>
+    psql(
+      [
+        databaseUrl,
+        "-At",
+        "-c",
+        `SELECT coalesce(last_save_at::text, '') FROM characters WHERE name = '${name}'`,
+      ],
+      { encoding: "utf8" },
+    ).trim();
+  const onlineBefore = await online();
+  const savedBefore = savedAt();
+  expect(onlineBefore).toBeGreaterThan(0);
+
   await page.reload();
   const characters = page.getByTestId("characters");
   await expect(characters.getByRole("status")).toContainText("quedó en el mundo");
   await shot(page, "07d-stayed-in-fight");
+  // The page is on the character list: its socket has been closed for a while. A server
+  // that took the character out when the socket closed has one player less and a save
+  // of it by now. (Either alone can happen to a character that stayed: a link-dead player
+  // of an earlier test leaving, or its own autosave, every 5 minutes.)
+  await page.waitForTimeout(3_000);
+  const left = (await online()) < onlineBefore && savedAt() !== savedBefore;
+  await serverCtx.dispose();
+
   await characters.getByRole("button", { name: "Jugar" }).click();
   await page.waitForFunction(() => window.__rpgClient?.ready === true);
-  await expect(page.getByTestId("conditions").locator('[data-condition="in_combat"]')).toBeVisible({
-    timeout: 10_000,
-  });
-  await expect(page.getByTestId("logout")).toHaveAttribute("data-locked", "");
-  // Link-dead, it dropped its target: hit the wolf again so the fight can end.
-  await battle
-    .getByRole("button", { name: /lobo/ })
-    .first()
-    .click({ timeout: 5_000 })
-    .catch(() => undefined);
+  // Link-dead it can die too (the wolf kept biting): then it did leave the world, by
+  // dying, and wakes up at the temple with the death screen and no fight.
+  await expect(inCombat.or(death).first()).toBeVisible({ timeout: 10_000 });
+  if (!(await death.isVisible())) {
+    expect(left, "the character left the world when the page closed in a fight").toBe(false);
+    await expect(page.getByTestId("logout")).toHaveAttribute("data-locked", "");
+    // Link-dead, it dropped its target: hit the wolf again so the fight can end.
+    await battle
+      .getByRole("button", { name: /lobo/ })
+      .first()
+      .click({ timeout: 5_000 })
+      .catch(() => undefined);
+  }
 
   await leaveAfterFight(page);
   expect(errors).toEqual([]);

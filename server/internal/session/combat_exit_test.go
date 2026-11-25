@@ -33,6 +33,15 @@ func TestEveryExitPathInCombatKeepsTheCharacter(t *testing.T) {
 		{"sign out everywhere", func(h *harness, _ *fakeClient, p *session.Player) {
 			h.sim.Command(h.w.SignOutAccount(p.CharacterID(), h.sim.Now()))
 		}, pb.DisconnectReason_DISCONNECT_REASON_SIGNED_OUT_EVERYWHERE},
+		{"slow client (its queue is full)", func(h *harness, cl *fakeClient, _ *session.Player) {
+			h.cutSlow(cl)
+		}, pb.DisconnectReason_DISCONNECT_REASON_SLOW_CLIENT},
+		// A flood: the gateway closes the socket itself (RATE_LIMITED) and the world only
+		// hears the Leave of the closed connection.
+		{"flood (the gateway cuts it)", func(h *harness, cl *fakeClient, _ *session.Player) {
+			cl.Close(pb.DisconnectReason_DISCONNECT_REASON_RATE_LIMITED)
+			h.sim.Command(h.w.Leave(cl))
+		}, pb.DisconnectReason_DISCONNECT_REASON_RATE_LIMITED},
 	}
 	for _, e := range exits {
 		t.Run(e.name, func(t *testing.T) {
@@ -62,14 +71,41 @@ func TestEveryExitPathInCombatKeepsTheCharacter(t *testing.T) {
 	}
 }
 
-// Out of combat the same exits take the character out at once (nothing to wait for).
+// Out of combat every exit takes the character out at once, saved (nothing to wait for).
 func TestExitOutOfCombatLeavesAtOnce(t *testing.T) {
-	h := fightHarness(t, 0) // a passive wolf: nobody fights
-	cl, p := h.hunter("Calm", 1)
-	h.sim.Command(h.w.SignOutAccount(p.CharacterID(), h.sim.Now()))
-	h.sim.Step()
-	if !cl.closed || h.w.PlayerByCharacter(p.CharacterID()) != nil || p.LinkDead() {
-		t.Fatalf("closed %v, in the world %v, link-dead %v", cl.closed, h.w.PlayerByCharacter(p.CharacterID()) != nil, p.LinkDead())
+	exits := []struct {
+		name string
+		do   func(h *harness, cl *fakeClient, p *session.Player)
+	}{
+		{"logout", func(h *harness, cl *fakeClient, _ *session.Player) { h.input(cl, logout()) }},
+		{"closed connection", func(h *harness, cl *fakeClient, _ *session.Player) {
+			h.sim.Command(h.w.Leave(cl))
+		}},
+		{"password change", func(h *harness, _ *fakeClient, p *session.Player) {
+			h.sim.Command(h.w.KickAccount(p.CharacterID(), h.sim.Now()))
+		}},
+		{"sign out everywhere", func(h *harness, _ *fakeClient, p *session.Player) {
+			h.sim.Command(h.w.SignOutAccount(p.CharacterID(), h.sim.Now()))
+		}},
+		{"slow client", func(h *harness, cl *fakeClient, _ *session.Player) { h.cutSlow(cl) }},
+		{"flood", func(h *harness, cl *fakeClient, _ *session.Player) {
+			cl.Close(pb.DisconnectReason_DISCONNECT_REASON_RATE_LIMITED)
+			h.sim.Command(h.w.Leave(cl))
+		}},
+	}
+	for _, e := range exits {
+		t.Run(e.name, func(t *testing.T) {
+			h := fightHarness(t, 0) // a passive wolf: nobody fights
+			cl, p := h.hunter("Calm", 1)
+			n := len(h.saves)
+			e.do(h, cl, p)
+			h.sim.Step()
+			s := h.savesOf(p.CharacterID(), n)
+			if h.w.PlayerByCharacter(p.CharacterID()) != nil || p.LinkDead() || len(s) != 1 || !s[0].Final {
+				t.Fatalf("in the world %v, link-dead %v, saves %+v",
+					h.w.PlayerByCharacter(p.CharacterID()) != nil, p.LinkDead(), s)
+			}
+		})
 	}
 }
 
@@ -97,6 +133,35 @@ func TestLogoutRefusalSaysTheSecondsLeft(t *testing.T) {
 	// 12 s block, 4.5 s (and a tick) gone: 8 s left once rounded up.
 	if len(ps) != 1 || ps[0].GetName() != "seconds" || ps[0].GetNumber() != 8 {
 		t.Fatalf("params %v, want seconds 8", ps)
+	}
+}
+
+// The PvP lock's refusal says its seconds too (pvp.logout_locked), for both sides.
+func TestPvPLogoutRefusalSaysTheSecondsLeft(t *testing.T) {
+	g := newPvP(t, nil)
+	ca, a := g.fighter("Ana", 0, 11, 45, 30, 0)
+	cb, b := g.fighter("Bea", 0, 11, 46, 30, 0)
+	g.hit(a, b)
+	g.sim.RunFor(2*time.Second + 500*time.Millisecond)
+	// pvpRules: a 10 s lock; 2.5 s (and a tick or two) gone: 8 s left once rounded up.
+	const want = 8
+	for _, cl := range []*fakeClient{ca, cb} {
+		cl.take()
+		g.input(cl, logout())
+		g.sim.Step()
+		var got *pb.LocalizedText
+		for _, m := range find(cl.take(), (*pb.ServerMessage).GetChatMessage) {
+			if m.GetLocalized().GetKey() == "pvp.logout_locked" {
+				got = m.GetLocalized()
+			}
+		}
+		if got == nil || cl.closed {
+			t.Fatalf("no refusal (closed %v)", cl.closed)
+		}
+		ps := got.GetParams()
+		if len(ps) != 1 || ps[0].GetName() != "seconds" || ps[0].GetNumber() != want {
+			t.Fatalf("params %v, want seconds %d", ps, want)
+		}
 	}
 }
 

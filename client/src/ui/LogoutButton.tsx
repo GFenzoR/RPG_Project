@@ -45,6 +45,27 @@ export function LogoutTextButton(props: {
   );
 }
 
+/** What scheduleLockRedraw needs of the timers (the window's, or a test's). */
+interface Timers {
+  setTimeout(fn: () => void, ms: number): unknown;
+  clearTimeout(id: never): void;
+}
+
+/**
+ * Asks for one `redraw` when the seconds left of a lock of `left` ms change (its next
+ * whole second, and a little more so the rounding has moved on); nothing when the player
+ * may leave (undefined). Returns how to cancel it.
+ */
+export function scheduleLockRedraw(
+  left: number | undefined,
+  redraw: () => void,
+  timers: Timers = globalThis as unknown as Timers,
+): (() => void) | undefined {
+  if (left === undefined) return undefined;
+  const timer = timers.setTimeout(redraw, (left % 1000 || 1000) + 15);
+  return () => timers.clearTimeout(timer as never);
+}
+
 /**
  * Gives its child the seconds left of the logout lock and draws it again each second
  * while the lock lasts (the server sends the status only when it starts, moves or ends).
@@ -55,10 +76,6 @@ export function LogoutLock(props: {
 }): JSX.Element {
   const [, setTick] = useState(0);
   const left = logoutLockMs(props.conditions, performance.now());
-  useEffect(() => {
-    if (left === undefined) return undefined;
-    const timer = setTimeout(() => setTick((n) => n + 1), (left % 1000 || 1000) + 15);
-    return () => clearTimeout(timer);
-  });
+  useEffect(() => scheduleLockRedraw(left, () => setTick((n) => n + 1)));
   return props.children(lockSeconds(left));
 }
