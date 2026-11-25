@@ -141,12 +141,10 @@ el punto 5:
   - **Decisión del dueño: banco, cama y jardinera** siguen caminables (regla de las casas
     del lote 12). Si deben bloquear fuera de las casas, hacen falta items aparte para las
     casas o revisar `town-props.test.ts`.
-  - **Quien salió del juego parado sobre un arbusto** despierta una vez en su templo (la
-    regla de siempre para una casilla que el mapa cambió), no al lado del arbusto. El
-    templo es el de su pueblo (`Town`): si el arbusto estaba en otra isla, ese despertar
-    lo lleva a su isla de origen, un viaje gratis de una sola vez que nadie puede elegir
-    después del cambio. Arreglarlo (templo de la isla donde quedó) toca `placement` en
-    `server/internal/session/player.go`; no se hizo.
+  - **Quien salió del juego parado sobre un arbusto** despierta al lado del arbusto, en la
+    isla donde estaba (`besideSolid`, docs/06); ya no viaja gratis al templo de su pueblo.
+    La misma regla vale para cualquier casilla que bloquea el paso y no la vista, también
+    una de agua: quien quedara guardado ahí despierta en la orilla más cercana.
   - **`thick_bush` no se dobla** al rozarlo (`data/livingworld/plants.yaml` no lo nombra:
     es un rompible del mundo vivo, ya era así). Decidir si un rompible también se mece.
   - **E2E** (lo corre el lote al final): ningún test nombra la casilla de un arbusto, pero

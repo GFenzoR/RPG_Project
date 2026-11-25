@@ -380,9 +380,12 @@ Un objeto del mapa bloquea lo que su sprite muestra. Antes se caminaba sobre los
   árbol sí tapa la vista**: es alto y denso, como un seto alto o un muro. Detrás de un
   tronco no se ve ni se tira (flechas, hechizos, la vista de un monstruo que busca a quién
   atacar); las casillas de los extremos no cuentan, así que un árbol vecino se tala o se
-  mira igual. Desde el centro de cada spawn del bosque se sigue viendo entre el 57 % y el
-  95 % de las casillas caminables a 7 de distancia (medido al cambiarlo): ninguno queda
-  ciego. Un poste, un farol, un puesto de mercado o una reja dejan ver.
+  mira igual (`TestTreesBlockSightOnTheMap` lo juega en el mapa real: una curación detrás
+  de un tronco se rechaza, la misma sobre un arbusto llega, y el árbol vecino se tala).
+  Ningún spawn queda ciego: desde el centro de cada spawn con un árbol a 7 casillas o
+  menos se ve más de la mitad de las casillas caminables a esa distancia (lo vigila
+  `TestTreesLeaveNoSpawnBlind` de `mapcompile`; al cambiarlo, el peor veía el 57 %). Un
+  poste, un farol, un puesto de mercado o una reja dejan ver.
 - **`data/solid_families.yaml`** (`solid_families.schema.json`; solo lo lee el validador,
   nunca el servidor): la lista `families` de palabras de id que nombran una familia sólida
   (`tree`, `bush`, `shrub`, `hedge`, `boulder`, `rock`, `statue`, `well`, `fountain`,
@@ -394,7 +397,10 @@ Un objeto del mapa bloquea lo que su sprite muestra. Antes se caminaba sobre los
   singular o en plural: `stacked_crates` tiene `crate`, `barrels` tiene `barrel`) no
   escribe `blocks_movement`, con `true` o con `false`. El miembro plano o abierto de una
   familia lo dice en voz alta (`cut_bush`, `forge_gate_open`, `bench`:
-  `blocks_movement: false`). Las piezas de borde (sprite `borders/...`) no cuentan: llevan
+  `blocks_movement: false`). Un `kind: decoration` de una familia que no escribe
+  `pickupable` también falla: sin escribirlo se puede levantar, así que un seto nuevo sin
+  ninguna de las dos líneas quedaría caminable y además se lo llevarían; dice
+  `pickupable: false` (y entonces `blocks_movement`) o `pickupable: true`. Las piezas de borde (sprite `borders/...`) no cuentan: llevan
   el nombre de su suelo. Un arbusto, un cajón o una estatua nuevos ya no pueden quedar
   caminables por olvido; una familia nueva (`cart`, por ejemplo) se agrega a la lista.
 - **Quién lee la regla:** `mapcompile` (el A* del servidor y la línea de visión),
@@ -404,13 +410,18 @@ Un objeto del mapa bloquea lo que su sprite muestra. Antes se caminaba sobre los
 - **Al volver sólido un item que ya está en los mapas:** `make validate` (templo, spawns,
   NPCs, portales, casas, cofres, placas y lugares de quest alcanzables) y
   `packages/map-format/src/solid-objects.test.ts`, que compara en cada isla las zonas
-  caminables de antes y de ahora: ningún lugar al que se llegaba queda partido. En el lote
-  20 los 434 arbustos del mundo no cortaron ningún camino; solo se quitó uno, el que
-  estaba en el centro del spawn `puerto_spiders` (3124,6416,7).
-- **Un personaje guardado sobre una casilla que ahora es sólida** despierta en su templo,
-  en la casilla libre más cercana (`placement` de `server/internal/session/player.go`: una
-  casilla que el mapa cambió no está en ninguna zona, y el servidor no adivina de qué lado
-  dejarlo; test `TestBushesAreSolidOnTheMap`).
+  caminables de antes y de ahora: ningún lugar al que se llegaba queda partido (el item
+  nuevo se suma a la lista `MADE_SOLID` de ese test). En el lote 20 los arbustos del mundo
+  no cortaron ningún camino; solo se quitaron dos: el que estaba en el centro del spawn
+  `puerto_spiders` (3124,6416,7) y el que crecía sobre agua en el Bosque (4215,6157,7).
+- **Un personaje guardado sobre una casilla que ahora llena un objeto bajo** (bloquea el
+  paso y no la vista: un arbusto, una roca, un barril) despierta al lado, en la casilla
+  libre más cercana (hasta 3) de las zonas caminables vecinas, en la isla donde salió y
+  sea cual sea su pueblo; nunca en una casa ni en la sala de una puerta con llave
+  (`placement` y `besideSolid` de `server/internal/session/player.go`; test
+  `TestBushesAreSolidOnTheMap`). Sobre un muro, un árbol o una casilla sin mapa sigue
+  despertando en su templo: ahí nunca hubo suelo y el servidor no adivina de qué lado
+  dejarlo (`TestSavedOnAWallGoesToTheTemple`).
 - **Mundo vivo:** una planta sólida (arbusto, árboles) nunca se pisa; se dobla o se sacude
   cuando alguien pasa por una casilla vecina (`livingworld/README.md`, "Plantas").
 

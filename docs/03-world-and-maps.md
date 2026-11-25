@@ -394,7 +394,10 @@ veredicto de `mapcompile` con el de `packages/map-format`.
 
 **Muros y línea de visión (decidido).** `kind: wall` bloquea la vista igual que el paso:
 proyectiles, ataques a distancia y hechizos no atraviesan muros. Un muro que deba dejar
-ver (una reja abierta, una ventana) declara `blocks_sight: false`. Es una regla de juego,
+ver (una reja abierta, una ventana) declara `blocks_sight: false`. Lo que no es muro y es
+alto y denso (los árboles, un portón cerrado, cajones apilados, una cortina de
+enredaderas) declara `blocks_sight: true` y corta la vista igual; lo bajo (un arbusto, una
+roca, un barril) solo frena los pies (tabla en docs/06 "Qué bloquea el paso"). Es una regla de juego,
 no de render: el cliente sigue mostrando toda la vista (hasta 31x21) del piso actual.
 `packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
 en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.

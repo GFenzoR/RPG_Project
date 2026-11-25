@@ -718,7 +718,8 @@ umbrales en `01-architecture.md`, "Detección de bots"):
 - Runas: items de uso con carga; las crea el mago gastando maná.
 - **Magia (T1.9, `server/internal/session/magic.go`):** un hechizo exige vocación, nivel,
   nivel mágico, que no estén corriendo ni su cooldown ni el de su grupo, y maná. Si además
-  encuentra objetivo, rango, línea de visión (los muros la cortan) y no hay zona de
+  encuentra objetivo, rango, línea de visión (la cortan los muros, los árboles y lo demás que
+  tapa la vista, docs/06 "Qué bloquea el paso") y no hay zona de
   protección, se aplica; recién ahí se gasta el maná, que suma lo mismo en intentos de
   nivel mágico (`skills.base.magic`), y empiezan ambos cooldowns. Un hechizo fallido no
   cuesta nada.
