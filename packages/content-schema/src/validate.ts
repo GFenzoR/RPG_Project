@@ -204,6 +204,10 @@ class Validator {
   private tutorial: SourceFile | undefined;
   /** data/livingworld/*.yaml (livingworld/README.md), checked after the items. */
   private living: SourceFile[] = [];
+  /** data/livingworld/plants.yaml, wind.yaml and wind_sprites.yaml (checkPlantWind). */
+  private plants: SourceFile | undefined;
+  private wind: SourceFile | undefined;
+  private windSprites: SourceFile | undefined;
 
   private readonly root: string;
 
@@ -241,6 +245,7 @@ class Validator {
     this.checkI18n();
     this.checkSounds();
     this.checkLivingWorld();
+    this.checkPlantWind();
     const lockFile = join(dataDir, "ids.lock.yaml");
     const lock = existsSync(lockFile)
       ? this.load(lockFile, "data/ids.lock.yaml", "ids-lock")
@@ -412,7 +417,10 @@ class Validator {
       if (src && name === "objects") this.living.push(src); // a list, not an object
       if (!src || !isObj(src.data)) continue;
       if (name === "ambience") this.checkAmbience(src, src.data);
+      if (name === "wind") this.wind = src;
+      if (name === "wind_sprites") this.windSprites = src;
       if (name === "plants") {
+        this.plants = src;
         const seen = new Map<string, number>();
         for (const [i, p] of asList(src.data["plants"]).entries()) {
           const item = isObj(p) ? p["item"] : undefined;
@@ -2683,6 +2691,84 @@ class Validator {
   }
 
   /**
+   * The wind (livingworld/README.md "Viento"): no plant is added and forgotten. Every map
+   * item that is a plant says how it takes the wind, or says `wind: none`:
+   *   - a plant is an item listed in plants.yaml, or a decoration whose id or sprite path
+   *     names a plant (PLANT_WORD: tree, bush, grass, reeds, flower, vine, fern, palm,
+   *     cactus...) or whose sprite lives under a plants/ folder;
+   *   - its wind is its `wind` in plants.yaml (a type, a mapping, none) or its sprite's
+   *     entry in wind_sprites.yaml, which make spritegen writes from the sprite's recipe
+   *     (or from its wind hint in assets/sprites.yaml).
+   * Also: every sprite of wind_sprites.yaml is used by an item, and a plant with a trunk
+   * that gets its wind from plants.yaml alone gives its pivot.
+   */
+  private checkPlantWind(): void {
+    const wind = this.wind;
+    if (!wind) return; // no wind in this content (a test fixture): nothing sways
+    const sprites =
+      this.windSprites && isObj(this.windSprites.data) && isObj(this.windSprites.data["sprites"])
+        ? this.windSprites.data["sprites"]
+        : {};
+    if (!this.windSprites)
+      this.error(
+        wind,
+        [],
+        "data/livingworld/wind_sprites.yaml is missing: run `make spritegen` (it writes the plants' wind metadata)",
+      );
+    const listed = new Map<string, { index: number; entry: Obj }>();
+    if (this.plants && isObj(this.plants.data))
+      for (const [i, p] of asList(this.plants.data["plants"]).entries())
+        if (isObj(p) && typeof p["item"] === "string" && !listed.has(p["item"]))
+          listed.set(p["item"], { index: i, entry: p });
+    const usedSprites = new Set<string>();
+    for (const { item, src, path } of this.items) {
+      const id = item["id"];
+      if (typeof id !== "string") continue;
+      const sprite = typeof item["sprite"] === "string" ? item["sprite"] : "";
+      if (sprite) usedSprites.add(sprite);
+      const entry = listed.get(id);
+      const own = entry?.entry["wind"];
+      const fromSprite = isObj(sprites[sprite]) ? sprites[sprite] : undefined;
+      if (entry && this.plants && own !== undefined && own !== "none") {
+        // A type alone, on a sprite that says nothing: a trunk needs its pivot.
+        const kind = typeof own === "string" ? own : isObj(own) ? own["kind"] : undefined;
+        const pivot = isObj(own) ? own["pivot"] : undefined;
+        if (
+          typeof kind === "string" &&
+          TRUNK_KINDS.has(kind) &&
+          pivot === undefined &&
+          fromSprite?.["kind"] !== kind
+        )
+          this.error(
+            this.plants,
+            ["plants", entry.index, "wind"],
+            `a ${kind} needs its pivot (where the trunk ends, px over the sprite's bottom edge): wind: { kind: ${kind}, pivot: N }`,
+          );
+      }
+      if (own !== undefined || fromSprite) continue;
+      const isPlant =
+        entry !== undefined ||
+        (item["kind"] === "decoration" &&
+          !sprite.startsWith("borders/") &&
+          (namesPlant(id) || namesPlant(sprite) || /(^|\/)plants\//.test(sprite)));
+      if (!isPlant) continue;
+      this.error(
+        entry && this.plants ? this.plants : src,
+        entry ? ["plants", entry.index] : path,
+        `plant "${id}" has no wind metadata: declare \`wind\` in the spritegen recipe of ${sprite || "its sprite"} (plantWind) or a wind hint in assets/sprites.yaml and run \`make spritegen\`, or give it \`wind: <type>\` or \`wind: none\` in data/livingworld/plants.yaml (livingworld/README.md "Cómo agregar una planta")`,
+      );
+    }
+    if (this.windSprites)
+      for (const sprite of Object.keys(sprites))
+        if (!usedSprites.has(sprite))
+          this.error(
+            this.windSprites,
+            ["sprites", sprite],
+            `no item of data/items uses the sprite "${sprite}": run \`make spritegen\``,
+          );
+  }
+
+  /**
    * data/livingworld/*.yaml (livingworld/README.md): one entry per item; never a wall, a
    * door or a ground; a breakable, pushable or closed gate blocks movement, its debris, an
    * open gate and a plate do not; sounds exist in assets/sounds.yaml; debris lies at most
@@ -3067,4 +3153,18 @@ function kitSlot(item: Obj): string | undefined {
   if (isObj(item["armor"])) return `${String(item["armor"]["slot"])} armor`;
   if (isObj(item["ammo"])) return "ammo";
   return undefined;
+}
+
+/** The plant types that stand on a trunk: wind needs to know where it ends. */
+const TRUNK_KINDS = new Set(["tree", "palm", "cactus", "dead_tree"]);
+
+/**
+ * Words that name a plant in an item id or a sprite path, as the last part of one of its
+ * words (oak_tree, wildflowers, jungle_ferns): checkPlantWind.
+ */
+const PLANT_WORD =
+  /(tree|bush|shrub|grass|reeds?|flowers?|vines?|ferns?|palm|cactus|cacti|bamboo|sapling|hedge|ivy|weeds?|plants?|bramble|thicket|seaweed|kelp|lianas?)$/;
+
+function namesPlant(name: string): boolean {
+  return name.split(/[_/]/).some((word) => PLANT_WORD.test(word));
 }

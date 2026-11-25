@@ -79,6 +79,9 @@ describe("repository content", () => {
       "sounds",
       "livingworld-objects",
       "livingworld-ambience",
+      "livingworld-plants",
+      "livingworld-wind",
+      "livingworld-wind_sprites",
       "i18n",
       "ids-lock",
     ];
@@ -517,6 +520,92 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('unknown item "no_such_plant"'))).toBe(true);
     expect(out.some((m) => m.includes("plants.yaml") && m.includes("reaction"))).toBe(true);
     expect(out.some((m) => m.includes("geysers.yaml") && m.includes("no schema"))).toBe(true);
+  });
+
+  it('lets no plant be added and forgotten: wind metadata or wind: none (livingworld/README.md "Viento")', () => {
+    const wind = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && /wind|pivot/.test(m));
+    expect(wind()).toEqual([]);
+    // A new plant item whose sprite says nothing of the wind.
+    const fern =
+      "\n- id: jungle_fern\n  kind: decoration\n  sprite: decor/jungle_fern\n  name: item.grass_tuft.name\n  pickupable: false\n";
+    appendFileSync(file("data/items/plants.yaml"), fern);
+    let out = wind();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("plants.yaml");
+    expect(out[0]).toContain('plant "jungle_fern" has no wind metadata');
+    expect(out[0]).toContain("make spritegen");
+    // Saying none is an answer; so is a type; so is the sprite's own metadata.
+    appendFileSync(file("data/livingworld/plants.yaml"), "  - { item: jungle_fern, wind: none }\n");
+    expect(wind()).toEqual([]);
+    edit(
+      "data/livingworld/plants.yaml",
+      "{ item: jungle_fern, wind: none }",
+      "{ item: jungle_fern, wind: bush }",
+    );
+    expect(wind()).toEqual([]);
+    edit("data/livingworld/plants.yaml", "  - { item: jungle_fern, wind: bush }\n", "");
+    appendFileSync(
+      file("data/livingworld/wind_sprites.yaml"),
+      "  decor/jungle_fern: { kind: bush, pivot: 4, top: 20 }\n",
+    );
+    expect(wind()).toEqual([]);
+    // A plant by its sprite's folder or by a word inside its name, not only by its id.
+    edit(
+      "data/items/plants.yaml",
+      "- id: jungle_fern\n  kind: decoration\n  sprite: decor/jungle_fern",
+      "- id: green_thing\n  kind: decoration\n  sprite: flora/plants/green_thing",
+    );
+    out = wind();
+    expect(out.some((m) => m.includes('plant "green_thing" has no wind metadata'))).toBe(true);
+    // ...and the metadata of a sprite no item uses is stale.
+    expect(
+      out.some((m) => m.includes("wind_sprites.yaml") && m.includes("decor/jungle_fern")),
+    ).toBe(true);
+  });
+
+  it("wants the pivot of a tree, the generated file and a listed plant's wind", () => {
+    const wind = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && /wind|pivot/.test(m));
+    // A listed plant loses its sprite's metadata: it is still a plant.
+    edit("data/livingworld/wind_sprites.yaml", "  decor/bush:", "  # decor/bush:");
+    let out = wind();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('plant "bush" has no wind metadata');
+    // A tree declared by hand must say where its trunk ends.
+    edit(
+      "data/livingworld/plants.yaml",
+      "{ item: bush, reaction: bend }",
+      "{ item: bush, reaction: bend, wind: dead_tree }",
+    );
+    out = wind();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("a dead_tree needs its pivot");
+    edit(
+      "data/livingworld/plants.yaml",
+      "wind: dead_tree }",
+      "wind: { kind: dead_tree, pivot: 5 } }",
+    );
+    expect(wind()).toEqual([]);
+    // Schema: an unknown type, a flutter of a pixel or more, a plant with nothing to say.
+    edit(
+      "data/livingworld/plants.yaml",
+      "{ item: reeds, reaction: bend }",
+      "{ item: reeds, wind: kite }",
+    );
+    edit("data/livingworld/plants.yaml", "{ item: cut_bush, wind: none }", "{ item: cut_bush }");
+    edit("data/livingworld/wind.yaml", "flutter: 0.7,", "flutter: 1.0,");
+    out = messages(root).filter((m) => m.startsWith("error"));
+    expect(out.some((m) => m.includes("plants.yaml") && m.includes("wind"))).toBe(true);
+    expect(out.some((m) => m.includes("wind.yaml") && m.includes("flutter"))).toBe(true);
+    expect(out.filter((m) => m.includes("plants.yaml")).length).toBeGreaterThanOrEqual(2);
+    // Without the generated file every plant sprite is undeclared: say how to make it.
+    rmSync(file("data/livingworld/wind_sprites.yaml"));
+    out = wind();
+    expect(
+      out.some((m) => m.includes("wind_sprites.yaml is missing") && m.includes("make spritegen")),
+    ).toBe(true);
+    expect(out.some((m) => m.includes('plant "oak_tree" has no wind metadata'))).toBe(true);
   });
 
   it('checks the ambience: ambient sounds, items, radius and caps (livingworld/README.md "Ambiente")', () => {

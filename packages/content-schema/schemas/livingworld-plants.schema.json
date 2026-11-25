@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rpg-project.local/schemas/livingworld-plants.schema.json",
   "title": "Living world plants (data/livingworld/plants.yaml)",
-  "description": "Map items that react when a creature walks on or next to them (livingworld/README.md). Cosmetic: the server never reads it.",
+  "description": "Map items that react when a creature walks on or next to them, and how they take the wind (livingworld/README.md). Cosmetic: the server never reads it.",
   "type": "object",
   "additionalProperties": false,
   "required": ["plants"],
@@ -12,15 +12,26 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["item", "reaction"],
+        "required": ["item"],
+        "anyOf": [{ "required": ["reaction"] }, { "required": ["wind"] }],
         "properties": {
           "item": { "$ref": "common.schema.json#/$defs/itemRef" },
-          "reaction": { "enum": ["bend", "rustle"] },
-          "idle": { "type": "boolean" },
+          "reaction": {
+            "description": "What a passing creature does to it. Absent: by its wind type (trees rustle, the rest bend); none with wind: none.",
+            "enum": ["bend", "rustle"]
+          },
           "leaves": { "type": "boolean" },
           "trample": {
             "description": "On a tile worn into a path (trail wear) it is drawn flattened.",
             "type": "boolean"
+          },
+          "wind": {
+            "description": "How it takes the wind. Absent: what its sprite says (data/livingworld/wind_sprites.yaml). A plant type: that type's defaults (wind.yaml kinds). A mapping: a type with its own numbers. none: it never sways (say why in a comment).",
+            "oneOf": [
+              { "const": "none" },
+              { "$ref": "livingworld-wind_sprites.schema.json#/$defs/kind" },
+              { "$ref": "livingworld-wind_sprites.schema.json#/$defs/wind" }
+            ]
           }
         }
       }

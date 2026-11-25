@@ -1,20 +1,34 @@
 # Plants of the living world (livingworld/README.md, docs/06 "Mundo vivo"): map items that
-# react when a creature walks on or next to them. Cosmetic: the server never reads it.
+# react when a creature walks on or next to them and sway in the wind. Cosmetic: the server
+# never reads it.
 #
 #   item      a data/items id
 #   reaction  bend: leans away and springs back (grass, flowers, reeds, bushes);
-#             rustle: a tree shakes a pixel or so
-#   idle      it also sways gently in the wind
+#             rustle: a tree shakes a pixel or so. Absent: by its wind type
 #   leaves    leaves fall from it now and then, and when someone brushes past
 #   trample   on a tile worn into a path (trail wear, wear.yaml) it lies flattened
+#   wind      how it sways (wind.yaml). Absent: what its sprite says, which is the usual
+#             case (wind_sprites.yaml, written by make spritegen from the sprite's recipe).
+#             A plant type (tree, palm, bush, tall_grass, reed, flower, vine, cactus,
+#             dead_tree) or { kind, pivot, stiffness, amplitude, flutter } for a plant
+#             whose sprite says nothing or that differs from its type; none: it never
+#             sways, with the reason in a comment.
+#
+# A plant whose sprite has wind metadata sways even when it is not listed here. make
+# validate fails on a plant item that has neither wind metadata nor `wind: none`.
 plants:
   - { item: grass_tuft, reaction: bend, trample: true }
-  - { item: tall_grass, reaction: bend, idle: true, trample: true }
-  - { item: wildflowers, reaction: bend, idle: true, trample: true }
-  - { item: reeds, reaction: bend, idle: true }
+  - { item: tall_grass, reaction: bend, trample: true }
+  - { item: wildflowers, reaction: bend, trample: true }
+  - { item: reeds, reaction: bend }
   - { item: bush, reaction: bend }
   - { item: flower_box, reaction: bend }
   - { item: oak_tree, reaction: rustle, leaves: true }
   - { item: elm_tree, reaction: rustle, leaves: true }
   - { item: birch_tree, reaction: rustle, leaves: true }
   - { item: pine_tree, reaction: rustle }
+  - { item: thick_bush, reaction: bend }
+  - { item: thorny_vines, reaction: bend }
+  # What is left of a cut bush and of cut vines: stubble on the ground, nothing to sway.
+  - { item: cut_bush, wind: none }
+  - { item: cut_vines, wind: none }
