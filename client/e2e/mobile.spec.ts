@@ -135,19 +135,17 @@ async function tileClient(page: Page, x: number, y: number): Promise<{ x: number
   return p;
 }
 
-/** What is on top at the centre of a map tile: "CANVAS" when a tap there reaches the map. */
-const tileHit = async (page: Page, x: number, y: number): Promise<string> => {
-  const p = await tileClient(page, x, y);
-  return page.evaluate(({ a, b }) => document.elementFromPoint(a, b)?.tagName ?? "", {
+/** What is on top at a point of the page: "CANVAS" when a tap there reaches the map. */
+const hitAt = (page: Page, p: { x: number; y: number }): Promise<string> =>
+  page.evaluate(({ a, b }) => document.elementFromPoint(a, b)?.tagName ?? "", {
     a: p.x,
     b: p.y,
   });
-};
 
 /** Taps a map tile; fails if something over the map (a window, the pad) would take it. */
 const tapTile = async (page: Page, x: number, y: number): Promise<void> => {
   const p = await tileClient(page, x, y);
-  expect(await tileHit(page, x, y), `tile ${x},${y} is covered`).toBe("CANVAS");
+  expect(await hitAt(page, p), `tile ${x},${y} is covered`).toBe("CANVAS");
   await page.touchscreen.tap(p.x, p.y);
 };
 
@@ -626,16 +624,20 @@ async function tapWolf(page: Page, prefix: string): Promise<void> {
         );
         // The folded minimap sits over the map's top-left corner (its 44 px button): a
         // wolf under it cannot be tapped. Take the nearest one that can; wolves move, so
-        // with none, wait for one to walk out.
+        // with none, wait for one to walk out. The point checked is the point tapped: the
+        // camera follows the walking player, so the same tile is elsewhere a moment later.
         let near: (typeof drawn)[number] | undefined;
+        let at = { x: 0, y: 0 };
         for (const w of drawn) {
-          if ((await tileHit(page, w.x, w.y)) !== "CANVAS") continue;
+          const p = await tileClient(page, w.x, w.y);
+          if ((await hitAt(page, p)) !== "CANVAS") continue;
           near = w;
+          at = p;
           break;
         }
         if (!near) return false;
         const before = await page.evaluate(() => window.__rpgClient?.target());
-        if (before !== near.id) await tapTile(page, near.x, near.y);
+        if (before !== near.id) await page.touchscreen.tap(at.x, at.y);
         await page.waitForTimeout(300);
         target = await page.evaluate(() => window.__rpgClient?.target());
         return target !== undefined;
