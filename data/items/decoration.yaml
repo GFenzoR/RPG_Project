@@ -99,7 +99,9 @@
   pickupable: false
   blocks_movement: true
 
-# Nature (T1.16): trees and boulders block walking; bushes do not.
+# Nature (T1.16): trees, bushes and boulders block walking (docs/06 "Qué bloquea el paso"). A
+# bush is low: it stops feet, not arrows or eyes. Neither does a tree: its trunk is thinner
+# than the tile and its crown is above the heads.
 - id: oak_tree
   kind: decoration
   sprite: decor/oak_tree
@@ -119,6 +121,7 @@
   sprite: decor/bush
   name: item.bush.name
   pickupable: false
+  blocks_movement: true
 
 - id: boulder
   kind: decoration
@@ -159,7 +162,8 @@
 # Town prop kit (docs/17 "Kit de props de pueblo", lote 12): one-tile props drawn with the
 # sprite engine (tools/spritegen/src/engine/specs/town.ts) that furnish temples, depots,
 # plazas and houses. A table or a barrel lifts what is stacked on it (elevation, ART-8). The
-# bench, the bed and the flower box never block, so a rented house keeps every tile for its
+# bench, the bed and the flower box never block (said out loud: blocks_movement: false, docs/06
+# "Qué bloquea el paso"), so a rented house keeps every tile for its
 # tenant's items (docs/03 "Muebles y luces"); the rest block like furniture. The lamp post
 # gives light in caves (assets/sprites.yaml `light`); the lamp, the stall and the flag loop.
 - id: barrel
@@ -183,6 +187,7 @@
   sprite: decor/bench
   name: item.bench.name
   pickupable: false
+  blocks_movement: false
 
 - id: shelf
   kind: decoration
@@ -197,6 +202,7 @@
   sprite: decor/bed
   name: item.bed.name
   pickupable: false
+  blocks_movement: false
 
 - id: lamp_post
   kind: decoration
@@ -232,6 +238,7 @@
   sprite: decor/flower_box
   name: item.flower_box.name
   pickupable: false
+  blocks_movement: false
 
 - id: market_stall
   kind: decoration

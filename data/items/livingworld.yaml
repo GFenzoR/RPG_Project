@@ -16,6 +16,7 @@
   sprite: livingworld/weathered_crate_debris
   name: item.weathered_crate_debris.name
   pickupable: false
+  blocks_movement: false
 
 - id: rickety_barrel
   kind: decoration
@@ -30,6 +31,7 @@
   sprite: livingworld/rickety_barrel_debris
   name: item.rickety_barrel_debris.name
   pickupable: false
+  blocks_movement: false
 
 - id: clay_pot
   kind: decoration
@@ -44,6 +46,7 @@
   sprite: livingworld/clay_pot_shards
   name: item.clay_pot_shards.name
   pickupable: false
+  blocks_movement: false
 
 - id: thorny_vines
   kind: decoration
@@ -59,6 +62,7 @@
   sprite: livingworld/cut_vines
   name: item.cut_vines.name
   pickupable: false
+  blocks_movement: false
 
 - id: thick_bush
   kind: decoration
@@ -73,6 +77,7 @@
   sprite: livingworld/cut_bush
   name: item.cut_bush.name
   pickupable: false
+  blocks_movement: false
 
 - id: cracked_rock
   kind: decoration
@@ -87,6 +92,7 @@
   sprite: livingworld/rock_rubble
   name: item.rock_rubble.name
   pickupable: false
+  blocks_movement: false
 
 - id: rotten_barricade
   kind: decoration
@@ -101,6 +107,7 @@
   sprite: livingworld/barricade_planks
   name: item.barricade_planks.name
   pickupable: false
+  blocks_movement: false
 
 - id: spider_web
   kind: decoration
@@ -115,6 +122,7 @@
   sprite: livingworld/torn_web
   name: item.torn_web.name
   pickupable: false
+  blocks_movement: false
 
 # ---- pushables, plates and gates --------------------------------------------------------
 - id: mossy_boulder
@@ -154,3 +162,4 @@
   sprite: livingworld/portcullis_open
   name: item.portcullis_open.name
   pickupable: false
+  blocks_movement: false

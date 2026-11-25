@@ -1,6 +1,8 @@
 # Plants of the living world (livingworld/README.md, docs/06 "Mundo vivo"): map items that
 # react when a creature walks on or next to them and sway in the wind. Cosmetic: the server
 # never reads it.
+# The solid ones (bush, trees: data/items says blocks_movement) are only ever brushed past
+# from a tile next to them; the low ones are walked through.
 #
 #   item      a data/items id
 #   reaction  bend: leans away and springs back (grass, flowers, reeds, bushes);
