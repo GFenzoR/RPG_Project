@@ -1058,31 +1058,6 @@ func TestVocationCareers(t *testing.T) {
 	})
 }
 
-// TestVocationSpellBands: vocation identity (owner's request, 2026-11-23). Every vocation
-// learns a spell of its own (only it casts it) in each band of levels 1 to 30, and the
-// spells several vocations share are support basics; the careers above cast each damage
-// or heal spell in its first levels ("every spell is affordable at its level and cast").
-func TestVocationSpellBands(t *testing.T) {
-	d := loadData(t)
-	bands := [][2]int{{1, 7}, {8, 15}, {16, 23}, {24, 30}}
-	for _, v := range []string{"guardian", "arcanist", "ranger", "druid"} {
-		for _, b := range bands {
-			var own []string
-			for _, id := range d.spells.IDs() {
-				s := d.spells[id]
-				if len(s.Vocations) == 1 && s.CastBy(v) && s.Level >= b[0] && s.Level <= b[1] {
-					own = append(own, id)
-				}
-			}
-			if len(own) == 0 {
-				t.Errorf("%s learns no spell of its own in levels %d-%d", v, b[0], b[1])
-			}
-		}
-	}
-	for _, id := range d.spells.IDs() {
-		s := d.spells[id]
-		if len(s.Vocations) > 1 && (s.Effect.Damage != nil || s.Effect.Heal != nil || s.Level > 10) {
-			t.Errorf("%s is shared by %v: shared spells are early support basics", id, s.Vocations)
-		}
-	}
-}
+// The spell bands of vocation identity (a spell of its own per vocation in each band of
+// levels 1 to 30, shared spells are support basics) are kept in one place only:
+// packages/content-schema/src/vocations-balance.test.ts "spell coverage".

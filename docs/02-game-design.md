@@ -517,9 +517,9 @@ del guardián, `cinder_lance` (18) del arcanista y `pinning_shot` (18) del monta
 Efecto y sonido salen de su elemento (docs/05, `assets/sounds.yaml`), como los demás. Con
 ellos la carrera simulada sigue en las bandas de ritmo (el guardián va del 1 al 50 en
 ~32 h, antes ~35; los demás entre 0,5 y 1,5 veces su tiempo por franja) y cada uno se lanza
-en las cazas de sus primeros niveles. Lo fijan `TestVocationSpellBands`
-(`server/internal/sim/balance_vocations_test.go`) y "every vocation learns a spell of its
-own in each band" (`vocations-balance.test.ts`); el tope de hechizos propios subió de 8 a
+en las cazas de sus primeros niveles. Las franjas las fija un solo test, "every
+vocation learns a spell of its own in each band" (`vocations-balance.test.ts`), y que cada
+hechizo se lance, `TestVocationCareers` (`server/internal/sim/balance_vocations_test.go`); el tope de hechizos propios subió de 8 a
 10 (con los dos compartidos, todos siguen entrando en las 12 teclas de la hotbar).
 
 ## Experiencia y nivel
