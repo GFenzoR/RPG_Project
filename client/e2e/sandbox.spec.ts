@@ -417,6 +417,19 @@ test("sandbox: the quest log, a lectern's book and a reward chest that gives onc
   await expect(ch1.getByTestId("quest-step")).not.toBeEmpty();
   await page.waitForTimeout(300); // let the atlas textures upload before the screenshot
   await shot(page, "96-sandbox-quests");
+  // The minimap (docs/02 "Minimapa"): track the chapter. Its wolves are far from the
+  // sandbox, so the estimate is an arrow on the minimap's edge with a rough distance; the
+  // temple around the player is explored, the rest black.
+  const minimap = page.getByTestId("minimap");
+  await expect(minimap).toBeVisible();
+  for (const side of ["top", "right", "bottom", "left"])
+    await expect(minimap.getByTestId(`minimap-${side}`)).not.toBeEmpty();
+  await ch1.getByTestId("quest-track").click();
+  await expect(ch1.getByTestId("quest-track")).toHaveAttribute("aria-pressed", "true");
+  await expect(minimap).toHaveAttribute("data-tracked", "ch1_shipwreck");
+  await expect(minimap.getByTestId("minimap-hint")).toHaveAttribute("data-kind", /area|arrow/);
+  await minimap.screenshot({ path: join(shots, "96c-minimap-tracked.png") });
+  await shot(page, "96d-minimap-hud");
   await quests.locator('[data-quest-tab="finished"]').click();
   const rats = quests.locator('.quest[data-quest="pruebas_rats"]');
   await expect(rats.getByTestId("quest-cooldown")).toContainText("Disponible otra vez en");
@@ -571,5 +584,233 @@ test("sandbox living world: cut the vines by hand, push both boulders, the portc
   // Still in the game: the pushes never closed the connection.
   expect(await page.evaluate(() => window.__rpgClient?.ready)).toBe(true);
   await expect(page.getByTestId("login-form")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+// docs/17 UI-3 (owner, 2026-11-23): the names over creatures grow with the map zoom in whole
+// steps (large by default, normal in Options → Interface) and their colours read on the
+// black outline; and ART-3: a wall piece just south of the own player fades, the player
+// keeps its colours (no pale copy over the map).
+test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in front of the player fades", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Rotulo");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const standsOn = async (x: number, y: number, z: number): Promise<void> => {
+    await expect
+      .poll(
+        async () => {
+          const s = await page.evaluate(() => window.__rpgClient?.self());
+          return s && !s.pending && !s.walking ? `${s.x},${s.y},${s.z}` : "moving";
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(`${x},${y},${z}`);
+  };
+  const labels = () => page.evaluate(() => window.__rpgClient?.labels());
+  const scale = async (): Promise<number> =>
+    (await page.evaluate(() => window.__rpgClient?.zoom()))?.scale ?? 0;
+  const canvas = await page.getByTestId("game-canvas").boundingBox();
+  if (!canvas) throw new Error("no canvas");
+  const wheel = async (deltaY: number): Promise<void> => {
+    await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 3);
+    await page.keyboard.down("Control");
+    await page.mouse.wheel(0, deltaY);
+    await page.keyboard.up("Control");
+  };
+  const zoomTo = async (want: number): Promise<void> => {
+    for (let i = 0; i < 8 && (await scale()) !== want; i++) {
+      await wheel((await scale()) < want ? -100 : 100);
+      await page.waitForTimeout(150);
+    }
+    await expect.poll(scale).toBe(want);
+    await page.waitForTimeout(300);
+  };
+  const say = page.getByTestId("say").getByRole("textbox");
+  const tp = async (x: number, y: number, z: number): Promise<void> => {
+    await say.fill(`/tp ${x} ${y} ${z}`);
+    await say.press("Enter");
+    await standsOn(x, y, z);
+    await say.blur();
+    await page.waitForTimeout(400);
+  };
+  /** The label of the first creature from `list` with that content id. */
+  const labelOf = async (list: "npcs" | "monsters", contentId: string) => {
+    const ids = await page.evaluate(
+      ({ l, c }) =>
+        (l === "npcs" ? window.__rpgClient?.npcs() : window.__rpgClient?.monsters())
+          ?.filter((n) => n.contentId === c)
+          .map((n) => n.id) ?? [],
+      { l: list, c: contentId },
+    );
+    const shown = (await labels())?.shown ?? [];
+    return shown.find((s) => ids.includes(s.id));
+  };
+
+  // The temple, by the instructor (an NPC), at the fitted 2x: large names, 2 px per cell.
+  await standsOn(2095, 2086, 7);
+  await zoomTo(2);
+  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.scale).toBe(2);
+  const npc2 = await labelOf("npcs", "pruebas_trainer");
+  expect(npc2?.fill).toBe(0xc79bff); // render/label-style.ts LABEL_COLORS.npc
+  await shot(page, "100-names-2x-npc");
+
+  // 1x: one cell per pixel, as before; half as tall.
+  await zoomTo(1);
+  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.scale).toBe(1);
+  const npc1 = await labelOf("npcs", "pruebas_trainer");
+  expect(npc1?.height ?? 0).toBeLessThan((npc2?.height ?? 0) * 0.6);
+  await shot(page, "100b-names-1x-npc");
+
+  // The rats' pen (weak: they cannot kill the guardian meanwhile): monster names at 2x and
+  // at 4x (3 px per cell).
+  await zoomTo(2);
+  await tp(2080, 2081, 7);
+  await expect
+    .poll(async () => (await labelOf("monsters", "bilge_rat"))?.fill, { timeout: 20_000 })
+    .toBe(0xff4f5e); // LABEL_COLORS.monster
+  await shot(page, "101-names-2x-monsters");
+  await zoomTo(4);
+  await expect.poll(async () => (await labels())?.scale).toBe(3);
+  await shot(page, "101b-names-4x-monsters");
+
+  // Options → Interface → "Name size": normal at 4x is 2 px per cell.
+  await openWindow(page, "options");
+  await page.getByTestId("name-size").selectOption("normal");
+  await closeWindow(page, "options");
+  await expect.poll(async () => (await labels())?.scale).toBe(2);
+  expect(await page.evaluate(() => localStorage.getItem("rpg.name-size"))).toBe("normal");
+  await shot(page, "101c-names-normal-4x-monsters");
+  await page.evaluate(() => localStorage.removeItem("rpg.name-size"));
+
+  // ART-3: just north of the temple's south wall (its piece at 2092,2091), the piece fades
+  // and no pale copy of the player is drawn; a piece of the same wall far away does not.
+  await zoomTo(2);
+  await tp(2092, 2090, 7);
+  expect(await page.evaluate(() => window.__rpgClient?.walkable(2092, 2091, 7))).toBe(false);
+  await expect
+    .poll(async () => {
+      const f = await page.evaluate(() => window.__rpgClient?.wallFade(2092, 2091));
+      return f && f.alphas.length > 0 && f.alphas.every((a) => a < 0.5) && f.copies === 0;
+    })
+    .toBe(true);
+  const far = await page.evaluate(() => window.__rpgClient?.wallFade(2099, 2091));
+  expect(far?.alphas.every((a) => a === 1)).toBe(true);
+  await shot(page, "102-wall-fade-own-player");
+  const me = await page.evaluate(() => window.__rpgClient?.tileToClient(2092, 2090));
+  if (!me) throw new Error("no canvas");
+  await page.screenshot({
+    path: join(shots, "102b-wall-fade-own-player-close.png"),
+    clip: { x: me.x - 192, y: me.y - 192, width: 384, height: 320 },
+  });
+  expect(errors).toEqual([]);
+});
+
+// Day and night (livingworld/README.md "Día y noche"): a gm stops the world clock at noon
+// (short shadows under the feet, no tint) and at a full-moon night (silvery blue, the
+// temple's lamps glowing, a faint moon shadow), with the cast shadows drawn under every
+// creature in view; then the low sun of the morning, the dusk, a new-moon night and the dawn
+// after it. It leaves the clock stopped at noon, as the E2E servers start it.
+test("sandbox day and night: noon and a full-moon night, with cast shadows", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Relojero");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const say = page.getByTestId("say").getByRole("textbox");
+  const time = async (args: string): Promise<void> => {
+    await say.fill(`/time ${args}`);
+    await say.press("Enter");
+    await page.waitForTimeout(300);
+  };
+  const sky = () => page.evaluate(() => window.__rpgClient?.sky());
+
+  // The E2E servers keep the time stopped at noon (-world-time noon in
+  // playwright.config.ts); put it back however this test ends, so the specs after it are
+  // not shot at night.
+  try {
+    await time("speed 0");
+    await time("noon");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
+    const noon = await sky();
+    expect(noon?.ambient).toBe(0xffffff);
+    expect(noon?.shadows).toBeGreaterThan(0); // the player and the instructor at least
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99b-daynight-noon");
+
+    await time("moon 4");
+    await time("night");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("night");
+    const night = await sky();
+    expect(night?.lamps).toBe(1);
+    expect(night?.moon).toBeCloseTo(1);
+    expect(night?.ambient).not.toBe(0xffffff);
+    expect(night?.shadowAlpha).toBeGreaterThan(0);
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99c-daynight-night");
+
+    // The rest of the day, for the eye (docs/17): long shadows to the west under a low
+    // morning sun, the orange dusk, a new moon (the darkest night, no moon shadow) and a
+    // dawn: the same day's (/time sets the hour of the current day), the one before that
+    // night, still under the moon of the night before it (phase 7).
+    await time("morning");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
+    expect((await sky())?.shadows).toBeGreaterThan(0);
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99d-daynight-morning");
+
+    await time("dusk");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("dusk");
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99e-daynight-dusk");
+
+    await time("moon 0");
+    await time("night");
+    await expect.poll(async () => (await sky())?.moon, { timeout: 10_000 }).toBeCloseTo(0);
+    expect((await sky())?.phase).toBe("night");
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99f-daynight-new-moon");
+
+    await time("dawn");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("dawn");
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99g-daynight-dawn");
+  } finally {
+    await time("noon");
+    await time("speed 0");
+  }
+  expect(await page.evaluate(() => window.__rpgClient?.ready)).toBe(true);
   expect(errors).toEqual([]);
 });

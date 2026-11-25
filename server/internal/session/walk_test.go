@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"math"
 	"testing"
 
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -25,8 +26,9 @@ func TestJoinSendsWelcomeAndFullView(t *testing.T) {
 	}
 	evs := cl.take()
 	// The quest log comes too, empty for a character with no quest (questlog.go).
-	want := []string{"welcome", "full_map_view", "player_stats", "inventory", "player_skills", "quest_log"}
-	if got := kinds(evs); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[4] != want[4] || got[5] != want[5] {
+	// And the minimap's explored sectors (minimap.go).
+	want := []string{"welcome", "full_map_view", "player_stats", "inventory", "player_skills", "minimap_index", "quest_log"}
+	if got := kinds(evs); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[4] != want[4] || got[5] != want[5] || got[6] != want[6] {
 		t.Fatalf("join events %v, want %v", got, want)
 	}
 	if wl := evs[0].GetWelcome(); wl.GetCreatureId() != p.ID() || wl.GetTickMs() != 50 || wl.GetViewWidth() != 31 || wl.GetViewHeight() != 21 {
@@ -117,16 +119,45 @@ func TestStepDuration(t *testing.T) {
 		ticks  int
 	}{
 		{worldtest.Grass, false, 200, 10}, // 500 ms
-		{worldtest.Grass, true, 200, 15},  // 750 ms
+		{worldtest.Grass, true, 200, 14},  // 10 ticks × √2 = 14.14 → 700 ms
 		{worldtest.Mud, false, 200, 20},   // 1000 ms
 		{worldtest.Road, false, 200, 5},   // 250 ms
 		{worldtest.Grass, false, 205, 10}, // 487.8 ms, rounded up to 500
-		{worldtest.Grass, true, 205, 15},  // 731.7 ms → 750
+		{worldtest.Grass, true, 205, 14},  // from the 10 straight ticks, not 689.8 ms rounded up
+		{worldtest.Road, true, 200, 7},    // 5 × √2 = 7.07
+		{worldtest.Mud, true, 200, 28},    // 20 × √2 = 28.28
 		{worldtest.Grass, false, 30000, 1},
+		{worldtest.Grass, true, 30000, 2}, // a one-tick straight step: never a one-tick diagonal
+		{worldtest.Road, true, 1000, 2},   // 50 ms straight
+		{worldtest.Road, true, 999, 3},    // 2 ticks × √2 = 2.83
 	}
 	for _, c := range cases {
 		if got := h.w.StepTicks(c.ground, c.speed, c.diag); int(got) != c.ticks {
 			t.Errorf("StepTicks(%d, %d, %v) = %d, want %d", c.ground, c.speed, c.diag, got, c.ticks)
+		}
+	}
+}
+
+// TestDiagonalSameSpeed: with diagonal_cost √2 a diagonal step covers its √2 tiles at the
+// speed of a straight one (docs/02 "Movimiento"), within half a tick, at every terrain
+// and speed, and is never shorter than the straight step. Where the straight step is one
+// tick, the diagonal is two: it never covers more distance per tick than a straight one.
+func TestDiagonalSameSpeed(t *testing.T) {
+	h := newHarness(t, worldtest.Map(t, 0, 0, 7, "...m="))
+	for _, ground := range []uint16{worldtest.Grass, worldtest.Mud, worldtest.Road} {
+		for speed := 50; speed <= 3000; speed += 7 {
+			straight := float64(h.w.StepTicks(ground, speed, false))
+			diag := float64(h.w.StepTicks(ground, speed, true))
+			if straight == 1 {
+				if diag != 2 {
+					t.Fatalf("ground %d speed %d: one straight tick, diagonal %v, want 2", ground, speed, diag)
+				}
+				continue
+			}
+			if diag < straight || math.Abs(diag-straight*math.Sqrt2) > 0.5 {
+				t.Fatalf("ground %d speed %d: straight %v ticks, diagonal %v, want %.2f ±0.5",
+					ground, speed, straight, diag, straight*math.Sqrt2)
+			}
 		}
 	}
 }
@@ -145,8 +176,9 @@ func TestDiagonalAndTerrain(t *testing.T) {
 	if len(ms) != 3 || p.Pos() != pos(3, 1) {
 		t.Fatalf("moves %v, at %v", ms, p.Pos())
 	}
-	// Diagonal onto mud: 1000*200/200*1.5 = 1500 ms; then two straight steps on mud.
-	if ms[0].GetDurationMs() != 1500 || ms[1].GetDurationMs() != 1000 || ms[2].GetDurationMs() != 1000 {
+	// Diagonal onto mud: 1000*200/200 = 20 ticks straight, × √2 = 28 ticks (1400 ms); then
+	// two straight steps on mud.
+	if ms[0].GetDurationMs() != 1400 || ms[1].GetDurationMs() != 1000 || ms[2].GetDurationMs() != 1000 {
 		t.Fatalf("durations %d %d %d", ms[0].GetDurationMs(), ms[1].GetDurationMs(), ms[2].GetDurationMs())
 	}
 }

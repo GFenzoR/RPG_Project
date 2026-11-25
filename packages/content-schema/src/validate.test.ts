@@ -78,6 +78,7 @@ describe("repository content", () => {
       "cosmetics",
       "sounds",
       "livingworld-objects",
+      "livingworld-ambience",
       "i18n",
       "ids-lock",
     ];
@@ -113,6 +114,95 @@ describe("validator diagnostics", () => {
       }
     }
   };
+  it('checks each vocation\'s start_kit (docs/02 "Equipo inicial")', () => {
+    const kitErrors = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("vocations.yaml"));
+    expect(kitErrors()).toEqual([]);
+    // The guardian's kit: another vocation's wand, a level 5 sword, a count on a weapon,
+    // more arrows than a stack, a two-handed weapon with the shield and an unknown item.
+    edit(
+      "data/vocations.yaml",
+      "    - { item: rusty_cutlass }\n",
+      "    - { item: rusty_cutlass, count: 2 }\n    - { item: spark_wand }\n    - { item: iron_sword }\n" +
+        "    - { item: arrow, count: 500 }\n    - { item: no_such_item }\n",
+    );
+    const errs = kitErrors();
+    expect(errs).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/rusty_cutlass does not stack/),
+        expect.stringMatching(/spark_wand is for arcanist, not guardian/),
+        expect.stringMatching(/guardian does not wield wand/),
+        expect.stringMatching(/iron_sword asks for level 5/),
+        expect.stringMatching(/500 arrow is more than its stack \(100\)/),
+        expect.stringMatching(/unknown item "no_such_item"/),
+      ]),
+    );
+    // The ranger's two-handed bow with a shield.
+    edit(
+      "data/vocations.yaml",
+      "    - { item: short_bow }\n",
+      "    - { item: short_bow }\n    - { item: barrel_lid_shield }\n",
+    );
+    expect(kitErrors()).toEqual(
+      expect.arrayContaining([expect.stringMatching(/two-handed weapon and a shield/)]),
+    );
+    // A second weapon is carried, not worn: a warning.
+    expect(
+      messages(root).filter((m) => m.startsWith("warning") && m.includes("vocations.yaml")),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/spark_wand is a second piece for the weapon slot/),
+      ]),
+    );
+    expect(kitErrors().join("\n")).not.toMatch(/do not fit the starting backpack/);
+    // The schema: an unknown field and a count of 0.
+    edit("data/vocations.yaml", "{ item: sapling_staff }", "{ item: sapling_staff, slot: 3 }");
+    edit(
+      "data/vocations.yaml",
+      "{ item: seaweed_poultice, count: 1 }",
+      "{ item: seaweed_poultice, count: 0 }",
+    );
+    expect(kitErrors().join("\n")).toMatch(/slot/);
+    expect(kitErrors().join("\n")).toMatch(/count/);
+  });
+
+  it("refuses a start_kit with more carried piles than the backpack and pockets hold", () => {
+    const fit = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("do not fit"));
+    // A starting backpack of one cell: with the four pockets, five cells. Every kit
+    // carries two piles (biscuits and a poultice), so they still fit.
+    edit("data/items/tools.yaml", "container: { slots: 24 }", "container: { slots: 1 }");
+    expect(fit()).toEqual([]);
+    // Four spare wands for the arcanist: six piles. The biscuits named twice are one pile.
+    edit(
+      "data/vocations.yaml",
+      "    - { item: spark_wand }\n",
+      "    - { item: spark_wand }\n" +
+        "    - { item: spark_wand }\n".repeat(4) +
+        "    - { item: ship_biscuit, count: 2 }\n",
+    );
+    const errs = fit();
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toMatch(
+      /6 carried piles do not fit the starting backpack and the pockets \(5 cells\)/,
+    );
+  });
+
+  it("refuses a start_kit heavier than a level 1 of the vocation carries", () => {
+    const heavy = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("the kit weighs"));
+    expect(heavy()).toEqual([]);
+    // The druid carries 41 kg; at 5 kg it cannot hold its own kit and backpack.
+    edit(
+      "data/vocations.yaml",
+      "start: { health: 140, mana: 75, capacity: 41000, speed: 205 }\n  per_level: { health: 6, mana: 27,",
+      "start: { health: 140, mana: 75, capacity: 5000, speed: 205 }\n  per_level: { health: 6, mana: 27,",
+    );
+    const errs = heavy();
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toMatch(/more than the 5000 g a level 1 druid carries/);
+  });
+
   const reachErrors = (): string[] =>
     messages(root).filter((m) => m.startsWith("error") && m.includes("reach"));
   // The reach step of ch3_gate, on the volcano's mine floor.
@@ -337,7 +427,7 @@ describe("validator diagnostics", () => {
     );
     edit("data/attributes.yaml", "text: attribute.speed", "text: attribute.nowhere");
     edit("data/attributes.yaml", "- id: ice_protection", "- id: fire_protection");
-    edit("data/items/weapons.yaml", "  weight: 3300\n", "  weight: 3300\n  stackable: true\n");
+    edit("data/items/weapons.yaml", "  weight: 1150\n", "  weight: 1150\n  stackable: true\n");
     const out = messages(root);
     expect(out.some((m) => m.includes("the first band is level 1"))).toBe(true);
     expect(out.some((m) => m.includes("min is greater than max"))).toBe(true);
@@ -427,6 +517,51 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('unknown item "no_such_plant"'))).toBe(true);
     expect(out.some((m) => m.includes("plants.yaml") && m.includes("reaction"))).toBe(true);
     expect(out.some((m) => m.includes("geysers.yaml") && m.includes("no schema"))).toBe(true);
+  });
+
+  it('checks the ambience: ambient sounds, items, radius and caps (livingworld/README.md "Ambiente")', () => {
+    mkdirSync(file("assets"), { recursive: true });
+    writeFileSync(
+      file("assets/sounds.yaml"),
+      [
+        "format: 1",
+        "sounds:",
+        "  amb_waves: { file: livingworld/sounds/ambience/waves.ogg, channel: ambient }",
+        "  hit: { file: sounds/sfx/hit.ogg, channel: sfx }",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      file("data/livingworld/ambience.yaml"),
+      [
+        "radius: 6",
+        "voices: 3",
+        "voices_lite: 4",
+        "beds:",
+        "  waves: { sound: amb_waves, surfaces: { water_shallow: 1 }, items: { no_such_tree: 1 } }",
+        "  bad: { sound: hit, floors: sky }",
+        "emitters:",
+        "  fountain: { sound: amb_nowhere, radius: 9 }",
+        "  no_such_well: { sound: amb_waves, radius: 2 }",
+        "",
+      ].join("\n"),
+    );
+    const out = messages(root).filter((m) => m.startsWith("error") && m.includes("ambience"));
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has('unknown item "no_such_tree"')).toBe(true);
+    expect(has('unknown item "no_such_well"')).toBe(true);
+    expect(has('sound "hit" is on channel sfx, not ambient')).toBe(true);
+    expect(has('unknown sound "amb_nowhere"')).toBe(true);
+    expect(has("radius 9 is past the window's (6)")).toBe(true);
+    expect(has("voices_lite 4 > voices 3")).toBe(true);
+    expect(has("floors")).toBe(true); // the schema: sky is no floor
+    // The real file is clean.
+    rmSync(file("data/livingworld/ambience.yaml"));
+    cpSync(join(REPO, "data/livingworld/ambience.yaml"), file("data/livingworld/ambience.yaml"));
+    cpSync(join(REPO, "assets/sounds.yaml"), file("assets/sounds.yaml"));
+    expect(
+      messages(root).filter((m) => m.startsWith("error") && m.includes("ambience.yaml")),
+    ).toEqual([]);
   });
 
   it("wants every ground surface described in data/livingworld/surfaces.yaml", () => {
@@ -875,7 +1010,7 @@ describe("validator diagnostics", () => {
   it("points at file:line:col and suggests the closest id for unknown references", () => {
     edit("data/monsters/wolf.yaml", "item: wolf_pelt,", "item: wolf_pelts,");
     expect(messages(root)).toContain(
-      'error data/monsters/wolf.yaml:17:7 loot[0].item: unknown item "wolf_pelts" (did you mean "wolf_pelt"?)',
+      'error data/monsters/wolf.yaml:18:7 loot[0].item: unknown item "wolf_pelts" (did you mean "wolf_pelt"?)',
     );
   });
 
@@ -891,7 +1026,7 @@ describe("validator diagnostics", () => {
     edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:60:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:65:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
       out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),
@@ -1246,7 +1381,7 @@ describe("validator diagnostics", () => {
     edit("data/spells.yaml", "{ id: slowed, range: 4,", "{ id: slowed, range: 7,");
     const out = messages(root);
     expect(
-      out.some((m) => m.startsWith("error data/items/weapons.yaml:126:") && m.includes("<= 6")),
+      out.some((m) => m.startsWith("error data/items/weapons.yaml:128:") && m.includes("<= 6")),
     ).toBe(true);
     const spells = out.filter((m) => m.startsWith("error data/spells.yaml:") && m.includes("<= 6"));
     expect(new Set(spells.map((m) => m.split(":")[1])).size).toBe(3);
@@ -1257,6 +1392,40 @@ describe("validator diagnostics", () => {
     edit("data/spells.yaml", "{ element: earth, radius: 1,", "{ element: earth, radius: 7,");
     expect(
       messages(root).some((m) => m.startsWith("error data/spells.yaml:160:") && m.includes("<= 6")),
+    ).toBe(true);
+  });
+
+  // Review of the monster pursuit: what the server refuses to start with, make validate
+  // reports (docs/06 "Monstruo", "Persecución y regeneración").
+  it("asks for the balance's roll_ms and an interval_ms with a persistence or a regeneration", () => {
+    edit("data/balance.yaml", "    roll_ms: 3000\n", "");
+    edit(
+      "data/balance.yaml",
+      "monster_regen: { delay_ms: 10000, interval_ms: 5000, pct: 1 }",
+      "monster_regen: { delay_ms: 10000, pct: 1 }",
+    );
+    edit("data/monsters/slagbound_warden.yaml", "regen: {", "regen: { interval_ms: 8000,");
+    const out = messages(root).filter((m) => m.startsWith("error "));
+    const has = (file: string, text: string): boolean =>
+      out.some((m) => m.includes(file) && m.includes(text));
+    expect(
+      has("data/balance.yaml", "combat.monster_pursuit.persistence: a persistence needs roll_ms"),
+    ).toBe(true);
+    expect(has("data/balance.yaml", "combat.monster_regen.pct: a pct needs interval_ms")).toBe(
+      true,
+    );
+    expect(
+      has("data/monsters/wolf.yaml", "pursuit.persistence: a persistence needs balance.yaml"),
+    ).toBe(true);
+    // Its own interval is enough for the warden; no monster without a regen block is named.
+    expect(out.some((m) => m.includes("regen.pct: a pct needs an interval_ms"))).toBe(false);
+    edit("data/monsters/slagbound_warden.yaml", "regen: { interval_ms: 8000,", "regen: {");
+    expect(
+      messages(root).some(
+        (m) =>
+          m.includes("data/monsters/slagbound_warden.yaml") &&
+          m.includes("regen.pct: a pct needs an interval_ms"),
+      ),
     ).toBe(true);
   });
 

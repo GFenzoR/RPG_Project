@@ -1,9 +1,10 @@
 // One window of the desktop game screen (docs/17 UI-5): an iron frame with gothic corners
-// and a title bar (icon, title, move handle, fold and close), floating over the full-screen
-// map. Where it is, how big and whether it is open is ui/windows.ts; this only draws it and
-// reports what the player does with it. Dragging (with the magnet), resizing and the keys
-// of the move handle are GameView.tsx's (it knows the screen and the other windows), with
-// ui/window-dom.ts.
+// and a title bar (icon, title, fold and close), floating over the full-screen map. It
+// moves by its title bar and resizes from its four corners (a grab zone over each corner
+// ornament; the edges do not resize). Where it is, how big and whether it is open is
+// ui/windows.ts; this only draws it and reports what the player does with it. Dragging and
+// resizing (with the magnet) are GameView.tsx's (it knows the screen and the other
+// windows), with ui/window-dom.ts.
 //
 // The toolbar's windows, the chat, the server's (dialog, shop, crafting, market, house,
 // trade) and each open container use this same frame.
@@ -11,7 +12,8 @@ import type { ComponentChildren, JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
 import { Icon } from "./icons.tsx";
 import type { IconName } from "./icons.tsx";
-import type { AutoPlace, WinKey, WindowPlace } from "./windows.ts";
+import { CORNERS } from "./windows.ts";
+import type { AutoPlace, Corner, WinKey, WindowPlace } from "./windows.ts";
 import { placeStyle } from "./window-dom.ts";
 
 export interface GameWindowProps {
@@ -61,17 +63,14 @@ export interface GameWindowProps {
   onFocus(): void;
   /** The title bar was pressed: GameView follows the pointer from here. */
   onGrab(e: PointerEvent, el: HTMLElement): void;
-  /** The resize grip was pressed (bottom right). */
-  onResize(e: PointerEvent, el: HTMLElement): void;
-  /** A key on the move handle: true when it moved or resized the window. */
-  onMoveKey(e: KeyboardEvent, el: HTMLElement): boolean;
+  /** A resize corner was pressed. */
+  onResize(corner: Corner, e: PointerEvent, el: HTMLElement): void;
   children: ComponentChildren;
 }
 
 export function GameWindow(props: GameWindowProps): JSX.Element {
   const { t, id, place } = props;
   const titleId = `gwin-${id}-title`;
-  const hintId = `gwin-${id}-move-hint`;
   const placed = place.x !== undefined && place.y !== undefined;
   // Left, top and a max-height that never reaches under the bar, and the player's size
   // (ui/window-dom.ts: a drag that ends writes the same lengths).
@@ -102,10 +101,8 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
       <header
         class="gwin-bar"
         onPointerDown={(e) => {
-          // The buttons of the bar click as buttons (the move handle drags too); the rest of
-          // the bar grabs the window.
-          const button = e.target instanceof Element ? e.target.closest("button") : null;
-          if (button && !button.classList.contains("gwin-move")) return;
+          // The buttons of the bar click as buttons; the rest of the bar grabs the window.
+          if (e.target instanceof Element && e.target.closest("button")) return;
           const el = e.currentTarget.parentElement;
           if (el) props.onGrab(e, el);
         }}
@@ -124,27 +121,6 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
         </h2>
         {props.barExtra}
         {props.badge && <span class="gwin-badge" aria-hidden="true" />}
-        <button
-          type="button"
-          class="gwin-btn gwin-move"
-          data-testid={`window-move-${id}`}
-          aria-label={t("client.window.move", { title: props.title })}
-          aria-describedby={hintId}
-          title={`${t("client.window.move", { title: props.title })} · ${t("client.window.move_hint")}`}
-          onKeyDown={(e) => {
-            const el = e.currentTarget.closest<HTMLElement>(".gwin");
-            if (!el || !props.onMoveKey(e, el)) return;
-            // The arrows on a focused button would walk the character (the Game listens
-            // on the window): this key was the window's.
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
-          <Icon name="move" />
-        </button>
-        <span id={hintId} class="visually-hidden">
-          {t("client.window.move_hint")}
-        </span>
         <button
           type="button"
           class="gwin-btn gwin-fold"
@@ -177,17 +153,20 @@ export function GameWindow(props: GameWindowProps): JSX.Element {
       <div class="gwin-body" id={`gwin-${id}-body`} hidden={place.collapsed}>
         {props.children}
       </div>
-      {!place.collapsed && (
-        <span
-          class="gwin-resize"
-          aria-hidden="true"
-          title={t("client.window.resize")}
-          onPointerDown={(e) => {
-            const el = e.currentTarget.parentElement;
-            if (el) props.onResize(e, el);
-          }}
-        />
-      )}
+      {!place.collapsed &&
+        CORNERS.map((corner) => (
+          <span
+            key={corner}
+            class="gwin-resize"
+            data-corner={corner}
+            aria-hidden="true"
+            title={t("client.window.resize")}
+            onPointerDown={(e) => {
+              const el = e.currentTarget.parentElement;
+              if (el) props.onResize(corner, e, el);
+            }}
+          />
+        ))}
     </section>
   );
 }

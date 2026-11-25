@@ -26,6 +26,8 @@ export interface AtlasIndex {
   anims?: Record<string, AnimMeta>;
   /** Map sprites with variants, frames, wall pieces, an anchor or a shadow (tile-art.ts). */
   tiles?: Record<string, TileMeta>;
+  /** Each sprite's minimap colour, "#rrggbb" (docs/02 "Minimapa"); absent in older atlases. */
+  minimap?: Record<string, string>;
 }
 
 /** A sprite's rectangle in its page image (pixels). */

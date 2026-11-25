@@ -530,6 +530,10 @@ func (s *sandbox) packIndex(p *session.Player, id string) uint32 {
 // equip drags id from the backpack to slot.
 func (s *sandbox) equip(cl *fakeClient, p *session.Player, id string, slot pb.EquipmentSlot) {
 	s.t.Helper()
+	// What the slot holds (the start_kit's weapon or shield) goes to the floor first.
+	if old := p.Equipped(slot); old != nil {
+		s.send(cl, moveItem(inSlot(slot), s.num(old.Def().ID), 0, onTile(p.Pos()), uint32(old.Count())))
+	}
 	win := s.packWindow(cl, p)
 	n := uint32(1)
 	if s.items[id].Stackable {
@@ -1081,8 +1085,9 @@ func TestSandboxPortals(t *testing.T) {
 	// A biscuit thrown onto the stairs lands below them.
 	s.walkNear(cl, p, sbStairsDown)
 	win = s.packWindow(cl, p)
+	biscuits := s.w.CountItem(p, "ship_biscuit")
 	evs = s.send(cl, moveItem(inContainer(win, s.packIndex(p, "ship_biscuit")), s.num("ship_biscuit"), 0, onTile(sbStairsDown), 1))
-	if s.w.CountItem(p, "ship_biscuit") != 2 {
+	if s.w.CountItem(p, "ship_biscuit") != biscuits-1 {
 		t.Fatalf("threw a biscuit onto the stairs: %v", systemKeys(evs))
 	}
 	landed := false
@@ -1180,6 +1185,9 @@ func TestSandboxTrades(t *testing.T) {
 	s := newSandbox(t)
 	cl, p := s.hero(5301, "Artesana", "guardian", 0, 0, 1, gear{"pickaxe", 1, 0}, gear{"felling_axe", 1, 0},
 		gear{"fishing_rod", 1, 0}, gear{"smithing_hammer", 1, 0})
+	// Two ore to start with: six veins of 4 swings give about 8.7 ore on average, too close
+	// to the 8 the forge may need to leave it to the luck of the seed.
+	s.w.GiveForTest(p, "iron_ore", 2)
 
 	var veins, birches []spot
 	for _, v := range [][2]int{{2065, 2088}, {2068, 2088}, {2070, 2090}, {2065, 2091}, {2067, 2093}, {2070, 2093}} {
@@ -1197,6 +1205,19 @@ func TestSandboxTrades(t *testing.T) {
 		{at3(2052, 2097, 7), at3(2051, 2095, 7)}, {at3(2052, 2098, 7), at3(2050, 2098, 7)},
 		{at3(2054, 2098, 7), at3(2054, 2100, 7)}, {at3(2052, 2098, 7), at3(2052, 2101, 7)}}
 	s.gather(cl, p, "pickaxe", veins, "iron_ore", 8)
+	// The stone that came with the ore stays at the quarry: with the start kit, the tools
+	// and the ore, a newcomer's 45 kg have no room for it and the logs too.
+	for range 20 {
+		n := s.w.CountItem(p, "rough_stone")
+		if n == 0 {
+			break
+		}
+		win := s.packWindow(cl, p)
+		s.send(cl, moveItem(inContainer(win, s.packIndex(p, "rough_stone")), s.num("rough_stone"), 0, onTile(p.Pos()), uint32(n)))
+	}
+	if n := s.w.CountItem(p, "rough_stone"); n != 0 {
+		t.Fatalf("%d rough_stone still carried", n)
+	}
 	s.gather(cl, p, "felling_axe", birches, "birch_log", 5)
 	s.gather(cl, p, "fishing_rod", shoals, "raw_fish", 2)
 
@@ -1337,8 +1358,9 @@ func TestSandboxHouse(t *testing.T) {
 	floor := at3(2089, 2111, 7)
 	win := s.packWindow(cl, p)
 	n := len(s.transfers)
+	biscuits := s.w.CountItem(p, "ship_biscuit")
 	evs := s.send(cl, moveItem(inContainer(win, s.packIndex(p, "ship_biscuit")), s.num("ship_biscuit"), 0, onTile(floor), 1))
-	if g := s.w.GroundAt(floor); len(g) != 1 || g[0].Def().ID != "ship_biscuit" || s.w.CountItem(p, "ship_biscuit") != 1 {
+	if g := s.w.GroundAt(floor); len(g) != 1 || g[0].Def().ID != "ship_biscuit" || s.w.CountItem(p, "ship_biscuit") != biscuits-1 {
 		t.Fatalf("drop a biscuit in the house: %v", systemKeys(evs))
 	}
 	written := false

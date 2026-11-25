@@ -24,7 +24,19 @@ holgura para crecer a ~300 sin cambiar la arquitectura.
   `combat.monster_path_retry_ms` (1 s) antes de buscar otra vez: uno trabado frente a
   agua no gasta la cuota del tick de los demás. Con correa, el que persigue a un objetivo
   fuera de su alcance hace una búsqueda por ese lapso aunque dé pasos (dos cuando decide
-  que no llega), siempre dentro de su área de correa.
+  que no llega), siempre dentro de lo que puede pisar: su área de correa o, mientras
+  persigue más allá (`session/pursuit.go`), su tope `max_chase_tiles` (a lo sumo 40), con
+  el mismo límite de nodos y la misma cuota del tick. La persecución cuesta una distancia
+  y una tirada cada `roll_ms` por monstruo; la regeneración, una resta por tick a los que
+  están sin objetivo; los monstruos con objetivo y los errantes (`World.strays`, fuera de casa)
+  piensan aunque su sector no esté activo: son pocos (los que pelean ya pensaron ese tick
+  en su sector; solo paga el que quedó sin nadie cerca, hasta que se rinde y llega a
+  casa). `BenchmarkTickMonsters/.../pursuit`
+  (correa de 6 con la persecución, la regeneración y los errantes de `data/balance.yaml`):
+  medido el 2026-11-24 (i7-13650HX, 3 corridas): `/leash` 8,66 → 8,92 µs por tick
+  (+3 %), `/pursuit` 8,95 µs, sin asignaciones nuevas (16 por tick). Vuelto a medir el
+  2026-11-25 con los monstruos con objetivo en `World.strays` (`-benchmem -count 3`):
+  `/leash` 8,96 µs, `/pursuit` 9,13 µs (+2 %), 16 asignaciones por tick las dos.
 - Comandos por tick (lote 16): la cola común y el carril de ciclo de vida (logins, logouts,
   acuses de guardado) drenan cada uno hasta `MaxCommandsPerTick` (2048), así que un tick
   ejecuta como mucho el doble, 4096. Es a propósito: un aluvión de logins tras un reinicio
@@ -239,12 +251,13 @@ transmite (ver abajo).
 | Todos los archivos de `assets/sounds.yaml` | ≤ 16 MiB | ~13,4 MiB (44 archivos; 13,3 MiB de música) |
 | Una pool de música (`music.pools`) | ≤ 8 MiB | Cuevas ~6,0 MiB (7 temas), Puerto ~3,2 MiB (3), las demás ~1 MiB |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
-| Un tema de música / un loop de ambiente | ≤ 1,5 MiB / ≤ 96 KiB | máx. ~1,1 MiB / ~29 KiB |
+| Un tema de música / un loop de ambiente | ≤ 1,5 MiB / ≤ 96 KiB | máx. ~1,1 MiB / ~44 KiB (los del ambiente posicional, ~42 KiB cada uno) |
+| Ambiente posicional (lote 18) | ≤ `voices` (6) loops a la vez, 3 en un teléfono o con animaciones reducidas; los que suenan y 2 más decodificados | 9 loops de 16 s, ~380 KiB en total; ~3 MB de PCM cada uno decodificado: ~24 MB con 6 sonando y 2 guardados, ~15 MB con 3 |
 | Descarga al cambiar de zona | el tema que suena y el siguiente de su pool (≤ 3 MiB) | ~1,7–2,2 MiB |
 | Música en memoria | `KEEP_STREAMS` (4) archivos comprimidos sin usar, más los que suenan o se esperan si son más (como mucho 6: 4 voces y 2 pedidos), + los decodificadores de 2–4 elementos | ~4–5 MB; ~7 MB en el peor caso |
 | Música en la caché de la PWA | nada (`client/src/sw/policy.ts`: `/audio/sounds/music/` va a la red) | 0 |
 | Voces simultáneas (efectos + UI) | ≤ 16, y `max_voices` por sonido | — |
-| Memoria decodificada (PCM float, 48 kHz) | < 40 MB | ~9 MB en el peor caso (efectos, interfaz y dos ambientes); +~10 MB mientras suena un tema de soundgen (solo en un lugar con `none`) |
+| Memoria decodificada (PCM float, 48 kHz) | < 40 MB | ~30 MB en el peor caso (efectos, interfaz y 8 loops de ambiente: 6 sonando y 2 guardados); +~10 MB mientras suena un tema de soundgen (solo en un lugar con `none`) |
 
 - **Por qué cambió (pedido del dueño, 2026-11-18):** al escuchar la música de Gemini pidió
   transiciones cuidadas, temas que no empiecen siempre por el principio, las tres tomas de
@@ -282,7 +295,8 @@ transmite (ver abajo).
   `AudioBufferSourceNode` con `loop`, sin hueco en la vuelta (el `loop` de un `<audio>`
   deja uno en Chromium). Se sueltan apenas dejan de sonar y de esperarse.
 - **Formatos:** efectos y ambiente **Ogg Opus mono** 48 kHz (32 kbps los efectos, 16 el
-  ambiente); los temas de soundgen mono a 24 kbps (son loops cortos, siguen igual); la
+  ambiente de la lava; 24 los loops del ambiente posicional, porque los chasquidos, las
+  gotas y las hojas se emborronan a 16); los temas de soundgen mono a 24 kbps (son loops cortos, siguen igual); la
   música de Gemini estéreo a 48 kbps (40 las cuevas). `make music-gemini` escribe ese
   formato (`tools/gemini/music_import.py`, `KBPS` y `AMBIENT_KBPS`).
 - El test de `tools/soundgen` (`checkBudget`) falla si algún archivo, una pool o el total se
@@ -320,6 +334,40 @@ del loop. Ancho de banda: docs/05 "Presupuesto de ancho de banda".
 Medido con los tests de simulación (`make test-livingworld`); el tiempo de frame en el
 navegador se mira en la revisión del E2E final del lote (docs/14).
 
+**Ambiente posicional** (lote 18): el cálculo cuesta casi nada. La ventana de 21x21 se
+mueve sumando una fila o columna de 21 casillas por paso (un anillo guarda lo que sumó
+cada casilla, sin objetos nuevos) y se cuenta entera (441 casillas) cada 2 s; cada
+número de item se clasifica una sola vez. El juego lo pide cada 250 ms, no cada frame, y
+el motor solo mueve rampas de ganancia y paneo. Lo que pesa es la memoria de los loops
+decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
+
+**Día y noche y sombras proyectadas** (`livingworld/README.md` "Día y noche"):
+- Servidor: el reloj es una cuenta por tick que nadie mira salvo al mandar el `WorldClock`
+  (una vez por minuto a cada jugador mientras corre, ~12 B; detenido, solo al entrar y tras
+  un `/time`). Sin memoria por jugador.
+- Cliente, cielo: `advance`, `skyAt` y `shadowTransform` cada frame son unas operaciones
+  de punto flotante que escriben en los objetos que `SkyView` reutiliza (la hora, el `Sky`
+  y la pose de la sombra); nada se crea.
+- Cliente, luz: de día ninguna pasada. En el amanecer, el atardecer y la noche, la misma
+  pasada de la luz de las cuevas (un mapa de luz a un cuarto de la pantalla, multiply) con
+  un brillo por luz en vista (pool).
+- Cliente, sombras proyectadas: un sprite por capa dibujada de cada criatura del piso (un
+  muñeco de 9 capas son 9; una bestia, 1), del pool de `CastShadows` (hecho una vez,
+  `cast-shadows.test.ts` cuenta una multitud de 60 muñecos durante 120 frames: 540 sprites
+  hechos en el primero y ninguno más), con las texturas de la propia criatura (ninguna
+  textura nueva por frame), y **una** pasada de filtro (`AlphaFilter`) sobre el contenedor
+  entero, no una por criatura. Con "Animaciones reducidas" y bajo tierra, nada. Las
+  sombras dibujadas de árboles y casas solo cambian el alfa de su capa.
+  **Medido solo del lado JS:** colocar las 540 sombras de una multitud de 60 muñecos
+  (`CastShadows.begin`/`part`/`end`: textura, ancla, posición, skew y escala de cada
+  sprite) cuesta ~0,035 ms por frame en Node en la PC del dueño (2026-11-24), el 0,2 % de
+  un frame de 16,6 ms; `cast-shadows.test.ts` lo vigila con un tope holgado de 2 ms.
+  **Sin medir contra este presupuesto, el lado GPU:** el pedido era "un sprite más por
+  criatura visible" y se hizo uno por capa (hasta 540 con 60 jugadores en vista) más la
+  pasada del filtro, casi del tamaño de la pantalla, y de noche se suma el mapa de luz.
+  Ningún test mide el tiempo de frame en el navegador. Medirlo ahí (multitud de noche,
+  móvil) o aceptar el costo es una decisión pendiente del dueño (docs/14).
+
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.
 - Escenario base: 100 bots repartidos en la isla inicial durante 10 minutos.
@@ -337,7 +385,8 @@ Cómo correrlo: `make bots N=100` (base, 10 min) y `make bots N=300 SCENARIO=str
   ejecuta en el siguiente tick y responde en el batch de ese tick, así que incluye la
   espera al tick (0–50 ms, ~25 ms de media) y la red local. Es el piso de la latencia
   de cualquier comando.
-- **Comportamiento de los bots**: rutas A* sobre `world.bin` hacia su zona (base: 9 zonas
+- **Comportamiento de los bots**: rutas A* sobre `world.bin` (pesan la diagonal con el
+  `diagonal_cost` de `data/balance.yaml`, flag `-data`, como el servidor) hacia su zona (base: 9 zonas
   de Velmara en round robin; stress: todos a 8 casillas o menos del templo y
   la plaza). Después reparten su tiempo así:
   - base: vagar 45 %, pelear 25 %, hablar con un NPC 12 %, chat 10 %, nada 8 %;
@@ -523,6 +572,34 @@ llena (2041 de 2048 de alto): la próxima capa o forma del muñeco probablemente
 tercera página (un draw call más por cambio de página en el peor caso); conviene medirlo
 en ese PR.
 
+**Humanoides en 8 direcciones** (2026-11-24, `feat/diagonal-motion`; docs/17 ANI-1): las 55
+capas del muñeco suman las cuatro diagonales de quieto, caminar, atacar, disparar y conjurar,
+80 frames por capa: **4400 frames** (164 por capa en vez de 84), recortados como los demás
+(4400 PNG más en el repo, ~1,5 MB). Medido contra la base (`fix/wall-fade`) en la misma
+máquina con `spritepack build`:
+
+| | Base | 8 direcciones | Diferencia |
+|---|---|---|---|
+| Páginas | 2 (2048x2041 y 2048x622) | **2** (2048x2034 y 2048x1126) | la segunda crece 504 px |
+| PNG | 1,88 + 1,24 = 3,12 MB | 2,03 + 2,23 = 4,26 MB | +1,14 MB |
+| JSON de las páginas | 694 + 1680 KB | 754 + 3193 KB | +1,57 MB |
+| `atlas.json` | 670 KB | 1079 KB | +409 KB |
+| Sprites | 6706 | 11106 | +4400 |
+
+Sigue dentro del presupuesto ("una página por capa": siguen siendo 2 páginas, y el atlas no
+cuenta en los 5 MB del bundle), así que no se partió nada ni se sacó ningún frame. Con
+el JSON indentado lo que baja el juego pasaba de ~6,2 a ~9,3 MB, y casi la mitad del aumento
+era JSON (nombres de frame y espacios). **Hecho** en la misma rama: `writeAtlas`
+(`tools/spritepack/src/build.ts`) escribe el JSON del atlas sin indentar (se genera, nadie
+lo revisa como diff): las páginas bajan de 754 + 3193 KB a 390 + 1647 KB y `atlas.json` de
+1079 a 709 KB, así que la descarga queda en **~7,0 MB**. **Propuesta si todavía molesta**,
+en este orden: (1) nombres de frame más cortos para el muñeco; (2) las capas
+del muñeco en su propia página, cargada aparte, y las diagonales en una tercera página que
+se baja después de entrar (mientras no llega, `ClipSet.eight` es falso y la figura va en 4
+direcciones, sin mezclar); (3) PNG indexado. En el cliente no cambia nada por frame: una
+diagonal es otra textura de la misma capa; el orden de capas por dirección sigue
+precalculado (ahora 8 órdenes).
+
 **Partículas de ambiente** (2026-11-18, docs/17 A13): como mucho 100 en pantalla
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por
@@ -656,6 +733,44 @@ cada 3 s suma ≤ 0,65 KB/s, lejos de los 4 KB/s (la base de `TestCrowdBandwidth
   empezadas a la vez; a una muerte cada 3 s, un tercio del presupuesto por jugador). Ese
   día, mandar solo la entrada que cambió (un delta) en lugar del diario entero, y medirlo
   con `TestCrowdBandwidth` con tareas activas.
+
+### Minimapa (2026-11-23)
+Lo explorado (docs/05 "Minimapa") vive en el servidor y no en `localStorage`: así el mapa
+sigue al personaje a otro dispositivo y el cliente nunca recibe casillas que no vio.
+- **Memoria:** 128 B por sector de 32x32 de un piso con algo explorado, en el
+  `explore.Map` de cada jugador en línea; tope `explore.MaxSectors` (4096, 512 KB), muy por
+  encima del mundo de hoy (unos 200 sectores por piso). Recorrer Puerto entero son unos 36
+  sectores (4,5 KB).
+- **Tick:** cada paso marca la ventana de 31x21 del piso propio (`Reveal`: un OR de 4 bytes
+  por fila y sector, 21 filas de 2 o 3 sectores; sin asignar sobre lo ya explorado). Un
+  `MinimapRequest` lee hasta 1024 casillas por sector; el presupuesto (32 sectores de
+  golpe, 32 por segundo por jugador) lo acota, y solo se pide al entrar o al arrastrar el
+  minimapa. **Medido** (`BenchmarkMinimapRequestBurst`, i7-13650HX, 2026-11-24): el
+  presupuesto entero en un tick, 32 sectores con todas sus casillas exploradas (32 768
+  lecturas de casilla y pila), cuesta ~0,7 ms, 43 KB y 152 asignaciones; sostenido, lo
+  mismo por segundo. Es el peor tick que un cliente puede forzar: 7 % del tick de 10 ms
+  de presupuesto. La ráfaga era de 64 (1,4 ms) y se bajó a 32: el minimapa más ancho (zoom
+  1) muestra 36 sectores y los pide de a 16 a medida que llegan las respuestas.
+- **Red:** al entrar, el índice (4 B por sector explorado) y lo que el minimapa pide: ~1,1
+  KB por sector (bitset y 1024 índices, que comprimen muy bien). Explorando, como mucho un
+  delta por segundo con 128 B por sector que ganó bits (uno o dos caminando en línea recta:
+  ≤ 0,3 KB/s); nada sobre lo ya explorado.
+- **Base de datos:** `character_explored` (migración 00028), una fila por sector. Cada
+  snapshot hace upsert de los sectores que ganaron bits y que la base todavía puede no
+  tener (nunca borra: los bits solo crecen), 128 B por sector. Cuando llega el ack de un
+  snapshot (`World.Saved`), sus sectores dejan de escribirse hasta que vuelvan a ganar
+  bits (`explore.Map.Snapshot` y `Saved`): un login largo no reescribe en cada save todo lo
+  que recorrió.
+- **Pista del objetivo:** se calcula solo cuando cambia la quest seguida o el jugador se
+  reubica (`flushHint`, `hintMoved`); el spawn más cercano de un `kill` recorre los spawns
+  del mapa una vez. Nunca por paso caminado.
+- **Cliente:** el terreno es un canvas de 160x160 px que se pinta solo cuando cambia lo
+  explorado, el centro o el zoom (no en cada frame). Las claves de sector son números (no
+  strings) y `revealView` busca el sector una vez por fila y sector, no por casilla. El
+  item de color de cada casilla recibida se guarda en `MinimapState` (un `Uint16Array` de
+  2 KB por sector visto, más 128 B de los que vinieron del servidor): pintar ya no lee el
+  mapa de `WorldState` (a zoom 1 eran 25 600 `tile()` con su clave de chunk en string por
+  repintado), solo un `Map` de claves numéricas.
 
 ### Aspecto y equipo visible (lote 13, 2026-11-19)
 Cada `Creature` humanoide lleva su cuerpo (`BodyLook`, cinco ids de `data/looks.yaml`); el

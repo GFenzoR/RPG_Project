@@ -17,6 +17,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/buildinfo"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/explore"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	"github.com/GFenzoR/RPG_Project/server/internal/httpapi"
 	"github.com/GFenzoR/RPG_Project/server/internal/metrics"
@@ -61,6 +62,12 @@ type Config struct {
 	TrailWear *session.TrailConfig
 	// LivingWorld is data/livingworld (session.LoadLivingWorld); nil means no living objects.
 	LivingWorld session.LivingDefs
+	// DayNight is data/livingworld/daynight.yaml's cycle (session.LoadDayNight); nil: no
+	// day and night. The world time starts at the clock's Unix time.
+	DayNight *session.DayNightCycle
+	// DayNightFixed (-world-time, test harnesses) fixes the day and night at that /time word,
+	// stopped (session.Config.DayNightFixed).
+	DayNightFixed string
 	// Attributes come from data/attributes.yaml (docs/02 "Atributos de items"); nil means
 	// no equipable rolls one.
 	Attributes content.Attributes
@@ -333,6 +340,9 @@ func New(cfg Config) (*App, error) {
 			TrailData:       trailData,
 			TrailDowntimeMs: trailDown,
 			SaveTrail:       saveTrail,
+			DayNight:        cfg.DayNight,
+			DayNightEpochMs: cfg.Clock.Now().UnixMilli(),
+			DayNightFixed:   cfg.DayNightFixed,
 
 			StoreHeartbeat: a.storeBeat,
 			Transfer:       transfer,
@@ -558,6 +568,7 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 		Skills:     storeSkills(s.Skills),
 		Inventory:  storeItems(s.Inventory),
 		Storage:    s.Storage,
+		Explored:   storeExplored(s.Explored),
 		Conditions: storeConditions(s.Conditions),
 		PvP: store.PvPState{Skull: s.PvP.Skull, SkullUntil: s.PvP.SkullUntil, Kills: s.PvP.Kills,
 			Unjust: s.PvP.Unjust},
@@ -566,6 +577,15 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 			Beard: s.Look.Beard},
 		SavedAt: a.cfg.Clock.Now(),
 	}
+}
+
+// storeExplored is a snapshot's explored sectors as saved (character_explored).
+func storeExplored(in []explore.SectorState) []store.ExploredSector {
+	out := make([]store.ExploredSector, len(in))
+	for i, s := range in {
+		out[i] = store.ExploredSector{Z: int(s.Key.Z()), SX: s.Key.SX(), SY: s.Key.SY(), Bits: append([]byte(nil), s.Bits[:]...)}
+	}
+	return out
 }
 
 func storeConditions(in []session.ConditionState) []store.Condition {

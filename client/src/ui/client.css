@@ -332,6 +332,46 @@ kbd {
   color: var(--ui-text-muted);
   flex: 1;
 }
+/* The character just created (docs/02 "Cuentas"): marked in gold. */
+.characters li[data-created] {
+  border-color: var(--ui-gold-500);
+  box-shadow: inset 0 0 0 1px var(--ui-gold-300);
+}
+.characters .look-preview {
+  flex: none;
+}
+.characters li > button {
+  margin-left: auto;
+}
+.characters-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+.characters-new small {
+  color: var(--ui-text-muted);
+}
+.vocation-info p {
+  margin: 0.15rem 0;
+}
+.vocation-info .vocation-kit {
+  color: var(--ui-text-muted);
+  font-size: 0.9rem;
+}
+form .link.back {
+  align-self: flex-start;
+}
+@media (max-width: 480px) {
+  .characters li {
+    flex-wrap: wrap;
+  }
+  .characters .meta {
+    flex-basis: 100%;
+    order: 3;
+  }
+}
 
 /* ---- Frames (docs/17 UI-2): every window, panel and box over the map ---------------- */
 .panel,
@@ -4185,4 +4225,35 @@ button.credits-link {
 }
 .stash li button {
   margin-left: auto;
+}
+/* The party window's "Invitar" prompt: a character name, then invite or cancel. It takes
+   the whole row of the party's buttons; the field is wide enough to tap on a phone. */
+.party-invite-prompt {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--ui-iron-600);
+  background: rgb(15 13 11 / 0.6);
+}
+.party-invite-prompt label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+.party-invite-prompt input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2rem;
+  font-size: 1rem;
+}
+.party-invite-prompt .buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+.party-invite-prompt .buttons button {
+  min-height: 2rem;
 }

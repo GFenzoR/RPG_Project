@@ -38,7 +38,7 @@ describe("itemCard", () => {
     expect(card.stats).toEqual([
       { id: "attack", value: 13 },
       { id: "defense", value: 9 },
-      { id: "weight", value: "33.00", total: undefined },
+      { id: "weight", value: 3300, total: undefined },
     ]);
     expect(card.requires).toEqual([{ id: "level", level: 5, met: false }]);
     expect(card.desc).toBe("item.iron_sword.desc");
@@ -99,7 +99,7 @@ describe("itemCard", () => {
     const card = itemCard(arrow, 2, 37);
     expect(card.count).toBe(37);
     expect(card.type).toEqual(["client.card.kind.ammo", "client.card.ammo.arrow"]);
-    expect(card.stats).toContainEqual({ id: "weight", value: "0.70", total: "25.90" });
+    expect(card.stats).toContainEqual({ id: "weight", value: 70, total: 2590 });
   });
 
   it("food heals and feeds; a rune names its spell, charges and magic level", () => {

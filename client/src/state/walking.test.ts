@@ -21,6 +21,7 @@ import type { ClientContent } from "../content-types.ts";
 import { delta } from "./geometry.ts";
 import { STEP_LEAD_MS, stalls } from "./motion.ts";
 import { Steering } from "./steering.ts";
+import { stepMs } from "./step-time.ts";
 import { WorldState } from "./world.ts";
 import type { CreatureState } from "./world.ts";
 
@@ -42,7 +43,7 @@ const content: ClientContent = {
   vocations: [],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.414, maxPathTiles: 100 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],
@@ -175,7 +176,7 @@ function simulate(run: Run): Result {
   const delay = () => run.rttMs / 2 + rand() * run.jitterMs;
   const own = client(WALKER, speed);
   const obs = client(OBSERVER, speed);
-  const steer = new Steering({ diagonalCost: 1.5, maxPathTiles: 100 });
+  const steer = new Steering({ diagonalCost: 1.414, maxPathTiles: 100 });
 
   // Links: in order, each message no earlier than the one before.
   type Up = { at: number; walk: { dir: Direction; walkEpoch: number; seq: number; nth: number } };
@@ -245,7 +246,8 @@ function simulate(run: Run): Result {
         else {
           queue.shift();
           const diagonal = dx !== 0 && dy !== 0;
-          const ticks = Math.max(Math.ceil((1000 * 100 * (diagonal ? 1.5 : 1)) / speed / TICK), 1);
+          // The server's StepTicks, which the client's stepMs mirrors (step-time.test.ts).
+          const ticks = stepMs(content.movement, 100, speed, diagonal) / TICK;
           if (lastStep >= 0) serverGaps += tick - (lastStep + lastTicks);
           lastStep = tick;
           lastTicks = ticks;
@@ -529,19 +531,19 @@ describe("own steps predicted ahead", () => {
     expect(w.canStep(500 - STEP_LEAD_MS - 1)).toBe(false);
     expect(w.chooseStep(Direction.SOUTH_EAST, 400)).toBeUndefined(); // too soon: nothing
     expect(w.canStep(460)).toBe(true);
-    // A diagonal: 750 ms, starting when the first step ends, not now.
+    // A diagonal: 700 ms (500 × √2, to the tick), starting when the first step ends, not now.
     expect(w.chooseStep(Direction.NORTH_EAST, 460)).toEqual({
       kind: "walk",
       dir: Direction.NORTH_EAST,
       seq: 2,
     });
-    expect(s.walk).toMatchObject({ start: 500, duration: 750 });
+    expect(s.walk).toMatchObject({ start: 500, duration: 700 });
     expect(w.unconfirmed).toBe(2);
     expect(w.drawPos(s, 480).x).toBeCloseTo(X0 + 0.96); // still the first step
     expect(w.facing(s, 480)).toBe(Direction.EAST);
     expect(w.drawPos(s, 500)).toEqual({ x: X0 + 1, y: Y });
-    expect(w.drawPos(s, 875)).toEqual({ x: X0 + 1.5, y: Y - 0.5 });
-    expect(w.facing(s, 875)).toBe(Direction.NORTH_EAST);
+    expect(w.drawPos(s, 850)).toEqual({ x: X0 + 1.5, y: Y - 0.5 });
+    expect(w.facing(s, 850)).toBe(Direction.NORTH_EAST);
     // The first one confirmed: the facing stays the newest step's.
     confirm(w, X0, X0 + 1, 500, 520, 1);
     expect(w.unconfirmed).toBe(1);

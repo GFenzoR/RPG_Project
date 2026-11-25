@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/livingworld-daynight.schema.json",
+  "title": "Living world day and night (data/livingworld/daynight.yaml)",
+  "description": "The day and night cycle and the moon (livingworld/README.md \"Día y noche\"). The server reads `cycle` (livingworld/server/daynight) and owns the world time; the client reads both blocks and draws the sky, the light and the shadows.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["cycle", "sky"],
+  "$defs": {
+    "colour": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+  },
+  "properties": {
+    "cycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "day_minutes",
+        "night_minutes",
+        "dawn_minutes",
+        "dusk_minutes",
+        "lunar_days",
+        "sync_seconds"
+      ],
+      "properties": {
+        "day_minutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
+        "night_minutes": { "type": "integer", "minimum": 1, "maximum": 1440 },
+        "dawn_minutes": {
+          "description": "At most half of day_minutes (the server refuses more; the client cuts it there).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 720
+        },
+        "dusk_minutes": {
+          "description": "At most half of day_minutes, like dawn_minutes.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 720
+        },
+        "lunar_days": { "type": "integer", "minimum": 2, "maximum": 64 },
+        "sync_seconds": { "type": "integer", "minimum": 1, "maximum": 3600 }
+      }
+    },
+    "sky": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dawn",
+        "day",
+        "dusk",
+        "night_new_moon",
+        "night_full_moon",
+        "floor",
+        "sun_shadow",
+        "moon_shadow",
+        "max_shadow"
+      ],
+      "properties": {
+        "dawn": { "$ref": "#/$defs/colour" },
+        "day": { "$ref": "#/$defs/colour" },
+        "dusk": { "$ref": "#/$defs/colour" },
+        "night_new_moon": { "$ref": "#/$defs/colour" },
+        "night_full_moon": { "$ref": "#/$defs/colour" },
+        "floor": { "type": "number", "minimum": 0.3, "maximum": 1 },
+        "sun_shadow": { "type": "number", "minimum": 0, "maximum": 0.8 },
+        "moon_shadow": { "type": "number", "minimum": 0, "maximum": 0.8 },
+        "max_shadow": { "type": "number", "minimum": 0.2, "maximum": 4 }
+      }
+    }
+  }
+}

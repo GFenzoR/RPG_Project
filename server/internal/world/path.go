@@ -43,6 +43,27 @@ const MaxPathLength = 100
 // at most 2 × DefaultMaxNodes expansions (about 3 ms in BenchmarkFindPathUnreachable).
 const DefaultMaxNodes = 6000
 
+// DefaultDiagonalCost is the diagonal step cost a new Pathfinder uses (balance.yaml
+// movement.diagonal_cost): √2, so a diagonal step takes as long per tile of distance as a
+// straight one (docs/02-game-design.md, "Movimiento").
+const DefaultDiagonalCost = 1.414
+
+// straightUnits is what a straight step costs per terrain percent, in Pathfinder.cost
+// units; a diagonal one costs Pathfinder.diagUnits (straightUnits × the diagonal cost,
+// rounded). A path's cost g and its heuristic h each stay within MaxPathLength ×
+// maxCostSpeed × straightUnits × MaxDiagonalCost, so f = g + h fits int32.
+const straightUnits = 100
+
+// maxCostSpeed is the highest terrain speed (percent) a search counts: a slower ground
+// costs as much as this one (327 times normal ground; real terrains are 50-200). It keeps
+// g + h within int32 whatever uint16 speed a ground item declares.
+const maxCostSpeed = 32767
+
+// MaxDiagonalCost is the highest diagonal step cost (balance.yaml movement.diagonal_cost):
+// a diagonal is two straight steps at most, which is what it replaces. Past it a path's
+// cost could overflow (straightUnits).
+const MaxDiagonalCost = 2
+
 // pathWindow is the side of the square of tiles a search can visit, centred on the start.
 const pathWindow = 2*MaxPathLength + 1
 
@@ -51,16 +72,18 @@ const pathWindow = 2*MaxPathLength + 1
 // the game loop owns one.
 //
 // Movement rules (docs/02-game-design.md): 8 directions, entering a tile costs its ground
-// speed (terrain percent, 100 = normal) and a diagonal step costs 1.5 times as much.
-// Diagonals may pass between two blocked tiles, as on foot.
+// speed (terrain percent, 100 = normal) and a diagonal step costs diagonal_cost times as
+// much (√2 unless SetDiagonalCost says otherwise). Diagonals may pass between two blocked
+// tiles, as on foot.
 type Pathfinder struct {
-	m        *Map
-	maxNodes int
+	m         *Map
+	maxNodes  int
+	diagUnits int32 // a diagonal step per terrain percent (straightUnits for a straight one)
 
 	gen    uint32
 	seen   []uint32 // generation at which the slot was first reached
 	closed []uint32 // generation at which the slot was expanded
-	cost   []int32  // g, in half-percent units (orthogonal = 2*speed, diagonal = 3*speed)
+	cost   []int32  // g: straightUnits*speed per straight step, diagUnits*speed per diagonal
 	f, h   []int32  // g + heuristic, and heuristic
 	depth  []uint8  // steps from the start
 	from   []uint8  // direction taken to reach the slot
@@ -87,7 +110,7 @@ func NewPathfinder(m *Map, maxNodes int) *Pathfinder {
 		maxNodes = DefaultMaxNodes
 	}
 	n := pathWindow * pathWindow
-	return &Pathfinder{
+	pf := &Pathfinder{
 		m:        m,
 		maxNodes: maxNodes,
 		seen:     make([]uint32, n),
@@ -100,6 +123,24 @@ func NewPathfinder(m *Map, maxNodes int) *Pathfinder {
 		depth:    make([]uint8, n),
 		from:     make([]uint8, n),
 	}
+	pf.SetDiagonalCost(DefaultDiagonalCost)
+	return pf
+}
+
+// SetDiagonalCost sets how many times a straight step a diagonal one costs (balance.yaml
+// movement.diagonal_cost, clamped to 1..MaxDiagonalCost), so paths agree with the step
+// timer. The heuristic stays admissible: its octile distance uses the same two costs.
+func (pf *Pathfinder) SetDiagonalCost(c float64) {
+	pf.diagUnits = int32(min(max(c, 1), MaxDiagonalCost)*straightUnits + 0.5)
+}
+
+// stepCost is what one step onto a tile of terrain speed `speed` costs.
+func (pf *Pathfinder) stepCost(diagonal bool, speed int32) int32 {
+	speed = min(speed, maxCostSpeed)
+	if diagonal {
+		return pf.diagUnits * speed
+	}
+	return straightUnits * speed
 }
 
 // pathHeap is a binary min-heap of window slots ordered by (f, h, slot), with
@@ -177,7 +218,7 @@ func (pf *Pathfinder) heuristic(dx, dy int) int32 {
 	if pf.bySteps {
 		return int32(hi)
 	}
-	return pf.m.minSpeed * int32(2*(hi-lo)+3*lo)
+	return min(pf.m.minSpeed, maxCostSpeed) * (straightUnits*int32(hi-lo) + pf.diagUnits*int32(lo))
 }
 
 // Find returns a walking path from `from` to `to` as a list of directions, appended to
@@ -288,10 +329,8 @@ func (pf *Pathfinder) search(from Pos, gdx, gdy int, dst []Direction) ([]Directi
 			switch {
 			case pf.bySteps:
 				step = 1
-			case dir.Diagonal():
-				step = 3 * pf.m.speed(ground)
 			default:
-				step = 2 * pf.m.speed(ground)
+				step = pf.stepCost(dir.Diagonal(), pf.m.speed(ground))
 			}
 			ng := g + step
 			queued := pf.seen[slot] == pf.gen

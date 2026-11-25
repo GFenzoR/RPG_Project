@@ -45,6 +45,7 @@ import { HeldDirection } from "./input/dpad.ts";
 import { DEFAULT_GESTURES, GestureRecognizer, isTouchPointer } from "./input/gestures.ts";
 import type { Gesture } from "./input/gestures.ts";
 import { creatureName } from "./state/messages.ts";
+import { instanceName } from "./state/item-name.ts";
 import type { ClientContent, ItemMods } from "./content-types.ts";
 import type { Translate } from "./i18n/i18n.ts";
 import {
@@ -59,10 +60,12 @@ import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotk
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
 import { loadZoom, saveZoom } from "./render/zoom.ts";
 import type { ZoomView } from "./render/zoom.ts";
+import { DEFAULT_NAME_SIZE } from "./render/label-style.ts";
+import type { NameSize } from "./render/label-style.ts";
 import type { ViewTiles } from "./state/view.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
-import type { GameCanvas } from "./render/game-canvas.ts";
+import type { GameCanvas, LabelsShown, SkyHook } from "./render/game-canvas.ts";
 import { locationInit, menuItem, splitCount, splittable, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
@@ -72,9 +75,13 @@ import type { SteerInput, StepChoice } from "./state/steering.ts";
 import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
+import { parseHex } from "./state/minimap.ts";
+import type { MinimapState, ObjectiveHintView } from "./state/minimap.ts";
 import type { PocketsState } from "./state/pockets.ts";
 import { MotionTrail } from "./state/motion.ts";
-import { cuesOf, loopFor, sceneFor } from "./audio/cues.ts";
+import { cuesOf, sceneFor } from "./audio/cues.ts";
+import { AMBIENCE_STEP_MS, ambienceAt, mountAmbience } from "./audio/ambience.ts";
+import type { Ambience } from "./audio/ambience.ts";
 import type { Cue, CueContext } from "./audio/cues.ts";
 import type { AudioEngine } from "./audio/engine.ts";
 import type { InvitationView, PartyView } from "./state/party.ts";
@@ -102,6 +109,18 @@ import type {
 } from "./state/world.ts";
 
 /** What the DOM UI shows next to the canvas, refreshed after every server batch. */
+/** What the minimap draws (GameUi.minimap). */
+export interface MinimapUi {
+  /** Grows with every change of what is explored or known (MinimapState.version). */
+  version: number;
+  self: { x: number; y: number; z: number; dir: Direction };
+  /** Party members in view on the own floor. */
+  party: { id: number; x: number; y: number }[];
+  hint: ObjectiveHintView | undefined;
+  /** The quest the server says is tracked ("": none). */
+  tracked: string;
+}
+
 export interface GameUi {
   battle: CreatureState[];
   target: number | undefined;
@@ -152,10 +171,14 @@ export interface GameUi {
    * and the server's clock minus the client's (ms) for a task's countdown.
    */
   quests: QuestLogView | undefined;
+  /** The minimap (docs/02 "Minimapa", ui/Minimap.tsx); undefined before the own creature. */
+  minimap?: MinimapUi | undefined;
   clockOffset: number;
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
   invitations: InvitationView[];
+  /** The party window's "Invitar" prompt (a character name) is open. */
+  partyInviting?: boolean | undefined;
   /** The guild and the invitations to one (T5.1). */
   guild: GuildView | undefined;
   /** The safe mode switch (T5.2). */
@@ -259,8 +282,16 @@ export interface ClientTestHooks {
    * to screen pixels): continuous motion means it moves on every frame while walking.
    */
   trail(ms: number): { t: number; x: number; y: number }[];
-  /** How long a straight own step onto (x, y, z) lasts at the player's speed now, ms. */
-  stepMs(x: number, y: number, z: number): number;
+  /**
+   * How long an own step onto (x, y, z) lasts at the player's speed now, ms: a straight
+   * one, or with `diagonal` a diagonal one.
+   */
+  stepMs(x: number, y: number, z: number, diagonal?: boolean): number;
+  /**
+   * The facing the own figure was last drawn in (docs/17 ANI-1: "n" ... "nw"), and whether
+   * it is drawn in eight facings; undefined before its first frame.
+   */
+  drawnFacing(): { facing: string; eight: boolean } | undefined;
   walkable(x: number, y: number, z: number): boolean;
   tileToClient(x: number, y: number): { x: number; y: number };
   scale(): number;
@@ -268,6 +299,10 @@ export interface ClientTestHooks {
   zoom(): ZoomView;
   /** The server's window (Welcome) and the tiles the canvas shows of it (fractional when cut). */
   view(): { server: ViewTiles; shown: ViewTiles };
+  /** The names over creatures drawn now (docs/17 UI-3; GameCanvas.labels). */
+  labels(): LabelsShown | undefined;
+  /** Wall pieces on (x, y) of the own floor and the translucent copies (docs/17 ART-3). */
+  wallFade(x: number, y: number): { alphas: number[]; copies: number } | undefined;
   /** The battle list as [id, contentId, health %]. */
   battle(): { id: number; contentId: string; health: number }[];
   target(): number | undefined;
@@ -309,6 +344,16 @@ export interface ClientTestHooks {
     dying: PoseView[];
     vanishing: PoseView[];
   };
+  /**
+   * docs/17 UI-11: the speech bubbles on screen now: the speaker's creature id, the kind
+   * (say, yell, whisper, npc) and each message's wrapped lines.
+   */
+  bubbles(): { id: number; style: string; lines: string[] }[];
+  /**
+   * The day and night as last drawn (livingworld/README.md "Día y noche"): phase, light
+   * colour, lamps, moon, and how many cast shadow sprites the frame drew.
+   */
+  sky(): SkyHook | undefined;
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
   /** T5.6: monsters the client knows, as [id, contentId, x, y, z] (to tap one). */
@@ -379,6 +424,16 @@ export interface GameOptions {
    * hit; reduced motion turns it off anyway. Without it, it shakes.
    */
   cameraShake?(): boolean;
+  /**
+   * docs/17 UI-11: whether what creatures say shows over their heads (Options →
+   * Interface), read every frame. Without it, it does.
+   */
+  chatBubbles?(): boolean;
+  /**
+   * How big the names over creatures are (Options → Interface, docs/17 UI-3), read at each
+   * frame. Without it, DEFAULT_NAME_SIZE.
+   */
+  nameSize?(): NameSize;
   /** The world is on screen. */
   entered(): void;
   /**
@@ -430,6 +485,9 @@ export class Game {
   private stepEvents: ((to: Pos) => string[]) | undefined;
   /** performance.now() of the last look at which loops should play (frame, LOOPS_EVERY_MS). */
   private loopsAt = Number.NEGATIVE_INFINITY;
+  /** The positional ambience over the map (audio/ambience.ts) and its last step. */
+  private readonly ambience: Ambience | undefined;
+  private ambienceAt = Number.NEGATIVE_INFINITY;
   /** When a key into a pushable object may push again (pushAhead). */
   private pushAt = Number.NEGATIVE_INFINITY;
   /** The safe mode the player chose (T5.2, `state/pvp.ts`). */
@@ -466,6 +524,8 @@ export class Game {
   private shown: GameUi | undefined;
   /** A Shift+drag of a stack, dropped, waiting for how many move (ui/SplitPrompt.tsx). */
   private split: { ref: ItemRef; to: ItemLoc; x: number; y: number } | undefined;
+  /** The party window's invite-by-name prompt is open (ui/Party.tsx). */
+  private partyInviting = false;
   /** The item dragged with the pointer right now (docs/17 UI-5). */
   private dragging: ItemRef | undefined;
   /** The map's zoom this device remembers (undefined = fit the view) and the one drawn. */
@@ -479,6 +539,7 @@ export class Game {
     this.zoomPref = loadZoom(opts.storage);
     this.world = new WorldState(opts.content);
     this.stepEvents = stepSoundEvents(this.world, opts.content);
+    this.ambience = mountAmbience(this.world, opts.content);
     this.steer = new Steering({
       portals: opts.content.portals,
       diagonalCost: opts.content.movement.diagonalCost,
@@ -499,12 +560,19 @@ export class Game {
           this.world.apply(e.message, now, at);
           this.steer.heard(e.message);
           if (e.message.case === "creatureLook") this.lookAnswered(e.message.value.id);
+          if (e.message.case === "welcome") this.trackAfterWelcome = true;
           if (e.message.case === "welcome" && !this.safe) {
             // T5.2: the server starts every login in safe mode.
             this.conn.send({ case: "setSafeMode", value: { enabled: false } });
           }
         }
         this.sound(cues);
+        if (this.trackAfterWelcome && this.world.self) {
+          // The tracked quest is not saved by the server (docs/05 TrackQuest): sent again.
+          this.trackAfterWelcome = false;
+          const id = loadTracked(this.world.self.name);
+          if (id) this.conn.send({ case: "trackQuest", value: { questId: id } });
+        }
         if (this.world.self && !this.canvas && !this.starting && !this.canvasFailed)
           void this.startCanvas();
         this.publish();
@@ -823,8 +891,26 @@ export class Game {
 
   // ---- parties (T3.3): the server checks leadership, sight and the party size ---------
 
-  private party(action: PartyAction, creatureId = 0): void {
-    this.conn.send({ case: "partyCommand", value: { action, creatureId } });
+  private party(action: PartyAction, creatureId = 0, name = ""): void {
+    this.conn.send({ case: "partyCommand", value: { action, creatureId, name } });
+  }
+
+  /** Opens or closes the party window's invite-by-name prompt. */
+  partyInvitePrompt(open: boolean): void {
+    if (this.partyInviting === open) return;
+    this.partyInviting = open;
+    this.publish();
+  }
+
+  /**
+   * Invites the online character called `name`, wherever it is (the prompt's submit),
+   * and closes the prompt. The server finds it (case-insensitive, exact) and answers
+   * with a system message either way.
+   */
+  partyInviteByName(name: string): void {
+    const n = name.trim();
+    if (n) this.party(PartyAction.INVITE_NAME, 0, n);
+    this.partyInvitePrompt(false);
   }
 
   /** Invites a player the client sees (battle list). */
@@ -872,6 +958,56 @@ export class Game {
   }
 
   /** Asks the server to end the tutorial (T4.2); the panel closes when it says so. */
+  /**
+   * Tracks quest id on the minimap ("" stops): the server answers with its estimate. Kept
+   * per character on this device and sent again at every login.
+   */
+  trackQuest(id: string): void {
+    this.conn.send({ case: "trackQuest", value: { questId: id } });
+    const name = this.world.self?.name;
+    if (name) saveTracked(name, id);
+  }
+
+  /** Asks the server for explored minimap sectors of floor z (MinimapState.wanted). */
+  minimapRequest(z: number, sectors: number[]): void {
+    if (sectors.length > 0) this.conn.send({ case: "minimapRequest", value: { z, sectors } });
+  }
+
+  private readonly minimapColours = new Map<number, readonly [number, number, number]>();
+
+  /**
+   * What the minimap paints with: the explored state, the colour item of a tile (what the
+   * server gave, else what the client was sent of it: MinimapState.item, kept after the
+   * map itself is forgotten) and an item's colour (the atlas's
+   * average of its sprite; a plain shade by kind until the atlas is up or without one).
+   */
+  minimapSource(): {
+    state: MinimapState;
+    tileItem(x: number, y: number, z: number): number;
+    colour(item: number): readonly [number, number, number];
+  } {
+    const w = this.world;
+    return {
+      state: w.minimap,
+      tileItem: (x, y, z) => w.minimap.item(x, y, z),
+      colour: (item) => {
+        let c = this.minimapColours.get(item);
+        if (c) return c;
+        const hex = this.canvas?.itemColor(item);
+        const def = w.item(item);
+        c = hex
+          ? parseHex(hex)
+          : def?.blocks
+            ? ([110, 104, 96] as const)
+            : def?.ground && !def.walkable
+              ? ([38, 64, 112] as const)
+              : ([64, 88, 52] as const);
+        if (hex) this.minimapColours.set(item, c);
+        return c;
+      },
+    };
+  }
+
   skipTutorial(): void {
     this.conn.send({ case: "tutorialSkip", value: {} });
   }
@@ -1461,7 +1597,7 @@ export class Game {
     const title = other
       ? creatureName(other, this.opts.t)
       : top
-        ? this.itemTitle(top.itemId)
+        ? this.itemTitle(top.itemId, top.mods)
         : c
           ? creatureName(c, this.opts.t)
           : "";
@@ -1478,7 +1614,7 @@ export class Game {
   /** The menu of a DOM item: its default action first, look, move, maybe move part. */
   private openItemMenu(ref: ItemRef, x: number, y: number, mouse = false): void {
     const actions = itemActions(this.itemFacts(ref));
-    const title = this.itemTitle(ref.itemId);
+    const title = this.itemTitle(ref.itemId, ref.mods);
     this.openMenu({ x, y, title, actions, card: this.card(ref), mouse, stack: ref.count }, { ref });
   }
 
@@ -1587,9 +1723,10 @@ export class Game {
     if (slot !== undefined) this.moveItem(ref, { kind: "slot", slot });
   }
 
-  private itemTitle(itemId: number): string {
+  /** An item's name as menus and hints say it (state/item-name.ts): "restos de lobo". */
+  private itemTitle(itemId: number, mods?: ItemMods): string {
     const def = this.opts.content.items[itemId];
-    return def ? this.opts.t(`item.${def.id}.name`) : "";
+    return def ? instanceName(this.opts.t, def, itemId, mods) : "";
   }
 
   private openMenu(view: ActionMenuView, target: MenuTarget): void {
@@ -1757,6 +1894,28 @@ export class Game {
     return { containers: others, backpack };
   }
 
+  private trackAfterWelcome = false;
+
+  /** The minimap's part of GameUi; the own view is explored here, as the server does. */
+  private minimapUi(): MinimapUi | undefined {
+    const w = this.world;
+    const s = w.self;
+    if (!s) return undefined;
+    w.minimap.revealView(s.pos.x, s.pos.y, s.pos.z, w.view.width, w.view.height);
+    const party: MinimapUi["party"] = [];
+    for (const m of w.party.party?.members ?? []) {
+      const c = m.id === w.selfId ? undefined : w.creatures.get(m.id);
+      if (c && c.pos.z === s.pos.z) party.push({ id: m.id, x: c.pos.x, y: c.pos.y });
+    }
+    return {
+      version: w.minimap.version,
+      self: { x: s.pos.x, y: s.pos.y, z: s.pos.z, dir: s.dir },
+      party,
+      hint: w.minimap.hint,
+      tracked: w.minimap.tracked,
+    };
+  }
+
   private publish(): void {
     const w = this.world;
     const self = w.self;
@@ -1790,9 +1949,11 @@ export class Game {
       presence: w.activePresence(performance.now()),
       tutorial: w.tutorial,
       quests: w.quests,
+      minimap: this.minimapUi(),
       clockOffset: w.clockOffset,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
+      partyInviting: this.partyInviting,
       guild: w.guild.view(performance.now()),
       safeMode: this.safe,
       guildInvitations: [...w.guild.invitations(performance.now())],
@@ -1855,7 +2016,7 @@ export class Game {
   }
 
   /**
-   * The music's scene and the ambient loop for now: the zone, an important quest's area
+   * The music's scene for now: the zone, an important quest's area
    * and a boss in view (assets/sounds.yaml `music`, audio/cues.ts sceneFor; the music
    * director, audio/director.ts, decides what plays and when). An ordinary fight is not
    * part of it: the owner keeps the zone's music on (2026-11-18). After each batch and,
@@ -1870,14 +2031,24 @@ export class Game {
     const bosses = Object.keys(sounds.music.bosses).length > 0;
     const inView = bosses ? this.world.battleList().map((c) => c.contentId) : [];
     audio.setMusic(sceneFor(self.pos, islands, sounds.music, questMusic ?? [], inView));
-    audio.setAmbient(loopFor(self.pos, islands, sounds.ambient));
+  }
+
+  /**
+   * The ambience's loops for where the player stands (livingworld/README.md "Ambiente"):
+   * every AMBIENCE_STEP_MS from the frame; the engine ramps between the steps.
+   */
+  private keepAmbience(now: number): void {
+    const self = this.world.self;
+    if (!this.opts.audio || !self) return;
+    this.ambienceAt = now;
+    this.opts.audio.setAmbience(ambienceAt(this.ambience, now, self.pos));
   }
 
   destroy(): void {
     this.destroyed = true;
     clearTimeout(this.presenceTimer);
-    // The ambient bed stops; the music goes on until the menus set the title's (App.tsx).
-    this.opts.audio?.setAmbient(undefined);
+    // The ambience fades out; the music goes on until the menus set the title's (App.tsx).
+    this.opts.audio?.setAmbience([]);
     this.cancelUse();
     this.picker.cancel();
     this.watchPick(false);
@@ -1959,6 +2130,8 @@ export class Game {
       hoverText: (x, y, z) => this.hoverText({ x, y, z }),
       restTile: (at) => this.restTile(at),
       shake: () => (this.opts.cameraShake?.() ?? true) && !motionReduced(document.documentElement),
+      bubbles: () => this.opts.chatBubbles?.() ?? true,
+      nameSize: () => this.opts.nameSize?.() ?? DEFAULT_NAME_SIZE,
       controls: () => this.controls(),
       clickCreature: (id) => this.click({ creature: id }),
       useTile: (x, y, z, top) => {
@@ -2014,15 +2187,18 @@ export class Game {
         };
       },
       trail: (ms) => this.trail.since(performance.now() - ms),
-      stepMs: (x, y, z) => {
+      stepMs: (x, y, z, diagonal = false) => {
         const s = world.self;
-        return s ? world.stepDuration({ x, y, z }, s.speed, false) : 0;
+        return s ? world.stepDuration({ x, y, z }, s.speed, diagonal) : 0;
       },
       walkable: (x, y, z) => world.free(x, y, z),
+      drawnFacing: () => canvas.drawnFacing(world.selfId),
       tileToClient: (x, y) => canvas.tileToClient(x, y),
       scale: () => canvas.scale,
       zoom: () => canvas.zoom,
       view: () => ({ server: world.view, shown: canvas.shown }),
+      labels: () => canvas.labels(),
+      wallFade: (x, y) => canvas.wallFade(x, y),
       battle: () =>
         world.battleList().map((c) => ({ id: c.id, contentId: c.contentId, health: c.health })),
       target: () => world.target,
@@ -2061,6 +2237,8 @@ export class Game {
           .map((d) => ({ id: d.id, reason: DisappearReason[d.reason] }));
       },
       poses: () => canvas.poses(),
+      bubbles: () => canvas.bubbles(),
+      sky: () => canvas.sky(),
       npcs: () =>
         [...world.creatures.values()]
           .filter((c) => c.kind === CreatureKind.NPC)
@@ -2093,6 +2271,7 @@ export class Game {
     const self = this.world.self;
     if (!self) return;
     if (now - this.loopsAt >= LOOPS_EVERY_MS) this.keepLoops(now);
+    if (now - this.ambienceAt >= AMBIENCE_STEP_MS) this.keepAmbience(now);
     this.world.expirePredicted(now);
     const drawn = this.world.drawPos(self, now);
     this.trail.record(now, drawn.x, drawn.y);
@@ -2195,7 +2374,11 @@ export class Game {
       creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
     });
     if (kind === undefined) return "";
-    const name = other ? creatureName(other, this.opts.t) : item ? this.itemTitle(item.itemId) : "";
+    const name = other
+      ? creatureName(other, this.opts.t)
+      : item
+        ? this.itemTitle(item.itemId, item.mods)
+        : "";
     const t = this.opts.t;
     return name && kind !== "climb"
       ? t(`client.action.${kind}`, { name })
@@ -2315,4 +2498,30 @@ export class Game {
   private readonly onFocusIn = (e: FocusEvent): void => {
     if (isTextField(e.target)) this.keys.clear();
   };
+}
+
+const TRACK_KEY = "rpg.track";
+
+/** The quest a character tracks on this device ("" or undefined: none). */
+export function loadTracked(name: string): string | undefined {
+  try {
+    const all = JSON.parse(localStorage.getItem(TRACK_KEY) ?? "{}") as Record<string, unknown>;
+    const v = all[name];
+    return typeof v === "string" && v !== "" ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function saveTracked(name: string, id: string): void {
+  try {
+    const all = new Map(
+      Object.entries(JSON.parse(localStorage.getItem(TRACK_KEY) ?? "{}") as Record<string, string>),
+    );
+    if (id) all.set(name, id);
+    else all.delete(name);
+    localStorage.setItem(TRACK_KEY, JSON.stringify(Object.fromEntries(all)));
+  } catch {
+    // Storage blocked: tracking lasts for this login only.
+  }
 }

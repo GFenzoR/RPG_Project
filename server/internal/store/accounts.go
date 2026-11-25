@@ -47,6 +47,9 @@ type Character struct {
 	Name     string
 	Vocation string
 	Level    int
+	// Look is the saved body (characters.look_*; empty: the game picks one from the id at
+	// its first login), for the character list's preview.
+	Look Look
 }
 
 // NewCharacter is the input to CreateCharacter. Values are already validated.
@@ -179,7 +182,9 @@ func (s *Store) ListCharacters(ctx context.Context, accountID int64) ([]Characte
 	}
 	out := make([]Character, len(rows))
 	for i, r := range rows {
-		out[i] = Character{ID: r.ID, Name: r.Name, Vocation: r.Vocation, Level: int(r.Level)}
+		out[i] = Character{ID: r.ID, Name: r.Name, Vocation: r.Vocation, Level: int(r.Level), Look: Look{
+			Sex: r.LookSex, Body: r.LookBody, Skin: r.LookSkin, Hair: r.LookHair, HairColor: r.LookHairColor, Beard: r.LookBeard,
+		}}
 	}
 	return out, nil
 }
@@ -219,7 +224,7 @@ func (s *Store) CreateCharacter(ctx context.Context, c NewCharacter, maxPerAccou
 		if err != nil {
 			return fmt.Errorf("insert character: %w", err)
 		}
-		out = Character{ID: row.ID, Name: row.Name, Vocation: row.Vocation, Level: int(row.Level)}
+		out = Character{ID: row.ID, Name: row.Name, Vocation: row.Vocation, Level: int(row.Level), Look: c.Look}
 		return nil
 	})
 	if err != nil {

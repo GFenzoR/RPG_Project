@@ -108,12 +108,37 @@ func TestLootCorpse(t *testing.T) {
 	coins := corpse.Loot()[0].GetCount()
 	cl.take()
 
+	// Looking at them names the monster: the item of look.container carries remains_of.
+	h.input(cl, lookAt(onTile(died), corpseID, 1))
+	h.sim.Step()
+	looks := find(cl.take(), (*pb.ServerMessage).GetChatMessage)
+	if len(looks) != 1 || looks[0].GetLocalized().GetKey() != "look.container" {
+		t.Fatalf("look = %v", looks)
+	}
+	named := false
+	for _, prm := range looks[0].GetLocalized().GetParams() {
+		if prm.GetName() != "item" {
+			continue
+		}
+		named = true
+		if prm.GetItem().GetMods().GetRemainsOf() != "wolf" {
+			t.Errorf("looked at %v, want the remains of the wolf", prm.GetItem())
+		}
+	}
+	if !named {
+		t.Errorf("look params %v carry no item: nothing names the monster", looks[0].GetLocalized().GetParams())
+	}
+
 	pack := openPack(t, h, cl)
 	h.input(cl, useItem(onTile(died), corpseID, 1)) // ground is index 0
 	h.sim.Step()
 	opens := find(cl.take(), (*pb.ServerMessage).GetContainerOpen)
 	if len(opens) != 1 || opens[0].GetItemId() != corpseID || len(opens[0].GetItems()) != 1 {
 		t.Fatalf("remains ContainerOpen = %v", opens)
+	}
+	// The window says whose remains it is: the client titles it "remains of <monster>".
+	if got := opens[0].GetMods().GetRemainsOf(); got != "wolf" {
+		t.Errorf("remains window mods.remains_of = %q, want wolf", got)
 	}
 	remains := opens[0].GetContainerId()
 	free := p.Carried()

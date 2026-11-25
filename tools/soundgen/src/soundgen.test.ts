@@ -13,7 +13,8 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { BUDGET, checkBudget, GENERATED, manifestFiles, render } from "./index.ts";
+import { AMBIENCE_PATHS, LOOP_S, PEAK, TARGET_RMS, XF_S, seamless } from "./ambience.ts";
+import { assetFile, BUDGET, checkBudget, GENERATED, manifestFiles, render } from "./index.ts";
 import { RATE, encodeWav, note, rng } from "./synth.ts";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -71,11 +72,9 @@ describe("generated sounds", () => {
   it("Karvask plays its own loops, not the cave's and the shore's (T5.5)", () => {
     const raw = parse(readFileSync(join(root, "assets", "sounds.yaml"), "utf8")) as {
       music: { islands: Record<string, string>; pools: Record<string, string[]> };
-      ambient: { islands: Record<string, string> };
     };
     expect(raw.music.islands["volcan"]).toBe("volcan");
     expect(raw.music.pools["volcan"]).toContain("music_volcan");
-    expect(raw.ambient.islands["volcan"]).toBe("amb_volcan");
     const files = new Map(manifestFiles(root).map((f) => [f.id, f.file]));
     // Its own theme: soundgen's, or the Gemini take the owner picked for it.
     expect(files.get("music_volcan")).toMatch(/^sounds\/music\/(volcan|gemini\/volcan_\d)\.ogg$/);
@@ -87,12 +86,49 @@ describe("generated sounds", () => {
     expect(Math.abs((a[0] ?? 0) - (a[a.length - 1] ?? 0))).toBeLessThan(0.05);
   }, 30_000);
 
+  it("the living world's ambience loops are seamless, as loud as each other, and capped", () => {
+    expect(AMBIENCE_PATHS.length).toBeGreaterThanOrEqual(9);
+    for (const path of AMBIENCE_PATHS) {
+      const g = { path, kind: "ambience" as const };
+      expect(assetFile(g), path).toMatch(/^livingworld\/sounds\/ambience\/[a-z_]+\.ogg$/);
+      const a = render(g);
+      expect(a.length, path).toBe(LOOP_S * RATE);
+      let sum = 0;
+      let peak = 0;
+      for (const v of a) {
+        sum += v * v;
+        peak = Math.max(peak, Math.abs(v));
+      }
+      const rms = Math.sqrt(sum / a.length);
+      expect(peak, path).toBeLessThanOrEqual(PEAK + 1e-6);
+      // At the target, or under it where the peak ceiling held it (crackles, drips).
+      expect(rms, path).toBeLessThanOrEqual(TARGET_RMS + 1e-6);
+      expect(rms, path).toBeGreaterThan(TARGET_RMS / 4);
+      // The wrap is no bigger a step than the ordinary ones of the loop.
+      const steps = [];
+      for (let i = 1; i < a.length; i += 97) steps.push(Math.abs((a[i] ?? 0) - (a[i - 1] ?? 0)));
+      steps.sort((x, y) => x - y);
+      const p99 = steps[Math.floor(steps.length * 0.99)] ?? 0;
+      expect(Math.abs((a[0] ?? 0) - (a[a.length - 1] ?? 0)), path).toBeLessThanOrEqual(p99);
+    }
+  }, 60_000);
+
+  it("seamless folds the tail over the head with equal power", () => {
+    // A ramp rendered past the loop: the head starts as the tail's continuation.
+    const a = seamless(1, (n) => Float32Array.from({ length: n }, (_, i) => i / RATE));
+    const xf = Math.round(XF_S * RATE);
+    expect(a.length).toBe(RATE);
+    expect(a[0]).toBeCloseTo(1, 3); // the sample after the loop's last one
+    expect(a[xf]).toBeCloseTo(xf / RATE, 3); // past the fold: the ramp itself
+    expect(a[a.length - 1]).toBeCloseTo((RATE - 1) / RATE, 3);
+  });
+
   it("sounds.yaml uses every generated file and every own file exists", () => {
     const files = manifestFiles(root);
     const used = new Set(files.map((f) => f.file));
     // A theme a Gemini pick replaced stays, with its recipe, to play again with "none".
     for (const slot of Object.values(gemini().slots)) if (slot.fallback) used.add(slot.fallback);
-    for (const g of GENERATED) expect(used, g.path).toContain(`sounds/${g.path}.ogg`);
+    for (const g of GENERATED) expect(used, g.path).toContain(assetFile(g));
     for (const f of files) expect(existsSync(join(root, "assets", f.file)), f.file).toBe(true);
   });
 });

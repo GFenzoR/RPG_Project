@@ -76,3 +76,18 @@ message TrailWear {
   repeated uint32 tiles = 2;
   bytes levels = 3;
 }
+
+// WorldClock is the world's time of day (server → client; livingworld/server/daynight,
+// data/livingworld/daynight.yaml). Sent at login, every `sync_seconds` and at once after a
+// staff /time. The client runs it on from there at `rate` and draws the sky, the light and
+// the cast shadows; no game rule depends on it.
+message WorldClock {
+  // day: cycles since the world's epoch. The moon's phase is day mod lunar_days, except
+  // at dawn: the dawn still has the moon of the night before, (day - 1) mod lunar_days.
+  uint32 day = 1;
+  // cycle_ms: how far into the cycle; 0 is the start of dawn, day_minutes the start of
+  // the night.
+  uint32 cycle_ms = 2;
+  // rate: world milliseconds per real millisecond (1 normal; 0 stopped by staff).
+  uint32 rate = 3;
+}

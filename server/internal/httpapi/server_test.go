@@ -170,14 +170,14 @@ func TestFullFlow(t *testing.T) {
 	// Empty list, create, list again (bearer and cookie both work).
 	w = h.do(req{method: "GET", path: "/api/characters", token: token})
 	expect(t, w, http.StatusOK, "")
-	if strings.TrimSpace(w.Body.String()) != `{"characters":[]}` {
+	if strings.TrimSpace(w.Body.String()) != `{"characters":[],"max_characters":10}` { // the creation screen disables its button at the limit
 		t.Fatalf("empty list body %s", w.Body.String())
 	}
 	w = h.do(req{method: "POST", path: "/api/characters", cookie: token, body: `{"name":"Mira","vocation":"guardian"}`})
 	expect(t, w, http.StatusCreated, "")
 	w = h.do(req{method: "GET", path: "/api/characters", cookie: token})
 	expect(t, w, http.StatusOK, "")
-	want := `{"characters":[{"id":2,"name":"Mira","vocation":"guardian","level":1}]}`
+	want := `{"characters":[{"id":2,"name":"Mira","vocation":"guardian","level":1}],"max_characters":10}`
 	if strings.TrimSpace(w.Body.String()) != want {
 		t.Fatalf("list body %s, want %s", w.Body.String(), want)
 	}

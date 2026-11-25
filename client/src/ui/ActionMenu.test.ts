@@ -3,7 +3,8 @@
 import { Direction } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
-import type { ClientContent } from "../content-types.ts";
+import type { ClientContent, ItemDef } from "../content-types.ts";
+import { itemCard } from "../state/item-card.ts";
 import type { ActionKind } from "../input/actions.ts";
 import {
   ActionMenu,
@@ -249,7 +250,95 @@ describe("ActionMenu", () => {
   });
 });
 
+describe("ActionMenu on the remains of a death", () => {
+  const rect = (x: number) => ({ url: "atlas.png", x, y: 0, width: 64, height: 64 });
+  const fur: ItemDef = {
+    id: "remains_fur",
+    sprite: "decor/remains_fur",
+    ground: false,
+    walkable: true,
+    blocks: false,
+    speed: 100,
+    stackable: false,
+    slots: 10,
+    useWith: false,
+    fixed: true,
+  };
+  const card = itemCard(fur, 91, 1, {}, { attribute: "", value: 0, refine: 0, remainsOf: "wolf" });
+  const menu = { x: 100, y: 100, title: "restos de lobo", actions: ["open", "look"], card };
+  const iconBox = (tree: unknown): Node | undefined =>
+    nodes(nodes(tree).find((n) => n.props["class"] === "touch-menu-title")).find(
+      (n) => n.props["class"] === "touch-menu-icon",
+    );
+
+  it("shows the monster's own corpse beside the title, fitted to the icon box", () => {
+    const asked: string[] = [];
+    const game = {
+      menuPressed: false,
+      menuChoose: () => undefined,
+      closeMenu: () => undefined,
+      menuPress: () => undefined,
+      itemIcon: () => rect(0),
+      spriteIcon: (path: string) => (asked.push(path), rect(128)),
+    };
+    const tree = ActionMenu({
+      t,
+      menu: menu as Parameters<typeof ActionMenu>[0]["menu"],
+      game: game as unknown as Parameters<typeof ActionMenu>[0]["game"],
+      viewport: { width: 800, height: 600 },
+    });
+    expect(asked).toEqual(["corpses/wolf"]);
+    const icon = iconBox(tree);
+    expect(icon?.props["icon"]).toEqual(rect(128));
+    expect(icon?.props["fit"]).toBe(64);
+    // A boss's 96 px corpse is scaled down into the box, not drawn over the title.
+    expect(icon?.props["shrink"]).toBe(true);
+    expect(nodes(tree).some((n) => n.props.children === "restos de lobo")).toBe(true);
+  });
+
+  it("falls back to the item's icon when the atlas has no corpse for the monster", () => {
+    const game = {
+      menuPressed: false,
+      menuChoose: () => undefined,
+      closeMenu: () => undefined,
+      menuPress: () => undefined,
+      itemIcon: () => rect(0),
+      spriteIcon: () => undefined,
+    };
+    const tree = ActionMenu({
+      t,
+      menu: menu as Parameters<typeof ActionMenu>[0]["menu"],
+      game: game as unknown as Parameters<typeof ActionMenu>[0]["game"],
+      viewport: { width: 800, height: 600 },
+    });
+    const icon = iconBox(tree);
+    expect(icon?.props["icon"]).toEqual(rect(0));
+    expect(icon?.props["fit"]).toBeUndefined();
+  });
+});
+
 describe("PickBanner", () => {
+  it("names picked remains after whose they are", () => {
+    const content = { items: { 91: { id: "remains_fur" } } } as unknown as ClientContent;
+    // The monster has a name here (one without falls back to the family's: item-name.ts).
+    const named: typeof t = (key, params) =>
+      key === "monster.wolf.name" ? "wolf" : t(key, params);
+    const tree = PickBanner({
+      t: named,
+      content,
+      picked: {
+        loc: { kind: "pos", pos: { x: 1, y: 1, z: 7 } },
+        itemId: 91,
+        stackIndex: 1,
+        count: 1,
+        mods: { attribute: "", value: 0, refine: 0, remainsOf: "wolf" },
+      },
+      game: { cancelPick: () => true },
+    });
+    const name = 'client.item.remains_of{"monster":"wolf"}';
+    expect(nodes(tree).some((n) => n.props.children === name)).toBe(true);
+  });
+
   it("names the picked item and drops the pick", () => {
     let cancelled = 0;
     const content = { items: { 66: { id: "backpack" } } } as unknown as ClientContent;
@@ -301,7 +390,7 @@ describe("the right-click menu (docs/17 UI-6)", () => {
     id: "raw_fish",
     count: 12,
     type: ["client.card.kind.consumable", "client.card.food"],
-    stats: [{ id: "weight" as const, value: "5.00", total: "60.00" }],
+    stats: [{ id: "weight" as const, value: 500, total: 6000 }],
     requires: [],
     effects: [{ id: "food" as const, seconds: 60 }],
     desc: "item.raw_fish.desc",

@@ -21,10 +21,17 @@ import (
 // Mods is what makes one item instance different from another of its definition: its
 // attribute (an id of data/attributes.yaml, "" none) with its value, and its refine level
 // (the forge; 0 here). The zero value is a plain item.
+//
+// The remains a death leaves carry whose they are (docs/02 "Muerte", docs/05 "Restos"):
+// RemainsOf, the data/monsters id of the monster that fell, and BodyOf, the name of the
+// player whose body it is. The client names and draws the remains from them. Remains are
+// never saved (houseItems leaves them out), so neither is stored.
 type Mods struct {
-	Attr   string
-	Value  int
-	Refine int
+	Attr      string
+	Value     int
+	Refine    int
+	RemainsOf string
+	BodyOf    string
 }
 
 // Zero reports whether m is a plain item's.
@@ -35,7 +42,8 @@ func (m Mods) msg() *pb.ItemMods {
 	if m.Zero() {
 		return nil
 	}
-	return &pb.ItemMods{Attribute: m.Attr, Value: int32(m.Value), Refine: uint32(max(m.Refine, 0))}
+	return &pb.ItemMods{Attribute: m.Attr, Value: int32(m.Value), Refine: uint32(max(m.Refine, 0)),
+		RemainsOf: m.RemainsOf, BodyOf: m.BodyOf}
 }
 
 // modsOf reads mods sent by a client (nil: none). Only a comparison key: the server never
@@ -44,7 +52,8 @@ func modsOf(m *pb.ItemMods) Mods {
 	if m == nil {
 		return Mods{}
 	}
-	return Mods{Attr: m.GetAttribute(), Value: int(m.GetValue()), Refine: int(m.GetRefine())}
+	return Mods{Attr: m.GetAttribute(), Value: int(m.GetValue()), Refine: int(m.GetRefine()),
+		RemainsOf: m.GetRemainsOf(), BodyOf: m.GetBodyOf()}
 }
 
 // Mods returns the instance's mods (tests and tools).

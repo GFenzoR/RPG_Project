@@ -58,6 +58,7 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	// all of it (playerCorpse): nothing falls loose next to it.
 	if w.corpseItem != nil {
 		corpse := &Corpse{Item: newItem(w.playerCorpse(p), 1), Owner: p.charID, OwnerUntil: ctx.Tick + w.corpseOwnerFor}
+		corpse.Item.mods.BodyOf = p.name // "body of <player>" (docs/02 "Muerte")
 		fall := func(it *Item) {
 			w.econTree(p, EconDeath, "", it, -1)
 			w.detach(it)

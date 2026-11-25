@@ -115,7 +115,7 @@ items:
   sprite: weapons/iron_sword
   name: item.iron_sword.name
   description: item.iron_sword.desc
-  weight: 3150            # en gramos (capacidad en "oz" se muestra derivada)
+  weight: 1100            # en gramos por unidad; la UI lo muestra en g o kg
   stackable: false
   tradeable: true
   weapon:
@@ -167,6 +167,8 @@ items:
   un contenedor con `pickupable: false`, como los restos de cada familia de monstruos
   (`remains_fur`, `remains_chitin`, `remains_scales`, `remains_slag`, `remains_bones`,
   `remains_feathers`, `remains_humanoid`, `remains_bramble`; ver `corpse` en "Monstruo").
+  Los restos de un monstruo se nombran y se dibujan por el monstruo, no por la familia
+  ("Cadáver propio" en "Monstruo").
   `pickupable: false` vale para cualquier item que no deba moverse de su tile.
 - **Item de misión** (`quest: true`, docs/17 UI-6, solo de dibujo): un item que existe
   para una quest (lo que pide el `has_item` de un paso o de un diálogo: `bosun_logbook`,
@@ -198,7 +200,12 @@ items:
   `driftwood_club`, `forged_shortsword`, `thornwood_blade`, `leather_jerkin`, `hide_vest`
   y `riveted_round_shield`. Nunca se borra un item que pudo quedar en un inventario
   guardado: se retira.
-- **Peso:** `weight` en gramos por unidad; la UI muestra oz = gramos / 100.
+- **Peso:** `weight` en gramos por unidad, realista para lo que es el objeto (una espada
+  1–1,5 kg, un torso pesado 4–19 kg según su banda, una moneda unos gramos; tabla en
+  `02-game-design.md` "Unidades"). La UI lo muestra en g por debajo de 1 kg y en kg con
+  hasta dos decimales (`client/src/state/units.ts`). La capacidad de
+  `data/vocations.yaml` también va en gramos. Un alcance (`weapon.range`) son casillas, y
+  una casilla es un metro.
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
   un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera
   entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
@@ -416,6 +423,8 @@ behavior:
   aggressive: true
   flee_at_health_pct: 10
   target_distance: 1       # 1 = cuerpo a cuerpo; >1 = mantiene distancia
+pursuit: { persistence: 0.85, max_chase_tiles: 22, lose_sight_ms: 6000, insist_target_hp_pct: 40 }
+regen: { pct: 1 }          # opcional, como pursuit: lo que falta sale de balance.yaml
 attacks:
   - type: melee
     min: 0
@@ -441,6 +450,55 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   se pierde. Todo monstruo de `data/monsters` tiene el
   suyo. Un monstruo nuevo de una familia nueva suma su item (`data/items/decoration.yaml`,
   `make gen-ids`, nombre en es y en) y su modelo en `tools/spritegen/src/engine/specs/remains.ts`.
+- **Cadáver propio** (2026-11-23, sin campo nuevo): la familia da el contenedor (botín,
+  lugares, reglas) y el sprite de respaldo; lo que el jugador ve es del monstruo. El
+  servidor marca los restos con su id (`ItemMods.remains_of`, docs/05 "Restos"), el
+  cliente los nombra `client.item.remains_of` con `monster.<id>.name` ("restos de lobo") y
+  los dibuja con `corpses/<id>`, que `tools/spritegen/src/recipes/corpses.ts` hace para
+  cada monstruo de esta carpeta desde su propio arte (el último frame de `death_s`; un
+  monstruo con `look`, el humanoide compuesto con sus colores en su último frame de morir;
+  uno de una sola imagen, volcado de costado). Se eligió así y no un item de cadáver por
+  monstruo: un item por monstruo duplicaba 21 contenedores iguales (y sus ids y nombres)
+  para cambiar solo el dibujo y el nombre, que ya salen del id del monstruo. Agregar un
+  monstruo: `make spritegen ONLY=corpses/` escribe su cadáver y lo revisas con
+  `node --experimental-strip-types tools/spritegen/src/cli.ts corpses` (cada monstruo de
+  pie al lado de su cadáver, `build/spritegen/corpses.png`); el test de los PNG
+  commiteados de spritegen falla mientras falte. Si el arte del monstruo lo dibuja
+  spritegen, un solo `make spritegen` escribe sus frames y su cadáver (sale de la receta,
+  no del PNG). Un monstruo sin `look`, sin clip de muerte y sin imagen cuadrada no puede
+  tener cadáver: `spritegen check` lo dice (`corpses/<id>: monster <id> has no corpse`).
+- **Persecución y regeneración** (`pursuit` y `regen`, opcionales; reglas en
+  `02-game-design.md` "Monstruos", "Persecución" y "Regeneración fuera de combate"): cada
+  campo que falta toma el de `balance.yaml combat.monster_pursuit` / `monster_regen`.
+  - `pursuit.persistence` (0–1): la probabilidad de seguir más allá de su zona de confort
+    (el área de correa), que baja con la distancia del objetivo a casa; 0 = nunca sale.
+  - `pursuit.max_chase_tiles` (0–40): tope duro, Chebyshev desde el centro del spawn
+    (nunca menos que el área de correa).
+  - `pursuit.lose_sight_ms` (≥ 0): cuánto conserva a un objetivo fuera de su vista; 0 = lo
+    pierde en el acto.
+  - `pursuit.give_up_below_hp_pct` (0–100): con menos vida que eso no sigue más allá de su
+    zona; `pursuit.insist_target_hp_pct` (0–100): contra un objetivo con menos vida que
+    eso, la probabilidad sube `insist_boost` del camino hacia 1.
+  - `regen.delay_ms`, `regen.interval_ms`, `regen.pct` (0–100, decimales): `pct` % de su
+    vida máxima cada `interval_ms`, sin objetivo y `delay_ms` después de su última pelea;
+    `pct: 0` = no regenera.
+  Solo de `balance.yaml`: `monster_pursuit.roll_ms` (cada cuánto vuelve a tirar, ≥ 50;
+  exigido con `persistence` > 0, también la de un solo monstruo: ni `make validate` pasa ni
+  el servidor arranca si un monstruo tiene `persistence` y el balance no tiene `roll_ms`,
+  ni si uno tiene `regen.pct` sin ningún `interval_ms`),
+  `monster_pursuit.distance_exponent` (0–10: cuánto baja la probabilidad con la distancia a
+  casa, `persistence^(1 + exponente × fracción del camino de la correa al tope)`; 0 = no
+  baja) y `monster_pursuit.insist_boost` (0–1: cuánto del camino hacia 1 sube contra un
+  objetivo bajo `insist_target_hp_pct`; 0 = nada), `monster_pursuit.memory_ms` (cuánto recuerda, desde su último
+  golpe, a quien lo hirió y su daño después de rendirse; 0 = nada) y `combat.monster_stray_ms` (cuánto puede quedar fuera de casa sin llegar
+  antes de volver a su spawn; 0 = nunca). Valores por defecto: persistencia 0,5, tope 16,
+  4 s sin verte, tirada cada 3 s, exponente 2, insiste bajo 25 % a mitad de camino (0,5), memoria 3 min; 1 % cada 5 s tras
+  10 s (unos 8 minutos de vida 0 a llena); errante 5 min. El esquema
+  (`monster.schema.json`, `balance.schema.json`) y el arranque (`content.ParseMonster`,
+  `Combat.check`) rechazan lo mismo (`roll_ms` e `interval_ms` de al menos 50 ms, un
+  tick, en los dos); lo que cruza un monstruo con el balance (`persistence` sin `roll_ms`,
+  `pct` sin `interval_ms`) lo revisan `make validate` (`checkMonster`, `checkBalance`) y el
+  arranque (`session.pursuitOf`).
 - **Habilidades** (reglas en `02-game-design.md` "Monstruos", "Habilidades"; el esquema
   es `monster.schema.json`, `$defs/attack`):
   ```yaml
@@ -717,6 +775,21 @@ con `give_item`/`give_gold` en opciones de diálogo condicionadas con `vocation_
 Una quest importante puede declarar `music` (una pool de `assets/sounds.yaml` que suena en
 unos rectángulos de unos pisos): ver "Música de una quest importante", en "Sonido".
 
+Un paso puede decir dónde lo estima el minimapa (docs/02 "Minimapa") con `hint_area`: un
+punto (`x`, `y`, `z`) y cuántas casillas alrededor (`radius`, Chebyshev, 0 a 32). Es
+opcional: sin él, el servidor lo saca del paso (el NPC de un `dialog_action`, el spawn más
+cercano del monstruo de un `kill`, el lugar de un `reach`, las placas de un `sigils`). Un
+`has_item` o un `flag_equals` sin `hint_area` no muestra estimación; con él, por ejemplo
+dónde se consigue el item:
+```yaml
+  - id: gather_ore
+    description: quest.foreman_ore.step_gather_ore
+    complete_when: { has_item: { item: iron_ore, count: 5 } }
+    hint_area: { x: 3120, y: 6300, z: 8, radius: 10 }
+```
+El jugador nunca ve ese punto: el servidor manda un círculo alrededor de un punto cercano
+(docs/05 "Minimapa").
+
 Semántica que asume el contenido (la implementa el motor de T1.10):
 - Los pasos se cumplen en orden; solo se evalúa el `complete_when` del paso actual. Al
   cumplirse el último, se entregan las `rewards` y la quest pasa a `completed`. Se dan en
@@ -870,6 +943,43 @@ rewards:
 - Un hito se empieza como cualquier quest (`start_quest`). El diario lo lista antes, con
   los requisitos (docs/05 `MilestoneInfo`).
 
+## Vocación (`data/vocations.yaml`)
+Cada vocación: `start` y `per_level` (vida, maná, capacidad en gramos y velocidad),
+`regen`, `skill_factors` (costo de entrenar cada skill de combate: más bajo, más rápido;
+docs/02 "Entrenamiento por vocación"), `weapons` (tipos de arma que usa) y, desde el
+2026-11-23, `start_kit` (docs/02 "Equipo inicial"):
+```yaml
+- id: ranger
+  # ...
+  weapons: [distance, sword, axe, club]
+  start_kit:
+    - { item: short_bow }
+    - { item: arrow, count: 60 }
+    - { item: patched_tunic }
+    - { item: ship_biscuit, count: 5 }
+```
+- `start_kit` (opcional, hasta 16 entradas): `item` (id de `data/items`) y `count`
+  (unidades, 1 si falta). El servidor lo da una sola vez, en el primer login del personaje,
+  cada pieza en su slot si está libre y la puede usar, y el resto en la mochila y los
+  bolsillos (`session/startkit.go`; fuente `start_kit` del log de economía).
+- `make validate` (`checkStartKits`) exige que cada pieza exista y no esté retirada, que
+  un equipo se pueda usar a nivel 1 por esa vocación (`requires.level` 1,
+  `requires.vocations` que la incluya, un arma de un tipo de `weapons`), `count` solo en
+  apilables y dentro de su pila (`max_stack`, 100 si falta), que no haya un arma de dos
+  manos junto a un escudo, que las pilas que no se llevan puestas entren en la mochila
+  inicial (`inventory.start_container`) más los bolsillos (`pocket_slots`) y que el kit
+  con la mochila no pese más que `start.capacity`; una segunda pieza para el mismo slot es
+  un aviso (va a la mochila, no puesta). El servidor revisa al arrancar que cada item
+  exista, que cada entrada entre en una pila, que las pilas sueltas entren y el peso.
+- Los NPC no deben pagar por un kit más de lo que dice el presupuesto de inicio (docs/02 "Equipo
+  inicial"): al agregar una pieza a un kit, o un comprador a una pieza de kit,
+  `TestStartKitResaleBudget` avisa.
+- El cliente lee `start_kit` (`ClientContent.startKits`) para la línea "Empieza con: …"
+  del formulario de creación: nombra cada pieza, en el orden de los datos (el texto no
+  describe nada a mano). El paso `open_backpack` del tutorial sí dice que el arma está en
+  la mano y que en la mochila hay galletas y una cataplasma: `vocations-balance.test.ts`
+  falla si algún kit deja de cumplirlo.
+
 ## Hechizo
 ```yaml
 - id: light_heal
@@ -969,6 +1079,7 @@ Las reglas de los grupos y de la experiencia compartida viven en `balance.yaml �
 party:
   max_members: 6            # 2..32, el líder incluido
   invite_ms: 45000          # vida de una invitación (máx. 600000)
+  invites_per_minute: 6     # 1..60: intentos de invitar de un jugador (anti-spam); ráfaga de ese tamaño
   update_ms: 1000           # cada cuánto, como mucho, se refresca vida/maná/nivel
   share_distance: 24        # casillas (Chebyshev, mismo piso) desde la muerte del monstruo
   contribution_ms: 75000    # ventana de "contribuyó hace poco"
@@ -1624,10 +1735,12 @@ music:           # el director de música (client/src/audio/director.ts)
     boss_forge: [music_boss_forge]
   title: title                       # pool de fuera del juego (login y personajes)
   bosses: { slagbound_warden: boss_forge }   # monstruo de data/monsters → pool
-ambient:
-  fade_ms: 2000
-  islands: { puerto: amb_olas }
 ```
+- **Ambiente:** ya no hay un loop por isla (el bloque `ambient:` se fue en el lote 18). Los
+  loops de ambiente son sonidos del canal `ambient` (`amb_waves`, `amb_fountain`...) que
+  nombra `data/livingworld/ambience.yaml` ("Mundo vivo", abajo), y suenan según lo que hay
+  alrededor del jugador. Un archivo propio puede estar bajo `sounds/` o bajo
+  `livingworld/sounds/` (los del mundo vivo).
 - **Pools:** cada lugar nombra una pool y el director la baraja: cada tema una vez por
   vuelta y nunca el mismo dos veces seguidas. Una pool de un solo tema lo repite desde otro
   punto de entrada. Los lugares son las islas, el subsuelo, el título, cada jefe y el área de
@@ -1641,7 +1754,7 @@ ambient:
 - `make validate` exige que cada archivo exista (y uno de `vendor/` tenga su fila en
   `CREDITS.md`), que cada evento nombre un sonido `sfx` o `ui`, que cada pool liste sonidos
   del canal `music`, que islas, subsuelo, título, jefes y las quests nombren pools que
-  existen, que los loops de `ambient` sean de su canal, que las islas existan en
+  existen, que las islas existan en
   `world/world.yaml`, que las claves de `bosses` sean monstruos de `data/monsters`, que
   `gap_ms` sea `[mínimo, máximo]` y que las medidas de cada tema quepan en él.
 - **Música de Gemini:** las líneas entre `# gemini-music:sounds:begin`/`end` (sonidos),
@@ -1695,6 +1808,40 @@ objetos): `fist_damage` (golpe a mano limpia), `tool_damage` (un uso de hacha o 
 `push_cooldown_ms` (entre dos empujes de un jugador). En el mapa, cada lado de una compuerta
 cerrada debe llegar a un templo sin pasar por ella (el servidor no arranca si no; `make
 validate` lo marca).
+
+### `ambience.yaml`: el ambiente posicional (lote 18)
+
+Lo que se oye bajo la música según dónde está el jugador (pedido del dueño del
+2026-11-23; reglas y números en `livingworld/README.md`, "Ambiente"). Solo el cliente.
+
+```yaml
+radius: 10          # ventana cuadrada alrededor del jugador, casillas (2..16)
+fade_ms: 2500       # una capa va de muda a llena (o al revés) en este tiempo
+voices: 6           # loops a la vez; voices_lite en un teléfono o con animaciones reducidas
+voices_lite: 3
+rescan_ms: 2000     # cada tanto se cuenta la ventana entera (casillas que cambiaron)
+beds:               # capas de zona: por la mezcla de casillas de la ventana
+  waves:
+    sound: amb_waves          # sonido de assets/sounds.yaml, canal ambient
+    volume: 0.6               # ganancia a nivel lleno
+    floors: surface           # surface (z <= 7) | underground (z > 7) | any
+    full: 0.35                # parte de casillas con peso que da el nivel lleno
+    base: 0                   # nivel fijo (la cueva suena en todo el subsuelo)
+    surfaces: { water_shallow: 1, wet_sand: 0.4 }   # peso por superficie del suelo
+    items: {}                 # peso por item de data/items (árboles, puestos...)
+emitters:           # items del mapa que suenan solos
+  fountain: { sound: amb_fountain, volume: 0.6, radius: 7 }        # falloff: smooth
+  wall_torch: { sound: amb_torch, volume: 0.25, radius: 3, falloff: linear }
+```
+- Una casilla cuenta lo más pesado de su suelo y sus items; el nivel de una capa es su parte
+  de las casillas conocidas sobre `full` (hasta 1) más `base`.
+- Un emisor se oye dentro de su `radius` (smooth: (1 − d/r)²; linear: 1 − d/r), paneado
+  por su x; los de un mismo sonido suenan como una sola voz.
+- `make validate` (`livingworld-ambience.schema.json` y `checkAmbience`): cada `sound` es
+  un sonido `ambient` de `assets/sounds.yaml`, cada item existe, ningún `radius` de emisor
+  pasa el de la ventana y `voices_lite` no pasa `voices`.
+- Agregar un emisor (una cascada, un molino) o una capa (nieve con viento) no pide código:
+  una fila acá y, si hace falta, el sonido en `assets/sounds.yaml`.
 
 ## i18n
 ```yaml

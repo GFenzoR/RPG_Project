@@ -114,6 +114,14 @@ type Character struct {
 	LookSex       string
 }
 
+type CharacterExplored struct {
+	CharacterID int64
+	Z           int16
+	Sx          int16
+	Sy          int16
+	Bits        []byte
+}
+
 type CharacterSkill struct {
 	CharacterID int64
 	Skill       string

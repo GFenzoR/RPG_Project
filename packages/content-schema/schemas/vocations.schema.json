@@ -67,6 +67,23 @@
         "uniqueItems": true,
         "items": { "enum": ["sword", "axe", "club", "distance", "wand"] }
       },
+      "start_kit": {
+        "description": "What a new character of this vocation gets once, at its first login (docs/02 \"Equipo inicial\"): each piece in the slot it fits, the rest in the backpack and pockets. Never given again (death, relog).",
+        "type": "array",
+        "maxItems": 16,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["item"],
+          "properties": {
+            "item": { "$ref": "common.schema.json#/$defs/itemRef" },
+            "count": {
+              "description": "Units (stackables only; default 1).",
+              "$ref": "common.schema.json#/$defs/positiveInt"
+            }
+          }
+        }
+      },
       "spells": {
         "type": "array",
         "uniqueItems": true,

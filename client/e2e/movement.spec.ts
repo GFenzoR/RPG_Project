@@ -28,7 +28,14 @@ const WAYS = [
   { key: "ArrowDown", dx: 0, dy: 1 },
   { key: "ArrowUp", dx: 0, dy: -1 },
 ] as const;
-type Way = (typeof WAYS)[number];
+type Way = { key: string; dx: number; dy: number };
+/** The diagonals: two perpendicular arrows held together (docs/02 "Movimiento"). */
+const DIAGONALS = [
+  { keys: ["ArrowUp", "ArrowRight"], dx: 1, dy: -1, facing: "ne" },
+  { keys: ["ArrowDown", "ArrowRight"], dx: 1, dy: 1, facing: "se" },
+  { keys: ["ArrowDown", "ArrowLeft"], dx: -1, dy: 1, facing: "sw" },
+  { keys: ["ArrowUp", "ArrowLeft"], dx: -1, dy: -1, facing: "nw" },
+] as const;
 type Tile = { x: number; y: number; z: number };
 
 /** The shortest step at level 1: speed 205 on the fastest ground (100), in whole ticks. */
@@ -426,5 +433,72 @@ test("with ~150 ms of latency a held key, the mouse held and a click all walk wi
   expect(click.back).toBe(0);
   // Before MOV-4 the first step waited a round trip and a tick (≥ 150 ms here).
   expect(click.leftAt - tc).toBeLessThan(150);
+  expect(errors).toEqual([]);
+});
+
+test("two arrows walk the diagonal at the straight speed, the person turned to it", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const api = await playwright.request.newContext({ baseURL: serverURL });
+  await enter(page, api, "diagonal");
+  await api.dispose();
+  errors.length = 0; // the 401 of opening the page without a session cookie
+
+  const start = await standing(page);
+  let best: { d: (typeof DIAGONALS)[number]; run: number } | undefined;
+  for (const d of DIAGONALS) {
+    const run = await freeRun(page, start, { key: d.keys[0], dx: d.dx, dy: d.dy }, 6);
+    if (!best || run > best.run) best = { d, run };
+  }
+  if (!best || best.run < 3) throw new Error(`no diagonal run of 3 from ${JSON.stringify(start)}`);
+  const { d } = best;
+  await page.waitForTimeout(300); // let the atlas textures upload
+
+  const HELD_MS = 1100;
+  // Both keys at once: the first step is the diagonal. Mid-walk, the person is drawn
+  // facing it (docs/17 ANI-1: the engine humanoid has eight facings).
+  const t0 = await now(page);
+  for (const k of d.keys) await page.keyboard.down(k);
+  await page.waitForTimeout(HELD_MS);
+  const drawn = await page.evaluate(() => window.__rpgClient?.drawnFacing());
+  await page.screenshot({ path: join(shots, "96d-movement-diagonal.png") });
+  for (const k of d.keys) await page.keyboard.up(k);
+  const end = await standing(page);
+  const held = (await now(page)) - t0;
+  expect(drawn).toEqual({ facing: d.facing, eight: true });
+  const n = Math.abs(end.x - start.x);
+  expect(n).toBeGreaterThanOrEqual(1);
+  expect(end.x - start.x).toBe(d.dx * n);
+  expect(end.y - start.y).toBe(d.dy * n); // a pure diagonal, never a straight step
+  // docs/02: a diagonal step lasts the straight one x sqrt(2), rounded to the tick (50 ms),
+  // not the x1.5 of before: the same speed per tile of distance as a straight step.
+  const stepAt = (t: Tile, diagonal: boolean): Promise<number> =>
+    page.evaluate(({ t, diagonal }) => window.__rpgClient?.stepMs(t.x, t.y, t.z, diagonal) ?? 0, {
+      t,
+      diagonal,
+    });
+  const straight = await stepAt(end, false);
+  const diagonal = await stepAt(end, true);
+  console.log(
+    `held ${d.keys.join("+")}: ${n} diagonal steps in ${Math.round(held)} ms, straight ${straight} ms, diagonal ${diagonal} ms`,
+  );
+  expect(straight).toBeGreaterThan(50);
+  expect(diagonal).toBe(Math.round((straight / 50) * Math.SQRT2) * 50);
+  expect(n).toBeLessThanOrEqual(Math.floor(held / (MIN_STEP_MS * 1.4)) + 1);
+  // And a floor: the server paces the steps, one starting as the last ends, so the keys
+  // held for HELD_MS start a step for every diagonal step's time that fits (300 ms of
+  // slack for the round trip), up to the free run. A slower diagonal walks fewer.
+  let fit = 0;
+  for (let i = 1, t = 0; i <= best.run && t <= HELD_MS - 300; i++) {
+    fit = i;
+    t += await stepAt({ x: start.x + d.dx * i, y: start.y + d.dy * i, z: start.z }, true);
+  }
+  expect(n).toBeGreaterThanOrEqual(fit);
   expect(errors).toEqual([]);
 });

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/payments"
+	"github.com/GFenzoR/RPG_Project/server/internal/session"
 )
 
 var allEnvs = []string{"production", "", "staging", "development", "test"}
@@ -50,6 +51,10 @@ func TestCheckProductionFlags(t *testing.T) {
 		err := checkProductionFlags(logger, env, options{cookieSecure: true, authRateBurst: 1000})
 		if prod != errors.Is(err, errTestOnlyInProduction) {
 			t.Errorf("RPG_ENV=%q -auth-rate-burst: %v", raw, err)
+		}
+		err = checkProductionFlags(logger, env, options{cookieSecure: true, worldTime: "noon"})
+		if prod != errors.Is(err, errTestOnlyInProduction) {
+			t.Errorf("RPG_ENV=%q -world-time: %v", raw, err)
 		}
 		if err := checkProductionFlags(logger, env, options{cookieSecure: true}); err != nil || logs.Len() != 0 {
 			t.Errorf("RPG_ENV=%q defaults: %v %s", raw, err, logs.String())
@@ -108,5 +113,18 @@ func TestSeedLogAttrs(t *testing.T) {
 		if got := render(seedLogAttrs(false, env, 5, 6)); !strings.Contains(got, "seed=5") || !strings.Contains(got, "seed_hi=6") {
 			t.Errorf("%s: %s", env, got)
 		}
+	}
+}
+
+func TestCheckWorldTime(t *testing.T) {
+	c := &session.DayNightCycle{DayMinutes: 180, NightMinutes: 60, DawnMinutes: 15, DuskMinutes: 15, LunarDays: 8, SyncSeconds: 60}
+	if err := checkWorldTime(c, "noon"); err != nil {
+		t.Fatalf("noon: %v", err)
+	}
+	if err := checkWorldTime(nil, ""); err != nil {
+		t.Fatalf("unset: %v", err)
+	}
+	if checkWorldTime(c, "teatime") == nil || checkWorldTime(nil, "noon") == nil {
+		t.Fatal("a bad -world-time was accepted")
 	}
 }

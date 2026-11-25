@@ -57,6 +57,7 @@ func (w *World) combatSystem(ctx *game.TickContext) {
 		}
 	}
 	clear(w.thinkBuf)
+	w.thinkStrays(ctx)
 }
 
 // ---- intents ---------------------------------------------------------------------
@@ -212,7 +213,9 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 	w.reveal(ctx, p) // T3.2: attacking ends invisibility
 	w.markFight(ctx, p)
 	if dmg > 0 {
-		w.addShare(m, p.id, dmg)
+		// A hit from where m's attacks do not reach p closes if m gives up before it gets
+		// to answer p (damageShare.unanswered).
+		w.addShare(ctx.Tick, m, p.id, dmg, !w.strikes(m, p.pos))
 		w.contribute(ctx, p)
 	}
 	w.hitEvents(m.id, m.pos, dmg, healthPercent(m.health, m.maxHealth), element)
@@ -227,14 +230,28 @@ func (w *World) damageMonster(ctx *game.TickContext, m *Monster, p *Player, dmg 
 	return dmg
 }
 
-func (w *World) addShare(m *Monster, id uint32, dmg int) {
+// addShare adds dmg that player id dealt to m at tick now (unanswered: from out of the
+// reach of m's attacks, damageShare.unanswered) to its experience share; m was in a fight
+// then (regen) and, if it remembers id from a fight it gave up, does so memory_ms more.
+func (w *World) addShare(now game.Tick, m *Monster, id uint32, dmg int, unanswered bool) {
+	m.calmAt = now
+	for i := range m.foes {
+		if m.foes[i].player == id {
+			m.foes[i].until = now + w.memoryFor
+		}
+	}
+	u := 0
+	if unanswered {
+		u = dmg
+	}
 	for i := range m.damage {
-		if m.damage[i].player == id {
-			m.damage[i].amount += dmg
+		if s := &m.damage[i]; s.player == id {
+			s.amount += dmg
+			s.unanswered += u
 			return
 		}
 	}
-	m.damage = append(m.damage, damageShare{player: id, amount: dmg})
+	m.damage = append(m.damage, damageShare{player: id, amount: dmg, unanswered: u})
 }
 
 // hitEvents tells everyone who sees pos about a hit of element on creature id: the
@@ -293,6 +310,8 @@ func (w *World) monsterAttacks(ctx *game.TickContext, m *Monster) {
 			continue
 		}
 		m.nextAttack[i] = ctx.Tick + m.kind.ticks[m.phase][i]
+		m.calmAt = ctx.Tick      // dealing damage (or trying to) keeps it from regenerating
+		w.answer(ctx.Tick, m, t) // ...and answers what was dealt from out of its reach
 		w.fought(ctx, m, t)
 		if a.Chance < 1 && ctx.Rand.Float64() >= a.Chance {
 			continue
@@ -400,10 +419,12 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 		}
 	}
 
-	// Remains with the loot, on the tile where it died: the fallen body of its family
-	// (its `corpse`) or the default remains. Loot beyond the remains' slots is lost
-	// (data/monsters keeps loot tables short).
+	// Remains with the loot, on the tile where it died: the container of its family (its
+	// `corpse`) or the default remains, marked with the monster that fell (RemainsOf): the
+	// client names them after it and draws its own corpse (docs/02 "Muerte"). Loot beyond
+	// the remains' slots is lost (data/monsters keeps loot tables short).
 	corpse := &Corpse{Monster: def.ID, Item: newItem(m.kind.corpse, 1)}
+	corpse.Item.mods.RemainsOf = def.ID
 	add := func(it *Item) {
 		if len(corpse.Item.items) < m.kind.corpse.Slots() {
 			it.parent = corpse.Item

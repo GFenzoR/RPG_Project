@@ -33,6 +33,68 @@ type Monster struct {
 	// below_hp_pct: every phase it has reached at once. ParseMonster sorts them from the
 	// highest below_hp_pct, so the phases a monster is in are always the first ones.
 	Phases []MonsterPhase `yaml:"phases"`
+	// Pursuit and Regen override, field by field, balance combat.monster_pursuit and
+	// combat.monster_regen (docs/02-game-design.md, monsters section). Nil: the defaults.
+	Pursuit *MonsterPursuit `yaml:"pursuit"`
+	Regen   *MonsterRegen   `yaml:"regen"`
+}
+
+// MonsterPursuit is a monster's own pursuit numbers; a nil field keeps the default of
+// balance combat.monster_pursuit (Pursuit).
+type MonsterPursuit struct {
+	Persistence       *float64 `yaml:"persistence"`
+	MaxChaseTiles     *int     `yaml:"max_chase_tiles"`
+	LoseSightMs       *int     `yaml:"lose_sight_ms"`
+	GiveUpBelowHpPct  *int     `yaml:"give_up_below_hp_pct"`
+	InsistTargetHpPct *int     `yaml:"insist_target_hp_pct"`
+}
+
+// MonsterRegen is a monster's own out-of-combat regeneration; a nil field keeps the
+// default of balance combat.monster_regen (MonsterRegenRate).
+type MonsterRegen struct {
+	DelayMs    *int     `yaml:"delay_ms"`
+	IntervalMs *int     `yaml:"interval_ms"`
+	Pct        *float64 `yaml:"pct"`
+}
+
+// Resolve returns def with p's fields that are set.
+func (p *MonsterPursuit) Resolve(def Pursuit) Pursuit {
+	if p == nil {
+		return def
+	}
+	if p.Persistence != nil {
+		def.Persistence = *p.Persistence
+	}
+	if p.MaxChaseTiles != nil {
+		def.MaxChaseTiles = *p.MaxChaseTiles
+	}
+	if p.LoseSightMs != nil {
+		def.LoseSightMs = *p.LoseSightMs
+	}
+	if p.GiveUpBelowHpPct != nil {
+		def.GiveUpBelowHpPct = *p.GiveUpBelowHpPct
+	}
+	if p.InsistTargetHpPct != nil {
+		def.InsistTargetHpPct = *p.InsistTargetHpPct
+	}
+	return def
+}
+
+// Resolve returns def with r's fields that are set.
+func (r *MonsterRegen) Resolve(def MonsterRegenRate) MonsterRegenRate {
+	if r == nil {
+		return def
+	}
+	if r.DelayMs != nil {
+		def.DelayMs = *r.DelayMs
+	}
+	if r.IntervalMs != nil {
+		def.IntervalMs = *r.IntervalMs
+	}
+	if r.Pct != nil {
+		def.Pct = *r.Pct
+	}
+	return def
 }
 
 // MonsterBehavior drives the monster's state machine.
@@ -247,6 +309,17 @@ func ParseMonster(raw []byte) (*Monster, error) {
 	}
 	if err := checkPhases(m.Phases); err != nil {
 		return nil, fmt.Errorf("monster %q: %w", m.ID, err)
+	}
+	// Its own fields only: the balance's roll_ms and interval_ms are not known here (the
+	// session checks the resolved numbers when it starts, pursuitOf; make validate too).
+	if err := m.Pursuit.Resolve(Pursuit{RollMs: MinPeriodMs}).Check(); err != nil {
+		return nil, fmt.Errorf("monster %q: pursuit: %w", m.ID, err)
+	}
+	if r := m.Regen; r != nil && r.IntervalMs != nil && *r.IntervalMs < MinPeriodMs {
+		return nil, fmt.Errorf("monster %q: regen: interval_ms must be >= %d", m.ID, MinPeriodMs)
+	}
+	if err := m.Regen.Resolve(MonsterRegenRate{IntervalMs: MinPeriodMs}).Check(); err != nil {
+		return nil, fmt.Errorf("monster %q: regen: %w", m.ID, err)
 	}
 	for i, l := range m.Loot {
 		lo, hi := l.CountRange()

@@ -72,7 +72,7 @@ describe("clip sets", () => {
     expect(clipTexture(c, "attack", dirIndex("n"), 1)).toBe("c/hero/walk_n_0");
     expect(clipTexture(c, "walk", dirIndex("n"), 1)).toBe("c/hero/walk_n_1");
     const still = spriteClips("m/rat", undefined, atlasOf(["m/rat"]));
-    expect(still).toEqual({ meta: undefined, frames: {}, still: "m/rat" });
+    expect(still).toEqual({ meta: undefined, frames: {}, still: "m/rat", eight: false });
     if (still) expect(clipTexture(still, "walk", 0, 3)).toBe("m/rat");
     expect(spriteClips("m/none", undefined, atlasOf([]))).toBeUndefined();
   });
@@ -126,5 +126,55 @@ describe("clip sets", () => {
     expect(headLift({ ...HERO, anchor: "br", foot: 1, top: 24 }, undefined, 32, 4)).toBe(0);
     expect(headLift(undefined, { w: 64, h: 64 }, 32, 4)).toBe(32);
     expect(headLift(undefined, undefined, 32, 4)).toBe(0);
+  });
+});
+
+describe("eight facings (docs/17 ANI-1)", () => {
+  const ALL = ["n", "e", "s", "w", "ne", "se", "sw", "nw"] as const;
+  const PERSON: AnimMeta = {
+    ...HERO,
+    actions: {
+      idle: { frames: 1, ms: 500, dirs: [...ALL] },
+      walk: { frames: 2, ms: 0, perTile: 8, perTileNS: 13.86, dirs: [...ALL] },
+      death: { frames: 1, ms: 150, dirs: ["s"] },
+    },
+  };
+  const keysOf = (dirs: readonly string[]): string[] => [
+    ...dirs.flatMap((d) => [`c/p/idle_${d}_0`, `c/p/walk_${d}_0`, `c/p/walk_${d}_1`]),
+    "c/p/death_s_0",
+  ];
+
+  it("indexes the diagonals after the straight facings when every action has them", () => {
+    const c = spriteClips("c/p", { "c/p": PERSON }, atlasOf(keysOf(ALL)));
+    expect(c?.eight).toBe(true);
+    expect(c?.frames.walk).toHaveLength(8);
+    expect(c?.frames.walk?.[dirIndex("ne")]).toEqual(["c/p/walk_ne_0", "c/p/walk_ne_1"]);
+    expect(c?.frames.idle?.[dirIndex("sw")]).toEqual(["c/p/idle_sw_0"]);
+    // Death falls facing south whichever way it faces.
+    expect(c?.frames.death?.[dirIndex("nw")]).toEqual(["c/p/death_s_0"]);
+  });
+
+  it("stays four ways when an action lacks the diagonals, or a diagonal frame is missing", () => {
+    const four: AnimMeta = {
+      ...PERSON,
+      actions: { ...PERSON.actions, idle: { frames: 1, ms: 500, dirs: DIRS } },
+    };
+    const c = spriteClips("c/p", { "c/p": four }, atlasOf(keysOf(ALL)));
+    expect(c?.eight).toBe(false);
+    expect(c?.frames.walk).toHaveLength(4);
+    const gap = keysOf(ALL).filter((k) => k !== "c/p/walk_se_1");
+    const d = spriteClips("c/p", { "c/p": PERSON }, atlasOf(gap));
+    expect(d?.eight).toBe(false);
+    expect(d?.frames.idle).toHaveLength(4);
+    // The action with the gap is not lost: its four straight facings are whole.
+    expect(d?.frames.walk).toHaveLength(4);
+    expect(d?.frames.walk?.[dirIndex("e")]).toEqual(c?.frames.walk?.[dirIndex("e")]);
+    expect(d?.meta?.actions.walk).toBeDefined();
+    // A straight frame missing still drops the action, and the rest goes four ways too.
+    const lost = keysOf(ALL).filter((k) => k !== "c/p/walk_e_1");
+    const e = spriteClips("c/p", { "c/p": PERSON }, atlasOf(lost));
+    expect(e?.frames.walk).toBeUndefined();
+    expect(e?.frames.idle).toHaveLength(4);
+    expect(spriteClips("c/hero", { "c/hero": HERO }, atlasOf(heroKeys))?.eight).toBe(false);
   });
 });

@@ -1057,3 +1057,7 @@ func TestVocationCareers(t *testing.T) {
 		check("druid", 18, bosqueTargetLevel, "rime_burst", "bramble_burst")
 	})
 }
+
+// The spell bands of vocation identity (a spell of its own per vocation in each band of
+// levels 1 to 30, shared spells are support basics) are kept in one place only:
+// packages/content-schema/src/vocations-balance.test.ts "spell coverage".

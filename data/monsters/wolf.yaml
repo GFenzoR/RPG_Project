@@ -10,6 +10,7 @@ behavior:
   aggressive: true
   flee_at_health_pct: 10
   target_distance: 1
+pursuit: { persistence: 0.85, max_chase_tiles: 22, lose_sight_ms: 6000, insist_target_hp_pct: 40 }  # a persistent pack hunter
 attacks:
   - { type: melee, min: 0, max: 19, interval_ms: 2000 }
 resistances: { physical: 0, fire: -10, ice: 10 }

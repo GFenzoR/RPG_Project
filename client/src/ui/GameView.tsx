@@ -44,6 +44,7 @@ import { GuildInvitations, GuildPanel } from "./Guild.tsx";
 import type { GuildTab } from "./Guild.tsx";
 import { AppearancePanel } from "./Appearance.tsx";
 import { QuestsPanel } from "./Quests.tsx";
+import { Minimap } from "./Minimap.tsx";
 import { CreditsLink } from "./CreditsLink.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
@@ -60,6 +61,7 @@ import { coarsePointer } from "../state/touch-prefs.ts";
 import { GameWindow } from "./GameWindow.tsx";
 import type { IconName } from "./icons.tsx";
 import { SplitPrompt } from "./SplitPrompt.tsx";
+import { LogoutLock, LogoutTextButton } from "./LogoutButton.tsx";
 import { Toolbar, windowIcon } from "./Toolbar.tsx";
 import { lowHealth } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
@@ -74,6 +76,7 @@ import {
   transformScale,
   watchedRef,
 } from "./window-dom.ts";
+import type { NameSize } from "../render/label-style.ts";
 import type { DragEnv, PageBox, WatchedRef } from "./window-dom.ts";
 import {
   WINDOWS_STORAGE_KEY,
@@ -106,11 +109,11 @@ import {
   tutorialCovered,
   windowForHighlight,
   windowKey,
-  windowNudge,
 } from "./windows.ts";
 import type {
   AutoPlace,
   ContainerKey,
+  Corner,
   LastLook,
   Rect,
   WinKey,
@@ -137,6 +140,10 @@ export interface GameSettings {
   uiScale?: number | undefined;
   /** The camera shakes on a heavy hit (off with reduced motion whatever this says). */
   cameraShake?: boolean | undefined;
+  /** What creatures say shows over their heads (docs/17 UI-11). */
+  chatBubbles?: boolean | undefined;
+  /** How big the names over creatures are (Options → Interface; docs/17 UI-3). */
+  nameSize?: NameSize | undefined;
 }
 
 /** What the screen shows before the first batch of the server. */
@@ -394,9 +401,9 @@ export function GameView(props: GameViewProps): JSX.Element {
     </span>
   );
   const logout = (
-    <button type="button" onClick={() => game?.logout()}>
-      {t("client.game.logout")}
-    </button>
+    <LogoutLock conditions={ui.conditions}>
+      {(seconds) => <LogoutTextButton t={t} seconds={seconds} onLogout={() => game?.logout()} />}
+    </LogoutLock>
   );
   // The system log: a tab of the chat box on desktop, atop the chat tab on small screens.
   const log = (
@@ -545,7 +552,14 @@ export function GameView(props: GameViewProps): JSX.Element {
   const skills = <SkillsPanel t={t} skills={ui.skills} />;
   const appearance = <AppearancePanel t={t} content={props.content} game={game} ui={ui} />;
   const quests = (
-    <QuestsPanel t={t} log={ui.quests} clockOffset={ui.clockOffset} content={props.content} />
+    <QuestsPanel
+      t={t}
+      log={ui.quests}
+      clockOffset={ui.clockOffset}
+      content={props.content}
+      tracked={ui.minimap?.tracked ?? ""}
+      onTrack={(id) => game?.trackQuest(id)}
+    />
   );
   const chat = (
     <ChatPanel
@@ -584,6 +598,10 @@ export function GameView(props: GameViewProps): JSX.Element {
           <strong>{t("client.level_up.title")}</strong>
           <span>{t("client.characters.level", { level: levelNotice })}</span>
         </div>
+      )}
+      {/* The minimap (docs/02 "Minimapa"): top right of the map, under the windows. */}
+      {props.entered && (
+        <Minimap t={t} game={game} mm={ui.minimap} phone={layout.id.startsWith("phone")} />
       )}
       {/* Server notices over the map (T5.6): the newest messages, also in the log. They
           never take a click (pointer-events: none in client.css). */}
@@ -864,7 +882,7 @@ export function GameView(props: GameViewProps): JSX.Element {
       const c = ui.containers.find((o) => o.id === cid);
       return c
         ? {
-            title: itemName(props.content, t, c.itemId),
+            title: itemName(props.content, t, c.itemId, c.mods),
             icon: "inventory",
             // In .inventory: the slots and items look as under the equipment.
             body: (
@@ -908,8 +926,7 @@ export function GameView(props: GameViewProps): JSX.Element {
           onCollapse={(c) => win.update((s) => collapseWindow(s, id, c))}
           onFocus={() => win.update((s) => focusWindow(s, id))}
           onGrab={(e, el) => win.grab(id, e, el)}
-          onResize={(e, el) => win.resize(id, e, el)}
-          onMoveKey={(e, el) => win.moveKey(id, e, el)}
+          onResize={(corner, e, el) => win.resize(id, corner, e, el)}
         >
           {w.body}
         </GameWindow>
@@ -959,15 +976,20 @@ export function GameView(props: GameViewProps): JSX.Element {
               )
             }
             toolbar={
-              <Toolbar
-                t={t}
-                windows={win.state}
-                onToggle={(id) => win.toggle(id)}
-                marketOpen={ui.market !== undefined}
-                onCloseMarket={() => game?.marketClose()}
-                guildBadge={ui.guildInvitations.length > 0}
-                onLogout={() => game?.logout()}
-              />
+              <LogoutLock conditions={ui.conditions}>
+                {(seconds) => (
+                  <Toolbar
+                    t={t}
+                    windows={win.state}
+                    onToggle={(id) => win.toggle(id)}
+                    marketOpen={ui.market !== undefined}
+                    onCloseMarket={() => game?.marketClose()}
+                    guildBadge={ui.guildInvitations.length > 0}
+                    onLogout={() => game?.logout()}
+                    logoutSeconds={seconds}
+                  />
+                )}
+              </LogoutLock>
             }
           />
           {/* The windows' area: the screen above the bar (windows never go under it). The
@@ -1148,10 +1170,8 @@ interface WindowsApi {
   reset(): void;
   /** The title bar: the window follows the pointer, with the magnet (snapPlace). */
   grab(id: WinKey, e: PointerEvent, el: HTMLElement): void;
-  /** The resize grip: the window's corner follows the pointer. */
-  resize(id: WinKey, e: PointerEvent, el: HTMLElement): void;
-  /** A key on the move handle (ui/windows.ts windowNudge): true when it was the window's. */
-  moveKey(id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean;
+  /** A resize corner: that corner follows the pointer, with the magnet (resizeFrom). */
+  resize(id: WinKey, corner: Corner, e: PointerEvent, el: HTMLElement): void;
   /**
    * The windows' area (.win-layer: the screen above the bar), watched while it is in the
    * page: only the desktop layout has one, and each switch back to it mounts a new one.
@@ -1413,35 +1433,22 @@ function useWindows(
     );
   };
 
-  const resize = (id: WinKey, e: PointerEvent, el: HTMLElement): void => {
+  const resize = (id: WinKey, corner: Corner, e: PointerEvent, el: HTMLElement): void => {
     const area = layer.current;
     if (e.button !== 0 || !area) return;
     e.preventDefault();
     e.stopPropagation();
+    const box = area.getBoundingClientRect();
     resizeDrag(
       dragEnv,
       el,
+      corner,
       e,
-      area.getBoundingClientRect(),
+      box,
+      otherRects(area, el, box),
       placeOf(stateRef.current, id),
       (x, y, w, h) => update((s) => resizeWindow(placeWindow(s, id, x, y), id, w, h)),
     );
-  };
-
-  const moveKey = (id: WinKey, e: KeyboardEvent, el: HTMLElement): boolean => {
-    const area = layer.current;
-    if (!area) return false;
-    const box = area.getBoundingClientRect();
-    const next = windowNudge(stateRef.current, id, e, {
-      rect: rectIn(el.getBoundingClientRect(), box),
-      area: { width: box.width, height: box.height },
-      others: otherRects(area, el, box),
-    });
-    if (!next) return false;
-    // A move raises the window: only its z-index changes (pageOrder), so the focus stays
-    // on its handle.
-    update(() => next);
-    return true;
   };
 
   return {
@@ -1454,7 +1461,6 @@ function useWindows(
     reset,
     grab,
     resize,
-    moveKey,
     layer,
     equipment,
     containersTop: containersTop(state.win.inventory, equipmentHeight),

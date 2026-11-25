@@ -178,30 +178,28 @@ func TestPartyInviteExpiresAndDecline(t *testing.T) {
 	}
 }
 
-// A party is no way to find players: inviting someone out of view (by id or with
-// /invite) answers like an unknown name.
-func TestPartyInviteNeedsSight(t *testing.T) {
+// By creature id (the battle list) only a player in view is found; by name (/invite, the
+// party window's button) any online player is, wherever it is.
+func TestPartyInviteByIDNeedsSight(t *testing.T) {
 	h := partyHarness(t)
 	ca, _ := h.join("Ana", at(10, 10))
 	cb, b := h.join("Bruno", at(40, 40))
 	ca.take()
 	h.input(ca, partyCmd(pb.PartyAction_PARTY_ACTION_INVITE, b.ID()))
-	h.input(ca, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "/invite Bruno"))
 	h.input(ca, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "/invite Nobody"))
 	h.sim.Step()
 	k := systemKeys(ca.take())
-	if k["party.player_not_seen"] != 1 || k["party.player_not_found"] != 2 {
+	if k["party.player_not_seen"] != 1 || k["party.player_not_found"] != 1 {
 		t.Fatalf("heard %v", k)
 	}
 	if len(find(cb.take(), (*pb.ServerMessage).GetPartyInvitation)) != 0 || h.w.InvitesForTest() != 0 {
-		t.Fatal("an unseen player was invited")
+		t.Fatal("an unseen player was invited by id")
 	}
-	// In view, /invite works.
-	h.join("Cora", at(11, 10))
-	h.input(ca, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "/invite cora"))
+	// /invite finds Bruno out of view.
+	h.input(ca, say(pb.ChatChannel_CHAT_CHANNEL_SAY, "/invite bruno"))
 	h.sim.Step()
-	if h.w.InvitesForTest() != 1 {
-		t.Fatal("/invite did not invite a player in view")
+	if h.w.InvitesForTest() != 1 || len(find(cb.take(), (*pb.ServerMessage).GetPartyInvitation)) != 1 {
+		t.Fatal("/invite did not invite an online player out of view")
 	}
 }
 

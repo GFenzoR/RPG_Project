@@ -249,9 +249,11 @@ func (w *World) econLoot(owner *Player, monster string, it *Item) {
 }
 
 // earns reports whether a positive entry of kind is new wealth for the outlier check
-// (buying from an NPC is not: it was paid for; nor the forge's new level of an instance).
+// (buying from an NPC is not: it was paid for; nor the forge's new level of an instance,
+// nor the starting kit, which every character gets once and nobody farmed).
 func earns(kind string) bool {
-	return kind != EconNPCBuy && kind != EconTrade && kind != EconMarket && kind != EconForge && kind != EconStash
+	return kind != EconNPCBuy && kind != EconTrade && kind != EconMarket && kind != EconForge && kind != EconStash &&
+		kind != EconStartKit
 }
 
 // ground books h moving between p and the ground (sign +1 picked up, -1 dropped). It is

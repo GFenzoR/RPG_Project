@@ -18,6 +18,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/explore"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
@@ -84,6 +85,11 @@ type Character struct {
 	// revocation of the account's sessions at or after it (KickAccount, SignOutAccount)
 	// refuses the Join: the token was spent before the revocation could find it.
 	RedeemedAt time.Time
+	// Explored is the minimap's explored sectors as saved (character_explored).
+	// ExploredUnsaved are sectors of an earlier login whose save may not be written yet
+	// (a quick re-login): merged in, and written again by the next snapshot.
+	Explored        []explore.SectorState
+	ExploredUnsaved []explore.SectorState
 }
 
 // Snapshot is an immutable copy of the persisted state of a character, built on the
@@ -111,6 +117,10 @@ type Snapshot struct {
 	Cosmetics Cosmetics
 	// Look is the character's body (docs/02 "Apariencia").
 	Look content.Look
+	// Explored are the minimap sectors whose bits the database may not have yet: gained
+	// during the login and not covered by an acknowledged snapshot (a copy; explore.Map
+	// Snapshot and Saved). Upserted, never deleted.
+	Explored []explore.SectorState
 	// Final marks the snapshot taken when the player left the world.
 	Final bool
 }
@@ -231,6 +241,16 @@ type Config struct {
 	TrailData       []byte
 	TrailDowntimeMs int64
 	SaveTrail       func(TrailSnapshot) bool
+	// DayNight is the living world's day and night (daynight.go,
+	// data/livingworld/daynight.yaml); nil: no WorldClock is sent. DayNightEpochMs is the
+	// world time at tick 0: the app passes its clock's Unix time at start, so the cycle goes
+	// on across restarts.
+	DayNight        *DayNightCycle
+	DayNightEpochMs int64
+	// DayNightFixed (tests, -world-time): a /time word (noon, night...). The clock then
+	// starts at that time of day 0, stopped, whatever the epoch, so screenshots do not
+	// depend on the hour they are taken at. Empty: the epoch, running.
+	DayNightFixed string
 	// LivingWorld is data/livingworld (LoadLivingWorld, livingworld/README.md): the map
 	// objects that break, move or open. Nil: none (every such item stays a plain map item).
 	LivingWorld LivingDefs
@@ -250,6 +270,8 @@ type World struct {
 	log  *slog.Logger
 	// trail is the living world's trail wear (trailwear.go).
 	trail trailWear
+	// sky is the living world's clock (daynight.go); nil without a day and night.
+	sky dayNight
 
 	nextID  uint32
 	players []*Player // ordered by creature id: deterministic iteration
@@ -328,6 +350,15 @@ type World struct {
 	pathRetry game.Tick
 	stuckFor  game.Tick
 	shunFor   game.Tick
+	// Pursuit and regeneration (pursuit.go): how long a monster remembers who hurt it (0:
+	// until it gives up), how long an idle monster may stray out of its home area before
+	// it goes back to its spawn (0: never), the monsters with a target or out of their home
+	// area (they think even in sectors without players, so they give up and walk home) and the last pursuit
+	// decisions of each spawn, one per target (its pack follows them).
+	memoryFor game.Tick
+	strayFor  game.Tick
+	strays    []*Monster
+	packs     map[*world.Spawn][]packRoll
 
 	// Death (T1.11): how long a player's corpse lasts and is reserved for its owner, and
 	// the largest player corpse made so far (death.go playerCorpse; nil until one needs
@@ -340,6 +371,8 @@ type World struct {
 	// inventory rules of balance.yaml.
 	byNum          map[uint16]*content.Item
 	startContainer *content.Item
+	// startKits is each vocation's start_kit resolved (startkit.go).
+	startKits map[string][]kitPiece
 	// pocketsDef is the definition of every player's pockets (pockets.go).
 	pocketsDef *content.Item
 	// rng is Config.Rand: the attribute rolls (attributes.go).
@@ -423,9 +456,15 @@ type World struct {
 	invites    map[inviteKey]game.Tick
 	inviteFor  game.Tick
 	partyEvery game.Tick
-	contribFor game.Tick
-	partyBuf   []*Player
-	islandBuf  []string
+	// inviteRefill and inviteBurst are party.invites_per_minute as a GCRA: one attempt
+	// every inviteRefill, up to inviteBurst ahead of now. inviteTAT is each account's
+	// theoretical arrival tick, kept while it is in the future (it outlives a logout).
+	inviteTAT    map[int64]game.Tick
+	inviteRefill game.Tick
+	inviteBurst  game.Tick
+	contribFor   game.Tick
+	partyBuf     []*Player
+	islandBuf    []string
 
 	// Guilds (T5.1, guild.go): every guild by id and by name key, members by
 	// character, the guilds that invited each character, the last guild id, and this
@@ -631,7 +670,7 @@ func New(cfg Config) (*World, error) {
 		return nil, errors.New("session: Config.Save is required")
 	}
 	mv := cfg.Balance.Movement
-	if mv.BaseStepMs <= 0 || mv.DiagonalCost < 1 || mv.MaxPathTiles <= 0 || mv.MaxPathTiles > world.MaxPathLength ||
+	if mv.BaseStepMs <= 0 || mv.DiagonalCost < 1 || mv.DiagonalCost > world.MaxDiagonalCost || mv.MaxPathTiles <= 0 || mv.MaxPathTiles > world.MaxPathLength ||
 		mv.MaxQueuedSteps <= 0 || mv.MaxQueuedSteps > content.MaxQueuedSteps {
 		return nil, fmt.Errorf("session: invalid movement balance %+v", mv)
 	}
@@ -679,6 +718,7 @@ func New(cfg Config) (*World, error) {
 	if w.rng == nil {
 		w.rng = rand.New(rand.NewPCG(1, 2))
 	}
+	w.pf.SetDiagonalCost(mv.DiagonalCost) // paths weigh a diagonal as the step timer does
 	if err := w.initCombat(); err != nil {
 		return nil, err
 	}
@@ -743,6 +783,7 @@ func New(cfg Config) (*World, error) {
 		return nil, err
 	}
 	w.initTrail()
+	w.initDayNight()
 	return w, nil
 }
 

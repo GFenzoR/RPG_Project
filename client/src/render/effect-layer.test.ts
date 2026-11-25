@@ -1,5 +1,5 @@
 import { Container, Texture } from "pixi.js";
-import type { Graphics, Sprite } from "pixi.js";
+import type { Graphics, Sprite, Text } from "pixi.js";
 import { FloatingTextKind } from "@rpg/protocol";
 import type { Atlas } from "@rpg/renderer";
 import { describe, expect, it } from "vitest";
@@ -251,6 +251,18 @@ describe("EffectLayer projectiles", () => {
     expect(shown(dots)).toHaveLength(0);
     expect(missiles.children).toHaveLength(1);
     expect(missiles.children[0]).toBe(arrow);
+    layer.destroy();
+  });
+
+  it("draws the floating numbers at the names' scale, nearest-neighbour", () => {
+    const { world, layer, texts } = setup();
+    world.floatingTexts.push({ pos: at(0, 0), kind: FloatingTextKind.DAMAGE, amount: 7, start: 0 });
+    layer.draw(0, 7, cam, 4, 3);
+    const text = texts.children[0] as Text;
+    expect([text.scale.x, text.scale.y]).toEqual([3, 3]);
+    expect(text.textureStyle?.scaleMode).toBe("nearest");
+    layer.draw(10, 7, cam, 1);
+    expect([text.scale.x, text.scale.y]).toEqual([1, 1]);
     layer.destroy();
   });
 });

@@ -430,25 +430,6 @@ export const ICONS = {
     ".....#SSSS#.....",
     "....########....",
   ],
-  // The handle that moves and resizes a window from the keyboard (docs/17 UI-1).
-  move: [
-    "................",
-    ".......oo.......",
-    "......oooo......",
-    ".....oooooo.....",
-    ".......oo.......",
-    "..o....oo....o..",
-    ".oo....oo....oo.",
-    "oooooooooooooooo",
-    "oooooooooooooooo",
-    ".oo....oo....oo.",
-    "..o....oo....o..",
-    ".......oo.......",
-    ".....oooooo.....",
-    "......oooo......",
-    ".......oo.......",
-    "................",
-  ],
 } as const satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICONS;

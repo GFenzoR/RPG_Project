@@ -246,8 +246,9 @@ func (w *World) loadItem(s ItemState) *Item {
 }
 
 // loadInventory equips the saved items of a joining player and fills its pockets. A
-// character that never played starts with balance.yaml inventory.start_container.
-func (w *World) loadInventory(p *Player, saved []ItemState, fresh bool) {
+// character that never played starts with balance.yaml inventory.start_container and its
+// vocation's start_kit (startkit.go), which it returns.
+func (w *World) loadInventory(p *Player, saved []ItemState, fresh bool) (kit []*Item) {
 	w.loadPockets(p, saved)
 	for _, s := range saved {
 		if s.Pocket || s.Slot <= 0 || s.Slot >= equipSlots || p.equip[s.Slot] != nil {
@@ -264,7 +265,11 @@ func (w *World) loadInventory(p *Player, saved []ItemState, fresh bool) {
 		it.owner, it.slot = p, slot
 		p.equip[slot] = it
 	}
+	if fresh && len(saved) == 0 {
+		kit = w.giveStartKit(p)
+	}
 	w.equipmentChanged(p)
+	return kit
 }
 
 // ---- weight and equipment effects ----------------------------------------------
@@ -949,7 +954,7 @@ func (w *World) toggleContainer(p *Player, c *Item) {
 	c.viewers = append(c.viewers, viewer{p: p, id: id})
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_ContainerOpen{ContainerOpen: &pb.ContainerOpen{
 		ContainerId: id, ItemId: uint32(c.def.Numeric), Capacity: uint32(c.def.Slots()),
-		Items: c.stacks(), HasParent: c.parent != nil,
+		Items: c.stacks(), HasParent: c.parent != nil, Mods: c.mods.msg(),
 	}}})
 	w.tutorialEvent(p, content.TriggerOpenContainer, c.def.ID)
 }
@@ -1246,5 +1251,5 @@ func (w *World) initItems() error {
 		}
 		w.startContainer = def
 	}
-	return nil
+	return w.initStartKits()
 }

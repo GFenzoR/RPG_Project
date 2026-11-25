@@ -2,7 +2,7 @@ import { LivingObjectEventSchema, LivingObjectKind, create } from "@rpg/protocol
 import { Container, Texture } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import type { ItemDef } from "../content-types.ts";
-import { livingEvent, mountLivingObjects } from "./living.ts";
+import { livingEvent, mountLivingObjects, plantSource } from "./living.ts";
 
 const def = (extra: Partial<ItemDef>): ItemDef => ({
   id: "x",
@@ -74,5 +74,27 @@ describe("living objects glue", () => {
     lw.onStep({ x: 2, y: 2, z: 7 }, { x: 3, y: 2, z: 7 }, 1);
     lw.onTick(2, 7);
     expect(lw.alive).toBeGreaterThan(afterBreak);
+  });
+});
+
+describe("the map's sprites for the living world", () => {
+  it("names each by its item's number, also the remains of a monster", () => {
+    // MapView hands the tile keys of the client (state/corpse-art.ts): "<n>@<monster>" for
+    // remains. The living world's rules are keyed by the item alone.
+    const view = {
+      version: 3,
+      forEachItemSprite(fn: (x: number, y: number, key: string, sprite: string) => void): void {
+        fn(1, 2, "14", "fern");
+        fn(3, 4, "91@wolf", "corpse");
+      },
+    };
+    const src = plantSource(view);
+    expect(src.version()).toBe(3);
+    const seen: [number, number, string, string][] = [];
+    src.forEach((x, y, id, sprite) => seen.push([x, y, id, sprite]));
+    expect(seen).toEqual([
+      [1, 2, "14", "fern"],
+      [3, 4, "91", "corpse"],
+    ]);
   });
 });

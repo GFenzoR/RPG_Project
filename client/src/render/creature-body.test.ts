@@ -26,7 +26,7 @@ const hero = (): ClipSet<Texture> => {
     shadow: "ellipse",
     actions: { walk: { frames: 2, ms: 0, perTile: 1, dirs: DIRS } },
   };
-  return { meta, frames: { walk }, still: walk[2]?.[0] };
+  return { meta, frames: { walk }, still: walk[2]?.[0], eight: false };
 };
 
 describe("CreatureBody", () => {
@@ -62,7 +62,7 @@ describe("CreatureBody", () => {
 
   it("keeps a single-frame sprite on the tile's bottom-right corner, with no extra shadow", () => {
     const still = tex(64, 64);
-    const body = new CreatureBody({ meta: undefined, frames: {}, still }, T);
+    const body = new CreatureBody({ meta: undefined, frames: {}, still, eight: false }, T);
     expect(body.root.children).toHaveLength(1);
     // Centre-bottom anchor: the right edge stays on the tile's right edge.
     expect(body.sprite.position).toMatchObject({ x: T - 32, y: T });
@@ -205,5 +205,63 @@ describe("CreatureBody as a paper doll (docs/17 Humanoides del motor)", () => {
     body.draw(pose, 2);
     expect(body.sprite.alpha).toBeCloseTo(0.2);
     expect(body.alpha).toBeCloseTo(0.2);
+  });
+});
+
+describe("CreatureBody facings (docs/17 ANI-1)", () => {
+  const ALL = ["n", "e", "s", "w", "ne", "se", "sw", "nw"] as const;
+  const clipsOf = (eight: boolean): ClipSet<Texture> => {
+    const dirs = eight ? ALL : DIRS;
+    const meta: AnimMeta = {
+      w: 64,
+      h: 64,
+      anchor: "bc",
+      foot: 2,
+      top: 40,
+      shadow: "none",
+      actions: { walk: { frames: 1, ms: 0, perTile: 8, dirs: [...dirs] } },
+    };
+    const walk = dirs.map(() => [tex(64, 64)]);
+    return { meta, frames: { walk }, still: walk[2]?.[0], eight };
+  };
+
+  it("draws eight ways only when every layer has the diagonals", () => {
+    const pool = new SpritePool();
+    const all = new CreatureBody(
+      clipsOf(true),
+      T,
+      0xffffff,
+      [
+        { slot: "body", clips: clipsOf(true), tint: 1 },
+        { slot: "torso", clips: clipsOf(true), tint: 2 },
+      ],
+      pool,
+    );
+    expect(all.eight).toBe(true);
+    // One layer drawn four ways (a piece without diagonals): the whole figure turns four.
+    const mixed = new CreatureBody(
+      clipsOf(true),
+      T,
+      0xffffff,
+      [
+        { slot: "body", clips: clipsOf(true), tint: 1 },
+        { slot: "weapon", clips: clipsOf(false), tint: 2 },
+      ],
+      pool,
+    );
+    expect(mixed.eight).toBe(false);
+    expect(new CreatureBody(clipsOf(false), T).eight).toBe(false);
+  });
+
+  it("stacks the layers of a diagonal facing by its own order", () => {
+    const c = clipsOf(true);
+    const layers = [
+      { slot: "weapon" as const, clips: c, tint: 1 },
+      { slot: "body" as const, clips: c, tint: 2 },
+      { slot: "shield" as const, clips: c, tint: 3 },
+    ];
+    // South-east: the right hand (the weapon) is the near one; south-west, the left.
+    expect(layerOrder(layers, "se")).toEqual([1, 2, 0]);
+    expect(layerOrder(layers, "sw")).toEqual([1, 0, 2]);
   });
 });

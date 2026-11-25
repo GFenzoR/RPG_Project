@@ -35,8 +35,10 @@
           "$ref": "common.schema.json#/$defs/positiveInt"
         },
         "diagonal_cost": {
+          "description": "Times a straight step a diagonal one lasts and weighs in paths (docs/02 \"Movimiento\"): √2 for one speed in every direction, 2 at most.",
           "type": "number",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 2
         },
         "max_path_tiles": {
           "$ref": "common.schema.json#/$defs/positiveInt"
@@ -179,7 +181,7 @@
           "maximum": 1
         },
         "monster_leash_tiles": {
-          "description": "Leash: a monster chases and flees only within its spawn's radius plus this many tiles (Chebyshev from the spawn's center); a target beyond that and out of its reach is dropped for another player fighting it from inside, or else the monster heals to full and walks home. 0 or absent = no leash.",
+          "description": "Leash: a monster chases and flees only within its spawn's radius plus this many tiles (Chebyshev from the spawn's center); the leash area is its comfort zone: beyond it, monster_pursuit decides whether it keeps chasing; a target it does not chase is dropped for another player fighting it from inside, or else the monster gives up (keeping its wounds) and walks home. 0 or absent = no leash.",
           "type": "integer",
           "minimum": 0
         },
@@ -197,6 +199,47 @@
           "description": "How long a target given up that way counts as beyond the leash for that monster, while it stands on the same tile and out of reach.",
           "type": "integer",
           "minimum": 50
+        },
+        "monster_pursuit": {
+          "description": "Pursuit beyond the leash area (docs/02 \"Monstruos\"): a target beyond it and out of reach is chased while a roll every roll_ms of persistence (scaled down with the target's distance from the spawn's center up to max_chase_tiles, 0 below give_up_below_hp_pct of its own health, insist_boost of the way to 1 against a target below insist_target_hp_pct) says so. A target out of sight lose_sight_ms is given up. Giving up keeps the monster's wounds; it remembers who hurt it memory_ms. Absent or 0 = no pursuit beyond the leash, a target out of sight lost at once, nobody remembered.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "persistence": { "type": "number", "minimum": 0, "maximum": 1 },
+            "max_chase_tiles": { "type": "integer", "minimum": 0, "maximum": 40 },
+            "lose_sight_ms": { "type": "integer", "minimum": 0 },
+            "roll_ms": { "type": "integer", "minimum": 50 },
+            "give_up_below_hp_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+            "insist_target_hp_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+            "distance_exponent": {
+              "description": "How fast the chance falls with the target's distance from home: persistence ^ (1 + distance_exponent x the fraction of the way from the leash area to max_chase_tiles). 0 or absent = the persistence everywhere.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "insist_boost": {
+              "description": "How much of the way to 1 the chance goes against a target below insist_target_hp_pct (0.5 = halfway). 0 or absent = none.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "memory_ms": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "monster_regen": {
+          "description": "Out-of-combat regeneration of monsters: without a target and delay_ms after last dealing or taking damage, pct % of the maximum health every interval_ms (fractions of a point carry over). Absent or pct 0 = none.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "delay_ms": { "type": "integer", "minimum": 0 },
+            "interval_ms": { "type": "integer", "minimum": 50 },
+            "pct": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        },
+        "monster_stray_ms": {
+          "description": "An idle monster out of its home area that has not got home after this long, and that no player sees, goes back to its spawn (despawn + respawn). 0 or absent = never.",
+          "type": "integer",
+          "minimum": 0
         },
         "modes": {
           "type": "object",
@@ -336,6 +379,7 @@
       "required": [
         "max_members",
         "invite_ms",
+        "invites_per_minute",
         "update_ms",
         "share_distance",
         "contribution_ms",
@@ -357,6 +401,12 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 600000
+        },
+        "invites_per_minute": {
+          "description": "Invitation attempts of one player per minute (anti-spam): that many at once, then one every 60000 / this ms.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
         },
         "update_ms": {
           "description": "Members' state refreshes at most this often (ms).",

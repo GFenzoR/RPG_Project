@@ -162,3 +162,22 @@ export function statusIconStyle(icon: StatusIcon | undefined): Record<string, st
     "--status-pos": `-${icon.x + STATUS_BOX.x}px -${icon.y + STATUS_BOX.y}px`,
   };
 }
+
+/**
+ * ms until the player may leave the game (docs/02 "Bloqueo de logout en combate"): the
+ * latest end of the in_combat and pvp_locked statuses the server sent, or undefined when
+ * neither lasts (the "Salir del juego" button is free). The server still decides: this
+ * only shows its lock.
+ */
+export function logoutLockMs(
+  conditions: readonly ConditionView[],
+  now: number,
+): number | undefined {
+  let left: number | undefined;
+  for (const c of conditions) {
+    if ((c.id !== "in_combat" && c.id !== "pvp_locked") || c.until === undefined) continue;
+    const ms = c.until - now;
+    if (ms > 0) left = left === undefined ? ms : Math.max(left, ms);
+  }
+  return left;
+}

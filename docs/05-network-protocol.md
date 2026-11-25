@@ -35,6 +35,18 @@
   `TileUpdate` y en la `palette` de un `MapArea`), el intercambio, el buzón del mercado y los cadáveres. Un item con `mods` nunca se apila. Un
   cliente que no conoce el atributo no muestra su línea. Es un campo aditivo: un cliente
   viejo lo ignora.
+- **Restos** (2026-11-23, aditivo): `ItemMods.remains_of` (4) es el id de `data/monsters`
+  del monstruo cuyos restos son, y `ItemMods.body_of` (5) el nombre del jugador cuyo
+  cuerpo es. Los pone el servidor al crear los restos (`session/combat.go`, `death.go`) y
+  viajan en todo `ItemStack` de ellos: el `TileUpdate` de su casilla, el parámetro `item`
+  de `look.container` y la ventana del botín. `ContainerOpen.mods` (6, aditivo) son los
+  `mods` del contenedor mismo, para el título de su ventana. El cliente nombra los restos
+  `client.item.remains_of` con `monster.<id>.name` ("restos de lobo", "wolf remains") o
+  `client.item.body_of` con el nombre ("cuerpo de Ana") y dibuja el cadáver propio del
+  monstruo (`corpses/<id>`, docs/17 "Cadáveres"). El servidor no los toma del cliente:
+  como el resto de `mods`, el cliente solo los devuelve como parte del item que nombra.
+  Los restos nunca se guardan, así que tampoco estos campos. Un cliente viejo los ignora
+  y sigue mostrando el nombre y el sprite de la familia.
 - `LocalizedText {key, params[]}`: texto visible como clave i18n + parámetros
   `TextParam {name, value}`. Es una lista y no un `map` para que la codificación sea
   determinista. `value` tiene tipo (`text` sin traducir, `number`, `content_id` o
@@ -95,13 +107,18 @@ Detalles (T1.4, `server/internal/net/gateway`):
   (`travel.combat_block_ms` desde la última vez que un monstruo lo atacó, que recibió daño
   o que le pegó a un monstruo o a un jugador, o el bloqueo PvP; docs/02 "Bloqueo de logout
   en combate") se rechaza con un mensaje de sistema, `combat.logout_locked` (o
-  `pvp.logout_locked` con el bloqueo PvP), y la conexión sigue. Cerrar el socket sin
+  `pvp.logout_locked` con el bloqueo PvP) con el parámetro numérico `seconds` (lo que falta
+  del bloqueo, redondeado hacia arriba, al menos 1; desde el 2026-11-24, aditivo), y la
+  conexión sigue. El cliente no espera al rechazo para mostrar el bloqueo: lo lee del
+  estado `in_combat` ("Estados", abajo), que ya trae su fin en `remaining_ms`; no hace falta
+  un campo nuevo. Cerrar el socket sin
   `Logout` también saca al personaje y lo guarda, salvo en combate: queda en el mundo
   link-dead hasta que la pelea termina ("Desconexión en combate", abajo). Una casilla sin
   logout todavía no rechaza el `Logout` (solo la miran la inactividad y los chequeos de
   presencia).
 - **Desconexión en combate:** si la conexión se cierra en combate (la cierra el cliente,
-  se cae la red o la corta el servidor: cliente lento, reseteo de contraseña), el
+  se cae la red o la corta el servidor: cliente lento, flood, reseteo o cambio de
+  contraseña, "Cerrar sesión en todos lados"), el
   personaje no sale del mundo: queda sin conexión (no recibe nada; lo que esa conexión
   haya mandado después no se ejecuta) y atacable hasta que la pelea termina; ahí se guarda
   y sale (quien lo veía recibe `CreatureDisappear{LOGOUT}`). Si muere así, sale en ese
@@ -135,7 +152,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `POST /api/auth/logout-all` | token | — | `204` (lote 17): revoca **todas** las sesiones de la cuenta (navegadores, app de escritorio y tokens de juego sin canjear), borra la cookie y saca del juego a sus personajes conectados (`Disconnect{SIGNED_OUT_EVERYWHERE}`) |
 | `POST /api/auth/keepalive` | token | — | `204` (lote 17): latido del cliente mientras juega, para que la sesión no venza por inactividad |
 | `POST /api/account/password` | token | `{current_password, new_password}` | `204` (lote 17): cambia la contraseña; revoca las **demás** sesiones (la de este pedido sigue), los enlaces de reset pendientes y saca del juego a los personajes conectados (`PASSWORD_CHANGED`), también los de la propia sesión: a propósito, la contraseña cambió para toda la cuenta y el jugador vuelve a entrar desde la lista de personajes. `401 invalid_credentials` (contraseña actual mal, cuenta como login fallido), `403 reauth_required`, `400 invalid_password`, `429` |
-| `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level}]}` |
+| `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level, look?}], max_characters}` (2026-11-23: `look` es el aspecto guardado, `{sex, body, skin, hair, hair_color, beard}`, ausente mientras el juego no le eligió uno; `max_characters` es el tope por cuenta, con el que la pantalla de personajes deshabilita "Crear personaje nuevo") |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
 | `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde (el ping se guarda 1 s contado desde que termina, y los pedidos que llegan durante un ping esperan ese mismo resultado: muchos pedidos cuestan un ping por segundo aunque la base esté lenta) |
@@ -673,7 +690,7 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 | `TradeAccept` / `TradeCancel` | — (T5.3) |
 | `MarketCommand` | `browse`, `create`, `cancel`, `accept`, `withdraw` o `close` (T5.3) |
 | `CloseContainer` | `container_id` (T1.8) |
-| `PartyCommand` | `action` (invitar, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id` (T3.3) |
+| `PartyCommand` | `action` (invitar, invitar por nombre, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id`, `name` (T3.3) |
 | `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
 | `Refine` | `station` (el yunque), `item` (slot o contenedor), `item_id`, `level` (el nivel de refinado que ve el cliente), `protect` (gastar un ámbar) (la forja) |
 | `ReportPlayer` | `creature_id` (un jugador a la vista), `reason` (1..200 caracteres) (T4.1) |
@@ -686,11 +703,20 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 una acción hecha sobre una vista desactualizada del tile o contenedor.
 
 ### Caminar (T1.4, `server/internal/session`)
-- El servidor marca el ritmo: un paso empieza cuando terminó el anterior. Duración =
-  `base_step_ms × terreno% / velocidad` (× `diagonal_cost` en diagonal), con terreno el
-  `ground.speed` de la casilla **de destino** (100 por defecto), redondeada hacia arriba
-  a ticks de 50 ms. `CreatureMove.duration_ms` es esa duración ya redondeada. La
-  posición cambia al **empezar** el paso.
+- El servidor marca el ritmo: un paso empieza cuando terminó el anterior. Duración de un
+  paso recto = `base_step_ms × terreno% / velocidad`, con terreno el `ground.speed` de la
+  casilla **de destino** (100 por defecto), redondeada hacia arriba a ticks de 50 ms (al
+  menos uno). Un paso en diagonal dura esos ticks × `diagonal_cost` (√2, leído en
+  milésimas: 1.414), redondeado al tick más cercano y nunca menos que el recto: así un
+  paso recto de 10 ticks es uno diagonal de 14, no de 15, y la velocidad por casilla de
+  distancia es la misma en las 8 direcciones. Una excepción: si el paso recto dura un solo
+  tick, el diagonal dura dos (√2 redondearía a uno y la diagonal rendiría √2 veces más
+  distancia por tick; solo pasa a velocidades que hoy nadie alcanza: 2000 en suelo normal,
+  1000 en camino). `diagonal_cost` va de 1 a 2 (`world.MaxDiagonalCost`: con más, el costo
+  de una ruta no cabría en el A*). `CreatureMove.duration_ms` es esa duración
+  ya redondeada; el cliente predice la misma con aritmética entera
+  (`client/src/state/step-time.ts`, igual que `StepTicks`). La posición cambia al
+  **empezar** el paso.
 - **`Walk` encola un paso de teclado** detrás de los pasos de teclado que ya esperan, como
   mucho `movement.max_queued_steps` (`balance.yaml`, 4; el `Welcome` se lo dice al
   cliente, así un cambio del YAML no necesita recompilar el cliente); si en la cola hay un
@@ -778,8 +804,9 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
   `data/effects.yaml`.
 - Muerte de un monstruo: `CreatureDisappear{reason: DEATH}` (después de su
   `CreatureHealth` 0), `TileUpdate` con sus restos encima de la pila (el item de su
-  `corpse` en `data/monsters`, o `creature_remains`; dura `combat.monster_corpse_ms`;
-  es un contenedor con el botín, T1.8),
+  `corpse` en `data/monsters`, o `creature_remains`, con `mods.remains_of` = el id del
+  monstruo: ver "Restos" arriba; dura `combat.monster_corpse_ms`; es un contenedor con el
+  botín, T1.8),
   `FloatingText{EXPERIENCE}` y `PlayerStats` a cada jugador que hizo daño (la experiencia
   se reparte según el daño de los que siguen conectados; con un grupo que comparte, a cada
   miembro que comparte, ver "Grupos": `FloatingText.bonus` es la parte del bonus de grupo)
@@ -885,9 +912,12 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   que no es contenedor: un cartel, un yunque, un árbol) contesta como el suelo,
   `look.ground` sin peso (T5.5). El cliente agrega la descripción que nombra el
   `description` del item en `data/items` (`item.<id>.desc`, o el `text.*` de un cartel) si
-  existe y muestra el peso en oz.
+  existe y muestra el peso en g o kg (`formatMass`, docs/02 "Unidades").
 - **Login:** `Inventory` lleva el equipo guardado y los bolsillos; un personaje que nunca
-  jugó recibe `inventory.start_container` en el slot de mochila (y sus bolsillos vacíos).
+  jugó recibe `inventory.start_container` en el slot de mochila y el `start_kit` de su
+  vocación (docs/02 "Equipo inicial"): su primer `Inventory` ya trae el arma, la ropa y,
+  según la vocación, el escudo o la munición en sus slots, y el resto dentro de la mochila
+  (los bolsillos, vacíos salvo que la mochila no alcance). No hay mensaje aparte para el kit.
 
 ### Magia (T1.9, `server/internal/session/magic.go`)
 Reglas de juego en `02-game-design.md` ("Magia (T1.9)").
@@ -1211,7 +1241,10 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
 - `ShopBuy` es todo o nada: dinero suficiente, capacidad y lugar en la mochila (se
   apila con lo que ya hay, y queda un lugar libre por cada moneda menor para el vuelto)
   o `shop.no_money` / `shop.no_room`. `ShopSell` toma de los
-  contenedores, nunca lo equipado (`shop.not_enough`). Tras cada compra o venta: `Message`
+  contenedores, nunca lo equipado (`shop.not_enough`); sus monedas nunca caen al suelo por
+  peso: entran aunque el vendedor esté sobrecargado si pesan menos que lo vendido, y si
+  pesan más y no caben en su capacidad la venta se rechaza con `shop.no_room` (docs/02
+  "Cargas realistas"). Tras cada compra o venta: `Message`
   `shop.bought`/`shop.sold`, `PlayerStats` y un `ShopOpen` actualizado.
 - **Dinero:** la suma de `worth × count` de los items `currency` que lleva (equipo y
   contenedores anidados). Pagar saca primero las monedas de menor valor y devuelve el
@@ -1222,6 +1255,75 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   `dialog.quest_updated`, `dialog.quest_kills` (`{monster} {count}/{total}`) y
   `dialog.quest_completed`, con el parámetro `content_id` `quest` (el cliente muestra
   `quest.<id>.name`).
+
+### Minimapa (`server/internal/session/minimap.go`, pedido del dueño del 2026-11-23)
+Lo explorado vive en el servidor, por personaje (docs/02 "Minimapa"): un bit por casilla,
+en sectores de 32x32 de un piso. Un sector se nombra en el protocolo, dentro de su piso, con
+`sx << 16 | sy` (`sx = x / 32`, `sy = y / 32`). El bitset de un sector son 128 bytes, fila
+por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
+- `MinimapIndex{floors}` (campo 50 de `ServerMessage`): una vez al entrar, en el lote del
+  `Welcome`, después de `PlayerSkills` y antes del `QuestLog`. Cada `MinimapFloorIndex`
+  trae `z` y los sectores de ese piso con algo explorado (también la vista de este login).
+  Un sector que no está es negro entero: el cliente no lo pide.
+- `MinimapRequest{z, sectors}` (campo 40 de `ClientMessage`): hasta 16 sectores del piso
+  **propio** (otro piso se ignora; más de 16, también). El servidor contesta un
+  `MinimapSectors` con `answer = true` y un `MinimapSector` por sector pedido (un repetido,
+  una vez):
+  `explored` (vacío si no tiene nada explorado), `palette` (ids numéricos de items) y
+  `tiles` (1024 bytes, uno por casilla en el mismo orden: 0 = sin explorar o sin nada; si
+  no, 1 + índice de `palette`). El item de una casilla es el de más arriba que bloquea el
+  paso (muro, árbol, roca), o si no su suelo; **nunca** sale una casilla sin explorar.
+  Presupuesto por jugador: 32 sectores de golpe, recarga de 32 por segundo exactos (1,6
+  por tick; la fracción se arrastra, también para quien pide en cada tick); un pedido que
+  no entra se descarta entero, sin respuesta, igual que uno de otro piso (el jugador puede
+  haber cambiado de piso mientras viajaba). El cliente da un sector por pedido recién
+  cuando le llega su respuesta (`answer`): uno sin respuesta a los 2 s (`REQUEST_RETRY_MS`)
+  lo pide otra vez la próxima vez que lo tenga a la vista, aunque nada más haya cambiado.
+  El color sale del mapa del servidor **como está ahora** (`world.Map`): una puerta lejana
+  ya explorada se ve abierta o cerrada según su estado actual. Es una pista aceptada (solo
+  casillas que el personaje ya vio, y cuesta presupuesto).
+- **Deltas:** como mucho uno por segundo, `MinimapSectors` con `answer = false` y los
+  sectores que ganaron bits desde el anterior, solo con `explored` (sin `palette` ni
+  `tiles`): esas casillas están en la vista del cliente, que las colorea con el mapa que
+  le mandaron. Un delta **no** da un sector por pedido: si el sector tenía algo explorado
+  de logins anteriores y el cliente nunca lo pidió (minimapa plegado, o el delta llegó
+  antes que la respuesta), lo pide igual. Nada mientras el jugador camina por lo ya
+  explorado. El cliente explora además su propia vista con la misma regla (31x21 del piso
+  propio), así la niebla se abre con el paso.
+- **Color en el cliente:** `MinimapState` recuerda el item de color de cada casilla que el
+  cliente recibe (`FullMapView`, `MapSlice`, `TileUpdate`: `noteTile`), porque `WorldState`
+  olvida el mapa a más de 2 chunks del jugador y entero en cada `FullMapView` (escalera,
+  teletransporte, muerte): lo explorado en esta sesión sigue coloreado hasta el próximo
+  login, que lo trae del servidor. Una casilla que vino en una respuesta se pinta con el
+  item de la respuesta (el servidor conoce las marcas del mapa que el cliente no tiene);
+  la del mapa recibido, solo si no vino.
+- `TrackQuest{quest_id}` (campo 41): sigue una quest **en curso** en el minimapa; vacío, o
+  una quest que no está en curso, deja de seguir. El servidor contesta siempre un
+  `ObjectiveHint` (campo 52 de `ServerMessage`), también al dejar de seguir y aunque otra
+  quest cambie en el mismo tick, y lo manda otra vez en el flush de cada tick en que
+  cambia el paso de esa quest (terminada: `quest_id` vacío) o en que una reubicación
+  (escalera, teletransporte, barco, despertar en el templo) cambia el lugar más cercano.
+  No se guarda: el
+  cliente lo manda de nuevo después de cada `Welcome` (lo recuerda por personaje en
+  `localStorage` `rpg.track`).
+- `ObjectiveHint{quest_id, step_id, center, radius}`: un círculo (radio euclídeo en
+  casillas) alrededor de un punto **cercano** al lugar del paso, que puede estar en otro
+  piso (`center.z`). Nunca es la casilla exacta: el centro se corre entre un cuarto y la
+  mitad del radio (cuando el lugar del paso es grande y no deja ese margen, se corre 1
+  casilla y el círculo crece para contenerlo), siempre igual para el mismo personaje, paso
+  y lugar (`quest.FuzzHint` con una semilla de personaje, quest, paso y centro del lugar:
+  pedirlo muchas veces no lo promedia, y conocer un spawn de un `kill` no da el corrimiento
+  de los otros), y el lugar del paso entra entero en el círculo. Un centro que caería
+  fuera del mapa se refleja al otro lado del lugar (nunca se recorta encima de él). Con `quest_id` y sin `center`: se sigue la quest
+  pero su paso no tiene lugar (un `has_item` o un `flag_equals` sin `hint_area`, docs/06).
+  El lugar sale del YAML (`hint_area`) o del paso: el NPC de un `dialog_action` (los NPCs
+  no se mueven), el spawn más cercano del monstruo de un `kill` (su piso primero; el más
+  cercano a donde el jugador empezó a seguir, avanzó la quest o se reubicó por última vez:
+  caminar por el mismo piso no lo recalcula), el lugar de un `reach` (una zona: su
+  rectángulo envolvente), las placas de un `sigils`. La pista no revela mapa: el
+  cliente dibuja solo el círculo o la flecha, nunca casillas sin explorar.
+- Todo agregado sin romper nada: un cliente viejo ignora los campos nuevos y un servidor
+  viejo nunca los manda.
 
 ### Diario de misiones (`server/internal/session/questlog.go`)
 - `QuestLog{entries}` es el diario completo del personaje: una `QuestLogEntry` por quest
@@ -1260,11 +1362,25 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
 
 ### Grupos (T3.3, `server/internal/session/party.go`)
 Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
-- **`PartyCommand{action, creature_id}`**:
+- **`PartyCommand{action, creature_id, name}`**:
   - `INVITE` (`creature_id` = un jugador que el cliente ve): solo el líder o alguien sin
-    grupo. Cuenta para el anti-flood del chat. Al invitado le llega
-    `PartyInvitation{inviter_id, inviter_name, expires_ms}`; al que invita, `party.invited`
-    (`name`). `/invite Nombre` en la línea de chat hace lo mismo por nombre.
+    grupo. Cuenta para el anti-flood del chat y para `party.invites_per_minute` (por cuenta:
+    un relogueo o el otro personaje no lo reinician). Al invitado
+    le llega `PartyInvitation{inviter_id, inviter_name, expires_ms}`; al que invita,
+    `party.invited` (`name`). Uno que el cliente no ve → `party.player_not_seen`.
+  - `INVITE_NAME` (9, agregado sin romper nada; `name` = campo 3, el nombre escrito;
+    `creature_id` se ignora): el botón "Invitar" de la ventana de grupo. Las mismas reglas
+    que `INVITE`, pero el servidor busca el nombre (exacto, sin importar mayúsculas, sin
+    espacios a los lados) entre los jugadores **en línea**, en el loop y sin la base: el
+    invitado puede estar en cualquier lado. Desconectado, inexistente o invisible sin ser
+    visto → `party.player_not_found` (`name`, tal como se escribió), siempre igual. Un
+    `name` vacío o de más de 80 bytes (4 × el nombre más largo) se ignora sin contestar; se
+    limpia como el chat (sin caracteres de control) antes de buscarlo y de devolverlo. `/invite Nombre` en la línea de chat hace lo mismo.
+  - Respuestas de una invitación, en orden: muteado por flood (`chat.muted`/`chat.flood`),
+    límite de invitaciones (`party.invite_rate`, `seconds`: cuánto esperar; el intento
+    rechazado no alarga la espera), a sí mismo (`party.invite_self`), no encontrado, no es
+    el líder (`party.not_leader`), ya está en un grupo (`party.already_in_party`), grupo
+    completo (`party.full`), ya invitado (`party.already_invited`) o `party.invited`.
   - `ACCEPT` / `DECLINE` (`creature_id` = quien invitó). Aceptar una invitación vencida, de
     alguien que ya no lidera o que se fue → `party.invite_gone`. Rechazar le avisa al que
     invitó (`party.declined`, `name`).
@@ -1297,7 +1413,8 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
 - Mensajes de sistema: `party.invited`, `party.player_not_found` (`name`),
   `party.player_not_seen`, `party.already_in_party` (`name`), `party.already_invited`
   (`name`), `party.leave_first`, `party.full`, `party.not_leader`, `party.none`,
-  `party.not_a_member`, `party.invite_gone`, `party.invite_usage`, `party.declined`,
+  `party.not_a_member`, `party.invite_gone`, `party.invite_usage`, `party.invite_self`,
+  `party.invite_rate` (`seconds`), `party.declined`,
   `party.joined`, `party.left`, `party.kicked`, `party.new_leader` (todos con `name`),
   `party.you_were_kicked`, `party.disbanded`, `party.shared_on`, `party.shared_off`,
   `party.shared_default` (al formarse un grupo con la experiencia compartida prendida: lo
@@ -1542,6 +1659,23 @@ se abre o vuelve, llega el `TileUpdate` de la casilla (y el de la de destino en 
   `FADE`, `RESET`), `pos`, `to` (empuje y vuelta), `item_id`, `effect` (material de las
   partículas), `sound` (id de `assets/sounds.yaml`) y `hp_permille` (lo que le queda tras
   un golpe).
+- **`WorldClock`** (servidor → cliente, `ServerMessage.world_clock` = 53; día y noche,
+  `server/internal/session/daynight.go`, `livingworld/README.md` "Día y noche"): `day`
+  (ciclos desde la época del mundo: la luna del cielo es la de `day mod lunar_days`, salvo en
+  el amanecer, que conserva la de la noche anterior, `(day - 1) mod lunar_days`: una noche
+  pertenece al día en que cayó; el `/time` del staff informa esa misma fase), `cycle_ms`
+  (cuánto va del ciclo: 0 empieza el amanecer, `day_minutes` empieza la noche) y `rate`
+  (ms del mundo por ms real: 1 normal, 0 detenido por el staff). Llega justo después del
+  `Welcome`, a todos cada `sync_seconds` (60) de `data/livingworld/daynight.yaml` mientras
+  el reloj corre (detenido, `rate` 0, no hay nada nuevo que decir y no se repite) y en el
+  acto después de un `/time` (docs/16). El cliente lo lleva adelante a `rate` entre dos y
+  dibuja con él la luz, las lámparas y las sombras; ninguna regla depende de la hora. Sin
+  `daynight.yaml` el servidor no lo manda y el cliente dibuja el mediodía (también un
+  cliente viejo lo ignora). El mensaje no lleva el largo del ciclo: el cliente lo toma de su
+  propia copia de `daynight.yaml`, empaquetada en el build junto con la del servidor; un
+  cliente y un servidor desplegados con datos distintos interpretarían mal `cycle_ms`. Los
+  servidores del E2E arrancan con `-world-time noon` (solo desarrollo y test): la hora
+  queda detenida al mediodía del día 0, para que las capturas no dependan de la hora real.
 
 ### Puertas (`server/internal/session/door.go`)
 Reglas en `02-game-design.md` ("Puertas con llave"); los items en `data/items/doors.yaml`.
@@ -1656,7 +1790,9 @@ Reglas en `02-game-design.md` ("Condiciones").
 - **Estados** (lote 13, `server/internal/session/status.go`; reglas en `02-game-design.md`,
   "Estados del personaje"): después de las condiciones, la misma lista lleva hasta tres
   entradas con ids que no son de `balance.yaml`: `in_combat` (el bloqueo de logout,
-  `remaining_ms` hasta que se puede salir), `pvp_locked` (el bloqueo PvP del atacante,
+  `remaining_ms` hasta que se puede salir; llega al empezar la pelea, otra vez si su fin se
+  movió 1 s o más, y la lista sin él cuando termina: con eso el cliente cuenta los segundos
+  en la bandeja y bloquea el botón "Salir del juego"), `pvp_locked` (el bloqueo PvP del atacante,
   hasta que vence) y `protection_zone` (parado en una zona de protección; `remaining_ms` 0
   = sin fin, solo en ella: el cliente lo decide por el id, y cualquier otra entrada con 0
   está terminando). `ticks` es 0 en las tres. Es aditivo: un cliente viejo las mostraría como
@@ -1666,7 +1802,10 @@ Reglas en `02-game-design.md` ("Condiciones").
   (`statusSlack`): una pelea mueve el fin del bloqueo con cada golpe y así cuesta a lo
   sumo una lista por segundo. El cliente cuenta para atrás lo último que supo: su ícono
   puede terminar hasta 1 s antes o después que el bloqueo, y la lista sin él llega en el
-  tick en que el bloqueo termina de verdad.
+  tick en que el bloqueo termina de verdad. El botón "Salir del juego" bloqueado cuenta
+  con ese mismo `remaining_ms`: puede verse libre hasta 1 s antes de tiempo, y un `Logout`
+  en ese segundo se rechaza como siempre (`combat.logout_locked` o `pvp.logout_locked`,
+  con su `seconds`).
 - **Daño periódico**: cada golpe es un golpe más (`Effect 10 + elemento`, `FloatingText`,
   `CreatureHealth`, `PlayerStats` al afectado).
 - **Velocidad**: el afectado recibe `PlayerStats.speed` y quien lo ve `CreatureSpeed`; los
@@ -1956,3 +2095,5 @@ de `x << 16 | y` en varint y 1 B de nivel) y nada a un área sin desgaste: una c
 con un sendero que la cruza, ~10 B. Un cambio de nivel es un `TrailWear` de ~10 B para
 cada jugador que ve la casilla, y con los números de `wear.yaml` una casilla cambia de
 nivel cada decenas de pasos o cada varios minutos: despreciable al lado de los pasos.
+El `WorldClock` (día y noche) pesa unos 12 B, uno por jugador al entrar y uno por minuto:
+0,2 B/s.

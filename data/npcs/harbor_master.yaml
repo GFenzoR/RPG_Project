@@ -15,10 +15,15 @@ look:
 notes: >-
   Opens and closes Chapter 1 (ch1_shipwreck) and runs the boat to the forest island
   (Chapter 2). Not a merchant: tools and provisions live in puerto_provisioner.
-  Gifts depend on the vocation: guardians get a cutlass and an iron sword, arcanists (wand
-  only) get the same value in coins (25 and 120). Rangers get a short bow and coins for
-  arrows, druids a sapling staff, and both the arcanist's coins for the logbook (T3.1;
-  the greeting has no room for a tenth option).
+  Gifts depend on the vocation. Accepting gives a biscuit: the class weapon comes in the
+  start_kit (data/vocations.yaml). A character that does not carry that weapon (one made
+  before the kit existed, or one that lost it) gets it here too, so nobody starts the
+  chapter unarmed: at most one more starting weapon per character. Rangers get 20 coins
+  for arrows on top, as before the kit. No other coins: a new character is worth, sold
+  whole, what it was before the kit (docs/02 "Equipo inicial", the start budget; a test
+  keeps it). For the logbook, guardians get an iron sword and the others its value in
+  coins (the greeting has no room for a tenth option, and neither has ch1_offer: two per
+  vocation plus the refusal).
   A new vocation needs its own branch here.
 dialog:
   start: greet
@@ -66,21 +71,52 @@ dialog:
       text: npc.harbor_master.ch1_offer
       options:
         - text: dialog.accept
-          if: { vocation_in: [guardian] }
+          if:
+            - { vocation_in: [guardian] }
+            - { has_item: { item: rusty_cutlass } }
+          action:
+            - { start_quest: ch1_shipwreck }
+            - { give_item: ship_biscuit }
+          goto: ch1_accepted
+        - text: dialog.accept
+          if:
+            - { vocation_in: [guardian] }
+            - { lacks_item: { item: rusty_cutlass } }
           action:
             - { start_quest: ch1_shipwreck }
             - { give_item: rusty_cutlass }
             - { give_item: ship_biscuit }
           goto: ch1_accepted
         - text: dialog.accept
-          if: { vocation_in: [arcanist] }
+          if:
+            - { vocation_in: [arcanist] }
+            - { has_item: { item: spark_wand } }
+          action:
+            - { start_quest: ch1_shipwreck }
+            - { give_item: ship_biscuit }
+          goto: ch1_accepted_arcanist
+        - text: dialog.accept
+          if:
+            - { vocation_in: [arcanist] }
+            - { lacks_item: { item: spark_wand } }
           action:
             - { start_quest: ch1_shipwreck }
             - { give_item: spark_wand }
             - { give_item: ship_biscuit }
           goto: ch1_accepted_arcanist
         - text: dialog.accept
-          if: { vocation_in: [ranger] }
+          if:
+            - { vocation_in: [ranger] }
+            - { has_item: { item: short_bow } }
+          action:
+            - { start_quest: ch1_shipwreck }
+            - { give_gold: 20 } # for arrows, as before the start_kit
+            - { give_item: ship_biscuit }
+          goto: ch1_accepted_ranger
+        - text: dialog.accept
+          if:
+            - { vocation_in: [ranger] }
+            - { lacks_item: { item: short_bow } }
           action:
             - { start_quest: ch1_shipwreck }
             - { give_item: short_bow }
@@ -88,7 +124,17 @@ dialog:
             - { give_item: ship_biscuit }
           goto: ch1_accepted_ranger
         - text: dialog.accept
-          if: { vocation_in: [druid] }
+          if:
+            - { vocation_in: [druid] }
+            - { has_item: { item: sapling_staff } }
+          action:
+            - { start_quest: ch1_shipwreck }
+            - { give_item: ship_biscuit }
+          goto: ch1_accepted_druid
+        - text: dialog.accept
+          if:
+            - { vocation_in: [druid] }
+            - { lacks_item: { item: sapling_staff } }
           action:
             - { start_quest: ch1_shipwreck }
             - { give_item: sapling_staff }

@@ -89,6 +89,18 @@ type QuestStepDef struct {
 	ID           string     `yaml:"id"`
 	Description  string     `yaml:"description"`
 	CompleteWhen Completion `yaml:"complete_when"`
+	// HintArea is where the minimap's estimate of the step points (docs/02 "Minimapa"):
+	// optional, the session derives one from CompleteWhen without it.
+	HintArea *HintArea `yaml:"hint_area"`
+}
+
+// HintArea is a step's place for the minimap: a point and the tiles within Radius
+// (Chebyshev) of it.
+type HintArea struct {
+	X      int `yaml:"x"`
+	Y      int `yaml:"y"`
+	Z      int `yaml:"z"`
+	Radius int `yaml:"radius"`
 }
 
 // Completion is what completes a step: exactly one field is set.

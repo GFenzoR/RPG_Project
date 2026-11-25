@@ -171,11 +171,11 @@ func TestQuestDropAndRewardRoll(t *testing.T) {
 }
 
 // The tutorial's item reward rolls its attribute (the data reward is gold only; here it
-// also gives a tunic).
+// also gives a cap (the start_kit already has a cap)).
 func TestTutorialRewardRolls(t *testing.T) {
 	h := tutorialHarnessWith(t, func(c *session.Config) {
 		withAttributes(t)(c)
-		c.Tutorial.Rewards = append(slices.Clone(c.Tutorial.Rewards), content.TutorialReward{Item: "patched_tunic"})
+		c.Tutorial.Rewards = append(slices.Clone(c.Tutorial.Rewards), content.TutorialReward{Item: "sailcloth_cap"})
 	})
 	// Stored at the last step (harbor_master_task, index 6 + 1), then back in.
 	cl, p := h.joinChar(newcomer(9720, "guardian"))
@@ -195,13 +195,13 @@ func TestTutorialRewardRolls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tunic := h.w.ItemsForTest(p, "patched_tunic")
-	if len(tunic) != 1 {
-		t.Fatalf("%d tunics", len(tunic))
+	cap := h.w.ItemsForTest(p, "sailcloth_cap")
+	if len(cap) != 1 {
+		t.Fatalf("%d caps", len(cap))
 	}
-	checkRolled(t, attrPool(t), items["patched_tunic"], tunic[0].Mods())
-	num := items["patched_tunic"].Numeric
-	if got := econMods(h, session.EconTutorial, num); !slices.Equal(got, []session.Mods{tunic[0].Mods()}) {
+	checkRolled(t, attrPool(t), items["sailcloth_cap"], cap[0].Mods())
+	num := items["sailcloth_cap"].Numeric
+	if got := econMods(h, session.EconTutorial, num); !slices.Equal(got, []session.Mods{cap[0].Mods()}) {
 		t.Fatalf("tutorial log %v", got)
 	}
 }

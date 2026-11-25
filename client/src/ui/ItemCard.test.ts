@@ -43,7 +43,8 @@ const card: ItemCardView = {
   type: ["client.card.kind.weapon", "client.card.weapon.sword", "client.card.hands.one"],
   stats: [
     { id: "attack", value: 13 },
-    { id: "weight", value: "33.00" },
+    { id: "range", value: 5 },
+    { id: "weight", value: 1200 },
   ],
   requires: [
     { id: "level", level: 5, met: false },
@@ -64,7 +65,9 @@ describe("ItemCard (docs/17 UI-6)", () => {
     );
     expect(all).toContain("client.card.stat.attack");
     expect(all).toContain("13");
-    expect(all).toContain('client.card.oz{"oz":"33.00"}');
+    // Metric units (docs/02 "Unidades"): kg and metres.
+    expect(all).toContain('client.unit.kg{"kg":1.2}');
+    expect(all).toContain('client.unit.m{"m":5}');
     expect(all).toContain('client.card.requires.level{"level":5}');
     expect(all).toContain(
       'client.card.requires.vocations{"vocations":"vocation.guardian.name, vocation.ranger.name"}',
@@ -110,7 +113,7 @@ describe("TipCard (docs/17 UI-6: the tooltip in the Diablo II style)", () => {
     expect(all).toContain(
       `client.card.stat_line${JSON.stringify({
         stat: "client.card.stat.weight",
-        value: 'client.card.oz{"oz":"33.00"}',
+        value: 'client.unit.kg{"kg":1.2}',
       })}`,
     );
     const all2 = nodes(tree);
@@ -127,12 +130,14 @@ describe("TipCard (docs/17 UI-6: the tooltip in the Diablo II style)", () => {
     const stack: ItemCardView = {
       ...card,
       count: 10,
-      stats: [{ id: "weight", value: "0.50", total: "5.00" }],
+      stats: [{ id: "weight", value: 50, total: 500 }],
     };
     expect(texts(TipCard({ t, card: stack }))).toContain(
       `client.card.stat_line${JSON.stringify({
         stat: "client.card.stat.weight",
-        value: 'client.card.oz{"oz":"0.50"} client.card.weight_total{"oz":"5.00"}',
+        value: `client.unit.g{"g":50} client.card.weight_total${JSON.stringify({
+          weight: 'client.unit.g{"g":500}',
+        })}`,
       })}`,
     );
   });
@@ -161,6 +166,15 @@ describe("BigIcon", () => {
     expect(bigIconScale(icon(32, 64), 64)).toBe(1);
     // Never under 1x, even when the sprite is larger than the box.
     expect(bigIconScale(icon(96, 96), 64)).toBe(1);
+  });
+
+  it("with shrink, scales a sprite larger than the square down into it", () => {
+    expect(bigIconScale(icon(96, 96), 64, true)).toBeCloseTo(2 / 3);
+    expect(bigIconScale(icon(32, 32), 64, true)).toBe(2);
+    expect(bigIconScale(icon(64, 64), 64, true)).toBe(1);
+    // The box is the square, never the sprite's own 96 px.
+    const boss = BigIcon({ icon: icon(96, 96), fit: 64, shrink: true }) as unknown as Node;
+    expect(boss.props["style"]).toEqual({ width: "64px", height: "64px" });
   });
 
   it("sizes its box and scales the sprite to match", () => {

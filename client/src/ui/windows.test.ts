@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  KEY_STEP,
   MAX_CONTAINER_PLACES,
   MIN_SIZE,
   SNAP_PX,
@@ -9,7 +8,7 @@ import {
   WINDOW_KEY_LABEL,
   WINDOWS_VERSION,
   clampPlace,
-  clampSize,
+  cornerCursor,
   closeWindow,
   collapseWindow,
   containerKeys,
@@ -36,6 +35,7 @@ import {
   placeOf,
   placeWindow,
   resetWindows,
+  resizeFrom,
   resizeWindow,
   saveWindows,
   serverWindows,
@@ -47,9 +47,8 @@ import {
   topWindow,
   windowForHighlight,
   windowKey,
-  windowNudge,
 } from "./windows.ts";
-import type { NudgeContext, Rect, WinKey, WindowsState } from "./windows.ts";
+import type { Rect, WinKey, WindowsState } from "./windows.ts";
 
 describe("default windows", () => {
   it("opens the battle list, the equipment and the chat, all floating", () => {
@@ -452,59 +451,136 @@ describe("the server's windows and the containers (docs/17 UI-5)", () => {
   });
 });
 
-describe("size and keyboard (docs/17 UI-1, UI-5)", () => {
+describe("resizing from the corners (docs/17 UI-5, resizeFrom)", () => {
   const area = { width: 1000, height: 700 };
-  const ctx = (
-    x: number,
-    y: number,
-    width = 200,
-    height = 150,
-    others: Rect[] = [],
-  ): NudgeContext => ({
-    rect: { x, y, width, height },
-    area,
-    others,
+  const start: Rect = { x: 300, y: 200, width: 240, height: 180 };
+
+  it("moves the two edges of the corner and keeps the opposite corner where it was", () => {
+    // Bottom right: x and y stay, the size grows.
+    expect(resizeFrom("se", start, 40, 30, area)).toEqual({
+      x: 300,
+      y: 200,
+      width: 280,
+      height: 210,
+    });
+    // Top left: the window's x and y follow the pointer, its bottom right stays at 540, 380.
+    expect(resizeFrom("nw", start, -40, -30, area)).toEqual({
+      x: 260,
+      y: 170,
+      width: 280,
+      height: 210,
+    });
+    // Top right: y moves, x stays; its bottom left stays at 300, 380.
+    expect(resizeFrom("ne", start, 40, -30, area)).toEqual({
+      x: 300,
+      y: 170,
+      width: 280,
+      height: 210,
+    });
+    // Bottom left: x moves, y stays; its top right stays at 540, 200.
+    expect(resizeFrom("sw", start, -40, 30, area)).toEqual({
+      x: 260,
+      y: 200,
+      width: 280,
+      height: 210,
+    });
+    // Shrinking from the top left moves the window right and down.
+    expect(resizeFrom("nw", start, 50, 60, area)).toEqual({
+      x: 350,
+      y: 260,
+      width: 190,
+      height: 120,
+    });
   });
 
-  it("never makes a window smaller than its minimum or larger than the area", () => {
-    expect(clampSize(10, 10, area)).toEqual({ width: MIN_SIZE.width, height: MIN_SIZE.height });
-    expect(clampSize(5000, 300.6, area)).toEqual({ width: 1000, height: 301 });
+  it("never under MIN_SIZE: the moving edge gives way, the opposite corner stays", () => {
+    expect(resizeFrom("se", start, -500, -500, area)).toEqual({
+      x: 300,
+      y: 200,
+      ...MIN_SIZE,
+    });
+    // Dragged past the opposite corner, the top left stops MIN_SIZE short of the bottom
+    // right (540, 380).
+    expect(resizeFrom("nw", start, 500, 500, area)).toEqual({
+      x: 540 - MIN_SIZE.width,
+      y: 380 - MIN_SIZE.height,
+      ...MIN_SIZE,
+    });
+    expect(resizeFrom("ne", start, -500, 500, area)).toEqual({
+      x: 300,
+      y: 380 - MIN_SIZE.height,
+      ...MIN_SIZE,
+    });
+    expect(resizeFrom("sw", start, 500, -500, area)).toEqual({
+      x: 540 - MIN_SIZE.width,
+      y: 200,
+      ...MIN_SIZE,
+    });
   });
 
-  it("moves a window with the arrows and resizes it with Shift", () => {
-    let s = moveWindow(defaultWindows(), "inventory", 100, 100);
-    s = windowNudge(s, "inventory", { key: "ArrowRight" }, ctx(100, 100)) ?? s;
-    expect(s.win.inventory).toMatchObject({ x: 100 + KEY_STEP, y: 100 });
-    s = windowNudge(s, "inventory", { key: "ArrowUp" }, ctx(0, 0)) ?? s;
-    expect(s.win.inventory.y).toBe(0); // never above the top
-    s = windowNudge(s, "inventory", { key: "ArrowDown", shiftKey: true }, ctx(0, 0)) ?? s;
-    expect(s.win.inventory).toMatchObject({ w: 200, h: 150 + KEY_STEP });
-    // Down to the bar's top at most: the room under the window.
-    s = windowNudge(s, "inventory", { key: "ArrowDown", shiftKey: true }, ctx(0, 600)) ?? s;
-    expect(s.win.inventory.h).toBe(100);
-    // Its top left corner stays: a window never moved (the chat, hanging from the bar) is
-    // pinned where it is, so it grows down and right, not up.
-    s =
-      windowNudge(defaultWindows(), "chat", { key: "ArrowUp", shiftKey: true }, ctx(140, 500)) ?? s;
-    expect(s.win.chat).toMatchObject({ x: 140, y: 500, w: 200, h: 150 - KEY_STEP });
-    expect(windowNudge(s, "inventory", { key: "KeyW" }, ctx(0, 0))).toBeUndefined();
-    // Enter and Space no longer dock anything: the button does what buttons do.
-    expect(windowNudge(s, "inventory", { key: "Enter" }, ctx(0, 0))).toBeUndefined();
-    // Alt+Left is the browser's (back): never taken.
-    expect(windowNudge(s, "inventory", { key: "ArrowLeft", altKey: true }, ctx(0, 0))).toBe(
-      undefined,
+  it("stays inside the area: never off the screen nor under the bar", () => {
+    // The top left past the screen's corner stops at 0, 0; the bottom right stays.
+    expect(resizeFrom("nw", start, -900, -900, area)).toEqual({
+      x: 0,
+      y: 0,
+      width: 540,
+      height: 380,
+    });
+    // The bottom right stops at the area's edges (the bar's top).
+    expect(resizeFrom("se", start, 2000, 2000, area)).toEqual({
+      x: 300,
+      y: 200,
+      width: 700,
+      height: 500,
+    });
+    expect(resizeFrom("ne", start, 2000, -2000, area)).toEqual({
+      x: 300,
+      y: 0,
+      width: 700,
+      height: 380,
+    });
+    expect(resizeFrom("sw", start, -2000, 2000, area)).toEqual({
+      x: 0,
+      y: 200,
+      width: 540,
+      height: 500,
+    });
+    // A window against the right edge shrunk to its minimum from the left stays inside.
+    const edge: Rect = { x: 900, y: 10, width: 100, height: 100 };
+    const r = resizeFrom("sw", edge, 0, 0, area);
+    expect(r.x + r.width).toBeLessThanOrEqual(area.width);
+    expect(r).toMatchObject({ x: area.width - MIN_SIZE.width, width: MIN_SIZE.width });
+  });
+
+  it("feels the magnet: the screen's edges, the bar's top and the other windows'", () => {
+    // 6 px from the left edge and 8 from the top: both snap to 0.
+    expect(resizeFrom("nw", start, -294, -192, area)).toMatchObject({ x: 0, y: 0 });
+    // 7 px short of the bar's top: the bottom snaps to it.
+    expect(resizeFrom("se", start, 0, 313, area)).toMatchObject({ y: 200, height: 500 });
+    // Beside another window: the right edge snaps to its left (both ways: to its right too).
+    const other: Rect = { x: 600, y: 150, width: 200, height: 300 };
+    expect(resizeFrom("se", start, 52, 0, area, [other])).toMatchObject({ x: 300, width: 300 });
+    expect(resizeFrom("ne", start, 255, 0, area, [other])).toMatchObject({ width: 500 });
+    // Over it on the other axis too, the top aligns with its top.
+    expect(resizeFrom("ne", start, 52, -44, area, [other])).toEqual({
+      x: 300,
+      y: 150,
+      width: 300,
+      height: 230,
+    });
+    // Farther than SNAP_PX nothing pulls; nor does a window far on the other axis.
+    expect(resizeFrom("se", start, 60 - SNAP_PX - 1, 0, area, [other]).width).toBe(
+      240 + 60 - SNAP_PX - 1,
     );
+    const far: Rect = { x: 600, y: 600, width: 200, height: 50 };
+    expect(resizeFrom("se", start, 52, 0, area, [far]).width).toBe(292);
   });
 
-  it("the arrows feel the magnet too: near an edge the window snaps to it", () => {
-    let s = defaultWindows();
-    // 20 px from the left edge, one step left (16) leaves it 4 px away: it snaps to 0.
-    s = windowNudge(s, "battle", { key: "ArrowLeft" }, ctx(20, 300)) ?? s;
-    expect(s.win.battle).toMatchObject({ x: 0, y: 300 });
-    // Next to another window: one step down aligns its top with that one's.
-    const other = { x: 200, y: 108, width: 200, height: 150 };
-    s = windowNudge(s, "battle", { key: "ArrowDown" }, ctx(0, 90, 200, 150, [other])) ?? s;
-    expect(s.win.battle).toMatchObject({ x: 0, y: 108 });
+  it("only the corners resize; the cursor follows their diagonal", () => {
+    expect(cornerCursor("nw")).toBe("nwse-resize");
+    expect(cornerCursor("se")).toBe("nwse-resize");
+    expect(cornerCursor("ne")).toBe("nesw-resize");
+    expect(cornerCursor("sw")).toBe("nesw-resize");
   });
 });
 

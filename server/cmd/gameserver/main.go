@@ -56,6 +56,9 @@ type options struct {
 	// authRateBurst overrides the per-IP register/login burst (0 = the default). Only
 	// for local test harnesses whose requests all come from one IP, such as the E2E suite.
 	authRateBurst int
+	// worldTime fixes the day and night at a /time word (noon, night...), stopped: the E2E
+	// server, so its screenshots do not depend on the hour. Empty: the real cycle.
+	worldTime string
 	// wsLimits bounds /ws (gateway.Limits, docs/05 "Límites"); wsLoopbackExempt skips its
 	// per-client limits for loopback clients (default: RPG_ENV development or test).
 	wsLimits         gateway.Limits
@@ -109,6 +112,7 @@ func main() {
 	flag.StringVar(&o.boatRoutes, "boat-routes", os.Getenv("RPG_BOAT_ROUTES"), "boat routes file replacing <data>/boat_routes.yaml (tests); default $RPG_BOAT_ROUTES")
 	flag.StringVar(&o.metricsAddr, "metrics-addr", envOr("RPG_METRICS_ADDR", defaultMetricsAddr), "internal listener for Prometheus /metrics, never public (empty = off); default $RPG_METRICS_ADDR or "+defaultMetricsAddr)
 	flag.DurationVar(&o.metricsLinger, "metrics-linger", 20*time.Second, "after shutdown, keep /metrics up this long if database writes were abandoned, so Prometheus scrapes them (0 = off)")
+	flag.StringVar(&o.worldTime, "world-time", "", "fix the day and night at this time (noon, night, dawn...), stopped; only for test harnesses (empty = the real cycle)")
 	flag.IntVar(&o.authRateBurst, "auth-rate-burst", 0, "per-IP register/login burst (0 = default); only for test harnesses that share one IP")
 	def := httpapi.DefaultMapSubmitLimits
 	flag.IntVar(&o.mapSubmit.MaxBytes, "map-submit-max-bytes", def.MaxBytes, "largest map patch the website accepts, in bytes (T4.5)")
@@ -209,6 +213,13 @@ func run(logger *slog.Logger, o options) error {
 	trailWear, err := session.LoadTrailWear(o.dataDir)
 	if err != nil {
 		return fmt.Errorf("content: %w", err)
+	}
+	dayNight, err := session.LoadDayNight(o.dataDir)
+	if err != nil {
+		return fmt.Errorf("content: %w", err)
+	}
+	if err := checkWorldTime(dayNight, o.worldTime); err != nil {
+		return err
 	}
 	living, err := session.LoadLivingWorld(o.dataDir)
 	if err != nil {
@@ -332,6 +343,8 @@ func run(logger *slog.Logger, o options) error {
 		Spells:           spells,
 		Recipes:          recipes,
 		TrailWear:        trailWear,
+		DayNight:         dayNight,
+		DayNightFixed:    o.worldTime,
 		LivingWorld:      living,
 		Attributes:       attributes,
 		BoatRoutes:       routes,

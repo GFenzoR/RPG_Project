@@ -44,6 +44,12 @@ export const LAYER_ORDER: Readonly<Record<AnimDir, readonly LayerSlot[]>> = {
   n: ["beard", "body", "legs", "feet", "torso", "hair", "head", "weapon", "shield"],
   e: ["body", "legs", "feet", "torso", "shield", "hair", "beard", "head", "weapon"],
   w: ["body", "legs", "feet", "torso", "hair", "beard", "head", "weapon", "shield"],
+  // The diagonals (docs/17 ANI-1): the clothes and hair as the straight facing they lean
+  // to front or back, the held pieces as their side: the near hand over the far one.
+  se: ["body", "legs", "feet", "hair", "torso", "beard", "head", "shield", "weapon"],
+  sw: ["body", "legs", "feet", "hair", "torso", "beard", "head", "weapon", "shield"],
+  ne: ["beard", "body", "legs", "feet", "torso", "hair", "shield", "head", "weapon"],
+  nw: ["beard", "body", "legs", "feet", "torso", "hair", "head", "weapon", "shield"],
 };
 
 /** The body: sex, build, skin tone, hair style and colour, beard (ids of data/looks.yaml). */

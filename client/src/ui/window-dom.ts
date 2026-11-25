@@ -1,10 +1,18 @@
 // The desktop windows' DOM side (docs/17 UI-5): the inline lengths that place a window
-// (GameWindow draws them from ui/windows.ts), dragging a title bar and the resize grip (the
+// (GameWindow draws them from ui/windows.ts), dragging a title bar and a resize corner (the
 // window follows the pointer, then its state takes over), and watching the windows' area
 // while it is in the page. Apart from GameView.tsx so the tests drive them without a DOM:
 // all they touch is a few properties of an element, a listener target and a class list.
-import { clampPlace, clampSize, defaultPlace, keptHeight, placeOf, snapPlace } from "./windows.ts";
-import type { AutoPlace, Box, Rect, WinKey, WindowPlace, WindowsState } from "./windows.ts";
+import {
+  clampPlace,
+  cornerCursor,
+  defaultPlace,
+  keptHeight,
+  placeOf,
+  resizeFrom,
+  snapPlace,
+} from "./windows.ts";
+import type { AutoPlace, Box, Corner, Rect, WinKey, WindowPlace, WindowsState } from "./windows.ts";
 
 /** The inline lengths a window's place sets (GameWindow's `style`). */
 export type PlaceStyle = Partial<
@@ -83,7 +91,10 @@ export interface PointerTarget {
 
 export interface DragEnv {
   pointer: PointerTarget;
-  /** The body's classes (`dragging-window`, `resizing-window`: the cursor everywhere). */
+  /**
+   * The body's classes (`dragging-window`, `resizing-window` and `resizing-nesw`: the
+   * cursor everywhere).
+   */
   body: Pick<DOMTokenList, "add" | "remove">;
   /** The interface scale now (the windows' CSS zoom). */
   zoom(): number;
@@ -179,52 +190,70 @@ export function dragWindow(
 }
 
 /**
- * The resize grip was pressed at `press`: the window's bottom right corner follows the
- * pointer, between MIN_SIZE and the room left in the area (never under the bar), its top
- * left corner pinned where it is (a default place that hangs from the bottom, the chat's
- * or the dialog's, would grow upwards). On release it keeps its new place and size and
- * `done` gets them, screen px.
+ * A corner of the window was pressed at `press` (docs/17 UI-5: the four corners resize,
+ * the edges do not): that corner follows the pointer and the opposite one stays
+ * (resizeFrom: a top or left corner moves the window's top or left), with the magnet on
+ * the area's edges, the bar's top and the `others` windows', never under the bar and never
+ * under MIN_SIZE. The body gets `resizing-window` (and `resizing-nesw` for the top right
+ * and bottom left corners: the cursor everywhere while it lasts) and the window
+ * `data-resizing` with the corner (windows.css keeps that one lit). On release the window
+ * keeps its new place and size (settleStyle) and `done` gets them, screen px from the
+ * area's top left.
  */
 export function resizeDrag(
   env: DragEnv,
   el: DragElement,
+  corner: Corner,
   press: PointerAt,
   area: PageBox,
+  others: readonly Rect[],
   place: WindowPlace,
   done: (x: number, y: number, width: number, height: number) => void,
 ): void {
   const r = el.getBoundingClientRect();
-  const room = { width: area.left + area.width - r.left, height: area.top + area.height - r.top };
-  const at = { x: Math.round(r.left - area.left), y: Math.round(r.top - area.top) };
-  let size = { width: r.width, height: r.height };
+  const start: Rect = {
+    x: r.left - area.left,
+    y: r.top - area.top,
+    width: r.width,
+    height: r.height,
+  };
+  let box: Rect = start;
   let moved = false;
+  const diagonal = cornerCursor(corner) === "nesw-resize" ? "resizing-nesw" : undefined;
   follow(
     env,
     (ev) => {
-      size = clampSize(
-        r.width + ev.clientX - press.clientX,
-        r.height + ev.clientY - press.clientY,
-        room,
+      box = resizeFrom(
+        corner,
+        start,
+        ev.clientX - press.clientX,
+        ev.clientY - press.clientY,
+        area,
+        others,
       );
       const k = scale(env.zoom());
       if (!moved) {
         env.body.add("resizing-window");
-        el.style.left = `${at.x / k}px`;
-        el.style.top = `${at.y / k}px`;
+        if (diagonal) env.body.add(diagonal);
+        el.dataset["resizing"] = corner;
         el.style.right = "auto";
         el.style.bottom = "auto";
         el.style.maxHeight = "none";
       }
-      el.style.width = `${size.width / k}px`;
-      el.style.height = `${size.height / k}px`;
+      el.style.left = `${box.x / k}px`;
+      el.style.top = `${box.y / k}px`;
+      el.style.width = `${box.width / k}px`;
+      el.style.height = `${box.height / k}px`;
       moved = true;
     },
     () => {
       if (!moved) return;
       env.body.remove("resizing-window");
-      const { width, height } = size;
-      settleStyle(el.style, { ...place, x: at.x, y: at.y, w: width, h: height }, env.zoom());
-      done(at.x, at.y, width, height);
+      if (diagonal) env.body.remove(diagonal);
+      delete el.dataset["resizing"];
+      const { x, y, width, height } = box;
+      settleStyle(el.style, { ...place, x, y, w: width, h: height }, env.zoom());
+      done(x, y, width, height);
     },
   );
 }

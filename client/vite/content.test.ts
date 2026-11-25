@@ -8,6 +8,7 @@ import {
   GAME_SITE_KEYS,
   dialogTopics,
   loadAttributes,
+  loadMovement,
   loadClientContent,
   loadForge,
   loadPortals,
@@ -37,6 +38,32 @@ describe("client content (T0.5)", () => {
       trample: true,
     });
     expect(lw?.plants["oak_tree"]?.reaction).toBe("rustle");
+    // Day and night (data/livingworld/daynight.yaml): the owner's 180 + 60 minutes.
+    expect(lw?.dayNight?.dayMs).toBe(180 * 60_000);
+    expect(lw?.dayNight?.nightMs).toBe(60 * 60_000);
+    expect(lw?.dayNight?.floor).toBeGreaterThanOrEqual(0.4);
+  });
+
+  it("ships the positional ambience: beds and emitters on ambient sounds (livingworld/README.md)", () => {
+    const a = content.livingWorld?.ambience;
+    expect(a).toBeDefined();
+    const beds = Object.fromEntries((a?.beds ?? []).map((b) => [b.id, b]));
+    // The owner's list (2026-11-23): waves by the sea, wind in the sand, the forest, caves.
+    expect(beds["waves"]?.surfaces.water_shallow).toBe(1);
+    expect(beds["desert_wind"]?.surfaces.sand).toBeGreaterThan(0);
+    expect(beds["forest"]?.items["oak_tree"]).toBeGreaterThan(0);
+    expect(beds["cave"]?.floors).toBe("underground");
+    expect(a?.emitters["fountain"]).toBeDefined();
+    expect(a?.emitters["cooking_hearth"]).toBeDefined();
+    const ids = new Set(Object.values(content.items).map((d) => d.id));
+    for (const s of [
+      ...(a?.beds ?? []).map((b) => b.sound),
+      ...Object.values(a?.emitters ?? {}).map((e) => e.sound),
+    ])
+      expect(content.sounds.sounds[s]?.channel, s).toBe("ambient");
+    for (const id of Object.keys(a?.emitters ?? {})) expect(ids.has(id), id).toBe(true);
+    // The island bed is gone: the sea is heard where the sea is.
+    expect(Object.keys(content.sounds)).not.toContain("ambient");
   });
 
   it("ships the item attributes and their card lines in both languages (docs/02)", () => {
@@ -70,6 +97,17 @@ describe("client content (T0.5)", () => {
     }
     expect(loadForge({ forge: { enabled: false } }, ids)).toBeUndefined();
     expect(loadForge({ forge: { enabled: true, station: "nowhere" } }, ids)).toBeUndefined();
+  });
+
+  it("reads the movement constants, a diagonal at √2 like the server when one is missing", () => {
+    expect(loadMovement({ movement: { base_step_ms: 800, diagonal_cost: 1.5 } })).toEqual({
+      baseStepMs: 800,
+      diagonalCost: 1.5,
+      maxPathTiles: 100,
+    });
+    // server/internal/world DefaultDiagonalCost.
+    expect(loadMovement({})).toEqual({ baseStepMs: 1000, diagonalCost: 1.414, maxPathTiles: 100 });
+    expect(content.movement.diagonalCost).toBe(1.414); // data/balance.yaml
   });
 
   it("reads no attributes without the file and fails on a broken one", () => {
@@ -375,7 +413,7 @@ describe("client content (docs/17 UI-6, UI-8)", () => {
   it("ships what the item card shows: kind, weight, stats and requirements", () => {
     expect(byId.get("iron_sword")).toMatchObject({
       kind: "weapon",
-      weight: 3150,
+      weight: 1100,
       weapon: { type: "sword", attack: 13, defense: 7, hands: 1, range: 0, element: "", ammo: "" },
       requires: { level: 5, vocations: [] },
     });

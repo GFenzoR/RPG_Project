@@ -216,10 +216,13 @@ parte de arriba transparente.
 - **Puertas:** pieza de 32x64 con marco y dintel, que continúa la tapa. Una puerta de casa
   (`houses.yaml` `doors`) que hoy es solo suelo recibe un marco decorativo que no bloquea.
 - **Muros altos** (murallas, acantilados): cara de 64 px (sprite de 32x96).
-- **Detrás de un muro:** el jugador propio, si queda tapado, se dibuja además como
-  **silueta** (contorno claro al 50 %) sobre los muros. Así nunca se pierde. A los demás no
-  se les hace nada: esconderse detrás de un muro es parte del juego. No hacemos los muros
-  transparentes como Diablo 2, porque dejaría ver los interiores.
+- **Detrás de un muro** (cambiado por el dueño el 2026-11-23): si un muro tapa al jugador
+  propio, **el muro cede**. Solo las piezas de muro que están al sur de él y cubren su
+  dibujo se vuelven translúcidas (35 %), con un fundido corto, y vuelven al alejarse. El
+  jugador nunca palidece. Antes se dibujaba encima una silueta clara al 45 %, y el dueño la
+  vio "pálida y rara". A los demás no se les hace nada: esconderse detrás de un muro es
+  parte del juego. Solo cede el muro que tapa al jugador, no todos los muros de la vista
+  como en Diablo 2, así los interiores no quedan a la vista.
 - Techos y pisos de arriba (en Tibia se ocultan al entrar) **quedan fuera** de este plan.
   Hoy solo se dibuja el piso del jugador.
 
@@ -247,9 +250,12 @@ parte de arriba transparente.
   tapa a la criatura de la casilla de atrás y la criatura de adelante tapa la cara. Las
   piezas se eligen mirando los vecinos también en el chunk de al lado, y un chunk se
   rearma si cambia un vecino del que dependen sus bordes.
-- **Silueta:** cuando el muro de la casilla de al sur tapa al jugador propio, el cliente
-  dibuja encima del mapa una copia de su frame, aclarada y al 45 %
-  (`BEHIND_WALL_ALPHA` y `BEHIND_WALL_TINT` en `game-canvas.ts`). Los demás quedan
+- **El muro cede** (desde el 2026-11-23): `MapView` guarda las piezas de muro por casilla
+  (`wallSprites`, y también los items que se unen a los muros). En cada frame,
+  `revealBehind(rect, fila, ahora)` funde a `REVEAL_ALPHA` (0,35) las de las
+  `REVEAL_ROWS` filas al sur del jugador que se cruzan con su dibujo. El dibujo es
+  `figureRect` de `game-canvas.ts`: la caja del sprite del cuerpo. Las demás piezas vuelven
+  a 1, con un fundido exponencial de `REVEAL_FADE_MS` (90 ms). Los demás jugadores quedan
   tapados.
 - **Muros altos, ventanas y marcos (hecho, 2026-11-18):** la muralla `rampart_wall` (16
   piezas de 32x96, cara de 64 px), los muros con ventana `stone_wall_window` y
@@ -265,8 +271,8 @@ parte de arriba transparente.
   5 tonos por suelo, y dentro de un mismo suelo **ΔL\* ≤ 15** (CIELAB) entre el tono más
   claro y el más oscuro. El pasto de hoy salta mucho más.
 - **Detalles sueltos:**
-  - los decorativos (matas, piedritas, flores) los esparce el cliente con el mismo hash:
-    no se pueden tocar y no pesan en el mapa;
+  - los decorativos (matas, piedritas, flores) los esparce el renderer con un hash de la
+    posición (`groundDecal`, abajo): no se pueden tocar y no pesan en el mapa;
   - lo que tiene sentido de juego (un arbusto que bloquea) sigue siendo un item del mapa.
 - **Bordes** (`gen-borders`): entre todos los pares de suelos naturales que se tocan, con
   orilla irregular (nunca recta) que no se repite de casilla en casilla, y en el agua con
@@ -324,6 +330,48 @@ mojada, ceniza con basalto y otros diez pares se tocaban en línea recta.
 - Queda: una casilla sola que entra en otro suelo (la punta de un camino, una ensenada de
   una casilla) termina en punta (dos esquinas de adentro); se lee como un sendero que se
   afina. Una pieza propia para ese caso serían 4 piezas más por suelo.
+
+**Hecho (2026-11-24, `feat/ground-variety`):** el dueño: "los sprites de piso se repiten
+demasiado, sobre todo la arena; crea muchas más variaciones para que las áreas grandes se
+vean naturales". La arena tenía manchas de 16 px y motas que caían en el mismo lugar de
+cada casilla: un campo de arena era una grilla. Tres capas, todas funciones puras de la
+posición en `packages/renderer/src/tile-art.ts` (el cliente, el editor y `mapcli render`
+dibujan lo mismo; nada cambia en el mapa ni en el servidor):
+- **Muchos looks por suelo** (`recipes/variety.ts` de spritegen): arena y pasto 11, tierra y
+  piedra de piso 6, arena mojada y ceniza 5, escoria 4. Cada look conserva el anillo de 1 px
+  del look principal y redibuja su **corazón**: otra semilla de la misma textura, o una
+  versión con más ondas de viento, más grano, más húmeda o más clara (arena), más tupida,
+  más seca o con trébol (pasto). En la arena, el pasto y la tierra la textura es un campo
+  de niveles y el corazón se funde con el anillo en el nivel, sin tramado (`levelHeart`); el
+  look principal sale de la semilla cuyo anillo queda más cerca del nivel medio
+  (`calmSeed`), así el anillo que todos comparten no dibuja la grilla. La ceniza y la
+  escoria (grano fino) funden el corazón con un tramado ordenado. Sus manchas grandes son
+  más suaves que antes: la sombra amplia la pone el tono (abajo). El peso del principal
+  (`weight` en `tiles`) baja a 0,2-0,35: ningún tile domina.
+- **Elección por zonas** (`groundLook`): un ruido lento (`macroNoise`, celdas de 14 y 6
+  casillas) hace que cada zona tire a una tanda de looks vecinos en la lista (los looks
+  parecidos van juntos: una playa con ondas, otra con grano) y a más o menos looks
+  alternativos. Dos casillas de lado nunca muestran el mismo look alternativo (los looks
+  pares van en un color del damero y los impares en el otro) y una casilla se corre del
+  look de sus vecinas diagonales de arriba (en bandas de 8 filas: menos del 5 % repite).
+- **Tono** (`groundTone`): cada suelo y cada pieza de borde se tiñe con otro ruido lento,
+  hasta un 10 % más oscuro y un poco más cálido o más frío. Las zonas grandes cambian de
+  tono sin escalones entre casillas (a lo sumo 6 niveles de 255), y como el tono es de la
+  posición, el borde de un suelo coincide con el suelo del que sale.
+- **Detalles sueltos** (`groundDecal`, `<suelo>/decal_<n>`): arena (conchas, piedritas, una
+  rama seca, huellas de gaviota, alga seca, ondas de viento) y pasto (flores amarillas,
+  blancas y violetas, trébol, dos piedras, hojas caídas). Uno cada ~20 casillas, más en
+  unas zonas que en otras, nunca dos que se toquen y solo donde las cuatro vecinas son del
+  mismo suelo (ningún borde los tapa). Son arte del suelo, no items: no se pueden tocar ni
+  bloquean, se dibujan con los suelos debajo de bordes, sombras e items, son chicos (5-80
+  px, en el centro de la casilla) y del valor del suelo.
+- Tests: `ground-variety.test.ts` del renderer (determinismo, vecinos distintos, diagonales,
+  continuidad del ruido, tono, detalles), `map-view.test.ts` y `render.test.ts` de mapcli
+  (tono y detalles como el juego), spritegen (anillo igual al principal, detalles chicos y
+  centrados, banda de ART-6) y spritepack (`decals` en `atlas.json`).
+- Queda: el agua y la lava (animadas: un look necesita sus 4 frames), la lava enfriada y el
+  basalto (celdas: otro corazón corta una losa) y los pisos de madera siguen con un solo
+  look. No hay nieve ni piso de cueva propios todavía: cuando entren, con `levelLooks`.
 
 ### ART-5 Contorno, sombra y luz
 - **Luz principal desde arriba a la izquierda** (como hoy). Por material, 3–4 tonos más un
@@ -407,7 +455,7 @@ mojada, ceniza con basalto y otros diez pares se tocaban en línea recta.
 - **Luz:**
   - los pisos subterráneos (z ≥ 8) van oscuros, con un radio de luz alrededor del jugador
     y de cada antorcha (capa de oscuridad en multiply y luces aditivas);
-  - día y noche no entran en este plan.
+  - día y noche: después llegó el ciclo (abajo, "Día y noche y sombras proyectadas").
 
 **Hecho (A10 y la luz de A13, 2026-11-18):**
 - **Formato:** frames `<sprite>/frame_<n>` (el sprite es el frame 0) y, en la sección
@@ -464,7 +512,7 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
 - **Agua y polvo:** anillos achatados que se abren en el agua baja; una nube de polvo al
   correr (paso de 260 ms o menos) por tierra, arena o ceniza. Las motas de MOV-7 siguen.
 - **Bichos:** pájaros y mariposas por el pasto que huyen cuando el jugador se acerca,
-  luciérnagas de noche (cuando haya noche) y sombras de peces en el agua. Pocos (10) y
+  luciérnagas de noche y sombras de peces en el agua. Pocos (10) y
   donde el hash de la casilla diga: el mismo lugar siempre tiene el mismo bicho.
 - **Desgaste de senderos** (estado del servidor, docs/02 "Senderos"; rama
   `feat/trail-wear`): tres etapas sobre el pasto, arte de color (no máscara) de
@@ -484,12 +532,79 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
   `assets/livingworld/sprites/`; plantas nuevas como items (`data/items/plants.yaml`).
 - Todo se apaga con "Animaciones reducidas" o `prefers-reduced-motion`.
 
+
+### Día y noche y sombras proyectadas (hecho, 2026-11-24, rama `feat/day-night-shadows`)
+Pedido del dueño (2026-11-23): "los personajes todavía parecen flotar: sombras dinámicas
+que sigan la forma real de cada uno; un ciclo de día y noche; y que las sombras sigan al
+sol: a la mañana para un lado, a la tarde para el otro". Contrato en `livingworld/README.md`
+"Día y noche"; aquí, la dirección de arte.
+- **El ciclo:** 180 minutos reales de día y 60 de noche (decisión del dueño). El amanecer y
+  el atardecer son los primeros y los últimos 15 minutos del día. La luna cambia de fase
+  cada día, en 8 días.
+- **La luz sobre la superficie** (multiply, la misma capa de luz de las cuevas): neutra de
+  día (sin pasada de más), cálida al amanecer (`#ffc9a8`), naranja al atardecer
+  (`#ffa86e`) y azul de noche: plateada con luna llena (`#8494c4`), más oscura con luna
+  nueva (`#58648c`). **Nunca demasiado oscuro:** la noche no baja de una luminancia de 0,5
+  (`floor`); un color más oscuro se mezcla hacia el blanco hasta llegar. Las transiciones
+  son continuas (también al cambiar de día: la noche usa la luna del día en que cayó). Las
+  cuevas no cambian.
+- **Lámparas:** de noche (y subiendo durante el atardecer) brillan el jugador (una luz más
+  suave que en la cueva) y todo item con `light` del atlas: fogatas, antorchas, faroles y
+  ventanas.
+- **Sombra proyectada de las criaturas:** la silueta de lo que se dibuja (cuerpo, ropa,
+  equipo, en su frame), oscura (`CAST_SHADOW_TINT`, el mismo violeta casi negro de las
+  sombras de árboles y casas), apoyada en los pies y tumbada en el suelo hacia el "norte"
+  de la vista 3/4 (el sol está del lado de quien mira), torcida hacia donde no está el
+  sol: larga al oeste a la mañana, corta bajo los pies al mediodía, larga al este a la
+  tarde. Más larga cuanto más bajo el sol (hasta 1,4 alturas) y más tenue al salir y al
+  ponerse. De noche la proyecta la luna, tenue (0,16) y según su fase (nada con luna
+  nueva). Toda la capa se desvanece junta (un `AlphaFilter`): dos sombras que se cruzan o
+  las capas de un muñeco no hacen manchas más oscuras. La **sombra de contacto** (la
+  elipse) sigue siempre: los pies nunca flotan. Un cuerpo que cae muerto conserva su
+  sombra hasta desvanecerse a la mitad. Con "Animaciones reducidas" no hay sombra
+  proyectada (solo la de contacto); el tinte y las luces de la noche siguen.
+- **Árboles y edificios:** sus sombras dibujadas (ART-5) se desvanecen con el sol (un alfa
+  sobre su capa); no giran con él (pendiente en docs/14).
+- La sombra gira en la **línea de los pies** del sprite, no en el borde de abajo de la
+  textura: un lobo o un thornling tienen filas vacías bajo los pies (`foot`) y su sombra
+  sale de las patas a cualquier hora. Si el cuerpo se dibuja inclinado (`skewX` de la
+  pose), la sombra se inclina con él.
+- Capturas del E2E, una por hora: `99b-daynight-noon`, `99c-daynight-night` (luna llena),
+  `99d-daynight-morning`, `99e-daynight-dusk`, `99f-daynight-new-moon` y
+  `99g-daynight-dawn`. **Pendiente mirarlas** en el E2E final del lote (docs/14): la
+  revisión visual de esta rama se hizo sobre una vista previa local, sin capturas
+  guardadas.
 ## 3. Animación de criaturas y personajes (ANI)
 
 ### ANI-1 Direcciones
-4 (N, E, S, O), como hoy (`render/outfit.ts` lleva las diagonales a la horizontal). No hace
-falta llegar a 8. E puede ser el espejo de O solo si el sprite declara `mirror: true`: con
-un escudo en un brazo, no. **Hecho** (2026-11-18) para los frames de archivos:
+**Los humanoides del motor, 8 (N, NE, E, SE, S, SO, O, NO)** desde el 2026-11-24 (pedido del
+dueño del 2026-11-23: la diagonal se sentía más lenta y el personaje caminaba al noreste
+mirando al este): todas las capas del muñeco (los dos cuerpos de los dos sexos, pelo, barba,
+cabeza, torso, piernas, pies, escudos y armas; los cosméticos son tintes de esas capas, sin
+píxeles propios) tienen quieto, caminar, atacar, disparar y conjurar en las ocho; morir sigue
+cayendo al sur. Las diagonales salen del mismo modelo girado, nunca espejadas: la luz sigue a
+la izquierda y el escudo en la mano izquierda. Giran **60°** desde el eje este-oeste, no 45°:
+en la proyección 3/4 una casilla al este y una al sur son 1 unidad de ancho por 1/0,58 de
+profundidad, así el modelo mira por donde su paso se desliza en pantalla (45° ahí) y el pie
+apoyado se queda (`DIAGONAL_TURN`, `FACING_YAW` de `style.ts`). El resto de las criaturas
+sigue en 4 (N, E, S, O). Qué dirección dibuja el cliente lo decide `turnTo`
+(`packages/renderer/src/anim.ts`): una figura con diagonales en todas sus capas
+(`ClipSet.eight`, `CreatureBody.eight`) gira a la diagonal en que camina o ataca; una de 4
+direcciones **conserva la mitad de la diagonal que ya mira** (al noreste después de mirar al
+norte sigue al norte; después de mirar al este, al este) y si no mira a ninguna de las dos
+toma la horizontal, como antes. **Al atacar** (`faceTo`, que el canvas llama por criatura y
+por frame): el servidor no gira a un jugador que ataca (su `dir` solo cambia al caminar o
+con `Turn`), así que el giro es del cliente: la figura mira hacia su ataque (el octante del
+objetivo: lejos al este y una casilla al norte es este, no noreste; `startAttack`,
+`attackDir`) mientras dura el clip o la embestida, y después **sigue mirando ahí** hasta que
+camina o cambia de dirección, para no volver a girar entre golpe y golpe. Es solo dibujo:
+`dir` del servidor no cambia. La regla de 4 direcciones depende de hacia dónde miraba la
+figura en *este* cliente (`AnimState.facing` arranca al sur cuando la criatura entra en
+vista), así que dos clientes pueden ver al mismo monstruo de 4 direcciones mirando distinto
+en una diagonal; es cosmético y se acepta. Si a una figura de 8 le falta un frame diagonal en
+el atlas, se arma entera en 4 con sus frames rectos (`spriteClips`), sin perder la acción. Nunca se mezclan: si una capa no tiene diagonales (un arte
+nuevo sin ellas), la figura entera va en 4. E puede ser el espejo de O solo si el sprite
+declara `mirror: true`: con un escudo en un brazo, no. **Hecho** (2026-11-18) para los frames de archivos:
 spritepack agrega los del lado que falta espejados (`assets/README.md`, "Sprites
 animados"); lo usan las criaturas de Gemini. El motor de sprites dibuja las cuatro desde su
 modelo, así el este conserva la luz desde la izquierda ("Motor de sprites", al final de
@@ -1002,12 +1117,14 @@ frame corridos del contacto, así en cada uno hay un pie apoyado (a +6, +2, −2
 cadera). Mirando al norte o al sur, la vista 3/4 acorta la profundidad del modelo (0,58 px por
 unidad) y la casilla del mapa no: el ciclo dura más en pantalla, 8 / 0,58 = 13,86 frames por
 casilla (`perTileNS`, `per_tile_ns` en `assets/sprites.yaml`, que el cliente usa con
-`AnimActionMeta.perTileNS`). `humanoid.test.ts` mide el contacto del pie, píxel por píxel, en
-las cuatro direcciones contra el `perTile` del cliente: se queda a 1 px de su punto del suelo.
+`AnimActionMeta.perTileNS`). Un paso en diagonal recorre una casilla de ancho y una de alto en
+pantalla: el ciclo avanza por distancia, hypot(8; 13,86) = 16 frames por paso
+(`walkPerStep`, también para las criaturas de 4 direcciones: un animal hace √2 veces su
+`perTile`). `humanoid.test.ts` mide el contacto del pie, píxel por píxel, en las ocho
+direcciones contra lo que avanza el cliente: se queda a 1 px de su punto del suelo (en las
+diagonales, en x y en y).
 La cadera baja ~1 px cuando la pierna apoyada está más lejos (contacto) y sube cuando pasa por
-debajo; los brazos van contra las piernas (22°) y el tronco se inclina 4°. Un paso en diagonal
-(la cara horizontal) sigue con el `perTile` de este y oeste: el pie no patina de lado, sí un
-poco hacia abajo. **La pausa de 100 ms entre pasos (ANI-3)** no cambió: con pasos encadenados
+debajo; los brazos van contra las piernas (22°) y el tronco se inclina 4°. **La pausa de 100 ms entre pasos (ANI-3)** no cambió: con pasos encadenados
 el siguiente empieza donde termina el anterior (el colchón de jitter y la predicción de
 `state/world.ts`) y el ciclo sigue sin repetir ni volver (`anim.test.ts`: un frame cada 50 ms
 de un paso de 400 ms da 0..7, 0..3 en dos pasos); solo un hueco real de la red la muestra, con
@@ -1031,7 +1148,14 @@ sobre la ropa, una pieza sostenida detrás del cuerpo pinta como mucho unos píx
 de una túnica larga. El arma va sobre todo; el escudo también, salvo mirando al este (en el
 brazo lejano): sobre el torso y bajo el pelo y lo de la cabeza. Al este el arma (mano cercana)
 va sobre el escudo, al oeste bajo él. El pelo va bajo el torso mirando al sur (lo que cae por
-la espalda) y la barba bajo todo mirando al norte. Una falda (túnica, túnica larga) no deja
+la espalda) y la barba bajo todo mirando al norte. Las diagonales toman la ropa y el pelo de la
+dirección recta hacia la que se inclinan (sur o norte) y las piezas de la mano de su lado: al
+sureste el arma sobre el escudo, al suroeste el escudo sobre el arma; al noreste el escudo
+(brazo lejano) bajo la cabeza y sobre el pelo; al noroeste el arma va arriba de todo menos el
+escudo, aunque esté en la mano lejana: bajo la ropa, una lanza levantada perdía 12 px contra
+una túnica, y sobre una túnica larga o una coraza pinta 1,35-1,45 veces los píxeles errados del
+mejor lugar (la única excepción del 10 % del test). Una lanza mirando al noreste deja hasta 6
+píxeles de hueco en los cuerpos de mujer (el tope de 3 sigue en las rectas). Una falda (túnica, túnica larga) no deja
 que la atraviesen las piernas (`occlude` sin piernas). `humanoid.test.ts` lo mide contra el
 modelo: dibuja la figura entera como una sola (las partes de la pieza con el cuerpo y la ropa
 de tres aspectos como oclusores, un solo buffer de profundidad: lo que se debe ver de la
@@ -1332,7 +1456,8 @@ teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
   `prefers-reduced-motion` y con la opción "Animaciones reducidas".
 - **Accesible y traducible:** contraste ≥ 4.5:1 en el texto, foco visible, todo con
   teclado, textos con i18n y lugar para un 25 % más de largo, ventanas con
-  `role="dialog"`.
+  `role="dialog"`. Excepción del dueño (2026-11-23): mover y cambiar el tamaño de las
+  ventanas es solo con el mouse (UI-5).
 - **Táctil:** la lógica de `ui/layout.ts` (T5.6) se mantiene. En teléfono, la botonera es
   la barra de pestañas y las ventanas son hojas.
 
@@ -1522,6 +1647,17 @@ ventanas acopladas y el chat iban en una columna a la derecha del mapa (el dock)
   - Recuerda posición, tamaño y si estaba plegada en `localStorage` `rpg.windows`
     (comodidad de cada jugador: si se pierde, vuelve al valor por defecto).
   - Tiene un tamaño mínimo y nunca queda fuera de la pantalla.
+  - **Cambio del dueño (2026-11-23): se cambia el tamaño desde las cuatro esquinas, como en
+    Ragnarok Online.** Solo las esquinas (una zona de agarre de unos 12 px sobre cada
+    adorno de esquina); los bordes no. Arrastrar una esquina de arriba o de la izquierda
+    mueve la `x`/`y` de la ventana y deja quieta la esquina contraria. Se respetan el
+    mínimo (160x72), el área sobre la barra y el imán (los bordes que se mueven se pegan a
+    los de la pantalla, el techo de la barra y las otras ventanas). Se quitó el botón ✥
+    (mover y cambiar el tamaño con las flechas y Mayús+flechas): al dueño le resultaba
+    confuso. Las ventanas se mueven por su barra de título y cambian de tamaño desde las
+    esquinas; con el teclado ya no se mueven (excepción a "todo con teclado" de UI-1,
+    decidida por el dueño). Hecho en la rama `feat/window-resize` (§7, "Hecho: cambiar el
+    tamaño desde las cuatro esquinas").
 - **Inventario:**
   - el equipo va sobre una **figura** (como el paperdoll de Ultima Online): cabeza arriba,
     las manos a los costados, el torso al centro, piernas y botas abajo, munición y
@@ -1719,6 +1855,77 @@ canal de comercio en el protocolo) y plegado sigue mostrando solo su barra.
 - El log del sistema es una pestaña más. Los avisos importantes siguen saliendo sobre el
   mapa (`ui/notices.ts`).
 
+### UI-11 Globos de diálogo sobre las cabezas (hecho, 2026-11-24, rama `feat/chat-bubbles`)
+Pedido del dueño del 2026-11-23: lo que alguien dice en el canal local aparece también sobre
+su cabeza, para que la conversación se sienta natural.
+- **Qué lleva globo:** decir, gritar y susurrar (`MessageKind` `SAY`, `YELL`, `WHISPER`) y
+  la línea de un NPC en su diálogo (`DialogOpen`, solo la ve quien habla con él). Nunca el
+  global, el grupo, el gremio, los anuncios de staff ni los mensajes del sistema
+  (`bubbleStyle` de `client/src/render/bubbles.ts`). El cliente solo arma globo para un
+  `Message` que trae `pos`: el servidor la manda solo a quien ve al que habla (un
+  invisible o alguien fuera de la ventana se oye por nombre, sin globo). El alcance de
+  cada modo lo pone el servidor (`balance.yaml` `chat.ranges`): un susurro solo llega a
+  quien está cerca. Los mensajes propios también tienen globo (el servidor se los devuelve
+  con `pos`). No hay lista de ignorados todavía; cuando exista, la misma regla la respeta
+  (ver docs/14).
+- **Cómo se ve:** una caja oscura redondeada con una colita hacia la cabeza, justo sobre
+  el nombre (sobre la barra de vida si el nombre está oculto a zoom 1), en la fuente del
+  canvas (Pixelify Sans 11 px, UI-3) con líneas de 13 px. Decir: pergamino sobre marrón;
+  gritar: naranja con borde de 2 px y dura 1,5 veces más; susurrar: azul gris, caja más
+  transparente y dura 0,8 veces; NPC: verde pálido. La fuente es de píxel: un grito no se
+  agranda (se vería borroso), se distingue por color, borde y duración.
+- **Cuánto dura:** 2,5 s + 60 ms por carácter, entre 3,5 y 9 s (por el factor del modo);
+  se desvanece en sus últimos 600 ms (`bubbleLife`, `bubbleAlpha`).
+- **Ajuste de línea:** a 150 px por línea, sin cortar palabras salvo una más ancha que la
+  línea; como mucho 4 líneas por mensaje, la última con "…" (`wrapBubble`).
+- **Varios mensajes:** los de un mismo hablante se apilan (el más nuevo abajo, junto a la
+  cabeza), como mucho 3 mensajes y 6 líneas; al llegar otro se va el más viejo
+  (`SpeechBubbles`).
+- **Varios hablantes juntos:** el propio jugador primero y después los más cercanos quedan
+  sobre su cabeza; un globo que taparía a otro ya puesto sube justo encima de él (2 px de
+  separación), las veces que haga falta, sin pasar del borde de arriba del canvas
+  (`stackBubbles`).
+- **Sigue a la criatura** con la misma interpolación que el nombre y la barra (se ancla al
+  nombre en cada frame). Una criatura que el canvas no dibuja (otro piso, fuera de la
+  vista) no muestra su globo mientras dura.
+- **Texto del jugador:** un `Text` de Pixi sin `tagStyles`, así nada se interpreta como
+  marcado; el largo ya lo limita el servidor (255).
+- **Opción:** Opciones → Interfaz, "Globos de diálogo sobre las cabezas"
+  (`data-testid="chat-bubbles"`, `localStorage` `rpg.chat-bubbles`, encendida por
+  defecto). Apagada, no se arma ninguno y se borran los que había.
+- **Código:** reglas puras en `render/bubbles.ts` (con tests); `render/bubble-layer.ts`
+  dibuja una pila por hablante (con tests sin canvas: mide con una función inyectada, nunca
+  con `Text.width`); `game-canvas.ts` pone la capa entre los nombres y los números
+  flotantes y la ancla al nombre; `WorldState.takeSpeech` guarda lo dicho (hasta
+  `SPEECH_QUEUE`, 16) hasta el frame siguiente. Hook E2E `__rpgClient.bubbles()`.
+
+### Minimapa (hecho, 2026-11-23, rama `feat/minimap`)
+Pedido del dueño: un minimapa como el de Tibia (la mecánica: explorar para verlo), con los
+puntos cardinales y la estimación del objetivo seguido (reglas en docs/02 "Minimapa").
+- **Dónde:** en escritorio, arriba a la derecha del mapa, bajo las ventanas; el inventario y
+  los contenedores en su lugar de fábrica empiezan debajo (`--minimap-h` de `windows.css`,
+  con `:has(.minimap)`). En tablets y teléfonos, arriba a la izquierda del mapa (arriba a la
+  derecha va el tutorial), y empieza plegado en los teléfonos. Plegado y zoom se recuerdan
+  por dispositivo (`localStorage` `rpg.minimap`).
+- **Marco:** el hierro de las ventanas (`--ui-frame-shadow`) con N, E, S y O en Cinzel dorado
+  en sus cuatro lados, y debajo tres botones (acercar, alejar, volver a centrar; 44 px en
+  pantallas táctiles). El terreno es un canvas de 160x160 px pintado píxel por píxel
+  (`image-rendering: pixelated`), una a cuatro casillas por píxel; lo no explorado, negro.
+  Encima, un SVG: la marca propia (una flecha clara que gira con la dirección), los puntos
+  azules del grupo, y la estimación en dorado (círculo punteado translúcido, o flecha en el
+  borde con "~N" y ▲/▼).
+- **Colores:** `make sprites` (tools/spritepack `averageColor`) guarda en `atlas.json`
+  `minimap` el promedio de los píxeles opacos de cada sprite (con su alfa); el cliente
+  colorea una casilla con el de su item (`GameCanvas.itemColor`). Antes de que cargue el
+  atlas, o sin color, un tono por tipo (bloquea, agua, suelo).
+- **Código:** `client/src/state/minimap.ts` (puro, con tests: estado, niebla, proyección,
+  flecha del borde, marca de la pista, puntos cardinales), `client/src/ui/Minimap.tsx` y
+  `minimap.css`. Test ids: `minimap`, `minimap-fold`, `minimap-canvas`, `minimap-self`,
+  `minimap-hint` (`data-kind` `area` o `arrow`, `data-floor`), `minimap-distance`,
+  `minimap-top|right|bottom|left`, `minimap-zoom-in`, `minimap-zoom-out`,
+  `minimap-recenter`, y en el diario `quest-track`. Vista previa: la escena `game` de
+  `make ui-preview` lo muestra con una quest seguida fuera del minimapa (la flecha).
+
 ## 6. Assets: de dónde salen y cómo se registran (SRC)
 
 ### SRC-1 Licencias (desde el 2026-11-17, por decisión del dueño)
@@ -1861,6 +2068,28 @@ juego). Las reglas:
 
 Cómo se usa, paso a paso: `assets/README.md`, "Arte y música hechos con Gemini", y
 `tools/CLAUDE.md`, "gemini".
+
+### SND-1 Dirección de sonido: el ambiente bajo la música (2026-11-23, lote 18)
+El dueño: "la música está muy buena, pero en el pueblo se escucha el mar aunque el mar no
+está tan cerca". Quiere la música de fondo y, debajo, detalles distintos según dónde está
+parado: olas cerca del mar, viento en el desierto, árboles con viento en el bosque, agua
+suave cerca de una fuente, crepitar cerca de una fogata. Reglas que salen de ahí:
+- **El ambiente es del lugar, no de la isla.** Nada se oye si no está cerca: el mar a unas
+  10 casillas del agua, una fuente a 7, una antorcha a 3. Lo que está de un lado suena de
+  ese lado (paneo suave, nunca un solo oído).
+- **Nunca un corte.** Una capa entra y sale en 2,5 s; si vuelve mientras se apaga, sube la
+  misma (no se reinicia). Cada loop arranca en un punto distinto, así dos no coinciden
+  siempre en el mismo segundo (lo mismo que el dueño pidió para la música).
+- **La música manda.** El ambiente va en su canal (`ambient`, con su volumen y silencio),
+  bajo la música; las capas de zona se mezclan bajas (0,15–0,6) y un detalle (antorcha,
+  farol) apenas se nota. Un pueblo suena a gente lejos, sin palabras.
+- **Loops naturales.** Ruido con forma (olas que suben y rompen, ráfagas, hojas que
+  tiemblan, chasquidos del fuego, gotas con eco), sin melodía: si algo suena a música,
+  compite con la música. Sin costura audible: la vuelta del loop se funde.
+- **Liviano.** Pocas voces (6; 3 en un teléfono o con animaciones reducidas).
+- **Origen:** se puede pedir a Gemini (SRC-5); si lo que vuelve es musical o no sirve, una
+  receta propia de `tools/soundgen`. Los de hoy son de soundgen (Gemini no estaba abierto).
+Cómo funciona y cómo agregar un sonido: `livingworld/README.md`, "Ambiente".
 
 ## 7. Plan de implementación propuesto
 Cada tarea es un PR con sus tests y screenshots (CLAUDE.md, "Definición de terminado").
@@ -2187,7 +2416,8 @@ quedaba de A3, A4 y A5".
   arrastra como la barra y, con el foco (Tab), toma el teclado: las flechas mueven la
   ventana 16 px, Mayús+flechas cambian su tamaño, en una acoplada arriba y abajo la cambian
   de lugar en la columna, y Enter o Espacio la acoplan o la sueltan junto a la columna. Alt
-  queda para el navegador (Alt+← es "atrás"). La ayuda (H) lo cuenta.
+  queda para el navegador (Alt+← es "atrás"). La ayuda (H) lo cuenta. **Desde el
+  2026-11-23 ya no:** el ✥ se quitó y el tamaño cambia desde las cuatro esquinas (UI-5).
 - **Escala de la interfaz y tamaño del texto (UI-3).** Opciones → Interfaz (y el menú ☰ del
   teléfono): "Escala de la interfaz" de 80 % a 150 % (el dock y las ventanas crecen; el
   mapa toma lo que queda, así que a 125 % en 1280x800 baja a 1x; la hotbar no se escala:
@@ -2403,8 +2633,9 @@ el cajón de T5.6; el servidor y el protocolo no cambian. El detalle técnico es
   del navegador o subir la escala, ni al abrirla de nuevo si se cerró antes de achicarla:
   una que queda aplastada a menos de su alto mínimo (72 px; desplegada contra la barra, o
   con su techo por debajo del área nueva) sube hasta verse entera, y una que todavía
-  muestra eso se queda donde el jugador la dejó, con su cuerpo desplazable. Las flechas
-  del ✥ también sienten el imán. Lugares de fábrica: batalla arriba a la izquierda con el
+  muestra eso se queda donde el jugador la dejó, con su cuerpo desplazable. Cambiar el
+  tamaño desde una esquina también siente el imán (desde el 2026-11-23; antes lo sentían
+  las flechas del ✥, que se quitó). Lugares de fábrica: batalla arriba a la izquierda con el
   grupo a su lado y las habilidades debajo; inventario arriba a la derecha con gremio y
   apariencia a su lado y los contenedores justo debajo de él (de lo que mida: con la
   figura y la mochila, unos 500 px; con el inventario cerrado o movido, desde arriba); el
@@ -2534,6 +2765,105 @@ de efectos" y "Notas de la UI oscura") y en `tools/CLAUDE.md` (spritegen).
   los nombres. Un nombre acortado a zoom 1 (12 caracteres) mide como mucho ~100 px (antes
   ~125 con la negrita de 12 px).
 
+### Hecho: nombres más grandes y legibles (2026-11-24, rama `feat/name-labels`)
+El dueño (2026-11-23): "los nombres sobre los personajes deben ser más grandes", y con el
+color de algunos NPCs no se leían (el violeta `0x7d4fb0` sobre el contorno negro).
+- **Tamaño** (`client/src/render/label-style.ts`, `labelScale`, puro y con tests). Antes un
+  nombre medía siempre 11 px de pantalla, fuera cual fuera el zoom: a 4x en una pantalla de
+  alta densidad era un cuarto de casilla. Ahora el `Text` se rasteriza una vez al tamaño de
+  la grilla de la fuente (11 px, una celda por píxel) y se escala por un **entero** con
+  muestreo al más cercano (`textureStyle: { scaleMode: "nearest" }`): cada celda pasa a ser
+  un cuadrado exacto de 2x2 o 3x3 píxeles y el aspecto pixel art se mantiene (también el
+  contorno de 3 px, que escala con él). La escala sigue al zoom del mapa:
+  | Zoom del mapa | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+  |---|---|---|---|---|---|---|---|---|
+  | Grande (por defecto) | 1 | 2 | 2 | 3 | 3 | 4 | 5 | 5 |
+  | Normal | 1 | 1 | 1 | 2 | 2 | 3 | 3 | 4 |
+  Grande es 3/5 del zoom redondeado hacia arriba; normal, la mitad hacia abajo (a 2x, el
+  zoom de un monitor 1080p, queda como antes). Escalan igual la línea del gremio, la marca
+  PvP y los números flotantes; la barra de vida ya escalaba con el zoom.
+- **Opción** Opciones → Interfaz → "Tamaño de nombres" (normal / grande; `rpg.name-size`,
+  `state/ui-prefs.ts`), grande por defecto.
+- **Solapes** (`render/labels.ts`): las reglas de T5.6 (perder el gremio, subir una línea,
+  ocultar los lejanos) ya no dependen del zoom solo, sino de qué tan grande es el nombre al
+  lado de su casilla: se saltan solo si `zoom >= 2 × labelScale` (`labelsFull`). Con
+  nombres grandes rigen a cualquier zoom, igual que a 1x; la separación al subir uno sobre
+  otro es de una celda escalada. El recorte a 12 caracteres sigue entrando: un nombre
+  recortado a escala k mide k veces lo de 1x al lado de una casilla k veces más grande.
+- **Colores** (tokens en `label-style.ts`, `LABEL_COLORS` y `SKULL_COLORS`; `game-canvas.ts`
+  y `state/pvp.ts` los usan). Cada relleno tiene un contraste WCAG de al menos 4,5:1 contra
+  el contorno negro (`label-style.test.ts` lo calcula para todos, y para los efectos de
+  nombre de la tienda contra su propio contorno), y los tonos quedan a 40° o más entre sí:
+  | Quién | Antes | Ahora | Contraste |
+  |---|---|---|---|
+  | Uno mismo (azul) | `0x3a7bd5` (5,0) | `0x5ea2ff` | 8,1 |
+  | Otro jugador (ámbar) | `0xd59a3a` | `0xf0b040` | 11,0 |
+  | Monstruo (rojo) | `0xb03a2e` (3,5) | `0xff4f5e` | 6,5 |
+  | NPC (violeta) | `0x7d4fb0` (3,6) | `0xc79bff` | 9,6 |
+  | Gremio (verde) | `0xb8e986` | igual | 15,0 |
+  | Marca agresor / asesino / proscrito | `0xf2b233` / `0xd23a3a` (4,4) / `0x8e4fd6` (4,2) | igual / `0xf04848` / `0xb07cff` | 11,2 / 5,7 / 7,2 |
+  Los bloques de color de una criatura sin sprite usan los mismos tokens.
+- **E2E** (`client/e2e/sandbox.spec.ts`, último test): el instructor de Thimblewick a 2x y a
+  1x (`100-names-2x-npc`, `100b-names-1x-npc`), las ratas del corral a 2x, a 4x y a 4x con
+  "Normal" (`101-*`), y el muro sur del templo delante del jugador (`102-*`, abajo). Hooks
+  `__rpgClient.labels()` y `wallFade(x, y)`.
+- **El muro delante del jugador** (ART-3, 2026-11-23) se verifica en el mismo test: parado en
+  2092,2090, justo al norte del muro sur del templo, la pieza de 2092,2091 baja de 1 (alfa
+  < 0,5), la de 2099,2091 no, y no se dibuja ninguna copia pálida del jugador
+  (`102-wall-fade-own-player`, de cerca en `102b-...-close`).
+
+### Cadáveres (hecho, 2026-11-23, rama `feat/corpse-names`)
+Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo el nombre.
+- **De qué sale:** `tools/spritegen/src/recipes/corpses.ts` hace `corpses/<monstruo>`
+  para cada monstruo de `data/monsters`, determinista y desde su propio arte: el último
+  frame de su muerte mirando al sur (cómo cayó; el cliente dibuja la caída al sur); un
+  monstruo con `look`, el humanoide del motor compuesto con sus colores en su último frame
+  de morir; uno de una sola imagen (la gaviota), el sprite girado un cuarto de costado y
+  aplastado a 3/5 de alto (la caída procedural de ANI-5). Después lo oscurece
+  (`CORPSE_LIGHT`) y le saca un poco de color (`CORPSE_COLOUR`): sin sangre, eso lo
+  ponen los efectos de golpe.
+- **Una sola pasada:** el arte que dibuja el código (los frames del motor, la gaviota de
+  `recipes/creatures.ts`) se toma de su receta al dibujar el cadáver, nunca del PNG
+  commiteado: cambiar el spec del jabalí o agregar un monstruo del motor y correr `make
+  spritegen` una vez escribe los frames y el cadáver de esos frames, en cualquier orden.
+  Solo el arte que ninguna receta dibuja (los frames de Gemini, que un build no
+  reescribe) se lee de `assets/sprites`. Un monstruo sin `look`, sin clip de muerte y sin
+  imagen cuadrada no tiene de dónde sacar su cadáver: `spritegen check` (`checkPaths`, lo
+  corre `make spritegen` al final y `make test`) lo nombra. Una imagen suelta tiene que
+  ser cuadrada (`tipOver` la gira un cuarto; otra forma falla en vez de recortarse).
+- **Dónde va:** del tamaño de la criatura (el custodio de 96x96 conserva su huella) y
+  con su píxel más bajo donde estaban sus pies (`FEET_LINE` sobre el borde de la
+  casilla). El cliente lo dibuja centrado en la casilla (`corpseArt`, ancla `bc`), así el
+  último frame de la caída, que se desvanece encima, y el cadáver coinciden. Un sprite
+  `br` más ancho que una casilla se ensancha para que su centro quede en la casilla.
+- **Cómo llega al mapa:** los restos siguen siendo el contenedor de la familia; el item
+  trae `mods.remains_of` (docs/05 "Restos") y el cliente lo apila en `MapView` con la
+  clave `<item>@<monstruo>` (`state/corpse-art.ts`), cuya textura es `corpses/<monstruo>`
+  si el atlas la tiene y la de la familia si no (`mapItemTexture`, `mapItemArt`). Quien
+  recibe esas claves de `MapView` y solo conoce items (el mundo vivo, la elevación) les
+  saca el monstruo (`plainItemKey`, `mapItemId`). El menú del click derecho muestra el
+  cadáver como ícono, ajustado a 64 px: uno más grande que la caja (el custodio, 96 px)
+  se achica a ella (`BigIcon` con `shrink`) en vez de salirse a 1x. Si el cliente no
+  tiene el nombre del monstruo (`monster.<id>.name`), los restos se llaman como su
+  familia (`instanceName`), nunca con la clave cruda.
+- **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts corpses
+  [--out FILE.png] [--scale N]`: cada monstruo de pie a la izquierda y su cadáver a la
+  derecha, sobre la grilla de casillas, como los pone el cliente. Revisado el 2026-11-24
+  con los 21 monstruos: todos se reconocen, con tres salvedades que la revisión de
+  código anotó y quedan para una pasada de arte (el jabalí, que quedaba casi de pie,
+  ya no: las dos keys finales de `death` en `specs/boar.ts` lo giran además sobre el
+  eje vertical, así queda tendido de costado en las cuatro direcciones, y su cadáver
+  salió solo de esos frames): la gaviota, una sola imagen girada, se lee
+  poco como un ave caída (pide un clip de muerte o un spec del motor); y el gólem y el
+  custodio son un montón de escoria (su último frame de muerte), casi lo mismo que el
+  sprite de familia `remains_slag` salvo el tamaño.
+- **La rama `br` no tiene caso real:** hoy ningún monstruo con arte más ancho que una
+  casilla está anclado abajo a la derecha (todos los cadáveres miden 32, 64 o 96 px y
+  son `bc`); el ensanche a `2w - 32` solo lo cubre un test sintético. El primero que
+  pase por ahí hay que mirarlo en el juego contra el último frame de su caída.
+- **Pendiente:** etapas (fresco, seco, huesos) a lo largo de `monster_corpse_ms` y el
+  cuerpo de un jugador con su propio muñeco tendido (docs/14).
+
 ### Hecho: bandeja de estados y placa del nombre (2026-11-19, rama `feat/hud-status`, lote 13)
 Lo que dijo el dueño de la prueba del 2026-11-19 (Thimblewick, build del lote 11):
 "cuando tengo activado un spell debería mostrarse un ícono... al lado del chat que indique
@@ -2595,6 +2925,46 @@ en la placa sobre el orbe de vida, con el tiempo solo en el `title`, y no las vi
   tooltip del veneno abierto) en `make ui-preview`; `game` lleva la zona de protección y la
   comida, y `danger` el veneno, el combate y una aceleración que se acaba. Se revisaron a
   1920x1080, 1280x800, 960x700, teléfono vertical y horizontal y tablet.
+
+### Hecho: cambiar el tamaño desde las cuatro esquinas (2026-11-23, rama `feat/window-resize`)
+Pedido del dueño: "que las ventanas se puedan agrandar desde sus esquinas, como en Ragnarok
+Online". Solo cliente; de Ragnarok Online se toma solo la idea.
+- **Las cuatro esquinas.** Cada ventana flotante tiene una zona de agarre de 12 px sobre
+  cada adorno de esquina (sale 5 px del marco, como el adorno). Cursor `nwse-resize` en
+  arriba a la izquierda y abajo a la derecha, `nesw-resize` en las otras dos (y en toda la
+  página mientras dura). Los bordes no cambian el tamaño (decisión del dueño). Plegada, no
+  tiene esquinas: solo se ve su barra.
+- **Geometría** (`resizeFrom` de `client/src/ui/windows.ts`, pura): los dos bordes de la
+  esquina siguen al puntero y la esquina contraria queda donde estaba; una esquina de
+  arriba o de la izquierda mueve la `y` o la `x`. Los bordes que se mueven se pegan a menos
+  de 10 px a los bordes de la pantalla, al techo de la barra y a los de las otras ventanas
+  (de lado o alineados, solo si están cerca en el otro eje, como el imán al arrastrar);
+  después nunca salen del área sobre la barra, y nunca bajan de 160x72: el borde que se
+  mueve se detiene. Con la escala de la interfaz el estado guarda px de pantalla y la
+  ventana recibe sus propios px (`placeStyle`). Al soltar, `settleStyle` deja escritos los
+  largos del lugar nuevo, así Preact no deja vacía la `left` o la `top` que no cambió y la
+  ventana no salta.
+- **Se ve que se pueden tomar** sin adornos nuevos: con el puntero encima, la esquina se
+  enciende con un brillo dorado suave (solo `opacity`, UI-9), y la que se arrastra sigue
+  encendida mientras dura.
+- **Qué ventanas:** todas las flotantes del escritorio, el chat también. Se revisó cada
+  una y ninguna tiene un contenido de tamaño fijo que se rompa: la figura del equipo
+  escala con el ancho (de 1x a 2x), los contenedores, la batalla, el grupo, las
+  habilidades, las misiones, el gremio, la apariencia, las opciones, la ayuda, el libro,
+  el diálogo, la tienda (mide sus columnas), el crafteo, el mercado, la casa, el
+  intercambio y el cofre de la cuenta se desplazan adentro si quedan chicos. Tablets y
+  teléfonos siguen con sus hojas y pestañas.
+- **Se quitó el ✥** (decisión del dueño, le resultaba confuso): el botón de la barra, su
+  teclado (flechas y Mayús+flechas), sus textos (`client.window.move`,
+  `client.window.move_hint`), su ícono y su test id `window-move-<id>`. La ayuda (H)
+  cuenta ahora que la ventana se arrastra por su barra y se agranda desde las esquinas.
+- **Tests:** `client/src/ui/windows.test.ts` (cada esquina: `x`, `y`, ancho y alto nuevos,
+  el mínimo, el área, el imán, el cursor), `client/src/ui/window-dom.test.ts` (el arrastre
+  de cada esquina sobre elementos falsos con la regla de `style` de Preact, la escala de la
+  interfaz, soltar sin mover) y `client/src/ui/Toolbar.test.ts` (las cuatro esquinas, sin
+  ✥, ninguna plegada). E2E: el test del chat de `e2e/game.spec.ts` arrastra la esquina de
+  arriba a la izquierda del chat y comprueba que su esquina de abajo a la derecha no se
+  movió (screenshot `16b-chat-resized-top-left`).
 
 ## 8. Cómo se verifica
 - **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**

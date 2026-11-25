@@ -60,7 +60,7 @@ describe("portals", () => {
     const from = { x: 3, y: 2, z: 7 };
     const to = { x: 7, y: 2, z: 7 };
     const steps = findPath(from, to, pathPassable(portals, to, free), {
-      diagonalCost: 1.5,
+      diagonalCost: 1.414,
       maxSteps: 100,
     });
     expect(steps).toBeDefined();
@@ -77,7 +77,7 @@ describe("portals", () => {
     const stairs = { x: 5, y: 2, z: 7 };
     expect(
       findPath(from, stairs, pathPassable(portals, stairs, free), {
-        diagonalCost: 1.5,
+        diagonalCost: 1.414,
         maxSteps: 100,
       }),
     ).toEqual([Direction.EAST, Direction.EAST]);

@@ -5,7 +5,7 @@
 // of area damage, the ranger (T3.1) the distance hybrid and the druid (T3.1) the healer;
 // skills level at a pace a player of classic tile MMORPGs finds familiar. The pace bands
 // below are sanity limits, not exact targets: retune freely inside them.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -142,6 +142,42 @@ describe("vocation roles", () => {
   });
 });
 
+describe("each vocation trains its own skills, the others slowly", () => {
+  // Vocation identity (owner's request, 2026-11-23): an arcanist trains the sword much
+  // slower than a guardian. Tries to reach skill 30 (magic level 15) against the vocation
+  // that trains it fastest; the table is in docs/02 "Vocaciones".
+  const OWN: Record<string, string[]> = {
+    guardian: [...MELEE, "shield"],
+    arcanist: ["magic"],
+    druid: ["magic"],
+    ranger: ["distance", "shield"],
+  };
+  const target = (skill: string) => (skill === "magic" ? 15 : 30);
+  const fastest = (skill: string) => Math.min(...ALL.map((v) => triesTo(v, skill, target(skill))));
+  it.each(Object.entries(OWN))("%s trains its own skills fastest", (id, own) => {
+    for (const skill of own) {
+      // The ranger's shield is almost the guardian's (at most 1.2 times its tries).
+      const slack = id === "ranger" && skill === "shield" ? 1.2 : 1;
+      expect(triesTo(vocation(id), skill, target(skill)), skill).toBeLessThanOrEqual(
+        slack * fastest(skill),
+      );
+    }
+  });
+  it.each(Object.entries(OWN))("the others need many more tries for %s's skills", (id, own) => {
+    for (const skill of own) {
+      for (const v of ALL) {
+        if (OWN[v.id]?.includes(skill)) continue;
+        // The ranger trains melee as a hybrid: about 4-5 times the guardian's tries; any
+        // other vocation outside its role, at least 15 times.
+        const min = v.id === "ranger" && MELEE.includes(skill) ? 3 : 15;
+        expect(triesTo(v, skill, target(skill)), `${v.id} ${skill}`).toBeGreaterThanOrEqual(
+          min * fastest(skill),
+        );
+      }
+    }
+  });
+});
+
 describe("skill pace bands", () => {
   it.each([
     ["guardian", "sword", 50, 15_000, 45_000],
@@ -170,14 +206,14 @@ describe("spell roles", () => {
   // areas from 35 to 47, and the guardian's heal outgrew the druid's from 12 to 29).
   // From 12, when the guardian's heal comes; retune this table with the careers.
   const careerMagic: Record<number, Record<string, number>> = {
-    12: { guardian: 0, arcanist: 5, druid: 5, ranger: 3 },
-    20: { guardian: 2, arcanist: 12, druid: 12, ranger: 5 },
-    25: { guardian: 3, arcanist: 17, druid: 17, ranger: 6 },
+    12: { guardian: 1, arcanist: 4, druid: 5, ranger: 2 },
+    20: { guardian: 3, arcanist: 12, druid: 12, ranger: 5 },
+    25: { guardian: 3, arcanist: 17, druid: 17, ranger: 7 },
     30: { guardian: 4, arcanist: 21, druid: 21, ranger: 8 },
-    35: { guardian: 4, arcanist: 25, druid: 25, ranger: 9 },
-    40: { guardian: 5, arcanist: 28, druid: 28, ranger: 10 },
-    45: { guardian: 5, arcanist: 32, druid: 31, ranger: 12 },
-    49: { guardian: 6, arcanist: 35, druid: 34, ranger: 13 },
+    35: { guardian: 5, arcanist: 25, druid: 25, ranger: 9 },
+    40: { guardian: 5, arcanist: 29, druid: 28, ranger: 11 },
+    45: { guardian: 6, arcanist: 33, druid: 32, ranger: 12 },
+    49: { guardian: 6, arcanist: 35, druid: 35, ranger: 13 },
   };
   const LEVELS = Object.keys(careerMagic).map(Number);
   // Weapon skill: the guardian sims' rule (skillStart + skillPerLevel × (level − 1)). The
@@ -198,18 +234,48 @@ describe("spell roles", () => {
     return Math.max(0, ...amounts);
   };
 
-  it("every vocation has 3-8 spells of its own and all of them fit the hotbar", () => {
+  it("every vocation has 3-10 spells of its own and all of them fit the hotbar", () => {
     // Own = only it casts them; the support spells every vocation shares (haste and the
     // poison cure, T3.2) do not count. Six since the content audit (M5): each caster has
     // a second area spell of another element for the island that resists the first; eight
-    // since the spell progression (2026-11), when the guardian got spells of its own too.
+    // since the spell progression (2026-11), when the guardian got spells of its own too;
+    // ten since the vocation identity (2026-11-23), a spell of its own in every band.
     // The default hotbar (client/src/state/hotkeys.ts) puts a vocation's spells on its 12
     // keys by level: they all fit.
     const own = (v: string) => castBy(v).filter((s) => s.vocations.length === 1);
     for (const v of ["guardian", "arcanist", "ranger", "druid"]) {
       expect(own(v).length, v).toBeGreaterThanOrEqual(3);
-      expect(own(v).length, v).toBeLessThanOrEqual(8);
+      expect(own(v).length, v).toBeLessThanOrEqual(10);
       expect(castBy(v).length, v).toBeLessThanOrEqual(12);
+    }
+  });
+
+  it("every vocation learns a spell of its own in each band of levels 1 to 30", () => {
+    // Vocation identity (owner's request, 2026-11-23): the powers of each vocation are its
+    // own, and a player feels it all along the first 30 levels, not only at the start.
+    const BANDS = [
+      [1, 7],
+      [8, 15],
+      [16, 23],
+      [24, 30],
+    ] as const;
+    for (const v of ["guardian", "arcanist", "ranger", "druid"]) {
+      for (const [from, to] of BANDS) {
+        const own = castBy(v).filter(
+          (s) => s.vocations.length === 1 && s.level >= from && s.level <= to,
+        );
+        expect(own.length, `${v} levels ${from}-${to}`).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
+  it("the spells several vocations share are basics: support, no damage, early", () => {
+    const shared = spells.filter((s) => s.vocations.length > 1);
+    expect(shared.length).toBeLessThanOrEqual(3);
+    for (const s of shared) {
+      expect(s.effect.damage, s.id).toBeUndefined();
+      expect(s.effect.heal, s.id).toBeUndefined();
+      expect(s.level, s.id).toBeLessThanOrEqual(10);
     }
   });
 
@@ -258,4 +324,59 @@ describe("spell roles", () => {
       expect(radius("arcanist"), v).toBeGreaterThan(radius(v));
     }
   });
+});
+
+// The tutorial's open_backpack step (i18n tutorial.step.open_backpack) is written by hand
+// and says what a newcomer has (not "you": a character made before the kits, still in
+// the tutorial, has none of it): its vocation's weapon in its hand, plain clothes
+// on, and biscuits and a poultice in the backpack. The kits are data: if one stops being
+// that, this fails and the text (es and en) must change with it.
+describe("start kits keep the tutorial's word", () => {
+  type Item = Record<string, unknown> & { id: string };
+  const items = new Map<string, Item>();
+  for (const f of readdirSync(join(REPO, "data/items"))) {
+    if (!f.endsWith(".yaml")) continue;
+    for (const it of parse(readFileSync(join(REPO, "data/items", f), "utf8")) as Item[])
+      items.set(it.id, it);
+  }
+  const kits = vocations as unknown as {
+    id: string;
+    weapons: string[];
+    start_kit?: { item: string; count?: number }[];
+  }[];
+  const text = (lang: string): string =>
+    (
+      parse(readFileSync(join(REPO, `i18n/${lang}/tutorial.yaml`), "utf8")) as Record<
+        string,
+        string
+      >
+    )["tutorial.step.open_backpack"] ?? "";
+
+  it("the text still names the weapon, the clothes, the biscuits and the poultice", () => {
+    expect(text("es")).toMatch(/arma.*mano.*ropa.*galletas.*cataplasma/s);
+    expect(text("en")).toMatch(/weapon.*hand.*clothes.*biscuits.*poultice/s);
+    // It speaks of whoever just arrived, never promises it to the reader.
+    expect(text("es")).toMatch(/^Quien acaba de llegar/);
+    expect(text("es")).not.toMatch(/tu arma|tu mano/i);
+    expect(text("en")).toMatch(/^A newcomer/);
+    expect(text("en")).not.toMatch(/your vocation|your hand/i);
+  });
+
+  for (const v of kits) {
+    it(`${v.id}: a weapon it wields first, clothes, biscuits and a poultice`, () => {
+      const kit = v.start_kit ?? [];
+      const first = items.get(kit[0]?.item ?? "");
+      const weapon = first?.["weapon"] as { type: string } | undefined;
+      expect(weapon, "the first piece is the weapon: it takes the hand").toBeDefined();
+      expect(v.weapons).toContain(weapon?.type);
+      const worn = kit.map(
+        (e) => (items.get(e.item)?.["armor"] as { slot?: string } | undefined)?.slot,
+      );
+      expect(worn).toContain("body");
+      const count = (id: string): number =>
+        kit.filter((e) => e.item === id).reduce((n, e) => n + (e.count ?? 1), 0);
+      expect(count("ship_biscuit")).toBeGreaterThan(1); // "galletas"
+      expect(count("seaweed_poultice")).toBeGreaterThanOrEqual(1);
+    });
+  }
 });

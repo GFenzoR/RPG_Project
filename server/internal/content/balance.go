@@ -127,7 +127,11 @@ func (c Chat) check() error {
 type Party struct {
 	MaxMembers int `yaml:"max_members"`
 	InviteMs   int `yaml:"invite_ms"`
-	UpdateMs   int `yaml:"update_ms"`
+	// InvitesPerMinute caps the invitation attempts of one player (anti-spam, and no way
+	// to probe many names for who is online): that many at once, then one every
+	// 60000 / InvitesPerMinute ms.
+	InvitesPerMinute int `yaml:"invites_per_minute"`
+	UpdateMs         int `yaml:"update_ms"`
 	// A kill is shared by the members on its floor within ShareDistance tiles of it that
 	// contributed within ContributionMs and whose level is at least LevelRangePct % of
 	// the highest of them, or at most LevelGapAlways levels below it.
@@ -173,6 +177,9 @@ func (p Party) check() error {
 	}
 	if p.InviteMs > 600_000 {
 		return errors.New("party.invite_ms must be at most 600000")
+	}
+	if p.InvitesPerMinute < 1 || p.InvitesPerMinute > 60 {
+		return errors.New("party.invites_per_minute must be in 1..60")
 	}
 	if p.InviteMs <= 0 || p.UpdateMs <= 0 || p.ShareDistance <= 0 || p.ContributionMs <= 0 {
 		return errors.New("party: invite_ms, update_ms, share_distance and contribution_ms must be > 0")
@@ -634,6 +641,98 @@ type Combat struct {
 	// MonsterShunMs is how long a player given up that way stays beyond the leash for
 	// that monster while it stands on the same tile.
 	MonsterShunMs int `yaml:"monster_shun_ms"`
+	// MonsterPursuit is how monsters follow a target beyond their leash area, and
+	// MonsterRegen how they heal out of combat; data/monsters may override each field
+	// (docs/02-game-design.md, monsters section). Zero: no pursuit beyond the leash area, a
+	// target out of sight lost at once, no regeneration and attackers forgotten on giving
+	// up (the behaviour before them).
+	MonsterPursuit Pursuit          `yaml:"monster_pursuit"`
+	MonsterRegen   MonsterRegenRate `yaml:"monster_regen"`
+	// MonsterStrayMs: an idle monster that has stood out of its home area this long
+	// without finding its way home, and that no player sees, goes back to its spawn
+	// (despawn + respawn). 0: never.
+	MonsterStrayMs int `yaml:"monster_stray_ms"`
+}
+
+// MaxChaseTiles bounds Pursuit.MaxChaseTiles: nobody drags a monster across the world.
+const MaxChaseTiles = 40
+
+// Pursuit is how a monster follows a target beyond its leash area (its comfort zone).
+type Pursuit struct {
+	// Persistence (0-1) is the chance that it keeps chasing, checked every RollMs while
+	// its target is beyond the leash area; it falls with the target's distance from home.
+	Persistence float64 `yaml:"persistence"`
+	// MaxChaseTiles is the hard cap (Chebyshev from its spawn's center) of a chase.
+	MaxChaseTiles int `yaml:"max_chase_tiles"`
+	// LoseSightMs: a target out of its sight this long is given up (0: at once).
+	LoseSightMs int `yaml:"lose_sight_ms"`
+	// RollMs is how often the decision is rolled again (balance only).
+	RollMs int `yaml:"roll_ms"`
+	// GiveUpBelowHpPct: with less health than this, it does not chase beyond the leash.
+	GiveUpBelowHpPct int `yaml:"give_up_below_hp_pct"`
+	// InsistTargetHpPct: a target with less health than this halves the chance of
+	// giving up.
+	InsistTargetHpPct int `yaml:"insist_target_hp_pct"`
+	// DistanceExponent is how fast the chance falls with the target's distance from home:
+	// persistence ^ (1 + DistanceExponent x the fraction of the way from the leash area to
+	// MaxChaseTiles). 0: the persistence everywhere (balance only).
+	DistanceExponent float64 `yaml:"distance_exponent"`
+	// InsistBoost is how much of the way to 1 the chance goes against a target below
+	// InsistTargetHpPct (0.5: halfway; 0: none; balance only).
+	InsistBoost float64 `yaml:"insist_boost"`
+	// MemoryMs is how long it remembers who hurt it after their last hit, once it gave their
+	// fight up (balance only): it re-aggroes them first and their damage still counts for
+	// the experience and the loot. 0: forgotten on giving up.
+	MemoryMs int `yaml:"memory_ms"`
+}
+
+// MinPeriodMs is the shortest roll_ms or interval_ms (one tick), as the schemas ask.
+const MinPeriodMs = 50
+
+// MaxDistanceExponent bounds Pursuit.DistanceExponent.
+const MaxDistanceExponent = 10
+
+// Check validates p: the balance's numbers, or a monster's resolved against them. It
+// rejects what balance.schema.json and monster.schema.json reject.
+func (p Pursuit) Check() error {
+	if p.Persistence < 0 || p.Persistence > 1 || p.MaxChaseTiles < 0 || p.MaxChaseTiles > MaxChaseTiles ||
+		p.LoseSightMs < 0 || p.MemoryMs < 0 ||
+		p.GiveUpBelowHpPct < 0 || p.GiveUpBelowHpPct > 100 || p.InsistTargetHpPct < 0 || p.InsistTargetHpPct > 100 {
+		return fmt.Errorf("persistence in 0..1, max_chase_tiles in 0..%d, times >= 0, percents in 0..100", MaxChaseTiles)
+	}
+	if p.DistanceExponent < 0 || p.DistanceExponent > MaxDistanceExponent || p.InsistBoost < 0 || p.InsistBoost > 1 {
+		return fmt.Errorf("distance_exponent in 0..%d, insist_boost in 0..1", MaxDistanceExponent)
+	}
+	if p.RollMs != 0 && p.RollMs < MinPeriodMs {
+		return fmt.Errorf("roll_ms must be >= %d", MinPeriodMs)
+	}
+	if p.Persistence > 0 && p.RollMs == 0 {
+		return errors.New("a persistence needs roll_ms")
+	}
+	return nil
+}
+
+// MonsterRegenRate is a monster's out-of-combat regeneration: Pct % of its maximum health every
+// IntervalMs, once DelayMs went by without dealing or taking damage and without a target.
+type MonsterRegenRate struct {
+	DelayMs    int     `yaml:"delay_ms"`
+	IntervalMs int     `yaml:"interval_ms"`
+	Pct        float64 `yaml:"pct"`
+}
+
+// Check validates r: the balance's numbers, or a monster's resolved against them. It
+// rejects what balance.schema.json and monster.schema.json reject.
+func (r MonsterRegenRate) Check() error {
+	if r.DelayMs < 0 || r.Pct < 0 || r.Pct > 100 {
+		return errors.New("delay_ms >= 0, pct in 0..100")
+	}
+	if r.IntervalMs != 0 && r.IntervalMs < MinPeriodMs {
+		return fmt.Errorf("interval_ms must be >= %d", MinPeriodMs)
+	}
+	if r.Pct > 0 && r.IntervalMs == 0 {
+		return errors.New("a pct needs interval_ms")
+	}
+	return nil
 }
 
 // CombatMode scales attack and shield defense for a fight stance.
@@ -644,6 +743,10 @@ type CombatMode struct {
 
 // Stances are the fight stances of balance.yaml, in protocol order (FightStance 1..3).
 var Stances = [...]string{"offensive", "balanced", "defensive"}
+
+// MaxDiagonalCost caps movement.diagonal_cost (world.MaxDiagonalCost): a diagonal step is
+// two straight ones at most, and past it a path's cost could overflow.
+const MaxDiagonalCost = 2
 
 // MaxQueuedSteps caps movement.max_queued_steps: a deeper queue would only let a client
 // run further ahead of what the server confirmed.
@@ -785,8 +888,8 @@ func ParseBalance(raw []byte) (Balance, error) {
 	if m.BaseStepMs <= 0 || m.BaseStepMs > 60_000 {
 		return Balance{}, errors.New("movement.base_step_ms must be in 1..60000")
 	}
-	if m.DiagonalCost < 1 || m.DiagonalCost > 10 {
-		return Balance{}, errors.New("movement.diagonal_cost must be in 1..10")
+	if m.DiagonalCost < 1 || m.DiagonalCost > MaxDiagonalCost {
+		return Balance{}, errors.New("movement.diagonal_cost must be in 1..2 (world.MaxDiagonalCost)")
 	}
 	if m.MaxPathTiles <= 0 || m.MaxPathTiles > 100 {
 		return Balance{}, errors.New("movement.max_path_tiles must be in 1..100 (world.MaxPathLength)")
@@ -891,6 +994,15 @@ func (c Combat) check() error {
 	}
 	if c.MonsterPathRetryMs <= 0 || c.MonsterStuckMs <= 0 || c.MonsterShunMs <= 0 {
 		return errors.New("combat: monster_path_retry_ms, monster_stuck_ms and monster_shun_ms must be > 0")
+	}
+	if err := c.MonsterPursuit.Check(); err != nil {
+		return fmt.Errorf("combat.monster_pursuit: %w", err)
+	}
+	if err := c.MonsterRegen.Check(); err != nil {
+		return fmt.Errorf("combat.monster_regen: %w", err)
+	}
+	if c.MonsterStrayMs < 0 {
+		return errors.New("combat: monster_stray_ms must be >= 0")
 	}
 	for _, s := range Stances {
 		m, ok := c.Modes[s]

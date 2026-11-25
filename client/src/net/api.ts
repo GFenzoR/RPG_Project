@@ -11,6 +11,24 @@ export interface Character {
   name: string;
   vocation: string;
   level: number;
+  /** The saved body (snake_case from the server), for the list's preview; absent before the game picked one. */
+  look?: LookJSON;
+}
+
+/** A look as the HTTP API sends it (data/looks.yaml ids). */
+export interface LookJSON {
+  sex: string;
+  body: string;
+  skin: string;
+  hair: string;
+  hair_color: string;
+  beard: string;
+}
+
+/** GET /api/characters: the characters and how many the account may have (0: unknown). */
+export interface CharacterList {
+  characters: Character[];
+  maxCharacters: number;
 }
 
 /** A failed API call. `code` is the server's error code; the UI shows t(`error.<code>`). */
@@ -179,8 +197,15 @@ export const api = {
   login: (email: string, password: string): Promise<{ expires_at: string }> =>
     call("POST", "/api/auth/login", { email, password }),
   logout: (): Promise<void> => call("POST", "/api/auth/logout"),
-  characters: async (): Promise<Character[]> =>
-    (await call<{ characters: Character[] }>("GET", "/api/characters")).characters,
+  characters: async (): Promise<Character[]> => (await api.characterList()).characters,
+  /** The list with the account's limit (the characters screen disables creating at it). */
+  characterList: async (): Promise<CharacterList> => {
+    const r = await call<{ characters: Character[]; max_characters?: number }>(
+      "GET",
+      "/api/characters",
+    );
+    return { characters: r.characters, maxCharacters: r.max_characters ?? 0 };
+  },
   /** look: the body chosen on the creation screen (docs/02 "Apariencia"); the server checks it. */
   createCharacter: async (name: string, vocation: string, look?: Look): Promise<Character> =>
     (

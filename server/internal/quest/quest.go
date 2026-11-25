@@ -425,3 +425,15 @@ func (e *Engine) complete(l *Log, q *content.Quest, i int, h Host) {
 		e.SetFlag(l, f.Key, f.Value, h)
 	}
 }
+
+// CurrentStep returns the current step of quest id while it is in progress, or nil.
+func (e *Engine) CurrentStep(l *Log, id string) *content.QuestStepDef {
+	q := e.quests[id]
+	if q == nil || l.Get(stateKey(id)) != int64(InProgress) {
+		return nil
+	}
+	if _, i, ok := e.current(l, id); ok {
+		return &q.Steps[i]
+	}
+	return nil
+}

@@ -37,12 +37,14 @@ export interface ReviewLook {
   worn: Worn;
 }
 
+/** Every facing, the straight ones first, each diagonal after the straight ones it joins. */
+const FACINGS: readonly Dir[] = ["s", "sw", "w", "nw", "n", "ne", "e", "se"];
 const ROWS: readonly [ActionName, readonly Dir[], number][] = [
-  ["idle", ["s", "w", "n", "e"], 2],
-  ["walk", ["s", "w", "n", "e"], WALK_FRAMES],
-  ["attack", ["s", "w", "n", "e"], 4],
-  ["shoot", ["s", "w", "n", "e"], 3],
-  ["cast", ["s", "w", "n", "e"], 3],
+  ["idle", FACINGS, 2],
+  ["walk", FACINGS, WALK_FRAMES],
+  ["attack", FACINGS, 4],
+  ["shoot", FACINGS, 3],
+  ["cast", FACINGS, 3],
   ["death", ["s"], 4],
 ];
 

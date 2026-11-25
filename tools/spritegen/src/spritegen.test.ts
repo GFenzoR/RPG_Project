@@ -42,6 +42,8 @@ import { PALETTE } from "./palette.ts";
 import { HUMANOID_LAYERS } from "./engine/specs/humanoid/index.ts";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+/** A ground's decal (docs/17 ART-4): <ground>/decal_<n>. */
+const DECAL = /^ground\/[a-z0-9_]+\/decal_[1-9][0-9]*$/;
 
 /** The ids of balance.yaml's conditions, parsed as YAML: any style of entry counts. */
 function conditionIds(balance: string): string[] {
@@ -98,10 +100,11 @@ describe("recipes", () => {
   const dollFrame = (p: string): boolean =>
     HUMANOID_LAYERS.some((l) => l.slot !== "body" && p.startsWith(`${l.sprite}/`));
 
-  // With the engine humanoids' ~3600 frames, the tests over every recipe take seconds.
+  // With the engine humanoids' ~9000 frames (eight facings), the tests over every recipe
+  // take a minute or more while the whole suite runs.
   it("render the same bytes every time", () => {
     for (const p of paths) expect(encodePng(render(p)).equals(encodePng(render(p))), p).toBe(true);
-  }, 60_000);
+  }, 180_000);
 
   it("have sizes in multiples of 32, only fully opaque or transparent pixels, and draw something", () => {
     for (const p of paths) {
@@ -118,10 +121,63 @@ describe("recipes", () => {
         else if (a !== 0 && partial < 0) partial = a;
       }
       expect(partial, `${p}: alpha that is neither 0 nor 255`).toBe(-1);
-      // The living world's effect masks are a few pixels on purpose (a firefly, a leaf).
-      if (!dollFrame(p) && !LIVING_FX.test(p)) expect(opaque, p).toBeGreaterThan(20);
+      // The living world's effect masks are a few pixels on purpose (a firefly, a leaf), and
+      // so are a ground's decals (a shell, a flower: docs/17 ART-4), which must not read as
+      // items.
+      if (!dollFrame(p) && !LIVING_FX.test(p) && !DECAL.test(p))
+        expect(opaque, p).toBeGreaterThan(20);
     }
-  }, 60_000);
+  }, 180_000);
+
+  it("ground decals are small, flat details in the middle of their tile (docs/17 ART-4)", () => {
+    const decals = paths.filter((p) => DECAL.test(p));
+    expect(decals.length).toBeGreaterThanOrEqual(12); // sand and grass, six each
+    for (const p of decals) {
+      expect(RECIPES[p]?.kind, p).toBe("object");
+      const img = render(p);
+      expect([img.width, img.height], p).toEqual([32, 32]);
+      let opaque = 0;
+      let minX = 32;
+      let minY = 32;
+      let maxX = -1;
+      let maxY = -1;
+      for (let y = 0; y < 32; y++)
+        for (let x = 0; x < 32; x++) {
+          if ((img.data[(y * 32 + x) * 4 + 3] ?? 0) === 0) continue;
+          opaque++;
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        }
+      // Something, but not an item-sized drawing; kept off the edges a border would cover.
+      expect(opaque, p).toBeGreaterThan(4);
+      expect(opaque, p).toBeLessThan(80);
+      expect(Math.min(minX, minY), p).toBeGreaterThanOrEqual(6);
+      expect(Math.max(maxX, maxY), p).toBeLessThanOrEqual(25);
+    }
+  });
+
+  it("ground looks keep the main look's outer ring, so any look meets any other", () => {
+    for (const p of paths) {
+      const m = /^(ground\/[a-z0-9_]+)\/var_[0-9]+$/.exec(p);
+      if (!m?.[1] || RECIPES[p]?.kind !== "ground") continue;
+      const look = render(p);
+      const main = render(m[1]);
+      for (let k = 0; k < 32; k++)
+        for (const [x, y] of [
+          [k, 0],
+          [k, 31],
+          [0, k],
+          [31, k],
+        ] as const) {
+          const i = (y * 32 + x) * 4;
+          const a = Array.from(look.data.subarray(i, i + 4));
+          const b = Array.from(main.data.subarray(i, i + 4));
+          if (!same(a, b)) expect(`${p} ${x},${y}: ${a.join()}`).toBe(`${b.join()}`);
+        }
+    }
+  });
 
   it("ground and walls are opaque and tile seamlessly", () => {
     for (const p of paths) {
@@ -184,7 +240,7 @@ describe("recipes", () => {
         `${p}: stale, run make spritegen`,
       ).toBe(true);
     }
-  }, 60_000);
+  }, 180_000);
 
   it("every recipe path is used by data/ or is an outfit or effect frame or a ui icon", () => {
     expect(checkPaths(root)).toEqual([]);

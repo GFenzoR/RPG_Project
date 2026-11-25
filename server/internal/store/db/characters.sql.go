@@ -124,6 +124,46 @@ func (q *Queries) DeleteCharacterUnjustKills(ctx context.Context, characterID in
 	return err
 }
 
+const getCharacterExplored = `-- name: GetCharacterExplored :many
+SELECT z, sx, sy, bits
+FROM character_explored
+WHERE character_id = $1
+ORDER BY z, sx, sy
+`
+
+type GetCharacterExploredRow struct {
+	Z    int16
+	Sx   int16
+	Sy   int16
+	Bits []byte
+}
+
+// The minimap's explored sectors of a character (migration 00028).
+func (q *Queries) GetCharacterExplored(ctx context.Context, characterID int64) ([]GetCharacterExploredRow, error) {
+	rows, err := q.db.Query(ctx, getCharacterExplored, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCharacterExploredRow{}
+	for rows.Next() {
+		var i GetCharacterExploredRow
+		if err := rows.Scan(
+			&i.Z,
+			&i.Sx,
+			&i.Sy,
+			&i.Bits,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCharacterForPlay = `-- name: GetCharacterForPlay :one
 SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, c.mana,
        c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role,
@@ -394,17 +434,23 @@ func (q *Queries) InsertInventoryItem(ctx context.Context, arg InsertInventoryIt
 }
 
 const listCharactersByAccount = `-- name: ListCharactersByAccount :many
-SELECT id, name, vocation, level
+SELECT id, name, vocation, level, look_sex, look_body, look_skin, look_hair, look_hair_color, look_beard
 FROM characters
 WHERE account_id = $1
 ORDER BY id
 `
 
 type ListCharactersByAccountRow struct {
-	ID       int64
-	Name     string
-	Vocation string
-	Level    int32
+	ID            int64
+	Name          string
+	Vocation      string
+	Level         int32
+	LookSex       string
+	LookBody      string
+	LookSkin      string
+	LookHair      string
+	LookHairColor string
+	LookBeard     string
 }
 
 func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) ([]ListCharactersByAccountRow, error) {
@@ -421,6 +467,12 @@ func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) 
 			&i.Name,
 			&i.Vocation,
 			&i.Level,
+			&i.LookSex,
+			&i.LookBody,
+			&i.LookSkin,
+			&i.LookHair,
+			&i.LookHairColor,
+			&i.LookBeard,
 		); err != nil {
 			return nil, err
 		}
@@ -430,6 +482,41 @@ func (q *Queries) ListCharactersByAccount(ctx context.Context, accountID int64) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const saveCharacterExplored = `-- name: SaveCharacterExplored :exec
+INSERT INTO character_explored AS e (character_id, z, sx, sy, bits)
+SELECT $1::bigint, unnest($2::smallint[]), unnest($3::smallint[]),
+       unnest($4::smallint[]), unnest($5::bytea[])
+ON CONFLICT (character_id, z, sx, sy) DO UPDATE SET bits = (
+    SELECT string_agg(set_byte(decode('00', 'hex'), 0, get_byte(e.bits, i) | get_byte(EXCLUDED.bits, i)), ''::bytea ORDER BY i)
+    FROM generate_series(0, 127) AS i
+)
+`
+
+type SaveCharacterExploredParams struct {
+	CharacterID int64
+	Zs          []int16
+	Sxs         []int16
+	Sys         []int16
+	Bits        [][]byte
+}
+
+// A snapshot upserts the sectors that gained bits during the login. Explored bits are
+// only ever set, so a sector already saved keeps its bits and gains the new ones (a
+// bitwise OR, byte by byte: bits is always 128 bytes, migration 00028). The snapshots of
+// one character are written in the order they were taken (the persistence queue is FIFO
+// per character), so the new copy is normally a superset; the OR keeps the map whole even
+// if an older snapshot were ever written after a newer one.
+func (q *Queries) SaveCharacterExplored(ctx context.Context, arg SaveCharacterExploredParams) error {
+	_, err := q.db.Exec(ctx, saveCharacterExplored,
+		arg.CharacterID,
+		arg.Zs,
+		arg.Sxs,
+		arg.Sys,
+		arg.Bits,
+	)
+	return err
 }
 
 const saveCharacterQuestState = `-- name: SaveCharacterQuestState :exec

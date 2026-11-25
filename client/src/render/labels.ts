@@ -3,11 +3,18 @@
 // side overlap. The rule, in priority order (own creature, target, then nearest first):
 // place a label where it fits; if it overlaps one already placed, drop its guild line,
 // then lift it above the other one (at most one line); if it still overlaps, only the
-// ones next to the player stay (on top), the rest hide. Long names are shortened. From
-// zoom 2 up nothing changes: every label shows as before.
+// ones next to the player stay (on top), the rest hide. Long names are shortened. What
+// counts is how big the labels are next to a tile: labels drawn at `labelScale` screen
+// pixels per font cell (render/label-style.ts) at map scale `zoom` show untouched only
+// when zoom >= LABEL_FULL_ZOOM * labelScale (a name at most half as tall, next to its
+// tile, as at zoom 2 with the 11 px font). Large names keep the rules at every zoom.
 
-/** From this zoom (device pixels per sprite pixel) every label shows untouched. */
+/** Zoom per label scale from which every label shows untouched. */
 export const LABEL_FULL_ZOOM = 2;
+
+/** Whether labels at `labelScale` show untouched at map scale `zoom`. */
+export const labelsFull = (zoom: number, labelScale = 1): boolean =>
+  zoom >= LABEL_FULL_ZOOM * Math.max(1, labelScale);
 /** Longest name at small zoom, in characters (the ellipsis included). */
 export const SHORT_NAME_CHARS = 12;
 /** Creatures this close (tiles, Chebyshev) keep their label even when it overlaps. */
@@ -66,10 +73,18 @@ const rank = (a: LabelBox, b: LabelBox): number =>
   a.distance - b.distance ||
   a.id - b.id;
 
-/** Where each label goes this frame (keyed by creature id). */
-export function placeLabels(boxes: readonly LabelBox[], zoom: number): Map<number, LabelPlacement> {
+/**
+ * Where each label goes this frame (keyed by creature id). `labelScale` is the label's
+ * screen pixels per font cell: the gap left above a label it is lifted over.
+ */
+export function placeLabels(
+  boxes: readonly LabelBox[],
+  zoom: number,
+  labelScale = 1,
+): Map<number, LabelPlacement> {
   const out = new Map<number, LabelPlacement>();
-  if (zoom >= LABEL_FULL_ZOOM) {
+  const gap = Math.max(1, labelScale);
+  if (labelsFull(zoom, labelScale)) {
     for (const b of boxes) out.set(b.id, { show: true, guild: b.guildHeight > 0, lift: 0 });
     return out;
   }
@@ -89,8 +104,8 @@ export function placeLabels(boxes: readonly LabelBox[], zoom: number): Map<numbe
     if (!chosen) {
       // Lift the name-only block just above the label it hits, at most one line up.
       const hit = free(rectOf(b, false, 0));
-      const lift = hit ? b.y - hit.top + 1 : 0;
-      if (lift > 0 && lift <= b.nameHeight + 1 && !free(rectOf(b, false, lift))) {
+      const lift = hit ? b.y - hit.top + gap : 0;
+      if (lift > 0 && lift <= b.nameHeight + gap && !free(rectOf(b, false, lift))) {
         chosen = { guild: false, lift };
       }
     }
@@ -107,9 +122,14 @@ export function placeLabels(boxes: readonly LabelBox[], zoom: number): Map<numbe
   return out;
 }
 
-/** The name to draw at this zoom: shortened with an ellipsis below LABEL_FULL_ZOOM. */
-export function labelText(name: string, zoom: number, max = SHORT_NAME_CHARS): string {
-  if (zoom >= LABEL_FULL_ZOOM) return name;
+/** The name to draw at this zoom and label scale: shortened with an ellipsis unless labelsFull. */
+export function labelText(
+  name: string,
+  zoom: number,
+  max = SHORT_NAME_CHARS,
+  labelScale = 1,
+): string {
+  if (labelsFull(zoom, labelScale)) return name;
   const chars = [...name];
   if (chars.length <= max) return name;
   return `${chars

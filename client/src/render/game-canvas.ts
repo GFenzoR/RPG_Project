@@ -22,8 +22,8 @@ import {
   TextureStyle,
 } from "pixi.js";
 import type { Texture } from "pixi.js";
-import { CreatureKind, Direction, FloatingTextKind, Skull } from "@rpg/protocol";
-import type { AttackKind } from "@rpg/protocol";
+import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
+import type { AttackKind, Direction } from "@rpg/protocol";
 import {
   Atlas,
   DEATH_FADE_MS,
@@ -42,6 +42,7 @@ import {
   clipMs,
   entityZIndex,
   newAnimInput,
+  faceTo,
   newAnimState,
   newPose,
   screenToTile,
@@ -63,6 +64,7 @@ import type {
   StepKind,
   TileArt,
   WornSlot,
+  WorldRect,
 } from "@rpg/renderer";
 import { dirIndex, legacyOutfitClips, spriteClips } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
@@ -74,6 +76,8 @@ import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
 import { mountLivingWorld, printOf } from "./living.ts";
+import { CastShadows } from "./cast-shadows.ts";
+import { NIGHT_PLAYER_LIGHT, SkyView, dimmed, litSurface } from "./sky.ts";
 import type { ParticleView } from "./particles.ts";
 import {
   attackDir,
@@ -104,7 +108,9 @@ import {
   CANVAS_TEXT_STROKE,
   loadCanvasFont,
 } from "./canvas-font.ts";
-import { labelText, placeLabels } from "./labels.ts";
+import { SHORT_NAME_CHARS, labelText, placeLabels } from "./labels.ts";
+import { DEFAULT_NAME_SIZE, LABEL_COLORS, LABEL_OUTLINE, labelScale } from "./label-style.ts";
+import type { NameSize } from "./label-style.ts";
 import type { LabelBox } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
 import type { Gesture } from "../input/gestures.ts";
@@ -117,16 +123,22 @@ import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { delta, samePos } from "../state/geometry.ts";
 import type { Pos } from "../state/geometry.ts";
-import { creatureName } from "../state/messages.ts";
+import { creatureName, formatMessage } from "../state/messages.ts";
+import { BubbleLayer } from "./bubble-layer.ts";
+import type { BubbleAnchor } from "./bubble-layer.ts";
+import { admitSpeech } from "./bubbles.ts";
+import type { BubbleStyle } from "./bubbles.ts";
+import { mapItemArt, mapItemId, mapItemTexture } from "../state/corpse-art.ts";
 import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
 import type { OutfitDef } from "../content-types.ts";
-import { DEFAULT_OUTFIT, outfitDir, outfitKeys } from "./outfit.ts";
+import { DEFAULT_OUTFIT, outfitKeys } from "./outfit.ts";
 import { EffectLayer } from "./effect-layer.ts";
 import { livingEvent, mountLivingObjects } from "./living.ts";
 import { SHAKE_MS, shakeOffset } from "./shake.ts";
 import {
+  AMBIENT,
   FIRE_TINT,
   LightLayer,
   PLAYER_LIGHT,
@@ -139,11 +151,12 @@ import type { ViewTiles } from "../state/view.ts";
 
 const COLORS = {
   background: 0x000000,
-  self: 0x3a7bd5,
-  player: 0xd59a3a,
-  monster: 0xb03a2e,
-  npc: 0x7d4fb0,
-  guild: 0xb8e986,
+  // Names, guild lines and the fallback blocks use the label tokens (render/label-style.ts).
+  self: LABEL_COLORS.self,
+  player: LABEL_COLORS.player,
+  monster: LABEL_COLORS.monster,
+  npc: LABEL_COLORS.npc,
+  guild: LABEL_COLORS.guild,
   marker: 0xffffff,
   outline: 0x101010,
   target: 0xff2020,
@@ -157,15 +170,59 @@ const COLORS = {
 const BAR_W = 26;
 const BAR_H = 4;
 
-/** The own player seen through a wall (ART-3): its sprite, light and translucent. */
-const BEHIND_WALL_ALPHA = 0.45;
-const BEHIND_WALL_TINT = 0xd6e2ff;
 /** A creature hidden by a taller one in front of it (07-combat): drawn again like that. */
 const HIDDEN_ALPHA = 0.55;
 const HIDDEN_TINT = 0xffe2c8;
 
+/**
+ * The rectangle (world units) a creature's figure covers: its body sprite, anchored at the
+ * bottom centre and placed relative to the creature's container at (bodyX, bodyY).
+ */
+export function figureRect(
+  bodyX: number,
+  bodyY: number,
+  fig: {
+    x: number;
+    y: number;
+    scale: { x: number; y: number };
+    texture: { width: number; height: number };
+  },
+): WorldRect {
+  const w = fig.texture.width * Math.abs(fig.scale.x);
+  const h = fig.texture.height * Math.abs(fig.scale.y);
+  return { x: bodyX + fig.x - w / 2, y: bodyY + fig.y - h, width: w, height: h };
+}
+
+/** What GameCanvas.labels reports (E2E). */
+export interface LabelsShown {
+  /** Screen pixels per font cell of the names, and the map scale. */
+  scale: number;
+  zoom: number;
+  shown: {
+    id: number;
+    text: string;
+    fill: number;
+    scale: number;
+    /** Page px. */
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }[];
+}
+
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
+
+/** What the E2E hook `sky()` tells (GameCanvas.sky). */
+export interface SkyHook {
+  phase: string;
+  ambient: number;
+  lamps: number;
+  moon: number;
+  shadowAlpha: number;
+  shadows: number;
+}
 
 export interface GameCanvas {
   /** Page coordinates of the centre of tile (x, y) on the current floor (tests, tooling). */
@@ -180,6 +237,8 @@ export interface GameCanvas {
   worldAt(clientX: number, clientY: number): { x: number; y: number } | undefined;
   /** Where an item's sprite is in the atlas, for DOM icons (inventory). */
   itemIcon(itemId: number): AtlasIcon | undefined;
+  /** An item's minimap colour from the atlas ("#rrggbb", docs/02 "Minimapa"), if it has one. */
+  itemColor(itemId: number): string | undefined;
   /** Where any sprite of the atlas is (an NPC's portrait in its dialog), real art or not. */
   spriteIcon(path: string): AtlasIcon | undefined;
   /** Where a PvP mark's sprite is in the atlas (real art only), for the battle list. */
@@ -190,6 +249,16 @@ export interface GameCanvas {
   readonly zoom: ZoomView;
   /** The tiles the canvas shows (fractional when cut to the box), at most WorldState.view. */
   readonly shown: ViewTiles;
+  /**
+   * E2E: the names drawn now (docs/17 UI-3): the label scale and, per shown creature label,
+   * its text, fill and box in page px.
+   */
+  labels(): LabelsShown;
+  /**
+   * E2E (docs/17 ART-3): the alpha of each wall piece on tile (x, y) of the own floor, and
+   * how many translucent copies of hidden creatures were drawn this frame.
+   */
+  wallFade(x: number, y: number): { alphas: number[]; copies: number };
   /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
   zoomBy(steps: number): void;
   /**
@@ -198,6 +267,15 @@ export interface GameCanvas {
    * length.
    */
   poses(): { attacking: PoseTime[]; dying: PoseTime[]; vanishing: PoseTime[] };
+  /** E2E (docs/17 UI-11): the speech bubbles on screen now, by speaker. */
+  bubbles(): { id: number; style: BubbleStyle; lines: string[] }[];
+  /**
+   * E2E: the sky last drawn (render/sky.ts): its phase, light colour, lamps, moon and how
+   * many cast shadow sprites the frame drew; undefined underground or without a day and night.
+   */
+  sky(): SkyHook | undefined;
+  /** E2E: the facing creature `id` was last drawn in, and whether its figure has eight. */
+  drawnFacing(id: number): { facing: string; eight: boolean } | undefined;
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -284,6 +362,16 @@ export interface GameCanvasOptions {
    * reduced motion). Asked at each frame of a shake; without it, never.
    */
   shake?(): boolean;
+  /**
+   * docs/17 UI-11: whether what creatures say shows over their heads (Options →
+   * Interface). Asked every frame; without it, it does.
+   */
+  bubbles?(): boolean;
+  /**
+   * docs/17 UI-3: how big the names are (Options → Interface), asked at each frame; without
+   * it, DEFAULT_NAME_SIZE.
+   */
+  nameSize?(): NameSize;
   /** T5.6: a finger tapped a tile (walk, attack or talk to its creature, place an item). */
   tapTile(x: number, y: number, z: number): void;
   /** T5.6: a finger held a tile still (the contextual menu), at page coordinates (cx, cy). */
@@ -405,24 +493,25 @@ export async function createGameCanvas(
   canvas.style.imageRendering = "pixelated";
   host.appendChild(canvas);
 
+  // A tile item's key is its number, or "<number>@<monster>" for the remains of a monster,
+  // drawn as that monster's own corpse when the atlas has it (state/corpse-art.ts).
   const textures = new Map<string, Texture>();
   const texture = (id: string): Texture => {
     let tex = textures.get(id);
     if (!tex) {
-      const sprite = content.items[Number(id)]?.sprite;
-      tex = (sprite && atlas.texture(sprite)) || MISSING_TEXTURE;
+      tex = mapItemTexture(id, content.items, atlas) ?? MISSING_TEXTURE;
       textures.set(id, tex);
     }
     return tex;
   };
   // Tile art (docs/17 ART-3, ART-4, ART-7): ground looks, wall pieces, animated tiles, anchors
-  // and cast shadows, resolved once per item.
+  // and cast shadows, resolved once per item. A corpse is centred on its tile, as the
+  // creature stood (its sprite is the creature's frame, wider than a tile for most).
   const arts = new Map<string, TileArt<Texture> | null>();
   const art = (id: string): TileArt<Texture> | undefined => {
     let a = arts.get(id);
     if (a === undefined) {
-      const sprite = content.items[Number(id)]?.sprite;
-      a = (sprite && atlas.tileArt(sprite)) || null;
+      a = mapItemArt(id, content.items, atlas) ?? null;
       arts.set(id, a);
     }
     return a ?? undefined;
@@ -438,31 +527,14 @@ export async function createGameCanvas(
         })
       : [],
   );
-  const doorTiles = new Set(content.houseDoors ?? []);
-  /**
-   * ART-3: the tile right south of the own player holds a wall that hides it. A house door's
-   * frame joins the walls but is open: standing just inside the doorway is not "behind".
-   */
-  const behindWallAt = (x: number, y: number): boolean =>
-    view.wallAt(x, y) && !(doorTiles.size > 0 && doorTiles.has(`${x},${y},${view.floor}`));
   const view = new MapView({
     source: new DecoratedSource(world, (z, cx, cy) => frames.get(`${z}/${cx}/${cy}`)),
     texture,
     art,
     // ART-8: tables and crates raise what is stacked on them (data/items elevation).
-    elevation: (id) => content.items[Number(id)]?.elevation ?? 0,
+    elevation: (id) => content.items[mapItemId(id)]?.elevation ?? 0,
     tileSize: T,
     floor: world.self?.pos.z ?? 7,
-  });
-  // ART-3: when a wall hides the own player (the wall right south of it covers its tile), a
-  // see-through copy of its sprite is drawn over the map, so the player never loses itself.
-  // The others stay hidden: hiding behind a wall is part of the game.
-  const behindWall = new Sprite({
-    anchor: { x: 0.5, y: 1 },
-    alpha: BEHIND_WALL_ALPHA,
-    tint: BEHIND_WALL_TINT,
-    visible: false,
-    roundPixels: true,
   });
   // Ambient particles (A13), in world space under the silhouettes.
   const particles = new ParticleLayer(T);
@@ -526,10 +598,18 @@ export async function createGameCanvas(
     ghostBox.order = entityZIndex(Math.round(x), Math.round(y));
     if (drawnBoxes.covered(ghostBox)) showCopy(g.body, g.figure);
   };
-  view.overlay.addChild(particles.view, hiddenLayer, behindWall);
+  view.overlay.addChild(particles.view, hiddenLayer);
   // The living world (livingworld/README.md, render/living.ts): footprints on the ground
   // overlay, plants that bend, ripples, leaves and critters; nothing with reduced motion.
-  const living = mountLivingWorld(view, world, content, atlas, reducedMotion);
+  // The day and night (livingworld/README.md "Día y noche", render/sky.ts): the world clock
+  // the server sent, run on every frame into the sky's light and the sun's angle.
+  const sky = new SkyView(content.livingWorld?.dayNight, world.worldClock);
+  const living = mountLivingWorld(view, world, content, atlas, reducedMotion, () => sky.night());
+  // The creatures' cast shadows (render/cast-shadows.ts): over the ground and the living
+  // world's footprints, under the items and the creatures; off with reduced motion and
+  // underground (no sun there: the contact ellipse stays).
+  const castShadows = new CastShadows();
+  view.groundOverlay.addChild(castShadows.root);
   // The living objects' effects (render/living.ts): over the map.
   const livingObjects = mountLivingObjects(view.overlay, {
     tileSize: T,
@@ -543,23 +623,30 @@ export async function createGameCanvas(
   const effectLayer = new Container({ label: "effects" });
   const textLayer = new Container({ label: "floating texts" });
   const labels = new Container({ label: "labels" });
+  // docs/17 UI-11: what creatures say, over their names (render/bubble-layer.ts).
+  const speech = new BubbleLayer();
+  const anchors = new Map<number, BubbleAnchor>();
   // Caves are dark (ART-7): a light map over the map, under effects and names.
   const lights = new LightLayer(glowTexture());
   // docs/17 MOV-7: the ring of a click-to-walk, over the light (seen in a cave too).
   const walkMark = new Graphics({ label: "walk mark" });
   let walkMarkDrawn = false;
-  app.stage.addChild(view.root, lights.view, walkMark, effectLayer, labels, textLayer);
+  app.stage.addChild(view.root, lights.view, walkMark, effectLayer, labels, speech.view, textLayer);
   /** Pixels per tile of the frame being lit, for addFireLight (made once: no per-frame closure). */
   let lightTile = 0;
+  /** The fires' colour this frame: full in a cave, by how dark it is on the surface. */
+  let fireTint = FIRE_TINT;
   const addFireLight = (x: number, y: number, radius: number): void =>
     lights.add(
       (x + 0.5 - cam.x) * lightTile,
       (y + 0.5 - cam.y) * lightTile,
       radius * lightTile,
-      FIRE_TINT,
+      fireTint,
     );
 
   let scale = 1;
+  // Screen pixels per font cell of the names this frame (render/label-style.ts labelScale).
+  let nameScale = 1;
   let cam: Camera = { x: 0, y: 0, zoom: 1 };
   // The zoom the player chose (undefined = the fitted view) and what the map's box
   // allows; `scale` is the one drawn.
@@ -806,10 +893,15 @@ export async function createGameCanvas(
     const w = world.activeWalk(c, now);
     const moving = w && now >= w.start && now < w.start + w.duration ? w : undefined;
     animInput.now = now;
-    animInput.dir = outfitDir(world.facing(c, now));
+    // docs/17 ANI-1: it faces its attack while that plays and until it walks or turns, else
+    // its step or its own direction; a figure with diagonals turns to them, one without
+    // keeps the half of a diagonal it already faces (faceTo, turnTo).
+    const [fx, fy] = delta(world.facing(c, now));
+    animInput.dir = faceTo(st, figure.clips.meta, now, fx, fy, moving !== undefined, figure.eight);
     animInput.walkStart = moving?.start;
     animInput.walkMs = moving?.duration ?? 0;
     animInput.moveDx = moving ? Math.sign(moving.to.x - moving.from.x) : 0;
+    animInput.moveDy = moving ? Math.sign(moving.to.y - moving.from.y) : 0;
     const stepBefore = st.walkStart;
     animate(st, figure.clips.meta, animInput, pose);
     figure.draw(pose, dirIndex(animInput.dir));
@@ -966,11 +1058,13 @@ export async function createGameCanvas(
           fontFamily: CANVAS_FONT,
           fontSize: CANVAS_FONT_SIZE,
           fill: colorOf(c),
-          stroke: { color: 0x000000, width: CANVAS_TEXT_STROKE },
+          stroke: { color: LABEL_OUTLINE, width: CANVAS_TEXT_STROKE },
           ...look?.name,
         },
         anchor: { x: 0.5, y: 1 },
         roundPixels: true,
+        // Scaled by whole numbers (labelScale): every font cell an exact square of pixels.
+        textureStyle: { scaleMode: "nearest" },
       });
       labels.addChild(label);
       const guild = new Text({
@@ -979,10 +1073,11 @@ export async function createGameCanvas(
           fontFamily: CANVAS_FONT,
           fontSize: CANVAS_FONT_SIZE,
           fill: COLORS.guild,
-          stroke: { color: 0x000000, width: CANVAS_TEXT_STROKE },
+          stroke: { color: LABEL_OUTLINE, width: CANVAS_TEXT_STROKE },
         },
         anchor: { x: 0.5, y: 1 },
         roundPixels: true,
+        textureStyle: { scaleMode: "nearest" },
       });
       labels.addChild(guild);
       const skull = new Container();
@@ -1007,7 +1102,7 @@ export async function createGameCanvas(
     }
     // The language can change during the game (T1.13).
     // Shortened at small zoom (T5.6, render/labels.ts); the zoom follows the window size.
-    const name = labelText(nameOf(c), scale);
+    const name = labelText(nameOf(c), scale, SHORT_NAME_CHARS, nameScale);
     if (s.label.text !== name) s.label.text = name;
     if (s.guild.text !== c.guild) s.guild.text = c.guild;
     if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull, markTexture(c.skull));
@@ -1022,6 +1117,7 @@ export async function createGameCanvas(
 
   redrawLabels = (): void => {
     CanvasTextMetrics.clearMetrics();
+    speech.refresh();
     for (const s of sprites.values()) {
       s.label.style.update();
       s.guild.style.update();
@@ -1096,17 +1192,21 @@ export async function createGameCanvas(
       if (s) leave(d.id, now, leaveStyle(d.reason, s.drawnHealth));
     }
   };
-  const drawGhosts = (now: number): void => {
+  /** `casting`: the frame casts shadows; a falling body keeps its own until it fades. */
+  const drawGhosts = (now: number, casting: boolean): void => {
     for (let i = ghosts.length - 1; i >= 0; i--) {
       const g = ghosts[i] as Ghost;
       animInput.now = now;
-      animInput.dir = outfitDir(g.dir);
+      const [gx, gy] = delta(g.dir);
+      animInput.dir = faceTo(g.state, g.figure.clips.meta, now, gx, gy, false, g.figure.eight);
       animInput.walkStart = undefined;
       animInput.walkMs = 0;
       animInput.moveDx = 0;
+      animInput.moveDy = 0;
       animate(g.state, g.figure.clips.meta, animInput, pose);
       g.figure.draw(pose, dirIndex(animInput.dir));
       if (pose.done) dropGhost(i);
+      else if (casting) g.figure.castShadow(castShadows, g.body.x, g.body.y);
     }
   };
 
@@ -1148,6 +1248,26 @@ export async function createGameCanvas(
     return from === to ? from : Math.round(from + ((to - from) * (now - w.start)) / w.duration);
   };
 
+  /** docs/17 UI-11: takes what was said since the last frame and draws the bubbles. */
+  const drawSpeech = (now: number): void => {
+    const on = opts.bubbles?.() ?? true;
+    for (const said of world.takeSpeech()) {
+      const style = admitSpeech(said.kind, on);
+      if (!style) continue;
+      const text = said.localized
+        ? formatMessage(
+            { key: said.localized.key, params: said.localized.params, at: now },
+            content,
+            t,
+          )
+        : (said.text ?? "");
+      speech.say(said.speakerId, style, text, now);
+    }
+    if (!on) speech.clear();
+    speech.draw(anchors, now);
+    anchors.clear();
+  };
+
   const draw = (now: number): void => {
     const self = world.self;
     if (!self) return;
@@ -1164,7 +1284,10 @@ export async function createGameCanvas(
       cam = { ...cam, x: cam.x + o.x / unit, y: cam.y + o.y / unit };
     }
     view.render(cam, { width: app.screen.width, height: app.screen.height }, now);
-    behindWall.visible = false;
+    // ART-3: the wall pieces in front of the own player that cover it fade (the wall gives
+    // way, never the player); the others stay hidden: hiding behind a wall is part of the game.
+    let reveal: WorldRect | undefined;
+    let revealRow = 0;
     const tilePx = tilePixels(cam, T);
     particleView.x = cam.x;
     particleView.y = cam.y;
@@ -1190,9 +1313,13 @@ export async function createGameCanvas(
     }
     livingObjects.onTick(now, self.pos.z);
     drawnBoxes.reset();
+    const skyNow = isDark(self.pos.z) ? sky.none() : sky.update(now);
+    view.castShadowStrength = sky.staticShadows(skyNow);
+    const casting = castShadows.begin(sky.shadowPose(skyNow, reducedMotion()));
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
+    nameScale = labelScale(scale, opts.nameSize?.() ?? DEFAULT_NAME_SIZE);
     react(now);
     depart(now);
     for (const c of world.creatures.values()) {
@@ -1212,6 +1339,7 @@ export async function createGameCanvas(
       if (s.figure) {
         s.figure.opacity = see;
         animateBody(s.figure, stateOf(c.id, now), c, now);
+        if (casting) s.figure.castShadow(castShadows, s.body.x, s.body.y);
       }
       s.body.alpha = s.figure ? 1 : see;
       if (lastSeen.get(c.id) !== c.dir) lastSeen.set(c.id, c.dir);
@@ -1226,27 +1354,28 @@ export async function createGameCanvas(
       view.placeEntity(s.body, later.x, later.y);
       const lift = s.figure?.lift ?? 0;
       drawnBoxes.add(c.id, p.x, p.y - raised, lift / T, entityZIndex(later.x, later.y));
-      if (c.id === world.selfId && s.figure && behindWallAt(Math.round(p.x), Math.round(p.y) + 1)) {
-        const fig = s.figure.sprite;
-        behindWall.texture = fig.texture;
-        behindWall.position.set(s.body.x + fig.x, s.body.y + fig.y);
-        behindWall.scale.copyFrom(fig.scale);
-        behindWall.skew.copyFrom(fig.skew);
-        behindWall.visible = see === 1;
+      if (c.id === world.selfId && s.figure) {
+        reveal = figureRect(s.body.x, s.body.y, s.figure.sprite);
+        revealRow = Math.max(later.y, Math.round(p.y));
       }
       // Over the head of a figure taller than its tile (ART-2).
       const head = tileToScreen(cam, p.x + 0.5, p.y - raised - lift / T, T);
       const barTop = Math.round(head.y) - BAR_H * scale;
       s.bar.position.set(Math.round(head.x), barTop);
       s.bar.scale.set(scale);
+      // Names, guild lines and skulls grow with the zoom in whole steps (docs/17 UI-3).
+      s.label.scale.set(nameScale);
+      s.guild.scale.set(nameScale);
+      s.skull.scale.set(nameScale);
       const hasGuild = c.guild !== "";
       const hasSkull = s.drawnSkull !== Skull.UNSPECIFIED;
       boxes.push({
         id: c.id,
         x: Math.round(head.x),
-        y: barTop - 1,
+        y: barTop - nameScale,
         width:
-          Math.max(s.label.width, hasGuild ? s.guild.width : 0) + (hasSkull ? MARK_BOX.w + 2 : 0),
+          Math.max(s.label.width, hasGuild ? s.guild.width : 0) +
+          (hasSkull ? (MARK_BOX.w + 2) * nameScale : 0),
         nameHeight: s.label.height,
         guildHeight: hasGuild ? s.guild.height : 0,
         self: c.id === world.selfId,
@@ -1254,9 +1383,10 @@ export async function createGameCanvas(
         distance: Math.max(Math.abs(c.pos.x - self.pos.x), Math.abs(c.pos.y - self.pos.y)),
       });
     }
+    view.revealBehind(reveal, revealRow, now);
     // Names, guild lines and skulls (T5.6): at small zoom neighbours would overlap, so
     // render/labels.ts drops guild lines and lifts or hides the labels of far creatures.
-    const placements = placeLabels(boxes, scale);
+    const placements = placeLabels(boxes, scale, nameScale);
     for (const b of boxes) {
       const s = sprites.get(b.id);
       const at = placements.get(b.id);
@@ -1274,15 +1404,26 @@ export async function createGameCanvas(
       }
       if (s.drawnSkull !== Skull.UNSPECIFIED) {
         s.skull.position.set(
-          Math.round(s.label.x - s.label.width / 2 - MARK_HALF - 2),
+          Math.round(s.label.x - s.label.width / 2 - (MARK_HALF + 2) * nameScale),
           Math.round(s.label.y - s.label.height / 2),
         );
       }
+      // docs/17 UI-11: a speech bubble goes right over the name (or the bar, without one).
+      anchors.set(b.id, {
+        x: b.x,
+        top: at.show ? Math.round(s.label.y - s.label.height) - 1 : b.y,
+        self: b.self,
+        distance: b.distance,
+      });
     }
+    drawSpeech(now);
     // Gone without a departure of its own (another floor, a new map view): it just goes.
     for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now, "drop");
     for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
-    drawGhosts(now);
+    // The bodies falling or shimmering away cast their shadow too, until they fade below
+    // half (CreatureBody.castShadow): it does not vanish the moment a creature dies.
+    drawGhosts(now, casting);
+    if (casting) castShadows.end();
     // A creature mostly hidden by a taller one in front (a wolf right north of a player),
     // and a body falling or shimmering away behind one.
     hiddenShown = 0;
@@ -1291,18 +1432,24 @@ export async function createGameCanvas(
     for (let i = hiddenShown; i < hiddenPool.length; i++) (hiddenPool[i] as Sprite).visible = false;
     world.expire(now);
     drawWalkMark(now, self.pos.z);
-    effects.draw(now, self.pos.z, cam, scale);
-    if (isDark(self.pos.z)) {
+    effects.draw(now, self.pos.z, cam, scale, nameScale);
+    // Caves are dark; the surface takes the sky's colour at dawn, dusk and night, and its
+    // lamps, fires and windows glow by how dark it is (render/sky.ts). By day: no pass.
+    const cave = isDark(self.pos.z);
+    if (cave || litSurface(skyNow)) {
+      const lamps = cave ? 1 : (skyNow?.lamps ?? 0);
       lightTile = tilePixels(cam, T);
+      fireTint = cave ? FIRE_TINT : dimmed(FIRE_TINT, lamps);
       const sp = world.drawPos(self, now);
-      lights.begin(app.screen.width, app.screen.height);
-      lights.add(
-        (sp.x + 0.5 - cam.x) * lightTile,
-        (sp.y + 0.5 - cam.y) * lightTile,
-        PLAYER_LIGHT * lightTile,
-        PLAYER_TINT,
-      );
-      view.forEachLight(addFireLight);
+      lights.begin(app.screen.width, app.screen.height, cave ? AMBIENT : skyNow?.ambient);
+      if (lamps > 0)
+        lights.add(
+          (sp.x + 0.5 - cam.x) * lightTile,
+          (sp.y + 0.5 - cam.y) * lightTile,
+          PLAYER_LIGHT * lightTile,
+          cave ? PLAYER_TINT : dimmed(PLAYER_TINT, lamps * NIGHT_PLAYER_LIGHT),
+        );
+      if (lamps > 0) view.forEachLight(addFireLight);
       lights.end(app.renderer);
     } else lights.hide();
   };
@@ -1656,8 +1803,51 @@ export async function createGameCanvas(
     get shown() {
       return shownTiles(app.screen.width, app.screen.height, scale, T);
     },
+    labels() {
+      const r = canvas.getBoundingClientRect();
+      const k = r.width / (app.screen.width || 1);
+      const shown: LabelsShown["shown"] = [];
+      for (const [id, s] of sprites) {
+        if (!s.label.visible || s.label.destroyed) continue;
+        const b = s.label.getBounds();
+        shown.push({
+          id,
+          text: s.label.text,
+          fill: Number(s.label.style.fill),
+          scale: s.label.scale.x,
+          x: r.left + b.x * k,
+          y: r.top + b.y * k,
+          width: b.width * k,
+          height: b.height * k,
+        });
+      }
+      return { scale: nameScale, zoom: scale, shown };
+    },
+    wallFade(x, y) {
+      return { alphas: view.wallAlphaAt(x, y), copies: hiddenShown };
+    },
     zoomBy(steps) {
       choose(stepZoom(scale, steps, range));
+    },
+    bubbles() {
+      return speech.shown();
+    },
+    sky() {
+      const s = sky.current;
+      if (!s || isDark(world.self?.pos.z ?? 0)) return undefined;
+      return {
+        phase: s.phase,
+        ambient: s.ambient,
+        lamps: s.lamps,
+        moon: s.moon,
+        shadowAlpha: s.shadow.alpha,
+        shadows: castShadows.root.visible ? castShadows.count : 0,
+      };
+    },
+    drawnFacing(id) {
+      const st = animStates.get(id);
+      const figure = sprites.get(id)?.figure;
+      return st && figure ? { facing: st.facing, eight: figure.eight } : undefined;
     },
     poses() {
       const now = performance.now();
@@ -1665,7 +1855,7 @@ export async function createGameCanvas(
       for (const [id, st] of animStates) {
         const meta = sprites.get(id)?.figure?.clips.meta;
         const c = world.creatures.get(id);
-        const dir = outfitDir(c ? world.facing(c, now) : Direction.SOUTH);
+        const dir = st.facing;
         const clip = attackClip(meta, st.attackAction, dir);
         const action = clip ? attackClipAction(meta, st.attackAction, dir) : "lunge";
         const of = clip ? clip.frames * clip.ms : LUNGE_OUT_MS + LUNGE_BACK_MS;
@@ -1718,6 +1908,10 @@ export async function createGameCanvas(
       const path = markPath(mark);
       return path ? atlas.icon(path) : undefined;
     },
+    itemColor(itemId) {
+      const sprite = content.items[itemId]?.sprite;
+      return sprite ? atlas.index.minimap?.[sprite] : undefined;
+    },
     itemIcon(itemId) {
       const sprite = content.items[itemId]?.sprite;
       return sprite ? atlas.icon(sprite) : undefined;
@@ -1743,7 +1937,9 @@ export async function createGameCanvas(
       for (const id of [...sprites.keys()]) dropSprite(id);
       while (ghosts.length > 0) dropGhost(ghosts.length - 1);
       effects.destroy();
+      speech.destroy();
       lights.destroy();
+      castShadows.destroy();
       living?.destroy();
       livingObjects.destroy();
       view.destroy();

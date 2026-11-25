@@ -7,7 +7,10 @@ notes: >-
   Characters wake up at the temple of the Lantern (3158,6386). The priestess stands next
   to it; the harbor, with bilge rats and gulls, is south-east, and the harbor master
   starts ch1_shipwreck on the pier. Only arcanists and druids have a level 1 spell, so
-  the spell step is theirs. The reward is deliberately tiny (a few coins).
+  the spell step is theirs. The reward is deliberately tiny (a few coins). Every new
+  character already wears its vocation's start_kit (data/vocations.yaml): the backpack
+  step says what a newcomer carries (the class weapon in its hand, the biscuits and the
+  poultice) without promising it: a character made before the kits has none.
 steps:
   - id: first_steps
     text: tutorial.step.first_steps

@@ -132,13 +132,17 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.unequipCosmetic(ctx, p, m.UnequipCosmetic.GetKind())
 	case *pb.ClientMessage_SetLook:
 		w.setLook(ctx, p, m.SetLook)
+	case *pb.ClientMessage_MinimapRequest:
+		w.minimapRequest(ctx.Tick, p, m.MinimapRequest)
+	case *pb.ClientMessage_TrackQuest:
+		w.trackQuest(p, m.TrackQuest.GetQuestId())
 	case *pb.ClientMessage_Logout:
 		// No logout in the middle of a fight (linkdead.go): the PvP lock (T5.2) or
 		// travel.combat_block_ms since p fought a monster or took damage. Closing the
 		// connection leaves the character link-dead until the fight is over (docs/02
 		// "Bloqueo de logout en combate").
 		if key := w.logoutBlock(ctx.Tick, p); key != "" {
-			p.emit(systemMsg(key))
+			p.emit(systemMsg(key, num("seconds", w.logoutWaitSeconds(ctx.Tick, p))))
 			return
 		}
 		w.remove(ctx, p, pb.DisconnectReason_DISCONNECT_REASON_LOGGED_OUT, false)
@@ -290,22 +294,34 @@ func (w *World) flushTurns(ctx *game.TickContext) {
 	w.turnHeld = kept
 }
 
-// StepTicks returns how many ticks a step onto ground costs at speed:
-// base_step_ms × terrain% / speed, × diagonal_cost for diagonals, rounded up to whole
-// ticks (at least one). CreatureMove.duration_ms is this many ticks.
+// StepTicks returns how many ticks a step onto ground costs at speed: a straight one
+// base_step_ms × terrain% / speed, rounded up to whole ticks (at least one); a diagonal
+// one that many ticks × diagonal_cost, rounded to the nearest tick (never fewer than the
+// straight step). Rounding the diagonal from the straight ticks, not up from its own
+// milliseconds, keeps both directions at one speed per tile of distance (with √2, a
+// 10-tick straight step is a 14-tick diagonal, not 15). A one-tick straight step is the
+// exception: √2 would round back to one tick and the diagonal would cover √2 times the
+// distance per tick, so a diagonal that costs more than a straight step lasts two there.
+// CreatureMove.duration_ms is this many ticks; the client predicts the same
+// (state/step-time.ts stepMs).
 func (w *World) StepTicks(ground uint16, speed int, diagonal bool) game.Tick {
 	terrain := int64(world.DefaultGroundSpeed)
 	if gs := w.m.GroundSpeeds(); int(ground) < len(gs) && gs[ground] != 0 {
 		terrain = int64(gs[ground])
 	}
-	num := int64(w.mv.BaseStepMs) * terrain * 1000 // thousandths of a ms × speed
-	if diagonal {
-		num = num * w.diag / 1000
-	}
-	den := int64(max(speed, 1)) * 1000
+	num := int64(w.mv.BaseStepMs) * terrain // ms × speed
+	den := int64(max(speed, 1))
 	ms := (num + den - 1) / den
 	tickMs := game.TickDuration.Milliseconds()
-	return game.Tick(max((ms+tickMs-1)/tickMs, 1))
+	ticks := max((ms+tickMs-1)/tickMs, 1)
+	if diagonal {
+		straight := ticks
+		ticks = max((straight*w.diag+500)/1000, straight)
+		if straight == 1 && w.diag > 1000 {
+			ticks = 2
+		}
+	}
+	return game.Tick(ticks)
 }
 
 // moveSystem advances every walking player whose previous step has finished.
@@ -445,6 +461,7 @@ func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick
 	// relocate checks the tile it lands on (a reward that did not fit would otherwise drop
 	// on the entrance, where nobody stands).
 	if !through {
+		p.exploreView() // the minimap (minimap.go)
 		w.checkReach(p)
 		w.sigilStep(p)
 		// The living world's trail wear (trailwear.go); an invisible player leaves no
@@ -513,6 +530,8 @@ func (w *World) relocate(p *Player, to world.Pos, why pb.DisappearReason) {
 	w.checkHouseView(p)
 	w.sendFullView(p)
 	w.appearToObservers(p)
+	p.exploreView() // the minimap (minimap.go)
+	p.hintMoved()   // the tracked step's nearest place may be another one from here
 	w.checkReach(p) // a teleport, a portal, a boat or the temple count for a reach step
 	w.sigilStep(p)
 }
@@ -565,10 +584,13 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.flushTurns(ctx)
 	w.flushLooks() // after everything above that changes equipment, before the batches
 	w.flushTrail(ctx.Tick)
+	w.flushDayNight(ctx.Tick)
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)
 		w.flushQuestLog(p) // after the recheck: its changes are in this one
+		w.flushHint(p)     // minimap.go: the tracked quest's step may have changed
+		w.flushMinimap(ctx.Tick, p)
 		w.sendConditions(ctx.Tick, p)
 		if !w.flushPlayer(ctx.Tick, p) {
 			w.slow = append(w.slow, p)

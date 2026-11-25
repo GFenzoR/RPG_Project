@@ -9,11 +9,15 @@ import {
   loadChatOpacity,
   saveChatOpacity,
   loadCameraShake,
+  loadChatBubbles,
+  loadNameSize,
   loadReducedMotion,
   loadTextScale,
   loadUiScale,
   nearestScale,
   saveCameraShake,
+  saveChatBubbles,
+  saveNameSize,
   saveReducedMotion,
   saveTextScale,
   saveUiScale,
@@ -90,6 +94,22 @@ describe("interface scale, text size and camera shake (docs/17 UI-3, UI-9)", () 
     expect(loadCameraShake(s)).toBe(true);
   });
 
+  it("remembers the speech bubbles over the heads, on by default (docs/17 UI-11)", () => {
+    const s = memory();
+    expect(loadChatBubbles(s)).toBe(true);
+    expect(loadChatBubbles(undefined)).toBe(true);
+    saveChatBubbles(false, s);
+    expect(loadChatBubbles(s)).toBe(false);
+    saveChatBubbles(true, s);
+    expect(loadChatBubbles(s)).toBe(true);
+    const broken = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(loadChatBubbles(broken)).toBe(true);
+  });
+
   it("puts the scales on the page, and takes them off at 100 %", () => {
     const props = new Map<string, string>();
     const root = {
@@ -154,5 +174,33 @@ describe("the chat's opacity (docs/17 UI-10)", () => {
     expect(Object.fromEntries(props)).toEqual({ "--chat-opacity": "0.8" });
     applyChatOpacity(root, 50);
     expect(props.size).toBe(0);
+  });
+});
+
+describe("the name size (docs/17 UI-3)", () => {
+  it("is large unless the player picked normal", () => {
+    const st = memory();
+    expect(loadNameSize(st)).toBe("large");
+    expect(loadNameSize(undefined)).toBe("large");
+    saveNameSize("normal", st);
+    expect(loadNameSize(st)).toBe("normal");
+    saveNameSize("large", st);
+    expect(loadNameSize(st)).toBe("large");
+  });
+
+  it("ignores a value it does not know and storage that throws", () => {
+    const st = memory();
+    st.setItem("rpg.name-size", "huge");
+    expect(loadNameSize(st)).toBe("large");
+    const broken = {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+    };
+    expect(loadNameSize(broken)).toBe("large");
+    expect(() => saveNameSize("normal", broken)).not.toThrow();
   });
 });

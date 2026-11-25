@@ -197,3 +197,43 @@ describe('milestones (docs/02 "Quests de hito")', () => {
     expect(byQuest(all, "ms_pair")).toBeUndefined();
   });
 });
+
+describe("tracking a quest on the minimap", () => {
+  it("offers Track on every active quest and Stop on the tracked one", () => {
+    const tracked: string[] = [];
+    const all = nodes(
+      QuestsBody({
+        t,
+        log: LOG,
+        tab: "active",
+        onTab: () => undefined,
+        serverNow: 10_000,
+        tracked: "ch2_roots",
+        onTrack: (id) => tracked.push(id),
+      }),
+    );
+    const buttons = all.filter((v) => v.props["data-testid"] === "quest-track");
+    expect(buttons).toHaveLength(2);
+    const roots = buttons.find((b) => text(b) === "client.quests.untrack");
+    const ore = buttons.find((b) => text(b) === "client.quests.track");
+    expect(roots?.props["aria-pressed"]).toBe(true);
+    expect(ore?.props["aria-pressed"]).toBe(false);
+    ore?.props.onClick?.();
+    roots?.props.onClick?.();
+    expect(tracked).toEqual(["foreman_ore", ""]);
+  });
+  it("offers nothing without a way to track (the preview) nor on finished quests", () => {
+    expect(body("active").all.some((v) => v.props["data-testid"] === "quest-track")).toBe(false);
+    const all = nodes(
+      QuestsBody({
+        t,
+        log: LOG,
+        tab: "finished",
+        onTab: () => undefined,
+        serverNow: 10_000,
+        onTrack: () => undefined,
+      }),
+    );
+    expect(all.some((v) => v.props["data-testid"] === "quest-track")).toBe(false);
+  });
+});

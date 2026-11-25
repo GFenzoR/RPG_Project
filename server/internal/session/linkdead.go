@@ -2,6 +2,7 @@ package session
 
 import (
 	"slices"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -26,6 +27,14 @@ func (w *World) logoutBlock(tick game.Tick, p *Player) string {
 		return msgLogoutLocked
 	}
 	return ""
+}
+
+// logoutWaitSeconds is how long p still waits before it may log out, in whole seconds
+// rounded up (at least 1): the "seconds" of the refusal (combat.logout_locked,
+// pvp.logout_locked), the same end the in_combat status counts down (combatEnd).
+func (w *World) logoutWaitSeconds(tick game.Tick, p *Player) int {
+	left := (w.combatEnd(p) - tick).Duration()
+	return max(1, int((left+time.Second-1)/time.Second))
 }
 
 // linkDeadOnLeave keeps p in the world when its connection closes while it is in combat

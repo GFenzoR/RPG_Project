@@ -2,6 +2,7 @@ package content
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -46,6 +47,27 @@ func TestRegenTick(t *testing.T) {
 	} {
 		if hp, mp := r.Tick(c.pct); hp != c.hp || mp != c.mp {
 			t.Errorf("Tick(%d) = %d, %d; want %d, %d", c.pct, hp, mp, c.hp, c.mp)
+		}
+	}
+}
+
+// A start_kit entry without a count, or with 0, is one unit; a negative count or no item
+// is refused, and the error says what is accepted.
+func TestParseVocationsStartKit(t *testing.T) {
+	const head = "- id: v\n  start: {health: 10, mana: 0, capacity: 1, speed: 100}\n  start_kit:\n"
+	vs, err := ParseVocations([]byte(head + "    - {item: a}\n    - {item: b, count: 0}\n    - {item: c, count: 7}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []int{1, 1, 7} {
+		if got := vs["v"].StartKit[i].Units(); got != want {
+			t.Errorf("entry %d: %d units, want %d", i, got, want)
+		}
+	}
+	for _, bad := range []string{"    - {item: a, count: -1}\n", "    - {count: 2}\n"} {
+		_, err := ParseVocations([]byte(head + bad))
+		if err == nil || !strings.Contains(err.Error(), "not negative") || strings.Contains(err.Error(), ">= 1") {
+			t.Errorf("%q: error %v, want one that asks for a count that is not negative", bad, err)
 		}
 	}
 }

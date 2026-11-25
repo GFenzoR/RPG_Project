@@ -16,16 +16,18 @@ import {
   textWidth,
 } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
-import { castShadow, composite, rng, seedOf } from "./draw.ts";
+import { composite } from "./draw.ts";
 import type { Recipe, RecipeBook } from "./recipe.ts";
 import { MAX_ORB_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { RECIPES, recipesAt } from "./recipes/index.ts";
+import { corpsePath, monsterIds } from "./recipes/corpses.ts";
+import { renderRecipe, TILE } from "./render.ts";
 
 export { RECIPES, recipesAt } from "./recipes/index.ts";
 export type { Recipe, RecipeBook, RecipeKind, ShadowOptions } from "./recipe.ts";
 export { UI_ICON_BOX, UI_SLOT_BOX, UI_STATUS_BOX, uiIconBox } from "./recipe.ts";
 
-export const TILE = 32;
+export { TILE } from "./render.ts";
 
 /**
  * Recipe paths in a stable (sorted) order, optionally only those starting with `only`, of
@@ -39,14 +41,7 @@ export function recipePaths(only?: string, book: RecipeBook = RECIPES): string[]
 
 /** Draws one recipe into a fresh image of its size (a creature with its cast shadow). */
 export function render(path: string, recipe: Recipe = mustGet(path)): Image {
-  const img = createImage(recipe.width ?? TILE, recipe.height ?? TILE);
-  const seed = seedOf(path);
-  recipe.draw(img, rng(seed), seed);
-  // A creature of ours casts the shadow the Dungeon Crawl monsters have, so both sit on
-  // the map the same way (assets/README.md, "Sombra de las criaturas"), unless it stands
-  // on the renderer's contact ellipse like the animated monsters (shadow: false).
-  if (recipe.kind === "creature" && recipe.shadow !== false) castShadow(img, recipe.shadow);
-  return img;
+  return renderRecipe(path, recipe);
 }
 
 function mustGet(path: string, book: RecipeBook = RECIPES): Recipe {
@@ -120,15 +115,16 @@ export const MISSILE_ART = new RegExp(
  * creatures/bristleback_boar/walk_w_0. Valid when data/ uses <sprite>; tools/spritepack
  * turns them into that sprite's clips.
  */
-export const ANIM_FRAME = /^(.+)\/(idle|walk|attack|shoot|cast|death)_(n|e|s|w)_[0-9]+$/;
+export const ANIM_FRAME =
+  /^(.+)\/(idle|walk|attack|shoot|cast|death)_(n|e|s|w|ne|se|sw|nw)_[0-9]+$/;
 
 /**
  * Map tile art (docs/17 ART-3, ART-4, ART-7, tools/spritepack tiles.ts): a ground's other
- * looks <sprite>/var_<n>, an animation's frames <sprite>/frame_<n>, a wall's pieces
+ * looks <sprite>/var_<n> and its decals <sprite>/decal_<n>, an animation's frames <sprite>/frame_<n>, a wall's pieces
  * <sprite>/wall_<mask> and a cast shadow <sprite>/shadow. Valid when data/ uses <sprite>.
  */
 export const TILE_PART =
-  /^(.+)\/(?:var_[1-9][0-9]*|frame_[1-9][0-9]*|wall_(?:[0-9]|1[0-5])|shadow)$/;
+  /^(.+)\/(?:var_[1-9][0-9]*|decal_[1-9][0-9]*|frame_[1-9][0-9]*|wall_(?:[0-9]|1[0-5])|shadow)$/;
 
 /**
  * Client interface icons, which the client finds by path (no data/ file names them):
@@ -139,13 +135,21 @@ export const UI_ICON = /^ui\/[a-z0-9_]+\/[a-z0-9_]+$/;
 /**
  * Problems with the recipe set: paths no data/ file uses (and that are neither outfit nor
  * effect frames, missile art nor ui icons), ui icons that are not of kind "ui" (or the
- * other way round), and effect or missile strips whose frames are not 0, 1, ... without a
- * gap (the client stops at the first missing frame).
+ * other way round), effect or missile strips whose frames are not 0, 1, ... without a
+ * gap (the client stops at the first missing frame), and monsters of data/monsters with no
+ * corpse of their own (no look, death clip nor image to make it from: recipes/corpses.ts).
  */
 export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
   const book = recipesAt(root);
+  // A monster's corpse (recipes/corpses.ts), which the client finds by the monster's id.
+  const corpses = new Set(monsterIds(root).map(corpsePath));
   const problems: string[] = [];
+  for (const id of monsterIds(root))
+    if (!book[corpsePath(id)])
+      problems.push(
+        `${corpsePath(id)}: monster ${id} has no corpse: it needs a look, a death clip (<sprite>/death_s_<n>) or a square image (<sprite>) to make it from`,
+      );
   for (const p of recipePaths(undefined, book)) {
     const ui = book[p]?.kind === "ui";
     if (ui !== UI_ICON.test(p))
@@ -157,6 +161,7 @@ export function checkPaths(root: string): string[] {
       !EFFECT_FRAME.test(p) &&
       !MISSILE_ART.test(p) &&
       !LIVING_FX.test(p) &&
+      !corpses.has(p) &&
       !used.has(ANIM_FRAME.exec(p)?.[1] ?? "") &&
       !used.has(TILE_PART.exec(p)?.[1] ?? "")
     )

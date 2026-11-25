@@ -1,0 +1,158 @@
+/* The minimap (ui/Minimap.tsx, docs/17 "Minimapa"): top right of the map box, under the
+   windows (.win-layer is z-index 20) and over the notices. The frame is the windows' iron
+   with the cardinal points on its sides; the terrain stays pixel-exact. */
+.minimap {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  color: var(--ui-text);
+  font-family: var(--ui-font);
+  background: var(--ui-stone-900);
+  box-shadow: var(--ui-frame-shadow);
+  border-radius: var(--ui-radius);
+  user-select: none;
+}
+.minimap-bar {
+  display: flex;
+}
+.minimap-fold {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.75rem;
+  padding: 0 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--ui-gold-300);
+  font-family: var(--ui-font-title);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.minimap-frame {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1rem auto 1rem;
+  grid-template-rows: 1rem auto 1rem auto;
+  padding: 0 0.25rem 0.25rem;
+}
+.minimap-cardinal {
+  font-family: var(--ui-font-title);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--ui-gold-300);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.minimap-cardinal[data-side="top"] {
+  grid-area: 1 / 2;
+}
+.minimap-cardinal[data-side="right"] {
+  grid-area: 2 / 3;
+}
+.minimap-cardinal[data-side="bottom"] {
+  grid-area: 3 / 2;
+}
+.minimap-cardinal[data-side="left"] {
+  grid-area: 2 / 1;
+}
+.minimap-map {
+  grid-area: 2 / 2;
+  position: relative;
+  overflow: hidden;
+  background: var(--ui-void);
+  box-shadow:
+    0 0 0 1px var(--ui-iron-900),
+    0 0 0 2px var(--ui-iron-600);
+  cursor: grab;
+  touch-action: none;
+}
+.minimap-map:active {
+  cursor: grabbing;
+}
+.minimap-canvas,
+.minimap-marks {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.minimap-canvas {
+  image-rendering: pixelated;
+}
+.minimap-marks {
+  pointer-events: none;
+  overflow: visible;
+}
+.minimap-self {
+  fill: var(--ui-text);
+  stroke: var(--ui-void);
+  stroke-width: 1;
+}
+.minimap-party {
+  fill: var(--ui-mana-300);
+  stroke: var(--ui-void);
+  stroke-width: 1;
+}
+.minimap-hint-area {
+  fill: color-mix(in srgb, var(--ui-gold-300) 22%, transparent);
+  stroke: var(--ui-gold-300);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+}
+.minimap-hint-arrow {
+  fill: var(--ui-gold-300);
+  stroke: var(--ui-void);
+  stroke-width: 1;
+}
+.minimap-distance,
+.minimap-floor {
+  fill: var(--ui-gold-300);
+  font-family: var(--ui-font);
+  font-size: 9px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--ui-void);
+  stroke-width: 2.5px;
+}
+.minimap-buttons {
+  grid-area: 4 / 1 / 5 / 4;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding-top: 4px;
+}
+.minimap-buttons button {
+  min-width: 1.75rem;
+  min-height: 1.5rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--ui-iron-600);
+  border-radius: var(--ui-radius);
+  background: var(--ui-stone-700);
+  color: var(--ui-text);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.minimap-buttons button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+/* Touch: 44 px targets for the fold and the buttons. */
+.game[data-touch] .minimap-fold,
+.game[data-touch] .minimap-buttons button {
+  min-height: 44px;
+  min-width: 44px;
+}
+/* Tablets and phones: top left, where nothing else sits over the map (the tutorial's hint
+   is top right). */
+.game:not([data-ui="windows"]) .minimap {
+  right: auto;
+  left: 6px;
+}

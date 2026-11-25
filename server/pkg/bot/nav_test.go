@@ -2,6 +2,10 @@ package bot
 
 import (
 	"math/rand/v2"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -86,4 +90,48 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+// A bot's paths weigh a diagonal as balance.yaml says, like the server's: around a tile of
+// mud, two diagonals over grass are shorter at √2 (2.83 against 3) and longer at 2 (4).
+func TestNavDiagonalCostFromBalance(t *testing.T) {
+	n := newNav(worldtest.Map(t, 0, 0, 7,
+		"...",
+		".m.",
+	))
+	from, to := Pos{X: 0, Y: 1, Z: 7}, Pos{X: 2, Y: 1, Z: 7}
+	if path, ok := n.Path(from, to); !ok || !slices.Equal(path, []Direction{NorthEast, SouthEast}) {
+		t.Fatalf("default cost: path %v (ok %v), want the two diagonals", path, ok)
+	}
+
+	repo := filepath.Join("..", "..", "..", "data")
+	if err := n.UseBalance(repo); err != nil {
+		t.Fatalf("UseBalance(repo data): %v", err)
+	}
+	if path, _ := n.Path(from, to); !slices.Equal(path, []Direction{NorthEast, SouthEast}) {
+		t.Fatalf("repo balance (√2): path %v, want the two diagonals", path)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(repo, "balance.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const line = "diagonal_cost: 1.414"
+	if !strings.Contains(string(raw), line) {
+		t.Fatalf("balance.yaml has no %q", line)
+	}
+	dir := t.TempDir()
+	dear := strings.Replace(string(raw), line, "diagonal_cost: 2", 1)
+	if err := os.WriteFile(filepath.Join(dir, "balance.yaml"), []byte(dear), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.UseBalance(dir); err != nil {
+		t.Fatalf("UseBalance: %v", err)
+	}
+	if path, _ := n.Path(from, to); !slices.Equal(path, []Direction{East, East}) {
+		t.Fatalf("diagonal_cost 2: path %v, want straight through the mud", path)
+	}
+	if err := n.UseBalance(t.TempDir()); err == nil {
+		t.Fatal("no balance.yaml: want an error")
+	}
 }

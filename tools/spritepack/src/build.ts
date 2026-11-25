@@ -101,6 +101,11 @@ export interface AtlasIndex {
   anims: Record<string, AnimMeta>;
   /** Map sprites with variants, frames, wall pieces, an anchor or a shadow (tiles.ts). */
   tiles: Record<string, TileMeta>;
+  /**
+   * The minimap colour of every sprite (docs/02 "Minimapa"): the average of its opaque
+   * pixels, "#rrggbb". The client colours a minimap tile by its item's sprite.
+   */
+  minimap: Record<string, string>;
 }
 
 export interface BuildResult {
@@ -459,6 +464,7 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     sprites: {},
     anims: {},
     tiles: {},
+    minimap: {},
   };
   const byName = [...packed.placements].sort((a, b) => (a.name < b.name ? -1 : 1));
   for (const p of byName) {
@@ -489,7 +495,39 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
   for (const page of pages) page.json.frames = sortedRecord(page.json.frames);
   index.anims = anims;
   index.tiles = tiles;
+  const colours: Record<string, string> = {};
+  for (const [name, r] of resolved) colours[name] = averageColor(r.image);
+  for (const [alias, target] of aliases) {
+    const col = colours[target];
+    if (col) colours[alias] = col;
+  }
+  index.minimap = sortedRecord(colours);
   return { diagnostics: diags, atlas: { index, pages }, sprites };
+}
+
+/**
+ * The minimap colour of an image (docs/02 "Minimapa"): the average of its opaque pixels,
+ * each weighted by its alpha, as "#rrggbb"; black for an image with none.
+ */
+export function averageColor(img: Image): string {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let w = 0;
+  for (let i = 0; i < img.width * img.height; i++) {
+    const a = img.data[i * 4 + 3] ?? 0;
+    if (a === 0) continue;
+    r += (img.data[i * 4] ?? 0) * a;
+    g += (img.data[i * 4 + 1] ?? 0) * a;
+    b += (img.data[i * 4 + 2] ?? 0) * a;
+    w += a;
+  }
+  if (w === 0) return "#000000";
+  const hex = (v: number): string =>
+    Math.round(v / w)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
 }
 
 /** The opaque box of an image ([x, y, w, h]; a 1x1 corner when it is all transparent). */
@@ -523,14 +561,16 @@ export function writeAtlas(atlas: NonNullable<BuildResult["atlas"]>, outDir: str
   };
   for (const page of atlas.pages) {
     write(page.pngFile, encodePng(page.image));
-    write(page.jsonFile, JSON.stringify(page.json, null, 2) + "\n");
+    write(page.jsonFile, JSON.stringify(page.json) + "\n");
   }
-  write("atlas.json", JSON.stringify(atlas.index, null, 2) + "\n");
+  // No indentation: the client downloads these, and spaces were near half their weight
+  // (docs/07 "Humanoides en 8 direcciones"). They are generated, never reviewed as a diff.
+  write("atlas.json", JSON.stringify(atlas.index) + "\n");
   return written;
 }
 
 /** An animation frame's name: <sprite>/<action>_<dir>_<n> (docs/17 ANI-4). */
-const FRAME_NAME = /^(.+)\/(idle|walk|attack|shoot|cast|death)_([nesw])_([0-9]+)$/;
+const FRAME_NAME = /^(.+)\/(idle|walk|attack|shoot|cast|death)_(ne|se|sw|nw|[nesw])_([0-9]+)$/;
 
 /** Default ms per frame of an action whose frames are files (walk plays by distance). */
 const FILE_FRAME_MS: Record<AnimAction, number> = {

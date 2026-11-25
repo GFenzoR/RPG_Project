@@ -57,10 +57,24 @@ de pruebas).
 ## 2. Cuenta y personaje
 1. En `http://localhost:5173/play/`, "¿No tienes cuenta? Regístrate": cualquier email y una
    contraseña de 8 caracteres o más. Sin SMTP no se verifica nada.
-2. Entra, crea un personaje (nombre, vocación y **aspecto**: cuerpo, piel, peinado, color de
-   pelo y barba, con la figura que camina en el lugar; las flechas ‹ › la giran y "Al azar"
-   elige todo) y pulsa "Jugar". El aspecto se cambia después gratis en la ventana
-   Apariencia (tecla O) → Personalizar → "Guardar aspecto" (docs/02 "Apariencia").
+2. Entra. Una cuenta nueva va directo al formulario de creación (sin "Volver"); una con
+   personajes ve primero la lista y "Crear personaje nuevo" (docs/02 "Cuentas"). Crea un
+   personaje (nombre, vocación y **aspecto**: cuerpo, piel, peinado, color de pelo y barba,
+   con la figura que camina en el lugar; las flechas ‹ › la giran y "Al azar" elige todo).
+   Al cambiar la vocación, debajo cambian su estilo en una línea y su equipo inicial
+   ("Empieza con: …"). Al crear vuelves a la lista con el nuevo marcado en dorado y su
+   figura; pulsa "Jugar". El aspecto se cambia después gratis en la ventana Apariencia
+   (tecla O) → Personalizar → "Guardar aspecto" (docs/02 "Apariencia").
+   - **Equipo inicial** (docs/02 "Equipo inicial"): al entrar por primera vez el personaje
+     ya lleva el arma de su vocación (el guardián también la tapa de barril; el montaraz 60
+     flechas en el slot de munición), túnica, pantalones y botas, y en la mochila 5
+     galletas y una cataplasma. Muere (los lobos de los corrales) o sal y vuelve a entrar:
+     no se da otra vez.
+   - **Tope de personajes:** con el máximo por cuenta (10, `auth.DefaultMaxCharacters`),
+     "Crear personaje nuevo" queda deshabilitado con el motivo.
+   - **Poderes de cada vocación:** con la instructora (sube nivel gratis, sección 4) mira
+     que la barra tenga los hechizos nuevos al llegar a su nivel: guardián `cleave` (3) y
+     `sundering_blow` (26), arcanista `cinder_lance` (18), montaraz `pinning_shot` (18).
 3. Despiertas en el templo de Thimblewick (2095,2086). Aquí no hay tutorial: es
    de Puerto.
 
@@ -304,6 +318,36 @@ Al norte del templo, entre la costa y los corrales (tabla de arriba; reglas en
    hacha o al fuego (un hechizo de área de fuego los quema).
 4. **El volcán** tiene dos atajos en el muro del cráter, al noroeste: una roca agrietada
    (3699,5753, pico) y una barricada podrida (3714,5746).
+
+### Día y noche
+La hora del mundo es la misma para todos y sigue la hora real (un ciclo de 240 minutos:
+180 de día y 60 de noche). Para verla sin esperar, con una cuenta de staff (abajo, "Hacerse
+personal"):
+- `/time` dice la hora del mundo: la fase, el minuto del ciclo, la luna y la velocidad.
+- `/time dawn`, `morning`, `noon` (o `day`), `afternoon`, `dusk`, `night` (o `midnight`), o
+  `/time <minuto>` (0 = empieza el amanecer, 180 = empieza la noche): otra hora del mismo
+  día.
+- `/time moon <fase>`: el próximo día con esa luna (0 nueva, 4 llena).
+- `/time speed <n>`: el mundo corre n veces más rápido (`/time speed 60`: un ciclo en 4
+  minutos); `/time speed 0` lo detiene (para mirar o sacar capturas) y `/time speed 1`
+  vuelve a lo normal. Un reinicio del servidor también.
+
+Los cambios del staff no se guardan: tras un reinicio el reloj vuelve a la hora real (lo
+mismo si el game loop se atrasó respecto del reloj real: la hora deriva un poco hasta el
+próximo reinicio). La luna que informa `/time` es la del cielo: en el amanecer, la de la
+noche anterior (`/time moon 4` y luego `/time dawn` dice luna 3). Al revés también:
+`/time moon 4` dado en el amanecer deja la luna 4 en ese cielo, y la noche que sigue
+(`/time night`) ya tiene la 5; para una noche con luna 4, primero `/time night` y después
+`/time moon 4`. El servidor del E2E arranca con `-world-time noon` (rechazado en
+producción): hora detenida al mediodía (un reloj detenido se manda al entrar y tras cada
+`/time`, no cada minuto); el test de día y noche la deja así al terminar, aunque falle.
+Todos los jugadores reciben el cambio en el acto. Qué mirar: a la mañana las sombras de los
+personajes largas hacia el oeste, al mediodía cortas bajo los pies, a la tarde hacia el
+este; de noche la superficie azul, las fogatas y faroles encendidos, luciérnagas en el pasto
+y una sombra tenue de la luna (ninguna con luna nueva); con "Animaciones reducidas", solo la
+sombra de contacto (la luz de la noche sigue). Un cuerpo a menos de media opacidad (tu personaje invisible, que se ve
+al 40 %, o uno que se desvanece) no proyecta sombra a propósito: le queda solo la de
+contacto. Bajo tierra todo sigue igual.
 
 ## 5. Hacerse personal (GM o admin)
 Los roles los da solo el operador, con la base de datos (con `make play` corriendo o no):

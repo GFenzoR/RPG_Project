@@ -104,6 +104,323 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Globos de diálogo (hecho, rama `feat/chat-bubbles`; el dueño el 2026-11-23: lo dicho en
+  el canal local aparece sobre la cabeza; docs/17 UI-11):** decir, gritar, susurrar y la
+  línea del NPC en su diálogo, con ajuste de línea, apilado, separación entre hablantes y
+  la opción en Opciones → Interfaz. Sin cambios de servidor ni protocolo. Queda:
+  - **Lista de ignorados:** no existe; cuando se haga, `drawSpeech` de `game-canvas.ts`
+    debe saltar a los ignorados igual que el chat.
+  - **Mirar en el playtest** si 150 px de ancho y los tiempos (3,5 a 9 s) se sienten
+    bien con mucha gente hablando, y si el grito necesita algo más que color y borde.
+  - **NPCs que hablan solos** (pregones, saludos al pasar): el servidor no los manda
+    (`MESSAGE_KIND_NPC` existe pero nadie lo emite); cuando lo haga, salen con globo solos.
+  - **E2E** (lo corre el lote al final): `16a-chat-bubble` del test del chat, el globo del
+    grito sobre el propio jugador.
+- **Ambiente posicional (hecho, rama `feat/soundscape`, lote 18; el dueño el 2026-11-23:
+  "en el pueblo se escucha el mar aunque no está tan cerca"; `livingworld/README.md`
+  "Ambiente", docs/17 SND-1):** el loop por isla se fue; bajo la música suenan capas por
+  lo que hay alrededor (olas, viento, brisa, bosque, lava, cueva, pueblo) y emisores
+  (fuentes, pozos, fogones, braseros, antorchas, faroles, fraguas), con fundidos y tope de
+  voces. Queda:
+  - **Escucharlo:** los nueve loops son de `tools/soundgen` (revisados solo por espectro y
+    costura, nadie los oyó). El dueño debería pasear por Velmara (orilla, plaza, fuente,
+    fragua) y por Selvaine y decir qué subir, bajar o rehacer; los volúmenes están en
+    `data/livingworld/ambience.yaml`.
+  - **Gemini:** no se probó: el Chrome del dueño con `--remote-debugging-port=9222` no estaba
+    abierto. Con él abierto, pedir loops naturales (olas en una orilla, viento del
+    desierto, viento en los árboles, una fuente de piedra, una fogata, una antorcha, una
+    cascada, una fragua, un murmullo de pueblo), convertirlos con `music_convert.py` (loop
+    de 16–30 s, mono) y acreditarlos con `credit.py`; si suenan musicales, quedan los de
+    soundgen.
+  - **Faltan items:** una fogata suelta (hoy el fogón hace de fogata) y una cascada no
+    existen como items; Thimblewick no tiene fuente. Las paredes no tapan el sonido de un
+    emisor (se oye una fragua a través de un muro).
+  - **E2E:** el test de sonido de `e2e/game.spec.ts` espera la brisa del pasto (y no las
+    olas) en el templo de la isla del E2E; lo corre el lote al final.
+- **Nombres más grandes y legibles (hecho, rama `feat/name-labels`; el dueño el 2026-11-23:
+  "los nombres deben ser más grandes", el violeta de los NPCs no se leía; docs/17 "Hecho:
+  nombres más grandes y legibles"):** los nombres, gremios, marcas PvP y números flotantes
+  escalan con el zoom en pasos enteros (grande por defecto, normal en Opciones → Interfaz)
+  y los colores tienen contraste ≥ 4,5:1 contra el contorno. Falta que el dueño lo mire en
+  su pantalla: si a 1x (la app a 960x700) los quiere más grandes, `labelScale` daría 2 desde
+  zoom 1 con "Grande" (a 1x un nombre ocuparía 2/3 de casilla de alto y se ocultarían más
+  por solapes). El muro que se vuelve translúcido delante del jugador (ART-3) tiene ahora su
+  E2E (`102-wall-fade-own-player`).
+- **Ventanas que cambian de tamaño desde las cuatro esquinas (hecho, rama
+  `feat/window-resize`; el dueño el 2026-11-23: "como en Ragnarok Online"; docs/17 UI-5,
+  §7 "Hecho: cambiar el tamaño desde las cuatro esquinas"):** solo las esquinas (los bordes
+  no), con mínimo, área sobre la barra e imán; el botón ✥ y mover o cambiar el tamaño con
+  el teclado se quitaron por decisión del dueño. Queda:
+  - **Mirarlo en el E2E final:** el screenshot `16b-chat-resized-top-left` (el chat
+    agrandado desde su esquina de arriba a la izquierda) y que el brillo de las esquinas no
+    se vea como un adorno de más.
+  - **Sin teclado:** con el ✥ fuera, mover o cambiar el tamaño de una ventana pide el
+    mouse. Si el dueño quiere de nuevo una forma con el teclado, que no sea un botón en la
+    barra (le resultaba confuso).
+- **Variedad de suelos (hecho, rama `feat/ground-variety`; el dueño el 2026-11-23: "los
+  sprites de piso se repiten demasiado, sobre todo la arena"; docs/17 ART-4):** 11 looks de
+  arena y de pasto, más looks de tierra, arena mojada, piedra, ceniza y escoria, elección
+  por zonas sin el mismo look alternativo en casillas de lado, un tono lento por posición
+  y detalles sueltos en arena y pasto (conchas, ramas, flores, trébol). Queda:
+  - **Mirarlo en el juego:** el E2E del lote saca las capturas; si al dueño el tono le
+    parece mucho o poco, es `TONE_DEPTH` (0,1) en `packages/renderer/src/tile-art.ts`, y la
+    cantidad de detalles, `DECAL_DENSITY` (0,05).
+  - **Agua, lava, lava enfriada, basalto y pisos de madera** siguen con un look: el agua y
+    la lava porque cada look necesita sus 4 frames; el basalto y la lava enfriada porque
+    un corazón distinto corta sus losas a la mitad. La lava enfriada muestra bandas
+    diagonales regulares en zonas grandes.
+  - **Nieve y piso de cueva** no existen como suelos propios: cuando entren, como
+    `LevelGround` con `levelLooks` (`assets/README.md`).
+  - El desgaste de senderos (`livingworld`) dibuja sus etapas sin el tono del suelo; con
+    `TONE_DEPTH` 0,1 la diferencia es chica, pero conviene mirarla en el E2E.
+- **Minimapa (hecho, rama `feat/minimap`, lote 17; el dueño el 2026-11-23: "un minimapa
+  como el de Tibia: hay que explorar para verlo, puntos cardinales y una estimación del
+  objetivo"; docs/02 "Minimapa", docs/05 "Minimapa"):** lo explorado se guarda por
+  personaje en el servidor (`character_explored`, migración 00028), el diario sigue una
+  quest y el minimapa muestra un círculo corrido o una flecha en el borde. Queda:
+  - **Integración y E2E** (Postgres y el navegador) los corre el lote al final:
+    `store/play_integration_test.go` (upsert de sectores) y el screenshot
+    `96c-minimap-tracked` de `e2e/sandbox.spec.ts`.
+  - **Revisión del 2026-11-24, aplicada:** el color de lo explorado en la sesión se
+    recuerda en el cliente (antes quedaba gris al alejarse o cambiar de piso), solo una
+    respuesta (`MinimapSectors.answer`) da un sector por pedido, el untrack se contesta
+    siempre, la pista de un `kill` se recalcula al reubicarse y su corrimiento depende
+    del lugar, ráfaga de pedidos 32 (medida) con recarga exacta. No se cambió: la clave de
+    `rpg.track` es el nombre del personaje (el cliente no conoce el id del personaje; el
+    servidor valida la quest, así que un nombre reutilizado solo sigue una quest que el
+    personaje nuevo también tenga en curso).
+  - **Riesgos menores anotados en la revisión:** la pista es fija por personaje y paso, así
+    que con varios personajes de la misma cuenta se podría triangular el objetivo (riesgo
+    bajo: es una quest, no un secreto). El upsert de `character_explored` hace un OR de
+    los bits en SQL (revisión final del lote 19): un snapshot viejo escrito después de uno
+    nuevo no borra nada, aunque la FIFO del Saver ya los escribe en orden. El minimapa
+    colorea con el mapa vivo del servidor (`world.Map`), así que una puerta lejana ya
+    explorada se ve abierta o cerrada como está ahora; los objetos del mundo vivo, los
+    items tirados y los muebles de casa no están en ese mapa y no se ven (solo la marca
+    de bloqueo de un objeto vivo puede cambiar el color de una casilla que además tiene
+    un item del mapa: la regla de respaldo de `minimapItem`).
+  - **Pisos de arriba:** desde la superficie se ven los pisos 0 a 7, pero solo se explora el
+    propio; decidir con el dueño si mirar un techo debe explorar ese piso.
+  - **`hint_area` en el contenido:** ninguna quest lo usa todavía; los pasos `has_item` (10
+    quests: `foreman_ore`, `tanner_chitin`, `smith_ring`, capítulos 2 y 3...) no muestran
+    estimación hasta que se les ponga uno (dónde se consigue el item).
+  - **Marcas propias** (como las de Tibia: un punto con un ícono y un texto) y un mapa grande
+    a pantalla completa: no se pidieron; el formato de sectores ya lo permitiría.
+  - **Número de migración:** 00028; si otra rama del lote suma una, renumerar al apilar.
+- **Identidad de vocación (hecho, rama `feat/vocation-identity`; el dueño el 2026-11-23:
+  equipo inicial por clase, skills que suben según la clase, poderes propios; docs/02
+  "Equipo inicial", "Entrenamiento por vocación" y "Hechizos por vocación"):** cada
+  vocación recibe su `start_kit` una vez en el primer login; cuatro hechizos nuevos
+  (`cleave`, `sundering_blow`, `cinder_lance`, `pinning_shot`) dan a cada clase un
+  poder propio en cada franja de 1 a 30; la pantalla de personajes va directo al
+  formulario sin personajes y a la lista con ellos. Queda:
+  - **Arte propio de los hechizos nuevos:** usan el efecto y el sonido de su elemento,
+    como todos; si el dueño quiere un efecto distinto por hechizo, hace falta un id de
+    efecto por hechizo en el protocolo.
+  - **Decisión del dueño, oro por personaje nuevo:** la revisión del lote notó que el kit
+    vendido al armero más monedas nuevas de la jefa del puerto eran unas 80 monedas por
+    personaje (10 personajes por cuenta). Quedó neutro respecto de antes del kit (docs/02
+    "Equipo inicial", presupuesto de inicio): la jefa del puerto no da monedas por el arma
+    (el montaraz conserva sus 20 para flechas) y el armero paga una sola moneda por la tapa
+    de barril y por cada prenda sencilla. Si el dueño prefiere regalar algo al aceptar (monedas, una
+    pieza de la banda 2, un brebaje), es dato de `data/npcs/harbor_master.yaml` y el tope
+    de `TestStartKitResaleBudget`.
+  - **Personajes creados antes:** no reciben el kit (ya jugaron), pero la jefa del puerto
+    le da el arma de clase a quien no la lleve al aceptar `ch1_shipwreck`, así que ninguno
+    queda desarmado. No reciben el escudo, la ropa ni las flechas (el armero los vende; el
+    montaraz recibe monedas para flechas). Si el dueño quiere el kit completo para los
+    existentes, sería un cambio de una vez; lo más simple en el hosting de pruebas
+    (docs/13) es vaciar su base. No hay personajes en producción.
+  - **Figura en la lista:** solo con aspecto guardado; uno creado por la API sin `look` no
+    la muestra hasta su primer login (el juego le elige uno).
+  - **Integración y E2E** (Postgres y el navegador) los corre el lote al final: la lista
+    con `look` (`store_integration_test.go`) y los screenshots `18b-characters-list`,
+    `19-create-druid` y `account-03-first-character`.
+- **Diagonales (hecho, rama `feat/diagonal-motion`, lote 17; el dueño el 2026-11-23: "en
+  diagonal se siente más lento" y pidió sprites en diagonal):** `diagonal_cost` pasó de 1,5 a
+  √2 (1.414; docs/02 "Movimiento", docs/05 "Caminar"): la misma velocidad por casilla en las
+  8 direcciones, con el A* y la predicción del cliente iguales al servidor. Los humanoides del
+  motor (jugadores, NPCs que son personas y los 4 monstruos humanoides, que usan el mismo
+  muñeco) tienen 8 direcciones (docs/17 ANI-1). Queda:
+  - **Mirarlo en el juego:** el E2E `96d-movement-diagonal.png` (dos flechas, la persona
+    mirando la diagonal) y caminar en diagonal en Thimblewick con `make play`, también con
+    escudo y arma (el arma al noroeste va sobre la ropa aunque esté en la mano lejana; docs/17).
+  - **El peso del atlas:** 2 páginas todavía, pero lo que baja el juego pasó de ~6,2 a
+    ~7,0 MB (ya con el JSON del atlas sin indentar; indentado eran ~9,3). Lo que queda por
+    hacer si molesta, en docs/07 "Humanoides en 8 direcciones".
+  - **Monstruos en 8 direcciones (siguiente):** siguen en 4 con la regla nueva (conservan la
+    mitad de la diagonal que ya miran). Los que más ganarían, por andar mucho en diagonal y
+    verse de cerca: los cuadrúpedos del motor (`bristleback_boar`, `bramble_stag`: ya son
+    modelos, solo falta pedir `dirs` de 8 en su spec, ~+70 frames cada uno, y revisar el
+    trote con la regla de la zancada), los perros (`wolf`, `ash_hound`) y `slag_golem` /
+    `slagbound_warden` (grandes, el giro se nota). Bichos chicos o que flotan (`bilge_rat`,
+    `tide_crab`, `ore_beetle`, `hollow_crawler`, `moss_spider`, `mire_toad`, `gloom_bat`,
+    `thieving_gull`, `thornling`, `cinder_salamander`, `ember_wyrmling`) ganan poco; los
+    de Gemini (hojas a mano) pedirían hojas nuevas.
+- **Restos con nombre y cadáver propio (hecho, rama `feat/corpse-names`; el dueño el
+  2026-11-23: "restos de lobo", no "restos de bestia", y el cuerpo de cada bestia único):**
+  los restos llevan `ItemMods.remains_of` (el cuerpo de un jugador, `body_of`), el cliente
+  los nombra "restos de <monstruo>" / "<monster> remains" y "cuerpo de <jugador>" en el
+  look, el texto del cursor, el menú, la ficha, la ventana del botín y el log, y los dibuja
+  con `corpses/<id>` de spritegen (docs/02 "Restos", docs/05 "Restos", docs/06 "Cadáver
+  propio", docs/17 "Cadáveres"). Queda:
+  - **Etapas de descomposición** (fresco, seco, huesos sobre `combat.monster_corpse_ms`):
+    el cliente no sabe la edad de unos restos; haría falta la hora de muerte en `ItemMods`
+    o un `TileUpdate` del servidor por etapa. No se hizo.
+  - **El cuerpo de un jugador con su muñeco tendido:** hoy es `creature_remains`
+    (`CorpseItem`, huesos sobre un cuero) con su nombre. Haría falta su aspecto en `ItemMods` (o el `CreatureLook` del muerto) y
+    componer las capas en el último frame de morir en el cliente (como `look-preview`).
+  - **Caída hacia otro lado:** el cadáver es siempre la caída al sur; el ciervo y el
+    jabalí del motor, que mueren en cuatro direcciones, terminan su caída al oeste o al
+    norte y el cadáver aparece mirando al sur.
+  - **E2E:** mirar en `make e2e` el lobo muerto (`11b-death`, `14-respawn`): el cadáver
+    del lobo, no el de la familia, y "restos de lobo" en el log y en la ventana.
+- **Unidades métricas y cargas realistas (hecho, rama `feat/metric-units`; el dueño el
+  2026-11-23: "todas las unidades y distancias en el sistema métrico"; docs/02
+  "Unidades" y "Cargas realistas"):** pesos en g/kg (`formatMass`), alcances en m y casas
+  en m² (1 casilla = 1 m); capacidad de 40–45 kg al nivel 1 y pesos reales en todo
+  `data/items`; `TestHuntLootFits` mide que una cacería de 60 muertes entra cada cinco
+  niveles del 1 al 50, con soga, pala y una bolsa de monedas encima. Queda:
+  - **Personajes que ya existen:** la capacidad se deriva del nivel (sin migración), pero
+    quien llevaba más de lo que ahora puede cargar (un guardián de nivel 30 con 100 kg de
+    botín en la mochila) queda sobrecargado: no queda atascado, solo no levanta nada hasta
+    vender o soltar. Vender a un NPC es seguro: las monedas de la venta entran aunque siga
+    sobrecargado (`TestOverloadedSellerKeepsTheCoins`; antes caían al suelo, donde tras el
+    guardado las levantaba cualquiera). **Ojo:** una recompensa de quest (oro o item) y lo
+    cobrado del mercado sí caen a sus pies si no entran por peso: que venda o suelte antes
+    de entregar. En un servidor con jugadores, avisar las dos cosas en las noticias.
+  - **Afinar con gente real:** la cacería de 60 muertes y el 15 % de suerte son una
+    estimación; si los jugadores vuelven al pueblo demasiado seguido, subir `per_level`
+    de `data/vocations.yaml` o bajar el peso de las pieles y el mineral.
+  - **Decisión de balance para el dueño, material pesado:** al cubrir todos los niveles
+    el test mostró que 60 muertes de espinoso (100 kg: troncos de olmo), de gólem de
+    escoria (112 kg: mineral de ascua y núcleos) y de minero de obsidiana (46 kg) **no
+    entran**; la cuenta a mano anterior ("entran de sobra") estaba mal. Hoy son la
+    excepción declarada del test (`heavyHaul`: deben entrar 15 muertes; entran 17, 20 y
+    43 al más justo). Si se quiere que entren enteros hay que bajar su botín (p. ej. el
+    tronco del espinoso de 30 % a ~5 %, el mineral del gólem de 45 % a ~10 %) o el peso
+    de troncos, mineral y núcleos: cambia la economía de la leña y la forja, por eso no
+    se tocó.
+  - **Decisión de balance para el dueño, botín ya tocado:** bajaron el mineral del
+    escarabajo (35 → 20 %), la carne del jabalí (50 → 35 %) y la piel del sabueso
+    (22 → 18 %); eso baja el ingreso por cacería y alarga `foreman_ore` (5 de mineral).
+    Los tests de balance pasan; revisar si el ritmo se siente bien.
+  - **Capacidad de los magos:** arcanista 40 kg y druida 41 kg al nivel 1 (+0,7 kg por
+    nivel), más cerca del montaraz (42 kg) de lo pensado al principio (36 y 37): con soga,
+    pala y 20 brebajes de maná no les entraba la cacería del nivel 5 al 10.
+  - **El fixture de los tests de sesión** (`helpers_test.go`, `testVocations`) sigue con
+    420 kg y pesos de la escala vieja: no se cambió porque varios tests cuentan con esos
+    números; los tests con datos reales (`dataHarness`) ya juegan con las capacidades
+    nuevas.
+  - **El atributo `speed`** sigue diciendo "+N de velocidad" (puntos, no una velocidad):
+    si se quiere mostrar en m/s hay que pasar por la fórmula del paso (docs/02
+    "Movimiento").
+  - **E2E:** mirar la barra de capacidad ("Capacidad libre: … kg / 45 kg" en un
+    guardián nuevo), la ficha de
+    un arma a distancia ("Alcance: 5 m", "Peso: 700 g") y el texto de una casa libre
+    ("(32 m²)"); lo corre el lote al final.
+- **No se puede salir en combate, visible (hecho, rama `feat/combat-logout`, lote 17; el
+  dueño el 2026-11-23: "como en Tibia, no te puedes desconectar durante una batalla";
+  docs/02 "Bloqueo de logout en combate"):** ya existía en el servidor; se revisó cada
+  salida (tabla en docs/02, tests en `session/combat_exit_test.go`), el rechazo dice los
+  segundos, el botón "Salir del juego" se ve bloqueado con la cuenta regresiva y la
+  siguiente pantalla dice que el personaje quedó en el mundo. Queda:
+  - **Aviso al cerrar la pestaña:** no hay un `beforeunload` que pregunte "¿salir?" en
+    combate (los navegadores solo muestran su texto genérico y molesta al recargar);
+    decidir con el dueño si se quiere.
+  - **El aviso "quedó en el mundo" es del navegador:** vive en su `localStorage`; en otro
+    dispositivo, o si la app de escritorio no dispara `pagehide` al cerrarse, no aparece
+    (el personaje queda link-dead igual: lo decide el servidor). Mostrarlo en cualquier
+    dispositivo pediría que la lista de personajes sepa quién está link-dead (el loop lo
+    publicaría como `PublishedOnline`). Hay una nota por personaje y solo la ve la cuenta
+    dueña, en la lista de personajes (nunca en el login).
+  - **Aviso falso si el servidor se cae o se reinicia en una pelea:** un socket que se
+    cierra sin `Disconnect` se ve igual que una red perdida, así que el cliente dice
+    "quedó en el mundo" aunque el servidor ya no tenga al personaje (`staysAfter` en
+    `client/src/state/stayed.ts`). No pierde nada: el personaje quedó como en su último
+    guardado. Se arreglaría con lo mismo de arriba (que la lista sepa quién está
+    link-dead).
+  - **E2E** (lo corre el lote al final; el de la revisión no se corrió): el de la pelea
+    con el lobo mira el botón bloqueado y la cuenta (`07c-logout-locked`), se asegura de
+    que haya un golpe reciente (vuelve a atacar, o a los lobos si murió), recarga en la
+    pelea, ve el aviso (`07d-stayed-in-fight`) y, con la página en la lista de
+    personajes, le pregunta al servidor: `GET /api/status` no bajó de jugadores y
+    `characters.last_save_at` no cambió (un personaje que sale se guarda al instante).
+    Después vuelve a entrar al mismo personaje todavía en combate, o con la pantalla de
+    muerte si el lobo lo mató link-dead.
+- **Persecución y regeneración de monstruos (hecho, rama `feat/monster-pursuit`; pedido del
+  dueño del 2026-11-23: "que te sigan, o que decidan si te siguen" y "que se recuperen
+  lento"; docs/02 "Persecución", "Regeneración fuera de combate"):** fuera de su zona de
+  confort un monstruo tira si sigue (persistencia por tipo, tope duro, pierde de vista,
+  zona de protección, cambio de piso), al rendirse conserva su vida y recuerda a quien lo
+  hirió, regenera 1 % cada 5 s fuera de combate y los errantes vuelven a casa aunque no
+  haya nadie cerca. Queda:
+  - **Afinar con gente real:** las persistencias y topes por tipo (`data/monsters`
+    `pursuit`) son una primera mano; mirar en Thimblewick que el lobo persiga lo que el
+    dueño quiere y que los corrales no vuelvan a llenar el sendero (el lobo llega a 22
+    casillas del centro de su spawn si gana las tiradas).
+  - **Cliente:** la regeneración llega como la barra de vida (`CreatureHealth`), sin
+    efecto; el jugador no ve si un monstruo "decidió" seguirlo. Si el dueño quiere un
+    gesto (un aullido, un "!"), es un evento nuevo del protocolo.
+  - **Un objetivo fuera de vista** se persigue hacia donde está de verdad durante
+    `lose_sight_ms` (como si lo rastreara), no hacia donde se lo vio por última vez; la
+    vista es la ventana clásica, sin línea de visión (como antes). **A confirmar por el
+    dueño** (la revisión lo marcó).
+  - **Decisiones de la revisión, a confirmar por el dueño** (docs/02 "Botín, experiencia y
+    abusos de la persecución"): (1) el daño hecho desde fuera del alcance del monstruo que
+    este nunca respondió se cura cuando se rinde (cierra matar sin riesgo desde el otro
+    lado del agua o disparando y saliendo de la correa, también al custodio); el costo es
+    que un arquero o mago que lo hiere sin que nunca lo alcance y se va lo encuentra
+    curado. (2) Al rendirse conserva el reparto de daño `memory_ms` (3 min): quien lo
+    remata comparte experiencia, botín y drop de quest con quien lo hirió.
+  - **Segunda revisión (hecho; decisiones a confirmar por el dueño):** (1) perder al
+    objetivo (zona de protección, fuera de vista `lose_sight_ms`, otro piso) ahora es
+    rendirse: cierra el daño sin responder, así que disparar desde la orilla de una zona
+    de protección y entrar no desgasta al monstruo
+    (`TestPursuitShootAndHideClosesTheWounds`). (2) Una ronda de ataque responde también
+    el daño de los demás que pelean desde donde el monstruo puede ir: el arquero de un
+    grupo con tanque conserva su daño y su parte si el grupo se retira
+    (`TestPursuitGroupDamageIsAnswered`). (3) El exponente de la distancia y el empuje de
+    `insist_target_hp_pct` son datos (`distance_exponent`, `insist_boost`). (4) Una manada
+    de la que tiran dos jugadores decide por objetivo. (5) La memoria va por id de
+    criatura: quien reloguea es un desconocido (lo acota el bloqueo de logout en combate);
+    guardarla por personaje queda para cuando haga falta. (6) No se cambió: un invocado
+    compara su propia vida con el `give_up_below_hp_pct` de quien lo llamó y regenera al
+    ritmo de su tipo (sin efecto hoy: el único que invoca no sale de su forja); y
+    `thinkStrays` recorre cada tick a los monstruos fuera de su radio de casa, también a
+    los que pelean dentro de la correa (un recorrido sin asignaciones; solo piensa el que
+    no pensó ese tick). Las cifras de docs/07 las midió el autor, sin bots.
+  - **Tercera revisión (hecho):** (1) un monstruo con objetivo piensa aunque su sector se
+    duerma (antes, quien peleaba solo y cambiaba de piso lo dejaba dormido con la pelea
+    abierta: sin rendirse, con sus quemaduras activas y sin regenerar); un autor en otro
+    piso está fuera de su alcance. (2) La regeneración acumula la fracción (ya no "al
+    menos 1" por intervalo) y recorta el reparto de daño a las heridas que quedan.
+    (3) `World.strays` ya no busca duplicados con un recorrido (`Monster.listed`).
+    **Sigue a confirmar por el dueño:** el daño sin responder de un arquero o mago que
+    kitea dentro de la zona de confort se cura cuando el monstruo se rinde; la
+    alternativa (cerrar solo el daño hecho desde donde el monstruo no puede ir) vuelve a
+    abrir "disparar desde adentro y salir de la correa", por eso no se cambió sin su
+    decisión. Sin test: el errante de un spawn sin casilla libre, que reaparece cada
+    `monster_stray_ms` (solo sin nadie mirando).
+  - **Una manada** es un spawn: dos spawns vecinos del mismo tipo deciden aparte.
+  - **Integración y E2E** los corre el lote al final: mirar en `make play` a un lobo
+    siguiendo fuera del corral y volviendo herido.
+- **Invitar al grupo por nombre (hecho, rama `feat/party-invite`; el dueño el 2026-11-23:
+  "la ventana de grupo tiene que tener un botón para invitar desde ahí, pidiendo el nombre
+  del personaje"; docs/02 "Grupos", docs/05 "Grupos"):** la ventana de grupo tiene un botón
+  "Invitar" (sin grupo, o siendo el líder) que abre un cuadro para escribir el nombre
+  (Enter manda, Escape cierra). Viaja como `PartyCommand` `INVITE_NAME` con `name`; el
+  servidor lo busca entre los jugadores en línea, esté donde esté, y `/invite Nombre` hace
+  lo mismo (antes solo encontraba a alguien a la vista). Desconectado e inexistente
+  responden igual. Límite nuevo `balance.yaml party.invites_per_minute` (6) para todo
+  intento de invitar. Queda:
+  - **En el teléfono** falta mirarlo a mano: que el cuadro entra en la pestaña del grupo y
+    el teclado no lo tapa. En escritorio lo cubre el E2E "party: the window's Invitar
+    button invites a player by its name" (screenshots `24b`–`24d`).
+  - **Lista de ignorados:** no existe; cuando se haga, invitar a quien te ignora tiene que
+    responder `party.player_not_found` (como desconectado).
+  - El límite de invitaciones es por cuenta y vive en la memoria del mundo: sobrevive a un
+    relogueo y lo comparten los 2 personajes de la cuenta; un reinicio del servidor lo borra.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores
@@ -126,7 +443,49 @@ el punto 5:
     generar. Los eventos `step.self.<sound>` ya se piden y caen en `step`; falta la receta
     de soundgen (o un pack con licencia) en `assets/livingworld/sounds/`, su fila en
     `sounds.yaml` y en `CREDITS.md`.
-  - **Día y noche:** no existe; las luciérnagas esperan uno (`night()` da falso).
+  - **Día y noche (hecho, rama `feat/day-night-shadows`):** reloj del servidor, luz,
+    lámparas, luna y sombras proyectadas (`livingworld/README.md` "Día y noche"). Queda:
+    - **Sombras de objetos altos que giren con el sol:** árboles, pilares y casas tienen
+      su sombra dibujada (ART-5), que solo se desvanece con el sol; girarlas pide una
+      silueta por objeto como la de las criaturas.
+    - **Sombra que se aleja de una luz fuerte:** de noche, junto a una fogata, la sombra
+      sigue a la luna; apuntarla lejos del fuego queda para después.
+    - **Medir en el navegador (decisión del dueño):** el pedido era un sprite más por
+      criatura visible; la capa de sombras suma un sprite por capa de cada criatura (540
+      con 60 muñecos) y una pasada de filtro (docs/07). Del lado JS está medido (~0,035 ms
+      por frame colocar las 540, en Node), pero ningún test mide el tiempo de frame en el
+      navegador (batches, la pasada del filtro, el mapa de luz de noche). Falta medirlo
+      en el E2E con mucha gente de noche, sobre todo en móvil, o que
+      el dueño acepte el costo; si no entra, la salida es hornear la silueta de cada
+      muñeco en una textura (un sprite por criatura). El `AlphaFilter` de
+      `castShadows.root` es una pasada offscreen del tamaño de todas las sombras (casi la
+      pantalla) y de noche se suma la del mapa de luz.
+    - **Sombras que se cruzan:** las de criaturas van en `groundOverlay`, debajo de las
+      horneadas; donde se cruzan con la de un árbol o una casa se suman y queda una mancha
+      más oscura. Revisarlo en las capturas.
+    - **Mirar las capturas:** el E2E saca `99b-daynight-noon`, `99c-daynight-night`,
+      `99d-daynight-morning`, `99e-daynight-dusk`, `99f-daynight-new-moon` y
+      `99g-daynight-dawn`; nadie las miró todavía en esta rama (sin E2E en la revisión).
+      Mirarlas en el E2E final del lote y, aparte, un lobo o un thornling con sol bajo
+      (`/time morning`): sus sprites tienen filas vacías bajo los pies (`foot` 8 y 10) y
+      la sombra ahora gira en la línea de los pies, no en el borde de la textura.
+    - **Efectos reducidos sin sombra proyectada (decisión del dueño):** con "Animaciones
+      reducidas" o `prefers-reduced-motion` (común en móvil) solo queda la elipse de
+      contacto, aunque una sombra quieta no es movimiento. Confirmar si se quiere así. El
+      tinte del cielo y el mapa de luz de la noche (lámparas, fogatas) **no** se apagan
+      con efectos reducidos: no se mueven ni parpadean, y sin ellos no habría noche;
+      confirmar también eso.
+    - **Luna nueva contra el piso de luminancia (mirar en las capturas):** el color
+      `night_new_moon` (`#58648c`, luminancia ~0,40) queda bajo `floor` 0,5, así que
+      nunca se dibuja tal cual: `withFloor` lo aclara. La diferencia real entre luna nueva
+      y llena es ~0,50 contra ~0,58, poco para "una noche más oscura". Al mirar
+      `99c-daynight-night` y `99f-daynight-new-moon`: subir `night_full_moon` o bajar
+      `floor` (mínimo del esquema 0,3). No se tocó a ciegas.
+    - **Sombra al morir (mirar en video o capturas):** un cuerpo que cae o se desvanece
+      ahora conserva su sombra proyectada hasta bajar de media opacidad; antes desaparecía
+      al empezar la animación. Ningún test unitario cubre ese cableado de
+      `game-canvas.ts` (solo el E2E).
+    - **Hora en la interfaz:** no hay reloj ni icono de la luna en el HUD.
   - **Plantas en los mapas:** `grass_tuft`, `tall_grass`, `wildflowers` y `reeds` existen
     pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.
   - **Superficies sin suelo:** `snow`, `mud` y `tall_grass` están en el enum y en
@@ -535,8 +894,9 @@ el punto 5:
     ataque a distancia: eso queda para la prueba a mano.
   - **Los otros jugadores**: hecho en `feat/character-look` (el punto siguiente): cada
     jugador se ve con su aspecto y su equipo.
-  - **La silueta translúcida** (detrás de un muro, o tapado por otra criatura) muestra solo
-    el cuerpo, sin ropa ni arma.
+  - **La silueta translúcida** (tapado por otra criatura) muestra solo el cuerpo, sin ropa
+    ni arma. Detrás de un muro ya no hay silueta: el muro se vuelve translúcido (docs/17
+    ART-3, 2026-11-23).
   - Un juego de armadura es de un solo tinte (el cinturón también); el arco no se tensa con
     la mano; el JSON del atlas creció ~0,9 MB por los 3612 nombres de frame (docs/07).
   - Si el dueño quiere más formas (un sombrero de ala, una capa, un escudo de torre de
@@ -699,8 +1059,8 @@ el punto 5:
     en el E2E o con `make play` bajando la escalera de la mina de Lanternby (3176,6322).
   - **La muralla (`rampart_wall`) sigue sin usarse:** el frente de mar de Lanternby es playa
     abierta con el muelle; queda para un pueblo amurallado de una isla nueva.
-  - **El farol no alumbra en la superficie** (la capa de luz solo dibuja en z ≥ 8 y no hay
-    noche): si llega un ciclo de día y noche, ya tiene su `light`.
+  - **El farol alumbra de noche** (día y noche, rama `feat/day-night-shadows`): su `light`
+    brilla en la superficie cuando se encienden las lámparas.
   - **Una casa no se puede amueblar con más fijo que bloquee:** cama, banco y jardinera
     son lo único que va adentro (docs/03); una mesa o un estante fijo le quitaría casillas
     al inquilino. Muebles que el jugador compre y ponga son otra tarea (decoración de casas,
@@ -829,8 +1189,8 @@ el punto 5:
     pieza que ahora pide más (un mago con el torso pesado, la cota o la hoja antes del 50,
     el escudo de tablones antes del 5, el cuero de ciervo antes del 15) la sigue usando
     hasta que se la saca.
-  - **Pesos:** varias piezas pesan más que antes (el hacha de mano 4000 g, la cabilla 3800,
-    el cuero de ciervo): un personaje cargado puede quedar sobre su capacidad. No lo deja
+  - **Pesos:** desde `feat/metric-units` todos los pesos son reales (docs/02 "Cargas
+    realistas"); un personaje cargado puede quedar sobre su capacidad. No lo deja
     atascado; solo no puede levantar más hasta soltar algo.
   - **Ids con `feat/item-forge`:** las 35 piezas nuevas tomaron los números 271-305; la
     forja, rebasada encima, corrió `make gen-ids` y sus piedras y el ámbar son 306-309.
@@ -1145,7 +1505,8 @@ el punto 5:
   - **Lo que A3, A4 y A5 dejaron (hecho, rama `feat/ui-windows-2`, docs/17 §7 "Hecho: lo que
     quedaba de A3, A4 y A5"):** cada contenedor es su ventana; diálogo, tienda, crafteo,
     mercado, casa e intercambio son `GameWindow` (flotantes desde A14); las ventanas se mueven y
-    cambian de tamaño con el mouse (esquina) y con el teclado (botón ✥); escala de la
+    cambian de tamaño con el mouse (esquina) y con el teclado (botón ✥; desde
+    `feat/window-resize`, desde las cuatro esquinas y sin el ✥); escala de la
     interfaz y tamaño del texto (Opciones → Interfaz); íconos de slot vacío (spritegen
     `ui/slots/*`); sacudida de cámara con los golpes fuertes y destello de la hotbar (los
     dos apagados con movimiento reducido; la sacudida, también con su opción); texto del NPC
@@ -1475,6 +1836,8 @@ el punto 5:
     `feat/monster-abilities` (lote 10) que la persecución fuera y viniera frente a un muro
     (ahora sigue el rodeo entero, `chaseWay`, `TestChaseFollowsItsWayAroundAWall`) y que
     `make bench-tick` corriera sin correa (variante `/leash` de `BenchmarkTickMonsters`)):
+    desde el 2026-11-23 rendirse ya no cura entero (docs/02 "Persecución"), el daño que
+    nunca llegó a responder sí se cura al rendirse;
     nada valida que el centro de un spawn sea caminable (hoy todos lo son); la espera tras
     una búsqueda fallida (de casa o de la persecución) usa `readyAt`; y un arquero que va
     pisando casillas inalcanzables nuevas entrena a ritmo completo los 2 s que cuesta cada

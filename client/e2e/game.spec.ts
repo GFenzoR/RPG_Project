@@ -496,8 +496,9 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
 });
 
 test("walk out of town, fight a wolf from the battle list", async ({ page, playwright }) => {
-  // Leaving at the end waits out the fight's logout block (leaveAfterFight).
-  test.setTimeout(240_000);
+  // Leaving at the end waits out the fight's logout block (leaveAfterFight), after a
+  // reload in the fight and a second login.
+  test.setTimeout(330_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -620,27 +621,129 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
   await expect(locked).toBeVisible();
   await expect(locked).toContainText("Estás en combate");
   await expect(page.getByRole("button", { name: "Salir del juego" })).toBeVisible();
+  // The lock is visible before any click (owner 2026-11-23): the "En combate" status with
+  // its seconds in the tray, and the toolbar's button greyed with the countdown.
+  await expect(
+    page.getByTestId("conditions").locator('[data-condition="in_combat"]'),
+  ).toBeVisible();
+  await expect(page.getByTestId("logout")).toHaveAttribute("data-locked", "");
+  await expect(page.getByTestId("logout-countdown")).toHaveText(/^\d+$/);
   await shot(page, "07c-logout-locked");
 
-  // Every swing trains fists (no weapon yet): the skills window (toolbar, K) shows the
-  // progress.
+  // Every swing trains the sword (the start kit's cutlass, docs/02 "Equipo inicial"): the
+  // skills window (toolbar, K) shows the progress.
   await openWindow(page, "skills");
   const skills = page.getByTestId("skills-panel");
-  await expect(skills.getByText("Puños")).toBeVisible();
+  await expect(skills.getByText("Espada")).toBeVisible();
   await expect
     .poll(
       () =>
         page.evaluate(
-          () => window.__rpgClient?.skills().find((s) => s.id === "fist")?.percent ?? 0,
+          () => window.__rpgClient?.skills().find((s) => s.id === "sword")?.percent ?? 0,
         ),
       { timeout: 30_000 },
     )
     .toBeGreaterThan(0);
-  await expect(skills.locator('[data-skill="fist"] [role="progressbar"]')).not.toHaveAttribute(
+  await expect(skills.locator('[data-skill="sword"] [role="progressbar"]')).not.toHaveAttribute(
     "aria-valuenow",
     "0",
   );
   await skills.screenshot({ path: join(shots, "08-skills-panel.png") });
+
+  // Reloading the page in the fight (the same as closing the tab: the connection closes)
+  // leaves the character in the world, link-dead, while the wolf keeps biting it (docs/02
+  // "Bloqueo de logout en combate"). The character list says so, and playing again takes
+  // over that same character, still in its fight: the logout is still locked.
+  const inCombat = page.getByTestId("conditions").locator('[data-condition="in_combat"]');
+  const death = page.getByTestId("death-screen");
+  // The fight must be going on when the page reloads: by now the wolf may be dead (the
+  // lock ran out) or the player may have died and woken up at the temple. Go back to the
+  // wolves if so, attack one if none is the target, and wait for a blow given or taken
+  // within the last 1.5 s: the 12 s lock is then almost whole.
+  await expect
+    .poll(
+      async () => {
+        if (await death.isVisible()) {
+          await death
+            .getByRole("button", { name: "Aceptar" })
+            .click({ timeout: 1_000 })
+            .catch(() => undefined);
+          return false;
+        }
+        const state = await page.evaluate(() => {
+          const c = window.__rpgClient;
+          const target = c?.target();
+          return {
+            wolves: c?.battle().length ?? 0,
+            target,
+            fresh:
+              target !== undefined &&
+              (c?.attacks(1_500) ?? []).some((a) => a.id === target || a.targetId === target),
+          };
+        });
+        if (state.target === undefined) {
+          const at = await self(page);
+          if (state.wolves === 0 && at && !at.walking) await click(at.x, at.y - 5);
+          await battle
+            .getByRole("button", { name: /lobo/ })
+            .first()
+            .click({ timeout: 1_000 })
+            .catch(() => undefined);
+          return false;
+        }
+        return state.fresh && (await inCombat.isVisible());
+      },
+      { timeout: 90_000, intervals: [500] },
+    )
+    .toBe(true);
+
+  // What the server says, not the page: how many players are in the world (GET
+  // /api/status, published by the game loop on every join and leave) and when the
+  // character was last saved (a character that leaves is saved at once).
+  const serverCtx = await playwright.request.newContext({ baseURL: serverURL });
+  const online = async (): Promise<number> =>
+    ((await (await serverCtx.get("/api/status")).json()) as { players: number }).players;
+  const savedAt = (): string =>
+    psql(
+      [
+        databaseUrl,
+        "-At",
+        "-c",
+        `SELECT coalesce(last_save_at::text, '') FROM characters WHERE name = '${name}'`,
+      ],
+      { encoding: "utf8" },
+    ).trim();
+  const onlineBefore = await online();
+  const savedBefore = savedAt();
+  expect(onlineBefore).toBeGreaterThan(0);
+
+  await page.reload();
+  const characters = page.getByTestId("characters");
+  await expect(characters.getByRole("status")).toContainText("quedó en el mundo");
+  await shot(page, "07d-stayed-in-fight");
+  // The page is on the character list: its socket has been closed for a while. A server
+  // that took the character out when the socket closed has one player less and a save
+  // of it by now. (Either alone can happen to a character that stayed: a link-dead player
+  // of an earlier test leaving, or its own autosave, every 5 minutes.)
+  await page.waitForTimeout(3_000);
+  const left = (await online()) < onlineBefore && savedAt() !== savedBefore;
+  await serverCtx.dispose();
+
+  await characters.getByRole("button", { name: "Jugar" }).click();
+  await page.waitForFunction(() => window.__rpgClient?.ready === true);
+  // Link-dead it can die too (the wolf kept biting): then it did leave the world, by
+  // dying, and wakes up at the temple with the death screen and no fight.
+  await expect(inCombat.or(death).first()).toBeVisible({ timeout: 10_000 });
+  if (!(await death.isVisible())) {
+    expect(left, "the character left the world when the page closed in a fight").toBe(false);
+    await expect(page.getByTestId("logout")).toHaveAttribute("data-locked", "");
+    // Link-dead, it dropped its target: hit the wolf again so the fight can end.
+    await battle
+      .getByRole("button", { name: /lobo/ })
+      .first()
+      .click({ timeout: 5_000 })
+      .catch(() => undefined);
+  }
 
   await leaveAfterFight(page);
   expect(errors).toEqual([]);
@@ -729,7 +832,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   const battle = page.getByTestId("battle-list");
 
   // The server and its world are shared by the suite (and by --repeat-each): earlier tests
-  // hurt or kill testisle's 3 wolves, so the nearest one may be hurt, die to our fists
+  // hurt or kill testisle's 3 wolves, so the nearest one may be hurt, die to our wand
   // before it is in the bolt's range, or none may be in view at all. Then every F1 is
   // refused with "you need a target" (the CI failure: target lost, empty battle list).
   // targetWolf attacks the healthiest wolf in view and, with none in view, waits for one
@@ -771,13 +874,17 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   // the projectile or its energy effect on screen. They live 250 ms and a bolt can kill the
   // wolf, so watch for them in the page rather than only right after each F1 (on a busy
   // CPU the bolt's messages can come after the next poll has seen the target gone). If the
-  // target is lost with no bolt (killed by our fists, out of view), take another wolf.
+  // target is lost with no bolt (killed by the wand, out of view), take another wolf.
+  // The start kit's wand (docs/02 "Equipo inicial") shoots the same energy projectile on its
+  // own every round, so a projectile alone is not the spell: it counts while F1 is in the
+  // cooldown the server starts when it accepts the cast (2 s for the arc bolt).
   await page.evaluate(() => {
     const w = window as unknown as { e2eBolt?: boolean };
     w.e2eBolt = false;
     const watch = setInterval(() => {
       const m = window.__rpgClient?.magic(300);
-      if ((m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13)) {
+      const cast = document.querySelector('[data-testid="hotbar"] [data-hotkey="F1"] .cd') !== null;
+      if (cast && ((m?.projectiles ?? 0) > 0 || (m?.effects ?? []).includes(13))) {
         w.e2eBolt = true;
         clearInterval(watch);
       }
@@ -823,7 +930,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   await expect(hotbar.locator('[data-hotkey="F1"] .cd')).toBeVisible();
   await hotbar.screenshot({ path: join(shots, "12-hotbar.png") });
 
-  // A9: bolts (and fists) until a wolf dies, and its fall on screen: the server's
+  // A9: bolts (and the wand) until a wolf dies, and its fall on screen: the server's
   // CreatureDisappear says DEATH (docs/17 ANI-7). A lost target is replaced.
   let fell = false;
   const fall = shotPose(page, "11b-death", "death", 150_000);
@@ -896,7 +1003,21 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
   errors.length = 0; // the 401 of opening the page without a session cookie
 
-  // The creation form offers the four vocations; create the druid there.
+  // docs/02 "Cuentas": with a character the list comes first, with "Crear personaje nuevo";
+  // the form has "Volver" back to it.
+  const chars = page.getByTestId("characters");
+  await expect(chars).toHaveAttribute("data-view", "list");
+  await expect(chars.getByText("Montaraz · Nivel 1")).toBeVisible();
+  await expect(page.getByTestId("create-character")).toHaveCount(0);
+  await shot(page, "18b-characters-list");
+  await page.getByTestId("new-character").click();
+  await expect(page.getByTestId("create-back")).toBeVisible();
+  await page.getByTestId("create-back").click();
+  await expect(chars).toHaveAttribute("data-view", "list");
+  await page.getByTestId("new-character").click();
+
+  // The creation form offers the four vocations, each with its style and its starting gear
+  // (docs/02 "Equipo inicial"); create the druid there.
   const form = page.getByTestId("create-character");
   const select = form.getByLabel("Vocación");
   await expect(select.locator("option")).toHaveText([
@@ -907,6 +1028,10 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   ]);
   await form.getByLabel("Nombre").fill(druidName);
   await select.selectOption({ label: "Druida" });
+  await expect(form.getByTestId("vocation-style")).toHaveText(
+    "Cura a sus compañeros a distancia y castiga con hielo y naturaleza.",
+  );
+  await expect(form.getByTestId("vocation-kit")).toContainText("vara de retoño");
   // docs/02 "Apariencia": a look picked on the form, with the live figure beside it. The
   // druid is a woman (the owner, 2026-11-20): "Mujer" is the first picker.
   const druidLook = {
@@ -928,8 +1053,13 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
   await expect(pickers.locator('[data-look="sex:female"]')).toHaveText("Mujer");
   await shot(page, "19-create-druid");
   await form.getByRole("button", { name: "Crear personaje" }).click();
+  // Back to the list, with the new character marked and its figure.
   const list = page.getByTestId("characters");
+  await expect(list).toHaveAttribute("data-view", "list");
   await expect(list.getByText("Druida · Nivel 1")).toBeVisible();
+  const druidRow = list.locator("li[data-created]");
+  await expect(druidRow).toContainText(druidName);
+  await expect(druidRow.getByTestId("character-look")).toBeVisible();
   await expect(list.getByText("Montaraz · Nivel 1")).toBeVisible();
 
   // Play the druid: its spells fill the bar by level.
@@ -1482,16 +1612,32 @@ test("chat on the local and global channels, then switch the language", async ({
   await sayInput.press("Enter");
   await expect(chat).toContainText(`${name} dice: <b>hola</b> {name}`);
   await expect(chat.locator("b")).toHaveCount(0);
+  // docs/17 UI-11: what is said nearby also shows over the speaker's head, as plain text.
+  const bubbleSaid = (style: string, text: string) =>
+    page.waitForFunction(
+      ([s, x]) =>
+        (window.__rpgClient?.bubbles() ?? []).some((b) => b.style === s && b.lines.join(" ") === x),
+      [style, text] as const,
+    );
+  await bubbleSaid("say", "<b>hola</b> {name}");
 
   await page.getByTestId("chat-channel").selectOption({ label: "Gritar" });
   await sayInput.fill("hay alguien");
   await sayInput.press("Enter");
   await expect(chat).toContainText(`${name} grita: hay alguien`);
+  await bubbleSaid("yell", "hay alguien");
+  await shot(page, "16a-chat-bubble");
 
   await page.getByTestId("chat-channel").selectOption({ label: "Global" });
   await sayInput.fill("hola a todos");
   await sayInput.press("Enter");
   await expect(chat).toContainText(`[Global] ${name}: hola a todos`);
+  // The global channel is heard from anywhere: no bubble over the head.
+  expect(
+    (await page.evaluate(() => window.__rpgClient?.bubbles() ?? [])).some((b) =>
+      b.lines.join(" ").includes("hola a todos"),
+    ),
+  ).toBe(false);
   // The global channel waits between two messages (balance.yaml chat.global_interval_ms).
   await sayInput.fill("otra vez");
   await sayInput.press("Enter");
@@ -1500,6 +1646,32 @@ test("chat on the local and global channels, then switch the language", async ({
   );
   // The chat floats over the map (docs/17 UI-10): its window.
   await page.locator('.gwin[data-window="chat"]').screenshot({ path: join(shots, "16-chat.png") });
+
+  // Windows resize from their four corners (docs/17 UI-5, the owner's request of
+  // 2026-11-23): dragging the chat's top left corner up and left moves its left and top and
+  // keeps its bottom right where it was. No move button is left in any title bar.
+  const chatWindow = page.locator('.gwin[data-window="chat"]');
+  await expect(page.locator(".gwin-move")).toHaveCount(0);
+  await expect(chatWindow.locator(".gwin-resize")).toHaveCount(4);
+  const before = await chatWindow.boundingBox();
+  const grip = await chatWindow.locator('.gwin-resize[data-corner="nw"]').boundingBox();
+  if (!before || !grip) throw new Error("no chat box");
+  const gripAt = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 };
+  await page.mouse.move(gripAt.x, gripAt.y);
+  await page.mouse.down();
+  await page.mouse.move(gripAt.x - 40, gripAt.y - 90, { steps: 8 });
+  await page.mouse.up();
+  const after = await chatWindow.boundingBox();
+  if (!after) throw new Error("no chat box");
+  // The bottom right stays (to the px); the top left moved (the magnet may take up to
+  // SNAP_PX of it, an edge of another window or of the screen).
+  expect(Math.abs(after.x + after.width - (before.x + before.width))).toBeLessThanOrEqual(1);
+  expect(Math.abs(after.y + after.height - (before.y + before.height))).toBeLessThanOrEqual(1);
+  expect(before.x - after.x).toBeGreaterThanOrEqual(30);
+  expect(before.y - after.y).toBeGreaterThanOrEqual(80);
+  await expect(chatWindow).toHaveAttribute("data-sized", "");
+  await expect(page.locator("body")).not.toHaveClass(/resizing-window/);
+  await shot(page, "16b-chat-resized-top-left");
 
   // Switching the language (the Options window of the toolbar) translates every screen at
   // once, the running game included.
@@ -1980,6 +2152,81 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await matePage.close();
 });
 
+test("party: the window's Invitar button invites a player by its name", async ({
+  browser,
+  playwright,
+}) => {
+  const lead = await newGuardian(playwright, "Caller");
+  const mate = await newGuardian(playwright, "Guest");
+  const errors: string[] = [];
+  const enter = async (who: { email: string; password: string }): Promise<Page> => {
+    const page = await browser.newPage();
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    await enterGame(page, who.email, who.password);
+    return page;
+  };
+  const leadPage = await enter(lead);
+  const matePage = await enter(mate);
+  errors.length = 0; // the 401 of opening the page without a session cookie
+  await openWindow(leadPage, "party");
+  const panel = leadPage.getByTestId("party-panel");
+  const log = leadPage.getByTestId("game-log");
+  const prompt = leadPage.getByTestId("party-invite-prompt");
+  const field = leadPage.getByTestId("party-invite-name");
+
+  // Without a party the button is there; it opens the prompt with the field focused.
+  await leadPage.getByTestId("party-invite").click();
+  await expect(field).toBeFocused();
+  // Escape closes the prompt, not the window around it.
+  await field.press("Escape");
+  await expect(prompt).toHaveCount(0);
+  await expect(panel).toBeVisible();
+
+  // A name nobody online has: the server says so, with the name as typed. Typing in the
+  // field moves nobody and opens no window (the name has the keys of both).
+  const before = await self(leadPage);
+  await leadPage.getByTestId("party-invite").click();
+  await field.pressSequentially("Wasd Pibe");
+  await expect(field).toHaveValue("Wasd Pibe");
+  await field.press("Enter");
+  await expect(prompt).toHaveCount(0);
+  await expect(log).toContainText("No hay ningún jugador en línea llamado Wasd Pibe.");
+  await expect(panel).toBeVisible();
+  const after = await self(leadPage);
+  expect([after?.x, after?.y]).toEqual([before?.x, before?.y]);
+
+  // The other player, by its name in another case: it gets the usual invitation.
+  await leadPage.getByTestId("party-invite").click();
+  await field.fill(mate.name.toUpperCase());
+  await leadPage
+    .locator('.gwin[data-window="party"]')
+    .screenshot({ path: join(shots, "24b-party-invite-prompt.png") });
+  await shot(leadPage, "24c-party-invite-prompt-page");
+  await leadPage.getByTestId("party-invite-send").click();
+  await expect(prompt).toHaveCount(0);
+  await expect(log).toContainText(`Invitaste a ${mate.name}`);
+  const invitation = matePage.getByTestId("party-invitation");
+  await expect(invitation).toContainText(`${lead.name} te invita a su grupo.`);
+  await invitation.getByRole("button", { name: "Aceptar" }).click();
+  await openWindow(matePage, "party");
+  for (const page of [leadPage, matePage]) {
+    const members = page.getByTestId("party-panel").locator("li[data-member]");
+    await expect(members).toHaveCount(2);
+  }
+  // The leader keeps the button; a member that does not lead has none.
+  await expect(leadPage.getByTestId("party-invite")).toBeVisible();
+  await expect(matePage.getByTestId("party-invite")).toHaveCount(0);
+  await leadPage
+    .locator('.gwin[data-window="party"]')
+    .screenshot({ path: join(shots, "24d-party-invite-leader.png") });
+  expect(errors).toEqual([]);
+  await leadPage.close();
+  await matePage.close();
+});
+
 test("T3.4: cook a fish at the hearth of Lanternby from the station window", async ({
   page,
   playwright,
@@ -2330,7 +2577,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   expect(await starts()).toBe(0);
   expect(await musicFrom()).toEqual([]);
   // The first gesture starts the title screen's music (a track of the pool the owner picked
-  // in assets/sounds.yaml music.title, through the music director), and no ambient bed.
+  // in assets/sounds.yaml music.title, through the music director), and no ambience.
   // Polling what plays proves its file arrived. The gesture is a click on the empty page: a
   // modifier key alone is no user activation for Chromium, and the context stays suspended.
   const sounds = parse(
@@ -2350,13 +2597,16 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   await enterGame(page, email, password);
   errors.length = 0;
   expect(await page.evaluate(() => window.__rpgAudio?.unlocked())).toBe(true);
-  // The test island plays a track of the harbour's pool and the waves (assets/sounds.yaml).
+  // The test island plays a track of the harbour's pool, and under it the ambience of what
+  // is around the player (livingworld/README.md "Ambiente"): its temple stands in a
+  // meadow, so the soft breeze over the grass, and no sea (it is more than ten tiles off).
   await expect
     .poll(async () => {
       const l = await page.evaluate(() => window.__rpgAudio?.loops());
       return (
         l &&
-        l.ambient === "amb_olas" &&
+        l.ambience.includes("amb_desert_wind") &&
+        !l.ambience.includes("amb_waves") &&
         pool(sounds.music.islands["testisle"]).includes(l.music ?? "")
       );
     })
@@ -2384,7 +2634,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
     await arrived(page, start.x, start.y);
   }
   expect(await history()).toContain("step");
-  expect(await starts()).toBeGreaterThanOrEqual(2); // the ambient bed and a step
+  expect(await starts()).toBeGreaterThanOrEqual(2); // the ambience and a step
 
   // Options (the toolbar's gear, docs/17 UI-5): lower the music, mute the effects.
   await page.getByTestId("options-button").click();
@@ -2873,7 +3123,7 @@ test("T5.2: an attack in the no_pvp zone is refused; outside it the attacker get
   // The attacker cannot log out in the middle of the fight.
   await hunterP.getByRole("button", { name: "Salir del juego" }).click();
   await expect(hunterP.getByTestId("game-log")).toContainText(
-    "Peleaste contra un jugador hace poco: todavía no puedes salir del juego.",
+    "Peleaste contra un jugador hace poco: podrás salir del juego en",
   );
   await expect(hunterP.getByTestId("battle-list")).toBeVisible();
   await shot(preyP, "50-pvp-aggressor-skull");
@@ -3129,7 +3379,7 @@ test("T5.4: a player rents a house, leaves an item inside, invites another; a th
   await a.mouse.click(doorA.x, doorA.y);
   await a.keyboard.up("Shift");
   await expect(a.getByTestId("game-log")).toContainText(
-    "Casa de la Red Tendida: libre. Alquiler: 1920 monedas cada 7 días (32 casillas).",
+    "Casa de la Red Tendida: libre. Alquiler: 1920 monedas cada 7 días (32 m²).",
   );
   await openDoor(a);
   const win = a.getByTestId("house");

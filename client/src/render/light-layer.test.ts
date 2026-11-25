@@ -1,7 +1,14 @@
 import { Texture } from "pixi.js";
 import type { Renderer, Sprite } from "pixi.js";
 import { describe, expect, it, vi } from "vitest";
-import { GLOW_RADIUS, LIGHT_SCALE, LightLayer, UNDERGROUND, isDark } from "./light-layer.ts";
+import {
+  AMBIENT,
+  GLOW_RADIUS,
+  LIGHT_SCALE,
+  LightLayer,
+  UNDERGROUND,
+  isDark,
+} from "./light-layer.ts";
 
 describe("isDark", () => {
   it("darkens the floors under the surface only", () => {
@@ -52,5 +59,16 @@ describe("LightLayer", () => {
     expect(glows(l).map((s) => s.visible)).toEqual([true, false, false]);
     l.hide();
     expect(l.view.visible).toBe(false);
+  });
+
+  it("lays the lights over the ambient it is given: the cave's, or the sky's at night", () => {
+    const l = new LightLayer(glow);
+    const fill = (l as unknown as { scene: { children: Sprite[] } }).scene.children[0];
+    l.begin(640, 480);
+    expect(fill?.tint).toBe(AMBIENT);
+    l.begin(640, 480, 0x8494c4);
+    expect(fill?.tint).toBe(0x8494c4);
+    l.begin(640, 480);
+    expect(fill?.tint).toBe(AMBIENT);
   });
 });

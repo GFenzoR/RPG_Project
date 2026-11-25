@@ -1,3 +1,5 @@
+# Weights are realistic grams per unit (docs/02 "Unidades", "Cargas realistas"); the UI
+# shows them in g or kg.
 # Weapons: the compact catalog (lote 11, docs/02 "Catálogo de equipo"). One weapon per
 # line and band; the numbers follow the band formula of docs/02 (our own numbers, CLAUDE.md
 # legal rule). Every weapon says its level (requires.level). A bow shoots one arrow of its
@@ -10,7 +12,7 @@
   sprite: weapons/rusty_cutlass
   name: item.rusty_cutlass.name
   description: item.rusty_cutlass.desc
-  weight: 3000
+  weight: 1000
   tradeable: true
   weapon: { type: sword, attack: 10, defense: 5, hands: 1 }
   worn: { shape: sword, tint: rust }
@@ -22,7 +24,7 @@
   sprite: weapons/hatchet
   name: item.hatchet.name
   description: item.hatchet.desc
-  weight: 4000
+  weight: 900
   tradeable: true
   weapon: { type: axe, attack: 12, defense: 3, hands: 1 }
   worn: { shape: axe, tint: rust }
@@ -34,7 +36,7 @@
   sprite: weapons/belaying_pin
   name: item.belaying_pin.name
   description: item.belaying_pin.desc
-  weight: 3800
+  weight: 700
   tradeable: true
   weapon: { type: club, attack: 11, defense: 4, hands: 1 }
   worn: { shape: mace, tint: oak }
@@ -46,7 +48,7 @@
   sprite: weapons/short_bow
   name: item.short_bow.name
   description: item.short_bow.desc
-  weight: 2400
+  weight: 700
   tradeable: true
   weapon: { type: distance, attack: 2, range: 5, hands: 2, ammo: arrow }
   worn: { shape: bow, tint: sapling }
@@ -58,7 +60,7 @@
   sprite: weapons/spark_wand
   name: item.spark_wand.name
   description: item.spark_wand.desc
-  weight: 1200
+  weight: 300
   tradeable: true
   weapon: { type: wand, attack: 8, range: 4, element: energy, hands: 1 }
   worn: { shape: wand, tint: spark }
@@ -70,7 +72,7 @@
   sprite: weapons/sapling_staff
   name: item.sapling_staff.name
   description: item.sapling_staff.desc
-  weight: 1400
+  weight: 1500
   tradeable: true
   weapon: { type: wand, attack: 8, range: 4, element: earth, hands: 1 }
   worn: { shape: staff, tint: sapling }
@@ -85,7 +87,7 @@
   sprite: weapons/iron_sword
   name: item.iron_sword.name
   description: item.iron_sword.desc
-  weight: 3150
+  weight: 1100
   tradeable: true
   weapon: { type: sword, attack: 13, defense: 7, hands: 1 }
   worn: { shape: sword, tint: iron }
@@ -97,7 +99,7 @@
   sprite: weapons/forged_axe
   name: item.forged_axe.name
   description: item.forged_axe.desc
-  weight: 4300
+  weight: 1150
   tradeable: true
   weapon: { type: axe, attack: 15, defense: 4, hands: 1 }
   worn: { shape: axe, tint: iron }
@@ -109,7 +111,7 @@
   sprite: weapons/spiked_cudgel
   name: item.spiked_cudgel.name
   description: item.spiked_cudgel.desc
-  weight: 4200
+  weight: 1050
   tradeable: true
   weapon: { type: club, attack: 14, defense: 5, hands: 1 }
   worn: { shape: mace, tint: oak }
@@ -121,7 +123,7 @@
   sprite: weapons/yew_longbow
   name: item.yew_longbow.name
   description: item.yew_longbow.desc
-  weight: 2700
+  weight: 800
   tradeable: true
   weapon: { type: distance, attack: 7, range: 6, hands: 2, ammo: arrow }
   worn: { shape: bow, tint: yew }
@@ -133,7 +135,7 @@
   sprite: weapons/coral_wand
   name: item.coral_wand.name
   description: item.coral_wand.desc
-  weight: 1300
+  weight: 320
   tradeable: true
   weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
   worn: { shape: wand, tint: coral }
@@ -145,7 +147,7 @@
   sprite: weapons/rimewood_staff
   name: item.rimewood_staff.name
   description: item.rimewood_staff.desc
-  weight: 1500
+  weight: 1600
   tradeable: true
   weapon: { type: wand, attack: 13, range: 4, element: ice, hands: 1 }
   worn: { shape: staff, tint: ice }
@@ -160,7 +162,7 @@
   sprite: weapons/boarding_saber
   name: item.boarding_saber.name
   description: item.boarding_saber.desc
-  weight: 3300
+  weight: 1200
   tradeable: true
   weapon: { type: sword, attack: 22, defense: 11, hands: 1 }
   worn: { shape: sword, tint: steel }
@@ -172,7 +174,7 @@
   sprite: weapons/bearded_axe
   name: item.bearded_axe.name
   description: item.bearded_axe.desc
-  weight: 4600
+  weight: 1400
   tradeable: true
   weapon: { type: axe, attack: 24, defense: 7, hands: 1 }
   worn: { shape: axe, tint: steel }
@@ -184,7 +186,7 @@
   sprite: weapons/elmroot_maul
   name: item.elmroot_maul.name
   description: item.elmroot_maul.desc
-  weight: 4600
+  weight: 1400
   tradeable: true
   weapon: { type: club, attack: 23, defense: 9, hands: 1 }
   worn: { shape: mace, tint: elm }
@@ -196,7 +198,7 @@
   sprite: weapons/thornwood_longbow
   name: item.thornwood_longbow.name
   description: item.thornwood_longbow.desc
-  weight: 3000
+  weight: 900
   tradeable: true
   weapon: { type: distance, attack: 12, range: 6, hands: 2, ammo: arrow }
   worn: { shape: bow, tint: thornwood }
@@ -208,7 +210,7 @@
   sprite: weapons/smuggler_crossbow
   name: item.smuggler_crossbow.name
   description: item.smuggler_crossbow.desc
-  weight: 3200
+  weight: 3000
   tradeable: true
   weapon: { type: distance, attack: 8, range: 5, hands: 1, ammo: bolt }
   worn: { shape: crossbow, tint: oak }
@@ -220,7 +222,7 @@
   sprite: weapons/stormglass_wand
   name: item.stormglass_wand.name
   description: item.stormglass_wand.desc
-  weight: 1400
+  weight: 340
   tradeable: true
   weapon: { type: wand, attack: 21, range: 4, element: energy, hands: 1 }
   worn: { shape: wand, tint: stormglass }
@@ -232,7 +234,7 @@
   sprite: weapons/hoarfrost_staff
   name: item.hoarfrost_staff.name
   description: item.hoarfrost_staff.desc
-  weight: 1600
+  weight: 1700
   tradeable: true
   weapon: { type: wand, attack: 21, range: 4, element: ice, hands: 1 }
   worn: { shape: staff, tint: ice }
@@ -246,7 +248,7 @@
   sprite: weapons/embersteel_sabre
   name: item.embersteel_sabre.name
   description: item.embersteel_sabre.desc
-  weight: 3450
+  weight: 1300
   tradeable: true
   weapon: { type: sword, attack: 29, defense: 15, hands: 1 }
   worn: { shape: sword, tint: embersteel }
@@ -258,7 +260,7 @@
   sprite: weapons/embersteel_axe
   name: item.embersteel_axe.name
   description: item.embersteel_axe.desc
-  weight: 4900
+  weight: 1650
   tradeable: true
   weapon: { type: axe, attack: 31, defense: 9, hands: 1 }
   worn: { shape: axe, tint: embersteel }
@@ -270,7 +272,7 @@
   sprite: weapons/embersteel_mace
   name: item.embersteel_mace.name
   description: item.embersteel_mace.desc
-  weight: 5000
+  weight: 1750
   tradeable: true
   weapon: { type: club, attack: 30, defense: 12, hands: 1 }
   worn: { shape: mace, tint: embersteel }
@@ -282,7 +284,7 @@
   sprite: weapons/embersteel_longbow
   name: item.embersteel_longbow.name
   description: item.embersteel_longbow.desc
-  weight: 3300
+  weight: 1000
   tradeable: true
   weapon: { type: distance, attack: 17, range: 6, hands: 2, ammo: arrow }
   worn: { shape: bow, tint: embersteel }
@@ -294,7 +296,7 @@
   sprite: weapons/embersteel_crossbow
   name: item.embersteel_crossbow.name
   description: item.embersteel_crossbow.desc
-  weight: 3600
+  weight: 3250
   tradeable: true
   weapon: { type: distance, attack: 13, range: 5, hands: 1, ammo: bolt }
   worn: { shape: crossbow, tint: embersteel }
@@ -306,7 +308,7 @@
   sprite: weapons/obsidian_wand
   name: item.obsidian_wand.name
   description: item.obsidian_wand.desc
-  weight: 1500
+  weight: 360
   tradeable: true
   weapon: { type: wand, attack: 30, range: 4, element: energy, hands: 1 }
   worn: { shape: wand, tint: obsidian }
@@ -318,7 +320,7 @@
   sprite: weapons/blackfrost_staff
   name: item.blackfrost_staff.name
   description: item.blackfrost_staff.desc
-  weight: 1700
+  weight: 1800
   tradeable: true
   weapon: { type: wand, attack: 30, range: 4, element: ice, hands: 1 }
   worn: { shape: staff, tint: blackice }
@@ -333,7 +335,7 @@
   sprite: weapons/wyrmfang_blade
   name: item.wyrmfang_blade.name
   description: item.wyrmfang_blade.desc
-  weight: 3600
+  weight: 1400
   tradeable: true
   weapon: { type: sword, attack: 36, defense: 18, hands: 1 }
   worn: { shape: sword, tint: bone }
@@ -345,7 +347,7 @@
   sprite: weapons/wyrmbone_axe
   name: item.wyrmbone_axe.name
   description: item.wyrmbone_axe.desc
-  weight: 5200
+  weight: 1900
   tradeable: true
   weapon: { type: axe, attack: 38, defense: 11, hands: 1 }
   worn: { shape: axe, tint: bone }
@@ -357,7 +359,7 @@
   sprite: weapons/wyrmbone_maul
   name: item.wyrmbone_maul.name
   description: item.wyrmbone_maul.desc
-  weight: 5400
+  weight: 2100
   tradeable: true
   weapon: { type: club, attack: 37, defense: 14, hands: 1 }
   worn: { shape: mace, tint: bone }
@@ -369,7 +371,7 @@
   sprite: weapons/wyrmsinew_bow
   name: item.wyrmsinew_bow.name
   description: item.wyrmsinew_bow.desc
-  weight: 3600
+  weight: 1100
   tradeable: true
   weapon: { type: distance, attack: 22, range: 6, hands: 2, ammo: arrow }
   worn: { shape: bow, tint: wyrmscale }
@@ -381,7 +383,7 @@
   sprite: weapons/wyrmsinew_crossbow
   name: item.wyrmsinew_crossbow.name
   description: item.wyrmsinew_crossbow.desc
-  weight: 4000
+  weight: 3500
   tradeable: true
   weapon: { type: distance, attack: 18, range: 5, hands: 1, ammo: bolt }
   worn: { shape: crossbow, tint: wyrmscale }
@@ -393,7 +395,7 @@
   sprite: weapons/wyrmhorn_wand
   name: item.wyrmhorn_wand.name
   description: item.wyrmhorn_wand.desc
-  weight: 1600
+  weight: 380
   tradeable: true
   weapon: { type: wand, attack: 39, range: 4, element: energy, hands: 1 }
   worn: { shape: wand, tint: bone }
@@ -405,7 +407,7 @@
   sprite: weapons/glacierheart_staff
   name: item.glacierheart_staff.name
   description: item.glacierheart_staff.desc
-  weight: 1800
+  weight: 1900
   tradeable: true
   weapon: { type: wand, attack: 39, range: 4, element: ice, hands: 1 }
   worn: { shape: staff, tint: white }
@@ -419,7 +421,7 @@
   sprite: weapons/tidesteel_sword
   name: item.tidesteel_sword.name
   description: item.tidesteel_sword.desc
-  weight: 3750
+  weight: 1500
   tradeable: true
   weapon: { type: sword, attack: 43, defense: 22, hands: 1 }
   worn: { shape: sword, tint: tidesteel }
@@ -431,7 +433,7 @@
   sprite: weapons/tidesteel_axe
   name: item.tidesteel_axe.name
   description: item.tidesteel_axe.desc
-  weight: 5500
+  weight: 2150
   tradeable: true
   weapon: { type: axe, attack: 45, defense: 13, hands: 1 }
   worn: { shape: axe, tint: tidesteel }
@@ -443,7 +445,7 @@
   sprite: weapons/tidesteel_mace
   name: item.tidesteel_mace.name
   description: item.tidesteel_mace.desc
-  weight: 5800
+  weight: 2450
   tradeable: true
   weapon: { type: club, attack: 44, defense: 17, hands: 1 }
   worn: { shape: mace, tint: tidesteel }
@@ -455,7 +457,7 @@
   sprite: weapons/drownwood_bow
   name: item.drownwood_bow.name
   description: item.drownwood_bow.desc
-  weight: 3900
+  weight: 1200
   tradeable: true
   weapon: { type: distance, attack: 27, range: 6, hands: 2, ammo: arrow }
   worn: { shape: bow, tint: drownwood }
@@ -467,7 +469,7 @@
   sprite: weapons/tidesteel_crossbow
   name: item.tidesteel_crossbow.name
   description: item.tidesteel_crossbow.desc
-  weight: 4400
+  weight: 3750
   tradeable: true
   weapon: { type: distance, attack: 23, range: 5, hands: 1, ammo: bolt }
   worn: { shape: crossbow, tint: tidesteel }
@@ -479,7 +481,7 @@
   sprite: weapons/pearlstorm_wand
   name: item.pearlstorm_wand.name
   description: item.pearlstorm_wand.desc
-  weight: 1700
+  weight: 400
   tradeable: true
   weapon: { type: wand, attack: 48, range: 4, element: energy, hands: 1 }
   worn: { shape: wand, tint: pearl }
@@ -491,7 +493,7 @@
   sprite: weapons/deepfrost_staff
   name: item.deepfrost_staff.name
   description: item.deepfrost_staff.desc
-  weight: 1900
+  weight: 2000
   tradeable: true
   weapon: { type: wand, attack: 48, range: 4, element: ice, hands: 1 }
   worn: { shape: staff, tint: tidesteel }
@@ -506,7 +508,7 @@
   sprite: weapons/driftwood_club
   name: item.driftwood_club.name
   description: item.driftwood_club.desc
-  weight: 2300
+  weight: 900
   tradeable: true
   weapon: { type: club, attack: 6, defense: 4, hands: 1 }
   worn: { shape: mace, tint: weathered }
@@ -519,7 +521,7 @@
   sprite: weapons/forged_shortsword
   name: item.forged_shortsword.name
   description: item.forged_shortsword.desc
-  weight: 3100
+  weight: 1000
   tradeable: true
   weapon: { type: sword, attack: 14, defense: 8, hands: 1 }
   worn: { shape: sword, tint: iron }
@@ -532,7 +534,7 @@
   sprite: weapons/thornwood_blade
   name: item.thornwood_blade.name
   description: item.thornwood_blade.desc
-  weight: 3450
+  weight: 1300
   tradeable: true
   weapon: { type: sword, attack: 23, defense: 13, hands: 1 }
   worn: { shape: sword, tint: thornwood }

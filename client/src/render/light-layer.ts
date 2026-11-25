@@ -1,10 +1,12 @@
-// Light in caves (docs/17 ART-7): underground floors (z >= UNDERGROUND) are dark, with a
+// Light in caves (docs/17 ART-7) and on the surface by night (livingworld/README.md "Día y
+// noche", render/sky.ts: the sky's colour as the ambient and the lamps' glow scaled by how
+// dark it is): underground floors (z >= UNDERGROUND) are dark, with a
 // light round the own player and round every fire that gives light (atlas.json tiles
 // `light`, MapView.forEachLight). A light map: a render texture at a quarter of the screen,
 // cleared to the dark AMBIENT colour, with a soft glow sprite added per light, then laid over
 // the map with a multiply blend (and smoothed when stretched back to the screen). One extra
 // small pass per frame, only underground; the glow sprites come from a pool, so a frame
-// allocates nothing once the pool is big enough. Surface floors draw nothing.
+// allocates nothing once the pool is big enough. Surface floors by day draw nothing.
 import { Container, RenderTexture, Sprite, Texture } from "pixi.js";
 import type { Renderer } from "pixi.js";
 
@@ -68,8 +70,12 @@ export class LightLayer {
     this.scene.addChild(this.ambient);
   }
 
-  /** Starts a frame of a screen width x height px: the lights added next are drawn. */
-  begin(width: number, height: number): void {
+  /**
+   * Starts a frame of a screen width x height px: the lights added next are drawn over
+   * `ambient` (the cave's dark by default; on the surface, the sky's colour: render/sky.ts).
+   */
+  begin(width: number, height: number, ambient = AMBIENT): void {
+    this.ambient.tint = ambient;
     const w = Math.max(1, Math.ceil(width / LIGHT_SCALE));
     const h = Math.max(1, Math.ceil(height / LIGHT_SCALE));
     if (!this.rt || this.rt.width !== w || this.rt.height !== h) {

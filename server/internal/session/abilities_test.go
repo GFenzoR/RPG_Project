@@ -719,7 +719,7 @@ func (f gameCtx) Execute(ctx *game.TickContext) { f(ctx) }
 // A caller that gives up takes its summons away with it: the next fight starts afresh.
 // Its target steps out of its leash area (3 tiles around 10,10) and of its reach, still
 // in its sight: the leash drops it (beyondLeash, dropTarget) and, with nobody else to
-// fight, the caller gives up (giveUp: full health, its imps DESPAWN).
+// fight, the caller gives up (giveUp: it keeps its wounds, its imps DESPAWN).
 func TestMonsterSummonsGoWhenItGivesUp(t *testing.T) {
 	h := leashHarness(t, 3, summonerDefs(t), spawnAt("caller", 10, 10, 0, 60))
 	cl, p := h.join("Hunter", at(10, 12))
@@ -734,8 +734,8 @@ func TestMonsterSummonsGoWhenItGivesUp(t *testing.T) {
 	cl.take()
 	h.sim.Command(gameFunc(func() { h.w.Teleport(p, pos(10, 15)) }))
 	h.sim.Step()
-	if hp, maxHP := boss.Health(); boss.TargetID() != 0 || hp != maxHP {
-		t.Fatalf("the caller targets %d at %d/%d health: want given up (no target, full health)", boss.TargetID(), hp, maxHP)
+	if hp, _ := boss.Health(); boss.TargetID() != 0 || hp != 500 {
+		t.Fatalf("the caller targets %d at %d health: want given up (no target, its 500 health kept)", boss.TargetID(), hp)
 	}
 	if n := len(monstersOf(h, "imp")); n != 0 {
 		t.Errorf("%d imps after the caller gave up", n)

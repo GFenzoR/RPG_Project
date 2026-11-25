@@ -1,0 +1,37 @@
+# Day and night (livingworld/README.md "Día y noche", docs/02 "Día y noche"). Owner decision
+# (2026-11-23): the day lasts 180 real minutes and the night 60, a 240-minute cycle; dawn
+# and dusk are smooth transitions inside the day. The moon changes phase once a day over
+# lunar_days days: a full moon makes a brighter, silvery night, a new moon a darker one,
+# but the night never goes black (`floor`). Purely visual: no game rule reads the time.
+#
+# cycle (the server reads it, livingworld/server/daynight; the client too):
+#   day_minutes, night_minutes   real minutes of the day and of the night
+#   dawn_minutes, dusk_minutes   the first and last minutes of the day: the transitions
+#                                (each at most half of day_minutes)
+#   lunar_days                   days from new moon to new moon (phase lunar_days/2: full)
+#   sync_seconds                 how often every player gets the world time again
+# sky (the client only, livingworld/client/src/sky.ts):
+#   dawn, day, dusk              light colour (multiplied over the surface) at mid-dawn,
+#                                by day and at mid-dusk
+#   night_new_moon, night_full_moon   the night's light colour at new and at full moon
+#   floor                        the night never gets darker than this luminance (0..1)
+#   sun_shadow, moon_shadow      opacity of the cast shadows under a high sun and under a
+#                                full moon (the moon's follows its phase)
+#   max_shadow                   the longest a shadow gets, in heights of its caster
+cycle:
+  day_minutes: 180
+  night_minutes: 60
+  dawn_minutes: 15
+  dusk_minutes: 15
+  lunar_days: 8
+  sync_seconds: 60
+sky:
+  dawn: "#ffc9a8"
+  day: "#ffffff"
+  dusk: "#ffa86e"
+  night_new_moon: "#58648c"
+  night_full_moon: "#8494c4"
+  floor: 0.5
+  sun_shadow: 0.42
+  moon_shadow: 0.16
+  max_shadow: 1.4

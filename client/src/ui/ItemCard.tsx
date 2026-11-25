@@ -4,9 +4,10 @@
 // centred, no icon, the description last). The data is state/item-card.ts (pure); this only
 // draws it. No hooks: ItemCard.test.ts walks its tree without a DOM.
 import type { JSX } from "preact";
-import { refinedName } from "../state/forge.ts";
+import { instanceName } from "../state/item-name.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import type { CardEffect, CardRequirement, CardStat, ItemCardView } from "../state/item-card.ts";
+import { formatLength, formatMass } from "../state/units.ts";
 
 /** A sprite's place in the atlas, as Game.itemIcon gives it. */
 export interface IconRect {
@@ -32,11 +33,15 @@ export function iconStyle(icon: IconRect | undefined): JSX.CSSProperties {
  * The whole scale of a big icon: 2x, or with `fit` the largest whole scale (at least 1) at
  * which it fits a `fit` px square. An NPC's portrait fits 64 px: a 32 px sprite of Dungeon
  * Crawl at 2x and a 64 px LPC character at 1x take the same box (at 2x the LPC frame was
- * 128 px, and an NPC's dialog no longer fit a phone on its side).
+ * 128 px, and an NPC's dialog no longer fit a phone on its side). With `shrink` a sprite
+ * larger than the square is scaled down to it (a fraction) instead of spilling out at 1x:
+ * a boss's 96 px corpse in the menu's 64 px box.
  */
-export function bigIconScale(icon: IconRect, fit?: number): number {
+export function bigIconScale(icon: IconRect, fit?: number, shrink = false): number {
   if (fit === undefined) return 2;
-  return Math.max(1, Math.floor(fit / Math.max(icon.width, icon.height, 1)));
+  const size = Math.max(icon.width, icon.height, 1);
+  if (shrink && size > fit) return fit / size;
+  return Math.max(1, Math.floor(fit / size));
 }
 
 /** An atlas icon at a whole scale (a box that size; the icon scaled pixelated: client.css). */
@@ -45,9 +50,11 @@ export function BigIcon(props: {
   class?: string;
   /** Fit the icon in a square of this many px instead of drawing it at 2x. */
   fit?: number;
+  /** With `fit`: scale a sprite larger than the square down to it. */
+  shrink?: boolean;
 }): JSX.Element {
   const icon = props.icon;
-  const scale = icon ? bigIconScale(icon, props.fit) : 2;
+  const scale = icon ? bigIconScale(icon, props.fit, props.shrink) : 2;
   return (
     <span
       class={`big-icon ${props.class ?? ""}`}
@@ -65,12 +72,13 @@ export function BigIcon(props: {
 
 /** The item's name with its count ("arrow ×37"). */
 export function cardTitle(t: Translate, card: ItemCardView): string {
-  // A refined instance (the forge, docs/02 "Forja") is named with its level: "+7 sword".
-  const name = refinedName(
-    t,
-    card.id ? t(`item.${card.id}.name`) : String(card.itemId),
-    card.refine?.level,
-  );
+  // A refined instance (the forge, docs/02 "Forja") is named with its level: "+7 sword";
+  // the remains of a death after whose they are (state/item-name.ts).
+  const name = instanceName(t, card.id ? { id: card.id } : undefined, card.itemId, {
+    refine: card.refine?.level,
+    remainsOf: card.remainsOf,
+    bodyOf: card.bodyOf,
+  });
   return card.count > 1 ? t("client.card.count", { name, count: card.count }) : name;
 }
 
@@ -167,11 +175,25 @@ function AttributeLine(props: { t: Translate; card: ItemCardView }): JSX.Element
   );
 }
 
-/** A stat's value as the card writes it ("13", "33.00 oz", "33.00 oz (330.00 oz in total)"). */
+/** A stat's value without the stack's total ("13", "5 m", "1,2 kg"; docs/02 "Unidades"). */
+function statOwn(t: Translate, s: CardStat): string {
+  if (s.id === "weight") return formatMass(s.value, t);
+  if (s.id === "range") return formatLength(s.value, t);
+  return String(s.value);
+}
+
+/** The whole stack's weight as the card writes it after the unit's ("(12 kg in all)"). */
+function statTotal(t: Translate, s: CardStat): string | undefined {
+  return s.total === undefined
+    ? undefined
+    : t("client.card.weight_total", { weight: formatMass(s.total, t) });
+}
+
+/** A stat's value as the card writes it ("13", "5 m", "1,2 kg", "300 g (3 kg in all)"). */
 function statValue(t: Translate, s: CardStat): string {
-  if (s.id !== "weight") return String(s.value);
-  const oz = t("client.card.oz", { oz: s.value });
-  return s.total === undefined ? oz : `${oz} ${t("client.card.weight_total", { oz: s.total })}`;
+  const own = statOwn(t, s);
+  const total = statTotal(t, s);
+  return total === undefined ? own : `${own} ${total}`;
 }
 
 export function ItemCard(props: {
@@ -202,10 +224,8 @@ export function ItemCard(props: {
             <div key={s.id} data-stat={s.id}>
               <dt>{t(`client.card.stat.${s.id}`)}</dt>
               <dd>
-                {s.id === "weight" ? t("client.card.oz", { oz: s.value }) : s.value}
-                {s.total !== undefined && (
-                  <span class="card-total"> {t("client.card.weight_total", { oz: s.total })}</span>
-                )}
+                {statOwn(t, s)}
+                {s.total !== undefined && <span class="card-total"> {statTotal(t, s)}</span>}
               </dd>
             </div>
           ))}

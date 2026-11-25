@@ -30,6 +30,7 @@ import { viewPixels, zoomRange } from "../render/zoom.ts";
 import { loadIcons } from "../site/shop.ts";
 import type { SpriteIcon } from "../site/shop.ts";
 import type { Game } from "../game.ts";
+import { MinimapState } from "../state/minimap.ts";
 import type { ItemDef } from "../content-types.ts";
 import {
   baseScene,
@@ -99,6 +100,33 @@ function selfTile(): { left: number; top: number; width: number; height: number 
   };
 }
 
+/**
+ * The minimap of the preview: explored around the base scene's player (and a path east),
+ * grass with a stone square, water to the south and a few walls; the rest black.
+ */
+const previewMinimapState = new MinimapState();
+previewMinimapState.revealView(3163, 6384, 7, 61, 41);
+previewMinimapState.revealView(3205, 6380, 7, 31, 11);
+const previewMinimap = {
+  state: previewMinimapState,
+  tileItem: (x: number, y: number): number =>
+    y > 6396
+      ? 3
+      : (x + y) % 17 === 0
+        ? 2
+        : Math.abs(x - 3163) < 6 && Math.abs(y - 6384) < 5
+          ? 4
+          : 1,
+  colour: (item: number): readonly [number, number, number] =>
+    item === 2
+      ? [118, 108, 96]
+      : item === 3
+        ? [36, 70, 128]
+        : item === 4
+          ? [140, 128, 104]
+          : [66, 96, 50],
+};
+
 /** A Game that only answers what the UI reads (icons, cooldowns); every intent is dropped. */
 function stubGame(icons: Map<string, SpriteIcon>): Game {
   const answers: Record<string, unknown> = {
@@ -110,6 +138,7 @@ function stubGame(icons: Map<string, SpriteIcon>): Game {
     markIcon: () => undefined,
     spriteIcon: (path: string) => icons.get(path),
     menuPressed: false,
+    minimapSource: () => previewMinimap,
     spellCooldown: (id: string) => (id === content.spells[1]?.id ? 0.6 : 0),
   };
   return new Proxy({} as Game, {
@@ -265,6 +294,7 @@ function Preview(props: { game: Game }): JSX.Element {
     setReducedMotion: () => {},
     uiScale,
     cameraShake: true,
+    chatBubbles: true,
     interfaceOptions: (
       <InterfaceOptions
         t={t}
@@ -272,10 +302,14 @@ function Preview(props: { game: Game }): JSX.Element {
         textScale={textScale}
         shake={true}
         chatOpacity={50}
+        bubbles={true}
+        nameSize="large"
+        onNameSize={() => {}}
         onUiScale={() => {}}
         onTextScale={() => {}}
         onShake={() => {}}
         onChatOpacity={() => {}}
+        onBubbles={() => {}}
       />
     ),
   };
@@ -303,7 +337,7 @@ function Preview(props: { game: Game }): JSX.Element {
 
 const root = document.getElementById("app");
 if (root) {
-  if (scene === "login" || scene === "characters") {
+  if (scene === "login" || scene === "characters" || scene === "createfirst") {
     render(<App content={content} t={t} locale={lang} />, root);
   } else {
     const defs: ItemDef[] = Object.values(content.items);

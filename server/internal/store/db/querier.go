@@ -97,6 +97,8 @@ type Querier interface {
 	// The caller passes "now" (injected clock) so expiry is testable. A banned account has
 	// no active session (T2.6).
 	GetActiveSession(ctx context.Context, arg GetActiveSessionParams) (GetActiveSessionRow, error)
+	// The minimap's explored sectors of a character (migration 00028).
+	GetCharacterExplored(ctx context.Context, characterID int64) ([]GetCharacterExploredRow, error)
 	// Loads what the game server needs to put a character in the world, with its account's
 	// role. A banned account's characters are not found (T2.6).
 	GetCharacterForPlay(ctx context.Context, arg GetCharacterForPlayParams) (GetCharacterForPlayRow, error)
@@ -276,6 +278,13 @@ type Querier interface {
 	RetireCosmetics(ctx context.Context, ids []string) error
 	// Approve or reject a pending submission. No row: it is not pending (or does not exist).
 	ReviewSubmission(ctx context.Context, arg ReviewSubmissionParams) (ReviewSubmissionRow, error)
+	// A snapshot upserts the sectors that gained bits during the login. Explored bits are
+	// only ever set, so a sector already saved keeps its bits and gains the new ones (a
+	// bitwise OR, byte by byte: bits is always 128 bytes, migration 00028). The snapshots of
+	// one character are written in the order they were taken (the persistence queue is FIFO
+	// per character), so the new copy is normally a superset; the OR keeps the map whole even
+	// if an older snapshot were ever written after a newer one.
+	SaveCharacterExplored(ctx context.Context, arg SaveCharacterExploredParams) error
 	SaveCharacterQuestState(ctx context.Context, arg SaveCharacterQuestStateParams) error
 	// Upserts every skill of a snapshot in one statement (parallel arrays).
 	SaveCharacterSkills(ctx context.Context, arg SaveCharacterSkillsParams) error

@@ -3,7 +3,8 @@
 // every ground first, then the cast shadows, then the stacks tile by tile in row-major order,
 // bottom to top; sprites bigger than a tile are anchored at the bottom-right of their tile (or
 // centred, tile art bc). The tile art is the game's too (@rpg/renderer/tile-art, docs/17):
-// a ground's look by tile, a wall's piece by its neighbours; animations show frame 0. Meant for
+// a ground's look, tone and decal by tile, a wall's piece by its neighbours; animations show
+// frame 0. Meant for
 // reviewing edits with the Read tool, so it adds what the game would not show: coordinate
 // rulers, a grid, and overlays for zones, spawns, NPCs, portals, signs and the temple.
 import { buildAtlas, createImage, drawText, encodePng, GLYPH_H, textWidth } from "@rpg/spritepack";
@@ -11,7 +12,16 @@ import type { Image, Rgba } from "@rpg/spritepack";
 import { CHUNK_SIZE, chunkKey, rectContains } from "@rpg/map-format";
 import type { ContentIndex, Rect, World } from "@rpg/map-format";
 import { HOUSE_DOOR_FRAME } from "@rpg/renderer/decorated";
-import { lookOf, resolveTileArt, stackElevation, tileHash, wallMask } from "@rpg/renderer/tile-art";
+import {
+  groundDecal,
+  groundLook,
+  groundTone,
+  lookOf,
+  resolveTileArt,
+  stackElevation,
+  tileHash,
+  wallMask,
+} from "@rpg/renderer/tile-art";
 import type { TileArt, TileMeta } from "@rpg/renderer/tile-art";
 
 /** Largest area side, in tiles. */
@@ -102,7 +112,8 @@ function outline(img: Image, x: number, y: number, w: number, h: number, t: numb
 
 /**
  * Draws a sprite scaled by tile/32 with its bottom-right corner at (right, bottom); with
- * `shadow`, only its shape, in that colour and alpha.
+ * `shadow`, only its shape, in that colour and alpha; with `tint` (0xRRGGBB), its colours
+ * multiplied by it, as a PixiJS sprite tint.
  */
 function drawSprite(
   img: Image,
@@ -111,7 +122,11 @@ function drawSprite(
   bottom: number,
   scale: number,
   shadow?: { color: Rgba; alpha: number },
+  tint = 0xffffff,
 ): void {
+  const tr = ((tint >> 16) & 255) / 255;
+  const tg = ((tint >> 8) & 255) / 255;
+  const tb = (tint & 255) / 255;
   const w = Math.max(1, Math.round(f.w * scale));
   const h = Math.max(1, Math.round(f.h * scale));
   for (let dy = 0; dy < h; dy++) {
@@ -126,9 +141,9 @@ function drawSprite(
         continue;
       }
       const c: Rgba = [
-        f.page.data[si] as number,
-        f.page.data[si + 1] as number,
-        f.page.data[si + 2] as number,
+        (f.page.data[si] as number) * tr,
+        (f.page.data[si + 1] as number) * tg,
+        (f.page.data[si + 2] as number) * tb,
         255,
       ];
       blend(img, right - w + dx, bottom - h + dy, c, a);
@@ -224,6 +239,11 @@ export function renderArea(
     }
     return a ?? undefined;
   };
+  const inField = (x: number, y: number, id: string): boolean =>
+    tileAt(x, y - 1)?.ground === id &&
+    tileAt(x + 1, y)?.ground === id &&
+    tileAt(x, y + 1)?.ground === id &&
+    tileAt(x - 1, y)?.ground === id;
   const wallAt = (x: number, y: number): boolean =>
     (tileAt(x, y)?.stack ?? []).some((id) => artOf(id)?.joinsWalls === true);
   const x1 = area.x + area.w;
@@ -237,14 +257,19 @@ export function renderArea(
       const g = t?.ground;
       if (!g) continue;
       const art = artOf(g);
-      const f = art?.variants ? art.variants[lookOf(art, tileHash(x, y, floor), true)] : frameOf(g);
-      if (f) drawSprite(img, f, px(x) + T, py(y) + T, scale);
+      const tone = groundTone(x, y, floor);
+      const f = art?.variants ? art.variants[groundLook(art, x, y, floor)] : frameOf(g);
+      if (f) drawSprite(img, f, px(x) + T, py(y) + T, scale, undefined, tone);
       else rect(img, px(x), py(y), T, T, MISSING);
+      // A decal only inside a field of its ground, as MapView.
+      const d = art?.decals ? groundDecal(x, y, floor, art.decals.length) : -1;
+      const decal = d >= 0 && inField(x, y, g) ? art?.decals?.[d] : undefined;
+      if (decal) drawSprite(img, decal, px(x) + T, py(y) + T, scale, undefined, tone);
       for (const id of t.stack) {
         const a = artOf(id);
         if (!a?.flat) continue;
         const p = a.variants ? a.variants[lookOf(a, tileHash(x, y, floor), false)] : a.base;
-        if (p) drawSprite(img, p, px(x) + T, py(y) + T, scale);
+        if (p) drawSprite(img, p, px(x) + T, py(y) + T, scale, undefined, tone);
       }
     }
   /** Where an item's sprite goes: its bottom-right corner (bc: centred on the tile). */

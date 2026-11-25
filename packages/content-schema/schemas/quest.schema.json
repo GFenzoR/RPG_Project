@@ -77,7 +77,19 @@
         "properties": {
           "id": { "$ref": "common.schema.json#/$defs/id" },
           "description": { "$ref": "common.schema.json#/$defs/i18nKey" },
-          "complete_when": { "$ref": "#/$defs/completion" }
+          "complete_when": { "$ref": "#/$defs/completion" },
+          "hint_area": {
+            "description": "Where the minimap's estimate of this step points (docs/02 \"Minimapa\"): a point on an island of the map and how many tiles around it (Chebyshev radius) the step happens in. Optional: without it the server derives the place from the step (the NPC of a dialog_action, the nearest spawn of a kill's monster, the place of a reach, the plates of a sigils step); a has_item or flag_equals step without it shows no estimate. The player never sees the point itself, only a circle around a point near it.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["x", "y", "z"],
+            "properties": {
+              "x": { "type": "integer", "minimum": 0, "maximum": 65535 },
+              "y": { "type": "integer", "minimum": 0, "maximum": 65535 },
+              "z": { "type": "integer", "minimum": 0, "maximum": 15 },
+              "radius": { "type": "integer", "minimum": 0, "maximum": 32 }
+            }
+          }
         }
       }
     },

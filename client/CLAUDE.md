@@ -61,8 +61,9 @@ client/
   le pasa a `MapView` el `TileArt` de cada item (`atlas.tileArt`, resuelto una vez por id)
   y la hora del frame, y `MapView` pone los looks de suelo, las piezas de muro, las anclas
   centradas, las sombras proyectadas (capa entre el suelo y los items) y avanza los tiles
-  animados sin asignar. Encima del mapa: la silueta del jugador propio cuando lo tapa el
-  muro de la casilla de al sur (`behindWall`, `view.wallAt`), y en los pisos z ≥ 8 la luz
+  animados sin asignar. Cuando un muro de las filas de al sur tapa al jugador propio, ese
+  muro se vuelve translúcido (`MapView.revealBehind` con `figureRect`, `REVEAL_ALPHA`): el
+  jugador nunca palidece (pedido del dueño del 2026-11-23). En los pisos z ≥ 8 la luz
   de `render/light-layer.ts` (multiply, bajo efectos y nombres; da luz el jugador y cada
   item con `light`). Orden de capas del stage: mapa → luz → efectos → nombres → textos.
 - Una criatura sin sprite es un bloque de color con una marca hacia donde mira (ver
@@ -132,7 +133,7 @@ client/
 - `WorldState` guarda `inventory` (slot → item), `containers` (ventanas abiertas) y el
   `count` de cada item de los tiles (`tileCounts`). `state/items.ts` arma las
   `ItemLocation` del protocolo y el item de arriba de un tile.
-- Panel `ui/Inventory.tsx`: slots de equipo, capacidad (oz = gramos / 100) y una ventana
+- Panel `ui/Inventory.tsx`: slots de equipo, capacidad (gramos, en g o kg: `state/units.ts`) y una ventana
   por contenedor abierto. Los iconos son el sprite del atlas como fondo CSS
   (`Atlas.icon`). Desde `feat/equipment-d2` el equipo es una figura al estilo Diablo II,
   con la mochila equipada abajo y la capacidad como barra: ver "Notas del equipo y el
@@ -173,8 +174,12 @@ client/
   entrar y lo lleva a los lobos.
 - Bloqueo de logout en combate (docs/02): un "Salir del juego" a menos de 12 s de una pelea
   lo rechaza el servidor con `combat.logout_locked` (`pvp.logout_locked` con el bloqueo
-  PvP). El cliente no hace nada propio: el mensaje flota sobre el mapa (`notices.ts`) y va
-  al log, y el jugador sigue en el juego con su objetivo. Un E2E que sale después de pelear
+  PvP), con los segundos que faltan: el mensaje flota sobre el mapa (`notices.ts`) y va
+  al log, y el jugador sigue en el juego con su objetivo. Antes del click, el botón ya se
+  ve bloqueado: `ui/LogoutButton.tsx` (`LogoutLock` lee `logoutLockMs` de los estados
+  `in_combat`/`pvp_locked` y redibuja cada segundo; `data-locked` y `logout-countdown` en
+  la barra, `logout-menu` en el menú del teléfono). Cerrar o recargar en combate deja una
+  nota (`state/stayed.ts`, `pagehide`) que la próxima pantalla muestra una vez. Un E2E que sale después de pelear
   usa `leaveAfterFight` (`e2e/game.spec.ts`), que reintenta cada 2 s hasta salir; el de la
   pelea con el lobo mira el rechazo (`07c-logout-locked`).
 
@@ -193,6 +198,12 @@ client/
   guarda el idioma en estado y `ui/LanguagePicker.tsx` lo cambia en vivo (esquina fuera del
   juego; dentro, la ventana Opciones en escritorio y el menú ☰ en teléfonos); el `Game`
   recibe `t` por un ref y el canvas renombra etiquetas.
+- **Globos sobre las cabezas** (docs/17 UI-11): lo dicho en el canal local (y la línea del
+  NPC en su diálogo) también va sobre quien habla. `WorldState.takeSpeech` (solo un
+  `Message` con `pos`), reglas puras en `render/bubbles.ts` (estilo por canal, ajuste de
+  línea, duración, apilado, separación) y la capa en `render/bubble-layer.ts`, entre los
+  nombres y los números. Opción `chat-bubbles` en Opciones → Interfaz (`rpg.chat-bubbles`).
+  Hook E2E `__rpgClient.bubbles()`.
 - `translator(texts, lang)` soporta plurales ICU; `make validate` revisa las claves literales
   del código (cliente, editor y servidor).
 
@@ -237,6 +248,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   panel del grupo (vida/maná solo de los miembros en vista, que es lo único que llega) y
   las invitaciones sobre el mapa. En la lista de batalla, un jugador tiene el botón "+"
   (invitar) si se lo puede invitar. El canal "Grupo" está en el selector del chat.
+- **Invitar por nombre** (lote 19, docs/02 "Grupos"): `PartyInvite` de `ui/Party.tsx` (sin
+  hooks) es el botón "Invitar" (sin grupo, o siendo el líder) o, abierto, el cuadro con el
+  nombre; el estado es `GameUi.partyInviting` (`Game.partyInvitePrompt`), y
+  `Game.partyInviteByName` manda `PartyCommand` `INVITE_NAME`. La respuesta es un mensaje
+  del sistema. Test ids: `party-invite`, `party-invite-prompt`, `party-invite-name`,
+  `party-invite-send`, `party-invite-cancel`. E2E: "party: the window's Invitar button…"
+  de `e2e/game.spec.ts` (screenshots `24b`–`24d`).
 - El plugin de Vite empaqueta los nombres de `world.yaml` (`island.<id>.name`).
 
 ## Notas de T3.4
@@ -295,8 +313,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   Mientras el contexto no esté `running`, los efectos se descartan; los loops no.
   `Game` recibe el motor en `GameOptions.audio`: traduce cada mensaje con `cuesOf`
   (`audio/cues.ts`, puro) y, después del batch, los reproduce alrededor de la posición
-  propia. También fija el ambiente con `loopFor` (isla de `content.islands` o subsuelo) y
-  la escena de la música (abajo). La herramienta de recolección (`toolAt`: uso y casilla) solo define el sonido
+  propia. También fija la escena de la música (abajo) y, cada `AMBIENCE_STEP_MS` (250 ms)
+  desde `frame`, el ambiente posicional (`audio/ambience.ts`, pegamento del mundo vivo:
+  `livingworld/README.md` "Ambiente"; el motor lo refleja con `setAmbience`). La herramienta de recolección (`toolAt`: uso y casilla) solo define el sonido
   de un efecto 5 en esa misma casilla. Se olvida al fabricar o al usar otro item.
 - Qué suena con cada evento está en `assets/sounds.yaml` (`content.sounds`). El plugin de
   Vite sirve esos archivos en `/audio/` y `vite build` los emite. No escribas nombres de
@@ -350,14 +369,16 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   un elemento que tuvo un `play()` en un gesto. Si igual rechaza un `play()`
   (`NotAllowedError`, `StreamLike.blocked`), el gesto siguiente lo vuelve a llamar desde
   donde va la voz. Falta probarlo en un iPhone y en la app de macOS (docs/14).
-- `Screens` (`ui/App.tsx`) pone la escena `title` fuera del juego (sin ambiente); al
-  salir, `Game.destroy` calla el ambiente y el título entra con su fundido. Dentro,
+- `Screens` (`ui/App.tsx`) pone la escena `title` fuera del juego (sin ambiente,
+  `setAmbience([])`); al salir, `Game.destroy` apaga el ambiente y el título entra con su fundido. Dentro,
   `Game.keepLoops` arma la escena con `sceneFor` (`audio/cues.ts`, puro: `loopFor` para la
   zona, `questPoolAt` para `content.questMusic`, de `music` en `data/quests`, y el primer
   jefe de `music.bosses` en la lista de batalla). Corre tras cada batch y cada
   `LOOPS_EVERY_MS` (500 ms) desde `frame`, porque un jefe sale de la vista sin mensaje.
-- Memoria: el motor deja decodificados solo los `KEEP_LOOPS` (2) últimos loops de
-  ambiente (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al caché.
+- Memoria: el motor deja decodificados los loops de ambiente que suenan y `KEEP_LOOPS` (2)
+  de los últimos (`isCached` para los tests); uno olvidado mientras cargaba no vuelve al
+  caché. `loops()` del hook E2E trae `ambience` (los loops que suenan) y `ambient` (el más
+  fuerte).
   La música no se decodifica entera (docs/07 "Audio").
 - **Sonidos que no bajan** (lote 10): `load` (efectos y loops de ambiente) pide el archivo
   con `withRetry` y `ASSET_RETRY` de `@rpg/renderer/retry` (4 intentos, esperas de 0,5, 1
@@ -365,8 +386,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `soundFailed` (hora de `ports.now` en que vuelve a valer) y borra la entrada de `buffers`:
   una reproducción antes de esa hora no pide nada; después, lo pide de nuevo. La espera es
   `STREAM_RETRY_MS` (5 s), doblando hasta `STREAM_RETRY_MAX_MS` (60 s), como la música.
-  El ambiente que se quiere vuelve solo: la bomba (`retryAmbient`) lo arranca cuando vence
-  la espera. Antes el fallo quedaba guardado (`undefined`) toda la sesión. Un archivo que
+  El ambiente que se quiere vuelve solo: el juego llama `setAmbience` cada 250 ms y,
+  vencida la espera, el archivo se pide de nuevo. Antes el fallo quedaba guardado (`undefined`) toda la sesión. Un archivo que
   llega pero `decodeAudioData` rechaza (un navegador sin Ogg) no se reintenta: `giveUp`
   lo anota con `Infinity`, como la música que el elemento no sabe tocar.
 
@@ -595,9 +616,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Los NPCs usan su sprite del atlas como los monstruos (`content.npcSprites`, de
   `data/npcs`); sin textura, el bloque de color de siempre.
 - Jugadores (propio y ajenos): outfit `citizen` de `content.outfits` (`data/outfits.yaml`).
-  Frames en el atlas: `<sprite>/<dir>_<frame>` (`outfits/citizen/s_0`). `render/outfit.ts`
-  (puro, con tests): `outfitDir` lleva las 8 direcciones a n/e/s/w (las diagonales usan
-  la horizontal: noreste mira al este). El frame lo elige la animación ("Animación de
+  Frames en el atlas: `<sprite>/<dir>_<frame>` (`outfits/citizen/s_0`). La dirección la elige
+  `turnTo` (`packages/renderer/src/anim.ts`, docs/17 ANI-1) con `AnimState.facing`: una
+  figura con diagonales en todas sus capas (`ClipSet.eight`, `CreatureBody.eight`; los
+  humanoides del motor) gira a la diagonal; una de 4 direcciones conserva la mitad de la
+  diagonal que ya mira, o toma la horizontal. Nunca se mezclan. El canvas llama a `faceTo`
+  (mismo archivo) por criatura y por frame: mira hacia su ataque (`startAttack`, por octante)
+  mientras dura el clip o la embestida y hasta que camina o gira; si no, hacia su paso o su
+  `dir`. El servidor no gira a un jugador que ataca: es solo dibujo. El frame lo elige la animación ("Animación de
   criaturas"): con 3 frames T0.5, 0 parado y, durante un paso, 1 la primera mitad y 2 la
   segunda, así pasos seguidos alternan 1, 2, 1, 2.
 - El canvas usa el outfit solo si el atlas lo anima (`anims`) o tiene arte real para todos
@@ -681,10 +707,10 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   en la misma pose y frame. El orden por dirección es `LAYER_ORDER` de
   `packages/renderer/src/look.ts` (puro, con tests: `lookSprites`, `lookLayers`,
   `attackActionFor`); el cuerpo se reapila solo al girar (`layerOrder`). Lo que se lleva en
-  la mano va sobre la ropa en las cuatro direcciones (docs/17 "Humanoides del motor": la
+  la mano va sobre la ropa (docs/17 "Humanoides del motor"; 8 órdenes, uno por dirección: la
   oclusión del cuerpo ya viene en sus frames). Los sprites salen de `LAYER_POOL` y vuelven con
   `release()` (`dropSprite`, `dropGhost`): dibujar un frame no crea objetos. La capa del
-  cuerpo es `figure.sprite` (siluetas y la copia tras un muro: solo el cuerpo).
+  cuerpo es `figure.sprite` (siluetas y la caja de `figureRect` para el muro translúcido).
 - **Se desvanece entero:** las capas van en un contenedor propio dentro de `figure.root`
   (después de la sombra). Pixi multiplica el alfa de un contenedor en cada hijo, así que el
   alfa de la pose no va en las capas: mientras es menor que 1, el contenedor se dibuja a
@@ -904,8 +930,9 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   más nuevos, 6 s, sin tomar clicks.
 - Nombres a zoom 1x (`render/labels.ts`): prioridad propio → objetivo → más cercano; si
   se pisa, pierde la línea del gremio, sube una línea o se oculta (salvo propio, objetivo o
-  a 1 casilla); nombres de más de 12 caracteres se acortan con "…". Desde zoom 2 no cambia
-  nada.
+  a 1 casilla); nombres de más de 12 caracteres se acortan con "…". Desde
+  `feat/name-labels` las reglas rigen mientras `zoom < 2 × labelScale` (`labelsFull`): con
+  nombres grandes, a cualquier zoom (ver "La fuente del canvas").
 - Hotbar: con poco ancho muestra los slots enteros que entran, con flechas ‹ › de 44 px y
   deslizamiento nativo; F1–F12 siguen en el DOM. En vertical con pad (`stacked` en
   `ui/Hotbar.tsx`) va a la derecha del pad: flechas y lápiz en una línea, y debajo los
@@ -1316,6 +1343,19 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `vite/canvas-font.test.ts` lee las tablas del `.ttf`: todo nombre de criatura tiene sus
   letras, uno acortado a zoom 1 (`labelText`) mide como mucho 96 px, las letras miden 7 y
   5 px de alto y los avances no son píxeles enteros (lo que dice `canvas-font.ts`).
+- **Tamaño y color de los nombres** (rama `feat/name-labels`, docs/17 "Hecho: nombres más
+  grandes y legibles"): `render/label-style.ts` (puro, con tests) tiene los tokens de color
+  (`LABEL_COLORS`, `SKULL_COLORS`, `LABEL_OUTLINE`; contraste ≥ `LABEL_MIN_CONTRAST`, 4,5,
+  comprobado en `label-style.test.ts`: un color nuevo va ahí, nunca suelto) y `labelScale`
+  (zoom, `NameSize`): los píxeles por celda de la fuente. Cada frame el canvas escala por
+  ese entero el nombre, el gremio, la marca y los números flotantes (`EffectLayer.draw`,
+  `textScale`), todos con `textureStyle` `nearest`; los huecos de `labels.ts` y de la marca
+  también. La opción es `rpg.name-size` (`loadNameSize`/`saveNameSize` de
+  `state/ui-prefs.ts`, `name-size` en `InterfaceOptions`), que llega como
+  `GameSettings.nameSize` → `GameOptions.nameSize()` → `GameCanvasOptions.nameSize()`.
+  Hooks E2E: `__rpgClient.labels()` (escala y caja en la página de cada nombre visible) y
+  `wallFade(x, y)` (el alfa de las piezas de muro de una casilla, `MapView.wallAlphaAt`, y
+  cuántas copias translúcidas se dibujaron).
 - **Tokens** (UI-2) en `:root` de `client.css` (`--ui-*`; `--bg`, `--panel`, `--text`,
   `--muted`, `--accent` y `--error` quedan como alias para el sitio). El marco de hierro
   (`--ui-frame-shadow`) y la veta de piedra (`--ui-grain`, SVG en línea) los comparten
@@ -1381,7 +1421,8 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
 - **E2E**: `e2e/windows.ts` (`openWindow`, `closeWindow`) abre las ventanas desde la
   botonera. Test ids nuevos: `toolbar`, `toolbar-<id>` (`options-button` para Opciones,
   `toolbar-market`, `logout`), `window-<id>` (`options` para Opciones; el chat es
-  `window-chat`), `window-close-<id>`, `window-fold-<id>`, `window-move-<id>`,
+  `window-chat`), `window-close-<id>`, `window-fold-<id>`, las esquinas
+  `.gwin-resize[data-corner=nw|ne|sw|se]` (desde `feat/window-resize`; ya no hay `window-move-<id>`),
   `[data-window-button]`, `[data-chat-tab]`, `[data-guild-tab]`, `reduced-motion`,
   `windows-reset`, `hud-bar`; la ayuda es `controls-help`. El mapa empieza en la esquina
   de arriba a la izquierda de la página, pero ahí flota la ventana de batalla: un click en
@@ -1495,12 +1536,9 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   (`InventoryPanel` con `containers`).
 - **Mover y cambiar el tamaño** (`GameWindow`, `useWindows` de `GameView` y
   `ui/window-dom.ts`; desde la pantalla completa nada se acopla y hay imán): la barra
-  arrastra (`dragWindow`); la esquina de abajo a la derecha (`.gwin-resize`, `resizeDrag`)
-  cambia el tamaño (`resizeWindow`, `clampSize` con `MIN_SIZE`); el botón ✥ de la barra
-  (`.gwin-move`, `window-move-<id>`) toma el teclado (`windowNudge`): flechas mueven 16 px
-  y Mayús+flechas cambian el tamaño. El botón para la tecla (`preventDefault` +
-  `stopPropagation`) para que la flecha no camine; Alt no se toma (Alt+← es "atrás" del
-  navegador). La ayuda (H) lo explica (`client.help.windows`).
+  arrastra (`dragWindow`); las cuatro esquinas cambian el tamaño (desde `feat/window-resize`,
+  ver "Cambiar el tamaño desde las cuatro esquinas"). El botón ✥ y su teclado se quitaron
+  (decisión del dueño del 2026-11-23). La ayuda (H) lo explica (`client.help.windows`).
 - **Escala de la interfaz y tamaño del texto** (UI-3, `state/ui-prefs.ts`,
   `ui/InterfaceOptions.tsx`, Opciones → Interfaz y el menú ☰ del teléfono): `rpg.ui-scale`
   (`UI_SCALES`, 80 % a 150 %) es el `zoom` CSS de la barra de abajo (con la hotbar
@@ -1752,7 +1790,7 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
     con su propia regla de escritorio, 3,5rem más arriba (la de `.invitations` les ganaba
     por especificidad a `.guild-invitations` y las dos quedaban en el mismo lugar).
     `ui/windows-css.test.ts` lo comprueba leyendo `windows.css`.
-  - **Imán** (`snapPlace`, puro): al arrastrar (y con las flechas del ✥), cada eje va al
+  - **Imán** (`snapPlace`, puro): al arrastrar (y en los bordes que mueve una esquina), cada eje va al
     borde más cercano a menos de `SNAP_PX` (10): los de la pantalla, el techo de la barra y
     los de las otras ventanas, de lado (la izquierda de una con la derecha de la otra) o
     alineados (izquierda con izquierda), solo si las dos están cerca en el otro eje. Después
@@ -1810,8 +1848,6 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
     antes, con su propio Escape, el diálogo y la estación.
   - **Abiertas juntas** (`syncWindows`): los contenedores primero, así un diálogo o una
     estación que abre con ellos queda encima.
-  - Teclado del ✥: flechas mueven 16 px (con imán), Mayús+flechas cambian el tamaño (hasta
-    el techo de la barra). Enter y Espacio ya no acoplan nada.
 - **Sobre el mapa**, encima de la barra: los avisos (`.notices`), las invitaciones (sobre
   las ventanas, las del gremio más arriba), el pad y los botones de zoom de una pantalla
   táctil; el tutorial se corre a la izquierda de la
@@ -1828,6 +1864,38 @@ ventanas libres con imán. Solo escritorio: tablets y teléfonos siguen con pest
   falla si una ventana tapa la casilla. Que el cuerpo de la tienda no se desplace se mide
   en `.gwin-body` (el marco no es un contenedor de scroll y sus esquinas góticas sobresalen
   5 px).
+
+## Cambiar el tamaño desde las cuatro esquinas (docs/17 UI-5, rama `feat/window-resize`)
+Pedido del dueño del 2026-11-23: como en Ragnarok Online. Solo escritorio.
+- **Las esquinas** (`GameWindow`): cuatro `span.gwin-resize[data-corner=nw|ne|sw|se]` de
+  12 px, 5 px fuera del marco, sobre los adornos de `.gwin::after`; no hay en una ventana
+  plegada. Los bordes no cambian el tamaño (decisión del dueño). Cursor por esquina
+  (`cornerCursor`: `nwse-resize` en nw y se, `nesw-resize` en ne y sw). Con el puntero
+  encima, un brillo dorado en su `::before` (solo `opacity`); mientras dura, la ventana
+  lleva `data-resizing="<esquina>"` y esa esquina sigue encendida, y `body` lleva
+  `resizing-window` (y `resizing-nesw` en ne y sw: el cursor en toda la página).
+- **Geometría** (`resizeFrom` de `ui/windows.ts`, pura y con tests): los dos bordes de la
+  esquina siguen al puntero (deltas redondeados), la esquina contraria queda; imán en los
+  bordes que se mueven (`SNAP_PX`: pantalla, techo de la barra y las otras ventanas, con
+  la misma regla de "cerca en el otro eje" de `snapPlace`; `nearest` es de los dos);
+  después dentro del área y nunca bajo `MIN_SIZE` (cede el borde que se mueve; si la
+  esquina fija está más cerca del borde del área que eso, `clampPlace` corre la caja).
+  `clampSize` ya no existe.
+- **DOM** (`resizeDrag(env, el, corner, press, area, others, place, done)` de
+  `ui/window-dom.ts`): mide la caja de la ventana una vez, escribe `left`, `top`, `width` y
+  `height` en sus propios px (`/ --ui-zoom`) en cada `pointermove`, y al soltar
+  `settleStyle` y `done(x, y, w, h)` (GameView: `placeWindow` + `resizeWindow`). Las otras
+  ventanas se miden una vez al empezar (`otherRects`, como al arrastrar).
+- **Qué ventanas:** todas las flotantes, el chat también; se revisó cada una y ninguna
+  tiene contenido de tamaño fijo (la figura del equipo escala, el resto se desplaza
+  adentro). Tablets y teléfonos no tienen `GameWindow`.
+- **Se quitó el ✥** (`.gwin-move`, `window-move-<id>`, `windowNudge`, `KEY_STEP`,
+  `NudgeContext`, el ícono `move` y las claves `client.window.move` y
+  `client.window.move_hint`): las ventanas ya no se mueven con el teclado.
+- **Tests:** `ui/windows.test.ts` ("resizing from the corners"), `ui/window-dom.test.ts`
+  ("resizing a window by a corner", con la regla de `style` de Preact) y
+  `ui/Toolbar.test.ts`. E2E: el test del chat de `e2e/game.spec.ts` arrastra la esquina de
+  arriba a la izquierda del chat (screenshot `16b-chat-resized-top-left`).
 
 ## Lugares de fábrica que miran las ventanas abiertas (lote 10, docs/17 UI-5)
 - **La regla** (`defaultPlace` de `ui/windows.ts`, pura y con tests): una ventana que se abre
@@ -1950,3 +2018,18 @@ de estados y placa del nombre").
 - **Vista previa:** escena `status` (y `game`, `danger`) de `make ui-preview`.
 - **E2E:** "T3.2: a guardian casts haste" (`22-haste`, `23-conditions-hud`) y "T5.6: at
   1280x800 a long name" (la placa).
+
+## Notas del minimapa (rama `feat/minimap`, docs/02 y docs/17 "Minimapa")
+- `WorldState.minimap` (`state/minimap.ts`, puro y con tests) guarda lo explorado del
+  servidor (`MinimapIndex`, `MinimapSectors`) y la pista (`ObjectiveHint`); `Game.publish`
+  explora la vista propia (`revealView`, la misma regla que el servidor) y publica
+  `GameUi.minimap`. `ui/Minimap.tsx` pinta el terreno con `paintTerrain` solo cuando cambia
+  la versión, el centro o el zoom, y pide los sectores que le faltan (`wanted`,
+  `Game.minimapRequest`). El color de un item es `atlas.json` `minimap`
+  (`GameCanvas.itemColor`). Nunca pintes una casilla que `isExplored` no da.
+- El item de color de una casilla sale de `MinimapState.item`, nunca de `WorldState.tile`:
+  `WorldState.setTile` lo anota (`noteTile`) al recibir cada casilla, porque el mapa se
+  olvida lejos del jugador y en cada `FullMapView`. Solo `MinimapSectors.answer` da un
+  sector por pedido; un delta no.
+- Seguir una quest: `Game.trackQuest` (botón `quest-track` del diario), recordado por
+  personaje en `localStorage` `rpg.track` y reenviado tras cada `Welcome`.

@@ -210,7 +210,7 @@ export const BOAR: SpriteSpec = {
         [
           0.75,
           {
-            "*": { rot: [-86, 0, 0], move: [0, -8, 7.5] },
+            "*": { rot: [-86, 0, 40], move: [6.5, -8.5, 7.5] },
             head: { rot: [-6, -14, 0] },
             leg_fl: { rot: [0, 35, 0] },
             leg_fr: { rot: [0, 15, 0] },
@@ -221,7 +221,7 @@ export const BOAR: SpriteSpec = {
         [
           1,
           {
-            "*": { rot: [-90, 0, 0], move: [0, -9, 7.5] },
+            "*": { rot: [-90, 0, 55], move: [9, -7, 7.5] },
             head: { rot: [-10, -18, 0] },
             leg_fl: { rot: [0, 30, 0] },
             leg_fr: { rot: [0, 20, 0] },

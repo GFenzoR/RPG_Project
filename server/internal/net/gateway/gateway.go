@@ -24,6 +24,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/clock"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/explore"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	"github.com/GFenzoR/RPG_Project/server/internal/net/clientip"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -501,12 +502,29 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 			Author: k.Author, AuthorHit: k.AuthorHit, AuthorUnjust: k.AuthorUnjust, SavedAt: k.SavedAt})
 	}
 	c.Inventory = itemStates(pc.Inventory)
+	c.Explored = exploredStates(pc.Explored)
 	c.Stash = itemStates(pc.Stash) // used only if the account's stash is not in the world yet
 	if pc.HasPos && pc.X >= 0 && pc.X <= 0xFFFF && pc.Y >= 0 && pc.Y <= 0xFFFF && pc.Z >= 0 && pc.Z <= world.MaxFloor {
 		c.HasPos = true
 		c.Pos = world.Pos{X: uint16(pc.X), Y: uint16(pc.Y), Z: uint8(pc.Z)}
 	}
 	return c
+}
+
+// exploredStates converts the saved minimap sectors; a row outside the map or of the
+// wrong size is dropped.
+func exploredStates(in []store.ExploredSector) []explore.SectorState {
+	out := make([]explore.SectorState, 0, len(in))
+	for _, e := range in {
+		if e.Z < 0 || e.Z > explore.MaxFloor || e.SX < 0 || e.SX >= 1<<12 || e.SY < 0 || e.SY >= 1<<12 ||
+			len(e.Bits) != explore.SectorBytes {
+			continue
+		}
+		s := explore.SectorState{Key: explore.MakeKey(uint8(e.Z), e.SX, e.SY)}
+		copy(s.Bits[:], e.Bits)
+		out = append(out, s)
+	}
+	return out
 }
 
 // itemStates converts saved inventory rows; ids outside uint16 cannot be items.

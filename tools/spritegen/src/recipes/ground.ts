@@ -1,9 +1,12 @@
 // Grounds with looks and motion (docs/17 ART-4, ART-6, ART-7). Every ground is a seamless
 // 32x32 tile of low-frequency texture (patches of 8-16 px, details of 1-3 px, at most 5
 // tones within a lightness step of about 15 L*), so a field reads as one surface and not
-// as a grid. Each has alternate looks, <sprite>/var_<n>: the same tile with a small detail
-// (flowers, a tuft, pebbles, a crack) kept away from the edges, so any look meets any other
-// without a seam; the renderer picks one per tile by a hash (about 70 % the plain one).
+// as a grid. Each has alternate looks, <sprite>/var_<n> (recipes/variety.ts): the main
+// look's outer ring with another heart (another seed of the texture, a rippled, coarse,
+// lush or dry take on it, or a detail: a tuft, pebbles, a crack), so any look meets any
+// other without a seam; sand and grass also have decals, <sprite>/decal_<n>. The renderer
+// picks a look per tile (groundLook: areas lean to runs of alike looks, side-by-side tiles
+// never repeat one) and lays decals on a few tiles (docs/17 ART-4).
 // Water and lava are animated, <sprite>/frame_<n>: every frame tiles, and the loop closes
 // (the swell sways and comes back, crests flicker in and out, lava bands pulse a quarter of
 // a band per frame). Timing in assets/sprites.yaml `tiles`.
@@ -12,6 +15,8 @@ import { eachInRect, hash2, line, px, tileNoise } from "../draw.ts";
 import type { Rng } from "../draw.ts";
 import { hex, mix } from "../palette.ts";
 import type { RecipeBook } from "../recipe.ts";
+import { calmSeed, drawLevel, groundBook, levelHeart } from "./variety.ts";
+import type { LevelGround, Look } from "./variety.ts";
 import { stones } from "./walls.ts";
 
 const wrap = (v: number): number => ((v % 32) + 32) % 32;
@@ -24,24 +29,29 @@ function ramp(colors: readonly Rgba[], level: number): Rgba {
   return colors[i] as Rgba;
 }
 
-/** A ground with its looks: the base drawer, then each detail drawn over a copy of it. */
+/**
+ * A ground with its looks (each drawn over the main look) and its decals (recipes/variety.ts).
+ */
 function withLooks(
   sprite: string,
   base: (img: Image, seed: number) => void,
-  details: ((img: Image, rand: Rng) => void)[],
+  looks: readonly Look[],
+  decals: readonly ((img: Image, rand: Rng) => void)[] = [],
+  seed = seedOf(sprite),
 ): RecipeBook {
-  const seed = seedOf(sprite);
-  const book: RecipeBook = { [sprite]: { kind: "ground", draw: (img) => base(img, seed) } };
-  details.forEach((detail, i) => {
-    book[`${sprite}/var_${i + 1}`] = {
-      kind: "ground",
-      draw: (img, rand) => {
-        base(img, seed);
-        detail(img, rand);
-      },
-    };
-  });
-  return book;
+  return groundBook(sprite, seed, base, looks, decals);
+}
+
+/** withLooks for a level ground, from the calmest seed near its path's (calmSeed). */
+function levelLooks<T>(
+  sprite: string,
+  field: LevelGround<T>,
+  take: T,
+  looks: readonly Look[],
+  decals: readonly ((img: Image, rand: Rng) => void)[] = [],
+): RecipeBook {
+  const seed = calmSeed(field, take, seedOf(sprite));
+  return withLooks(sprite, drawLevel(field, take), looks, decals, seed);
 }
 
 /** An animated ground: frame 0 is the sprite itself, frames 1.. are <sprite>/frame_<n>. */
@@ -86,54 +96,110 @@ function blade(
   pxw(img, x, y + 1, GRASS[0] as Rgba);
 }
 
-function grass(img: Image, seed: number): void {
-  eachInRect(0, 0, 32, 32, (x, y) => {
-    // Mostly mid-scale patches: a feature as big as the tile would repeat as a grid.
-    const patch =
-      tileNoise(x, y, 16, 16, seed) * 0.2 +
-      tileNoise(x, y, 8, 8, seed + 1) * 0.5 +
-      tileNoise(x, y, 4, 4, seed + 9) * 0.3;
-    const grain = (tileNoise(x, y, 2, 2, seed + 2) - 0.5) * 0.2;
-    px(img, x, y, ramp(GRASS.slice(1, 4), (patch - 0.5) * 1.4 + 0.5 + grain));
-  });
-  // Dark tufts between the blades (a small v), then blades on a jittered 4 px lattice.
-  for (let cy = 0; cy < 8; cy++)
-    for (let cx = 0; cx < 8; cx++) {
-      if (hash2(cx, cy, seed + 6) > 0.55) continue;
-      const x = cx * 4 + 2 + Math.floor(hash2(cx, cy, seed + 7) * 3);
-      const y = cy * 4 + 2 + Math.floor(hash2(cx, cy, seed + 8) * 3);
-      pxw(img, x, y, GRASS[0] as Rgba);
-      pxw(img, x - 1, y - 1, GRASS[1] as Rgba);
-      pxw(img, x + 1, y - 1, GRASS[1] as Rgba);
-    }
-  for (let cy = 0; cy < 8; cy++)
-    for (let cx = 0; cx < 8; cx++) {
-      const h = hash2(cx, cy, seed + 3);
-      if (h > 0.85) continue;
-      const x = cx * 4 + Math.floor(hash2(cx, cy, seed + 4) * 4);
-      const y = cy * 4 + Math.floor(hash2(cx, cy, seed + 5) * 4);
-      const lean = h < 0.2 ? -1 : h > 0.5 ? 1 : 0;
-      const tall = h < 0.1 ? 3 : 2;
-      blade(img, x, y, tall, lean, h < 0.35 ? GRASS_TIP : (GRASS[4] as Rgba), GRASS[3] as Rgba);
-    }
+/** A take on the grass: lusher (darker, fuller) or drier (sparser, paler tips). */
+interface GrassTake {
+  /** Shifts the patches darker (+) or lighter (-), in ramp steps of about 1/3. */
+  lush?: number;
+  /** Share of blades with a dry, pale tip. */
+  dry?: number;
+  /** Share of lattice cells with a blade (default 0.85). */
+  blades?: number;
 }
 
-const FLOWER = [hex("#c9b85a"), hex("#d6d2b8"), hex("#9a6fa8")];
-
-const GRASS_LOOKS = [
-  // A few small flowers.
-  (img: Image, rand: Rng): void => {
-    const c = FLOWER[Math.floor(rand() * FLOWER.length)] as Rgba;
-    for (let i = 0; i < 4; i++) {
-      const x = 8 + Math.floor(rand() * 16);
-      const y = 8 + Math.floor(rand() * 16);
-      px(img, x, y, c);
-      px(img, x + 1, y, mix(c, GRASS[1] as Rgba, 0.45));
-      px(img, x, y + 1, GRASS[0] as Rgba);
-    }
+/**
+ * Grass as a level field (patches and grain; the broad shading is the renderer's
+ * groundTone) with dark tufts and blades on jittered 4 px lattices, each cell drawn with
+ * the seed and take of its centre (so a heart's cells are the heart's).
+ */
+const GRASS_FIELD: LevelGround<GrassTake> = {
+  level(x, y, seed, take) {
+    // Mostly mid-scale patches: a feature as big as the tile would repeat as a grid.
+    const patch =
+      tileNoise(x, y, 16, 16, seed) * 0.12 +
+      tileNoise(x, y, 8, 8, seed + 1) * 0.5 +
+      tileNoise(x, y, 4, 4, seed + 9) * 0.38;
+    const grain = (tileNoise(x, y, 2, 2, seed + 2) - 0.5) * 0.2;
+    return (patch - 0.5) * 1.4 + 0.5 + grain - (take.lush ?? 0) * 0.25;
   },
-  // A tall tuft.
-  (img: Image, rand: Rng): void => {
+  paint(img, levelAt, seedAt, takeAt) {
+    eachInRect(0, 0, 32, 32, (x, y) => px(img, x, y, ramp(GRASS.slice(1, 4), levelAt(x, y))));
+    // Dark tufts between the blades (a small v), then the blades.
+    for (let cy = 0; cy < 8; cy++)
+      for (let cx = 0; cx < 8; cx++) {
+        const seed = seedAt(cx * 4 + 2, cy * 4 + 2);
+        const lush = takeAt(cx * 4 + 2, cy * 4 + 2).lush ?? 0;
+        if (hash2(cx, cy, seed + 6) > 0.55 + lush * 0.15) continue;
+        const x = cx * 4 + 2 + Math.floor(hash2(cx, cy, seed + 7) * 3);
+        const y = cy * 4 + 2 + Math.floor(hash2(cx, cy, seed + 8) * 3);
+        pxw(img, x, y, GRASS[0] as Rgba);
+        pxw(img, x - 1, y - 1, GRASS[1] as Rgba);
+        pxw(img, x + 1, y - 1, GRASS[1] as Rgba);
+      }
+    for (let cy = 0; cy < 8; cy++)
+      for (let cx = 0; cx < 8; cx++) {
+        const seed = seedAt(cx * 4 + 2, cy * 4 + 2);
+        const take = takeAt(cx * 4 + 2, cy * 4 + 2);
+        const lush = take.lush ?? 0;
+        const h = hash2(cx, cy, seed + 3);
+        if (h > (take.blades ?? 0.85)) continue;
+        const x = cx * 4 + Math.floor(hash2(cx, cy, seed + 4) * 4);
+        const y = cy * 4 + Math.floor(hash2(cx, cy, seed + 5) * 4);
+        const lean = h < 0.2 ? -1 : h > 0.5 ? 1 : 0;
+        const tall = h < 0.1 + lush * 0.15 ? 3 : 2;
+        const dry = hash2(cx, cy, seed + 10) < (take.dry ?? 0);
+        const tip = dry ? GRASS_DRY : h < 0.35 ? GRASS_TIP : (GRASS[4] as Rgba);
+        blade(img, x, y, tall, lean, tip, GRASS[3] as Rgba);
+      }
+  },
+};
+const grassLook = (salt: number, take: GrassTake): Look => levelHeart(GRASS_FIELD, {}, salt, take);
+const grassWith =
+  (salt: number, take: GrassTake, detail: (img: Image, rand: Rng) => void): Look =>
+  (img, rand, seed) => {
+    grassLook(salt, take)(img, rand, seed);
+    detail(img, rand);
+  };
+
+const GRASS_DRY = hex("#5d6b36");
+const FLOWER = [hex("#c9b85a"), hex("#d6d2b8"), hex("#9a6fa8")];
+const CLOVER = ["#2f5a2a", "#3d6e33", "#4d7f3c"].map(hex);
+const LEAF = ["#5a3a1e", "#7a5228", "#94683a"].map(hex);
+
+/** Clover: a few three-leaf sprigs, light leaves on a dark heart. */
+function clover(img: Image, rand: Rng, n: number, x0: number, y0: number, spread: number): void {
+  for (let i = 0; i < n; i++) {
+    const x = x0 + Math.floor(rand() * spread);
+    const y = y0 + Math.floor(rand() * spread);
+    px(img, x, y, CLOVER[0] as Rgba);
+    px(img, x - 1, y, CLOVER[2] as Rgba);
+    px(img, x + 1, y, CLOVER[1] as Rgba);
+    px(img, x, y - 1, CLOVER[2] as Rgba);
+  }
+}
+
+/** A few small flowers of one colour: a bloom, its shaded side and a dark stem below. */
+function flowers(img: Image, rand: Rng, c: Rgba, n: number, x0: number, spread: number): void {
+  for (let i = 0; i < n; i++) {
+    const x = x0 + Math.floor(rand() * spread);
+    const y = x0 + Math.floor(rand() * spread);
+    px(img, x, y, c);
+    px(img, x + 1, y, mix(c, GRASS[1] as Rgba, 0.45));
+    px(img, x, y + 1, GRASS[0] as Rgba);
+  }
+}
+
+/**
+ * Grass looks, alike ones together (the renderer lets an area lean to a run of them):
+ * plain hearts, lusher ones, a tall tuft, drier ones, clover.
+ */
+const GRASS_LOOKS: Look[] = [
+  grassLook(1, {}),
+  grassLook(2, {}),
+  grassLook(3, {}),
+  grassLook(4, { lush: 0.5 }),
+  grassLook(5, { lush: 0.8 }),
+  // A tall tuft in a lush heart.
+  grassWith(6, { lush: 0.5 }, (img, rand) => {
     const x0 = 11 + Math.floor(rand() * 8);
     const y0 = 14 + Math.floor(rand() * 8);
     for (let i = -3; i <= 3; i++) {
@@ -141,11 +207,33 @@ const GRASS_LOOKS = [
       blade(img, x0 + i, y0, h, i < 0 ? -1 : i > 0 ? 1 : 0, GRASS_TIP, GRASS[4] as Rgba);
     }
     line(img, x0 - 3, y0 + 1, x0 + 3, y0 + 1, GRASS[0] as Rgba);
-  },
-  // Two pebbles in the grass.
+  }),
+  grassLook(7, { dry: 0.35, blades: 0.75 }),
+  grassLook(8, { dry: 0.55, blades: 0.65, lush: -0.3 }),
+  grassLook(9, { blades: 0.6, lush: -0.2 }),
+  grassWith(10, { blades: 0.7 }, (img, rand) => clover(img, rand, 6, 9, 9, 14)),
+  grassLook(11, { lush: 0.3, blades: 0.95 }),
+];
+
+/** Grass decals: wildflowers, clover, a pair of stones, fallen leaves (never items). */
+const GRASS_DECALS = [
+  (img: Image, rand: Rng): void => flowers(img, rand, FLOWER[0] as Rgba, 5, 10, 12),
+  (img: Image, rand: Rng): void => flowers(img, rand, FLOWER[1] as Rgba, 4, 10, 12),
+  (img: Image, rand: Rng): void => flowers(img, rand, FLOWER[2] as Rgba, 4, 10, 12),
+  (img: Image, rand: Rng): void => clover(img, rand, 7, 10, 10, 12),
   (img: Image, rand: Rng): void => {
-    for (let i = 0; i < 2; i++)
-      pebble(img, 9 + Math.floor(rand() * 13), 9 + Math.floor(rand() * 13), rand() < 0.5);
+    pebble(img, 12 + Math.floor(rand() * 4), 13 + Math.floor(rand() * 3), true);
+    pebble(img, 17 + Math.floor(rand() * 3), 16 + Math.floor(rand() * 3), false);
+  },
+  // Two fallen leaves: a lit edge, a dark vein.
+  (img: Image, rand: Rng): void => {
+    for (let i = 0; i < 2; i++) {
+      const x = 10 + i * 6 + Math.floor(rand() * 4);
+      const y = 11 + i * 5 + Math.floor(rand() * 4);
+      line(img, x, y, x + 3, y + 1, LEAF[1] as Rgba);
+      line(img, x + 1, y - 1, x + 3, y, LEAF[2] as Rgba);
+      line(img, x, y + 1, x + 2, y + 2, LEAF[0] as Rgba);
+    }
   },
 ];
 
@@ -162,26 +250,44 @@ function pebble(img: Image, x: number, y: number, big: boolean): void {
 
 const DIRT = ["#2f241a", "#3a2d20", "#453626", "#51402d", "#5d4a34"].map(hex);
 
-function dirt(img: Image, seed: number): void {
-  eachInRect(0, 0, 32, 32, (x, y) => {
-    const patch = tileNoise(x, y, 16, 16, seed) * 0.25 + tileNoise(x, y, 8, 8, seed + 1) * 0.35;
+/**
+ * Dirt as a level field: fine patches and grain (the broad shading is the renderer's
+ * groundTone), with clods, a lit pixel over a dark one, on a jittered lattice.
+ */
+const DIRT_FIELD: LevelGround<null> = {
+  level(x, y, seed) {
+    const patch =
+      tileNoise(x, y, 16, 16, seed) * 0.12 +
+      tileNoise(x, y, 8, 8, seed + 1) * 0.3 +
+      tileNoise(x, y, 4, 4, seed + 6) * 0.1;
     const grain = (tileNoise(x, y, 2, 2, seed + 2) - 0.5) * 0.45;
-    px(img, x, y, ramp(DIRT.slice(1, 4), patch + grain + 0.2));
-  });
-  // Clods: a lit pixel over a dark one, on a jittered lattice.
-  for (let cy = 0; cy < 8; cy++)
-    for (let cx = 0; cx < 8; cx++) {
-      if (hash2(cx, cy, seed + 3) > 0.45) continue;
-      const x = cx * 4 + Math.floor(hash2(cx, cy, seed + 4) * 4);
-      const y = cy * 4 + Math.floor(hash2(cx, cy, seed + 5) * 4);
-      pxw(img, x, y, DIRT[4] as Rgba);
-      pxw(img, x + 1, y, DIRT[3] as Rgba);
-      pxw(img, x, y + 1, DIRT[0] as Rgba);
-    }
-}
+    return patch + grain + 0.24;
+  },
+  paint(img, levelAt, seedAt) {
+    eachInRect(0, 0, 32, 32, (x, y) => px(img, x, y, ramp(DIRT.slice(1, 4), levelAt(x, y))));
+    for (let cy = 0; cy < 8; cy++)
+      for (let cx = 0; cx < 8; cx++) {
+        const seed = seedAt(cx * 4 + 2, cy * 4 + 2);
+        if (hash2(cx, cy, seed + 3) > 0.45) continue;
+        const x = cx * 4 + Math.floor(hash2(cx, cy, seed + 4) * 4);
+        const y = cy * 4 + Math.floor(hash2(cx, cy, seed + 5) * 4);
+        pxw(img, x, y, DIRT[4] as Rgba);
+        pxw(img, x + 1, y, DIRT[3] as Rgba);
+        pxw(img, x, y + 1, DIRT[0] as Rgba);
+      }
+  },
+};
+const dirtHeart = (salt: number): Look => levelHeart(DIRT_FIELD, null, salt, null);
+const dirtWith =
+  (salt: number, detail: (img: Image, rand: Rng) => void): Look =>
+  (img, rand, seed) => {
+    dirtHeart(salt)(img, rand, seed);
+    detail(img, rand);
+  };
 
 const ROOT = hex("#2a2016");
-const DIRT_LOOKS = [
+/** Dirt looks: plain hearts, then hearts with pebbles, a root, a dry crack. */
+const DIRT_DETAILS = [
   (img: Image, rand: Rng): void => {
     for (let i = 0; i < 3; i++)
       pebble(img, 8 + Math.floor(rand() * 16), 8 + Math.floor(rand() * 16), rand() < 0.4);
@@ -211,48 +317,121 @@ const DIRT_LOOKS = [
     }
   },
 ];
+const DIRT_LOOKS: Look[] = [
+  dirtHeart(1),
+  dirtHeart(2),
+  dirtHeart(3),
+  ...DIRT_DETAILS.map((detail, i) => dirtWith(4 + i, detail)),
+];
 
 // ---- sand -------------------------------------------------------------------------------------
 
 const SAND = ["#6a5b41", "#76664a", "#827153", "#8e7c5b", "#9a8864"].map(hex);
 
-function sandBase(img: Image, seed: number, colors: readonly Rgba[]): void {
-  eachInRect(0, 0, 32, 32, (x, y) => {
-    const patch = tileNoise(x, y, 16, 16, seed) * 0.2 + tileNoise(x, y, 8, 8, seed + 1) * 0.45;
-    // Wind ripples: diagonal bands warped by noise (periodic: x + 2y over 8 px).
-    const warp = (tileNoise(x, y, 8, 8, seed + 2) - 0.5) * 6;
-    const band = ((((x + 2 * y + warp) / 8) % 1) + 1) % 1;
-    const ripple = band < 0.18 ? 0.18 : band > 0.8 ? -0.12 : 0;
-    px(img, x, y, ramp(colors.slice(1, 5), patch + ripple + 0.15));
-  });
-  eachInRect(0, 0, 32, 32, (x, y) => {
-    const h = hash2(x, y, seed + 4);
-    if (h < 0.012) px(img, x, y, colors[0] as Rgba);
-    else if (h > 0.992) px(img, x, y, colors[4] as Rgba);
-  });
+/** A take on the sand: rippled dunes, coarse grit, a damp or a sun-bleached patch. */
+interface SandTake {
+  /** Ripple strength (default 1). */
+  ripple?: number;
+  /** Ripple slant: bands run along x + slant * y (default 2). */
+  slant?: number;
+  /** Specks per pixel, a multiple of the plain sand's (default 1). */
+  grit?: number;
+  /** Shifts the level lighter (+) or darker (-), in ramp steps of about 1/4. */
+  shift?: number;
+}
+
+/**
+ * Sand as a level field: fine patches (the broad shading comes from the renderer's tone,
+ * groundTone, so no blotch repeats tile after tile), wind ripples and specks of grit; wet
+ * sand adds the sheen the water leaves.
+ */
+function sandGround(colors: readonly Rgba[], sheen = false): LevelGround<SandTake> {
+  return {
+    level(x, y, seed, take) {
+      const patch =
+        tileNoise(x, y, 16, 16, seed) * 0.08 +
+        tileNoise(x, y, 8, 8, seed + 1) * 0.2 +
+        tileNoise(x, y, 4, 4, seed + 5) * 0.14;
+      // Wind ripples: diagonal bands warped by noise (periodic: x + slant * y over 8 px).
+      const warp = (tileNoise(x, y, 8, 8, seed + 2) - 0.5) * 6;
+      const band = ((((x + (take.slant ?? 2) * y + warp) / 8) % 1) + 1) % 1;
+      const crest = band < 0.18 ? 0.18 : band > 0.8 ? -0.12 : 0;
+      return patch + crest * (take.ripple ?? 1) + 0.22 + (take.shift ?? 0) * 0.25;
+    },
+    paint(img, levelAt, seedAt, takeAt) {
+      eachInRect(0, 0, 32, 32, (x, y) => px(img, x, y, ramp(colors.slice(1, 5), levelAt(x, y))));
+      eachInRect(0, 0, 32, 32, (x, y) => {
+        const seed = seedAt(x, y);
+        const grit = takeAt(x, y).grit ?? 1;
+        const h = hash2(x, y, seed + 4);
+        if (h < 0.012 * grit) px(img, x, y, colors[0] as Rgba);
+        else if (h > 1 - 0.008 * grit) px(img, x, y, colors[4] as Rgba);
+        // Thin sheen streaks where the water just drew back.
+        if (!sheen) return;
+        const v = tileNoise(x, y * 3, 16, 4, seed + 7);
+        if (v > 0.82 && hash2(x, y, seed + 8) < 0.5) px(img, x, y, SHEEN);
+      });
+    },
+  };
 }
 
 const SHELL = ["#8a7a72", "#c9b8aa", "#e2d6c6"].map(hex);
-const SAND_LOOKS = [
-  // A shell.
+const TWIG = ["#3f3224", "#5c4a36", "#7a6650"].map(hex);
+const WEED = ["#2c3322", "#3d4529", "#56603a"].map(hex);
+
+/** A small fan shell: ribbed, lit on its top edge, a shadow under it. */
+function shell(img: Image, x: number, y: number): void {
+  px(img, x, y, SHELL[2] as Rgba);
+  px(img, x + 1, y, SHELL[1] as Rgba);
+  px(img, x - 1, y + 1, SHELL[1] as Rgba);
+  px(img, x, y + 1, SHELL[2] as Rgba);
+  px(img, x + 1, y + 1, SHELL[0] as Rgba);
+  line(img, x - 1, y + 2, x + 1, y + 2, SAND[0] as Rgba);
+}
+
+/** Sand looks, alike ones together: plain hearts, rippled dunes, coarse grit, patches. */
+const SAND_FIELD = sandGround(SAND);
+const sandLook = (salt: number, take: SandTake): Look => levelHeart(SAND_FIELD, {}, salt, take);
+const SAND_LOOKS: Look[] = [
+  sandLook(1, {}),
+  sandLook(2, {}),
+  sandLook(3, { ripple: 0.6 }),
+  sandLook(4, { ripple: 0.5, slant: 3 }),
+  sandLook(5, { ripple: 1.4 }),
+  sandLook(6, { ripple: 1.4, slant: 1 }),
+  sandLook(7, { ripple: 1.3, slant: 3 }),
+  sandLook(8, { ripple: 0.7, grit: 2.5 }),
+  sandLook(9, { ripple: 0.6, grit: 3.5, shift: -0.15 }),
+  sandLook(10, { ripple: 0.6, shift: -0.3 }),
+  sandLook(11, { ripple: 0.8, grit: 0.5 }),
+];
+
+/**
+ * Sand decals: shells, pebbles, a dry twig, gull footprints, a strand of dried weed, wind
+ * ripples. Small and flat, in the sand's own light, so they read as beach, not as loot.
+ */
+const SAND_DECALS = [
   (img: Image, rand: Rng): void => {
-    const x = 10 + Math.floor(rand() * 12);
-    const y = 10 + Math.floor(rand() * 12);
-    px(img, x, y, SHELL[2] as Rgba);
-    px(img, x + 1, y, SHELL[1] as Rgba);
-    px(img, x - 1, y + 1, SHELL[1] as Rgba);
-    px(img, x, y + 1, SHELL[2] as Rgba);
-    px(img, x + 1, y + 1, SHELL[0] as Rgba);
-    line(img, x - 1, y + 2, x + 1, y + 2, SAND[0] as Rgba);
+    shell(img, 12 + Math.floor(rand() * 6), 12 + Math.floor(rand() * 6));
+    if (rand() < 0.6) shell(img, 17 + Math.floor(rand() * 4), 17 + Math.floor(rand() * 3));
   },
   (img: Image, rand: Rng): void => {
     for (let i = 0; i < 3; i++)
-      pebble(img, 8 + Math.floor(rand() * 16), 8 + Math.floor(rand() * 16), rand() < 0.3);
+      pebble(img, 10 + Math.floor(rand() * 11), 10 + Math.floor(rand() * 11), rand() < 0.3);
+  },
+  // A dry twig of driftwood, lit along its top.
+  (img: Image, rand: Rng): void => {
+    const x = 9 + Math.floor(rand() * 4);
+    const y = 13 + Math.floor(rand() * 5);
+    line(img, x, y + 1, x + 11, y + 4, TWIG[0] as Rgba);
+    line(img, x, y, x + 11, y + 3, TWIG[1] as Rgba);
+    line(img, x + 1, y, x + 6, y + 1, TWIG[2] as Rgba);
+    line(img, x + 7, y + 2, x + 9, y, TWIG[1] as Rgba);
   },
   // Footprints of a gull.
   (img: Image, rand: Rng): void => {
-    let x = 8 + Math.floor(rand() * 4);
-    let y = 20;
+    let x = 9 + Math.floor(rand() * 3);
+    let y = 21;
     for (let i = 0; i < 4; i++) {
       px(img, x, y, SAND[0] as Rgba);
       px(img, x - 1, y - 1, SAND[1] as Rgba);
@@ -261,19 +440,48 @@ const SAND_LOOKS = [
       y -= 2 + (i % 2);
     }
   },
+  // A strand of dried weed with a couple of bladders.
+  (img: Image, rand: Rng): void => {
+    let x = 9;
+    let y = 14 + Math.floor(rand() * 4);
+    while (x < 23) {
+      px(img, x, y, WEED[1] as Rgba);
+      px(img, x, y + 1, WEED[0] as Rgba);
+      if (rand() < 0.15) px(img, x, y - 1, WEED[2] as Rgba);
+      x++;
+      if (rand() < 0.35) y += rand() < 0.5 ? -1 : 1;
+      y = Math.max(11, Math.min(21, y));
+    }
+  },
+  // A few wind ripples: short light crests over their shadow.
+  (img: Image, rand: Rng): void => {
+    for (let i = 0; i < 3; i++) {
+      const x = 9 + Math.floor(rand() * 6);
+      const y = 11 + i * 4 + Math.floor(rand() * 2);
+      const len = 6 + Math.floor(rand() * 5);
+      line(img, x, y, x + len, y - 1, SAND[4] as Rgba);
+      line(img, x + 1, y + 1, x + len, y, SAND[1] as Rgba);
+    }
+  },
 ];
 
 const WET_SAND = ["#4f4433", "#594d3a", "#625541", "#6c5e48", "#857760"].map(hex);
 const SHEEN = hex("#8c8270");
 
-function wetSand(img: Image, seed: number): void {
-  sandBase(img, seed, WET_SAND);
-  // Thin sheen streaks where the water just drew back.
-  eachInRect(0, 0, 32, 32, (x, y) => {
-    const v = tileNoise(x, y * 3, 16, 4, seed + 7);
-    if (v > 0.78 && hash2(x, y, seed + 8) < 0.6) px(img, x, y, SHEEN);
-  });
-}
+const WET_SAND_FIELD = sandGround(WET_SAND, true);
+const wetSandLook = (salt: number, take: SandTake): Look =>
+  levelHeart(WET_SAND_FIELD, {}, salt, take);
+
+const WET_SAND_LOOKS: Look[] = [
+  wetSandLook(1, {}),
+  wetSandLook(2, { ripple: 0.5 }),
+  (img, rand, seed) => {
+    wetSandLook(3, {})(img, rand, seed);
+    shell(img, 10 + Math.floor(rand() * 12), 10 + Math.floor(rand() * 12));
+  },
+  wetSandLook(4, { ripple: 1.4 }),
+  wetSandLook(5, { shift: -0.25, grit: 2 }),
+];
 
 // ---- cut stone floor (towns, temples, mines) -------------------------------------------------
 
@@ -318,8 +526,10 @@ const STONE_LOOKS = [
     });
   },
   // A worn, darker patch.
-  (img: Image): void => {
-    eachInRect(12, 12, 9, 9, (x, y) => {
+  (img: Image, rand: Rng): void => {
+    const x0 = 7 + Math.floor(rand() * 10);
+    const y0 = 7 + Math.floor(rand() * 10);
+    eachInRect(x0, y0, 8 + Math.floor(rand() * 3), 8 + Math.floor(rand() * 3), (x, y) => {
       const c = img.data.subarray((y * 32 + x) * 4, (y * 32 + x) * 4 + 3);
       if (c[0] === JOINT[0] && c[1] === JOINT[1]) return;
       px(img, x, y, mix([c[0] ?? 0, c[1] ?? 0, c[2] ?? 0, 255], FLAG[0] as Rgba, 0.35));
@@ -439,11 +649,12 @@ export const WATER_FRAMES = 4;
 export const LAVA_FRAMES = 4;
 
 export const GROUND: RecipeBook = {
-  ...withLooks("ground/grass", grass, GRASS_LOOKS),
-  ...withLooks("ground/dirt", dirt, DIRT_LOOKS),
-  ...withLooks("ground/sand", (img, seed) => sandBase(img, seed, SAND), SAND_LOOKS),
-  ...withLooks("ground/wet_sand", wetSand, [SAND_LOOKS[0] as (img: Image, rand: Rng) => void]),
-  ...withLooks("ground/stone_floor", stoneFloor, STONE_LOOKS),
+  ...levelLooks("ground/grass", GRASS_FIELD, {}, GRASS_LOOKS, GRASS_DECALS),
+  ...levelLooks("ground/dirt", DIRT_FIELD, null, DIRT_LOOKS),
+  ...levelLooks("ground/sand", SAND_FIELD, {}, SAND_LOOKS, SAND_DECALS),
+  ...levelLooks("ground/wet_sand", WET_SAND_FIELD, {}, WET_SAND_LOOKS),
+  // Each look of the stone floor twice: the rng of each path puts its detail elsewhere.
+  ...withLooks("ground/stone_floor", stoneFloor, [...STONE_LOOKS, ...STONE_LOOKS]),
   ...animated("ground/water_shallow", WATER_FRAMES, water),
   ...animated("ground/water_shoal", WATER_FRAMES, shoal),
   ...animated("ground/lava", LAVA_FRAMES, lava),

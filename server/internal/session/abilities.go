@@ -204,10 +204,12 @@ func (w *World) monsterSelf(ctx *game.TickContext, m *Monster) {
 
 // healMonster gives m up to amount health, with the heal's effect for who sees it and,
 // if it healed any (a heal of min 0 may roll 0), its floating text and the new health bar
-// (as a player's heal: no green 0).
+// (as a player's heal: no green 0). What it heals comes out of the wounds it never
+// answered (mend), like its regeneration: giving up does not close them a second time.
 func (w *World) healMonster(m *Monster, amount int) {
 	hp := min(max(amount, 0), m.maxHealth-m.health)
 	m.health += hp
+	m.mend(hp)
 	at := posMsg(m.pos)
 	shown := &pb.ServerMessage{Message: &pb.ServerMessage_Effect{Effect: &pb.Effect{Pos: at, EffectId: EffectHeal}}}
 	var text, bar *pb.ServerMessage

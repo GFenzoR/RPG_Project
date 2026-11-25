@@ -1081,6 +1081,10 @@ type ServerMessage struct {
 	//	*ServerMessage_StashUpdate
 	//	*ServerMessage_LivingObject
 	//	*ServerMessage_TrailWear
+	//	*ServerMessage_MinimapIndex
+	//	*ServerMessage_MinimapSectors
+	//	*ServerMessage_ObjectiveHint
+	//	*ServerMessage_WorldClock
 	Message       isServerMessage_Message `protobuf_oneof:"message"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1564,6 +1568,42 @@ func (x *ServerMessage) GetTrailWear() *TrailWear {
 	return nil
 }
 
+func (x *ServerMessage) GetMinimapIndex() *MinimapIndex {
+	if x != nil {
+		if x, ok := x.Message.(*ServerMessage_MinimapIndex); ok {
+			return x.MinimapIndex
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetMinimapSectors() *MinimapSectors {
+	if x != nil {
+		if x, ok := x.Message.(*ServerMessage_MinimapSectors); ok {
+			return x.MinimapSectors
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetObjectiveHint() *ObjectiveHint {
+	if x != nil {
+		if x, ok := x.Message.(*ServerMessage_ObjectiveHint); ok {
+			return x.ObjectiveHint
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetWorldClock() *WorldClock {
+	if x != nil {
+		if x, ok := x.Message.(*ServerMessage_WorldClock); ok {
+			return x.WorldClock
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Message interface {
 	isServerMessage_Message()
 }
@@ -1764,6 +1804,22 @@ type ServerMessage_TrailWear struct {
 	TrailWear *TrailWear `protobuf:"bytes,49,opt,name=trail_wear,json=trailWear,proto3,oneof"`
 }
 
+type ServerMessage_MinimapIndex struct {
+	MinimapIndex *MinimapIndex `protobuf:"bytes,50,opt,name=minimap_index,json=minimapIndex,proto3,oneof"`
+}
+
+type ServerMessage_MinimapSectors struct {
+	MinimapSectors *MinimapSectors `protobuf:"bytes,51,opt,name=minimap_sectors,json=minimapSectors,proto3,oneof"`
+}
+
+type ServerMessage_ObjectiveHint struct {
+	ObjectiveHint *ObjectiveHint `protobuf:"bytes,52,opt,name=objective_hint,json=objectiveHint,proto3,oneof"`
+}
+
+type ServerMessage_WorldClock struct {
+	WorldClock *WorldClock `protobuf:"bytes,53,opt,name=world_clock,json=worldClock,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Message() {}
 
 func (*ServerMessage_FullMapView) isServerMessage_Message() {}
@@ -1861,6 +1917,14 @@ func (*ServerMessage_StashUpdate) isServerMessage_Message() {}
 func (*ServerMessage_LivingObject) isServerMessage_Message() {}
 
 func (*ServerMessage_TrailWear) isServerMessage_Message() {}
+
+func (*ServerMessage_MinimapIndex) isServerMessage_Message() {}
+
+func (*ServerMessage_MinimapSectors) isServerMessage_Message() {}
+
+func (*ServerMessage_ObjectiveHint) isServerMessage_Message() {}
+
+func (*ServerMessage_WorldClock) isServerMessage_Message() {}
 
 // TutorialStep is the tutorial's current step (T4.2, data/tutorial.yaml). It is sent on
 // login while the tutorial is active, whenever the step or its progress changes, and once
@@ -4478,12 +4542,15 @@ func (x *Inventory) GetPocketSlots() uint32 {
 // ContainerOpen opens a container window. container_id is session-local and is what
 // ContainerSlot and the other container messages refer to.
 type ContainerOpen struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ContainerId   uint32                 `protobuf:"varint,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
-	ItemId        uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	Capacity      uint32                 `protobuf:"varint,3,opt,name=capacity,proto3" json:"capacity,omitempty"`
-	Items         []*ItemStack           `protobuf:"bytes,4,rep,name=items,proto3" json:"items,omitempty"`
-	HasParent     bool                   `protobuf:"varint,5,opt,name=has_parent,json=hasParent,proto3" json:"has_parent,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	ContainerId uint32                 `protobuf:"varint,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	ItemId      uint32                 `protobuf:"varint,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Capacity    uint32                 `protobuf:"varint,3,opt,name=capacity,proto3" json:"capacity,omitempty"`
+	Items       []*ItemStack           `protobuf:"bytes,4,rep,name=items,proto3" json:"items,omitempty"`
+	HasParent   bool                   `protobuf:"varint,5,opt,name=has_parent,json=hasParent,proto3" json:"has_parent,omitempty"`
+	// The container's own instance data (ItemMods): the remains of a monster or a player's
+	// body name the window after whose they are. Absent for a plain container.
+	Mods          *ItemMods `protobuf:"bytes,6,opt,name=mods,proto3" json:"mods,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4551,6 +4618,13 @@ func (x *ContainerOpen) GetHasParent() bool {
 		return x.HasParent
 	}
 	return false
+}
+
+func (x *ContainerOpen) GetMods() *ItemMods {
+	if x != nil {
+		return x.Mods
+	}
+	return nil
 }
 
 // ContainerUpdate replaces the contents of an open container.
@@ -7346,6 +7420,319 @@ func (x *StashUpdate) GetChest() *Position {
 	return nil
 }
 
+// MinimapIndex is sent once after Welcome: the sectors (sx << 16 | sy, MinimapRequest)
+// of every floor where the character has explored something. The client asks for the
+// ones its minimap shows with MinimapRequest; any other sector is unexplored (black).
+type MinimapIndex struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Floors        []*MinimapFloorIndex   `protobuf:"bytes,1,rep,name=floors,proto3" json:"floors,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MinimapIndex) Reset() {
+	*x = MinimapIndex{}
+	mi := &file_game_v1_server_proto_msgTypes[73]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MinimapIndex) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MinimapIndex) ProtoMessage() {}
+
+func (x *MinimapIndex) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[73]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MinimapIndex.ProtoReflect.Descriptor instead.
+func (*MinimapIndex) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{73}
+}
+
+func (x *MinimapIndex) GetFloors() []*MinimapFloorIndex {
+	if x != nil {
+		return x.Floors
+	}
+	return nil
+}
+
+// MinimapFloorIndex is the explored sectors of one floor.
+type MinimapFloorIndex struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Z             uint32                 `protobuf:"varint,1,opt,name=z,proto3" json:"z,omitempty"`
+	Sectors       []uint32               `protobuf:"varint,2,rep,packed,name=sectors,proto3" json:"sectors,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MinimapFloorIndex) Reset() {
+	*x = MinimapFloorIndex{}
+	mi := &file_game_v1_server_proto_msgTypes[74]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MinimapFloorIndex) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MinimapFloorIndex) ProtoMessage() {}
+
+func (x *MinimapFloorIndex) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[74]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MinimapFloorIndex.ProtoReflect.Descriptor instead.
+func (*MinimapFloorIndex) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{74}
+}
+
+func (x *MinimapFloorIndex) GetZ() uint32 {
+	if x != nil {
+		return x.Z
+	}
+	return 0
+}
+
+func (x *MinimapFloorIndex) GetSectors() []uint32 {
+	if x != nil {
+		return x.Sectors
+	}
+	return nil
+}
+
+// MinimapSectors carries explored sectors: the answer to a MinimapRequest (answer set;
+// palette and tiles for what is explored) and, at most once a second while the player
+// explores, the sectors that gained explored tiles (answer unset, only explored: the
+// client colours those tiles from the map it was sent, since they are in its view).
+type MinimapSectors struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Sectors []*MinimapSector       `protobuf:"bytes,1,rep,name=sectors,proto3" json:"sectors,omitempty"`
+	// answer: these sectors answer a MinimapRequest. The client stops asking for them; a
+	// delta (false) leaves a sector it never asked for still to ask.
+	Answer        bool `protobuf:"varint,2,opt,name=answer,proto3" json:"answer,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MinimapSectors) Reset() {
+	*x = MinimapSectors{}
+	mi := &file_game_v1_server_proto_msgTypes[75]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MinimapSectors) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MinimapSectors) ProtoMessage() {}
+
+func (x *MinimapSectors) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[75]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MinimapSectors.ProtoReflect.Descriptor instead.
+func (*MinimapSectors) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{75}
+}
+
+func (x *MinimapSectors) GetSectors() []*MinimapSector {
+	if x != nil {
+		return x.Sectors
+	}
+	return nil
+}
+
+func (x *MinimapSectors) GetAnswer() bool {
+	if x != nil {
+		return x.Answer
+	}
+	return false
+}
+
+// MinimapSector is one sector (32x32 tiles) of floor z. explored is its bitset: 128 bytes,
+// one bit per tile, row by row (bit x % 8 of byte (y * 32 + x) / 8, x and y inside the
+// sector); empty when nothing of it is explored. tiles, when set, is 1024 bytes, one per
+// tile in the same order: 0 for a tile that is unexplored or has nothing, else 1 + an
+// index into palette, the numeric item id the minimap colours that tile by (the topmost
+// item that blocks the tile, else its ground).
+type MinimapSector struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Z             uint32                 `protobuf:"varint,1,opt,name=z,proto3" json:"z,omitempty"`
+	Sector        uint32                 `protobuf:"varint,2,opt,name=sector,proto3" json:"sector,omitempty"`
+	Explored      []byte                 `protobuf:"bytes,3,opt,name=explored,proto3" json:"explored,omitempty"`
+	Palette       []uint32               `protobuf:"varint,4,rep,packed,name=palette,proto3" json:"palette,omitempty"`
+	Tiles         []byte                 `protobuf:"bytes,5,opt,name=tiles,proto3" json:"tiles,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MinimapSector) Reset() {
+	*x = MinimapSector{}
+	mi := &file_game_v1_server_proto_msgTypes[76]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MinimapSector) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MinimapSector) ProtoMessage() {}
+
+func (x *MinimapSector) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[76]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MinimapSector.ProtoReflect.Descriptor instead.
+func (*MinimapSector) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{76}
+}
+
+func (x *MinimapSector) GetZ() uint32 {
+	if x != nil {
+		return x.Z
+	}
+	return 0
+}
+
+func (x *MinimapSector) GetSector() uint32 {
+	if x != nil {
+		return x.Sector
+	}
+	return 0
+}
+
+func (x *MinimapSector) GetExplored() []byte {
+	if x != nil {
+		return x.Explored
+	}
+	return nil
+}
+
+func (x *MinimapSector) GetPalette() []uint32 {
+	if x != nil {
+		return x.Palette
+	}
+	return nil
+}
+
+func (x *MinimapSector) GetTiles() []byte {
+	if x != nil {
+		return x.Tiles
+	}
+	return nil
+}
+
+// ObjectiveHint is the estimated place of the tracked quest's current step (TrackQuest):
+// a circle of radius tiles around center, which may be on another floor. It is never the
+// exact target: the centre is moved from it (the same way for this character and step)
+// and the target lies inside the circle. An empty quest_id means nothing is tracked (or
+// the step has no place, as a step done anywhere): the minimap shows no estimate.
+type ObjectiveHint struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	QuestId       string                 `protobuf:"bytes,1,opt,name=quest_id,json=questId,proto3" json:"quest_id,omitempty"`
+	StepId        string                 `protobuf:"bytes,2,opt,name=step_id,json=stepId,proto3" json:"step_id,omitempty"`
+	Center        *Position              `protobuf:"bytes,3,opt,name=center,proto3" json:"center,omitempty"`
+	Radius        uint32                 `protobuf:"varint,4,opt,name=radius,proto3" json:"radius,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ObjectiveHint) Reset() {
+	*x = ObjectiveHint{}
+	mi := &file_game_v1_server_proto_msgTypes[77]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ObjectiveHint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ObjectiveHint) ProtoMessage() {}
+
+func (x *ObjectiveHint) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_server_proto_msgTypes[77]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ObjectiveHint.ProtoReflect.Descriptor instead.
+func (*ObjectiveHint) Descriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{77}
+}
+
+func (x *ObjectiveHint) GetQuestId() string {
+	if x != nil {
+		return x.QuestId
+	}
+	return ""
+}
+
+func (x *ObjectiveHint) GetStepId() string {
+	if x != nil {
+		return x.StepId
+	}
+	return ""
+}
+
+func (x *ObjectiveHint) GetCenter() *Position {
+	if x != nil {
+		return x.Center
+	}
+	return nil
+}
+
+func (x *ObjectiveHint) GetRadius() uint32 {
+	if x != nil {
+		return x.Radius
+	}
+	return 0
+}
+
 var File_game_v1_server_proto protoreflect.FileDescriptor
 
 const file_game_v1_server_proto_rawDesc = "" +
@@ -7353,7 +7740,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x14game/v1/server.proto\x12\agame.v1\x1a\x14game/v1/common.proto\x1a\x19game/v1/livingworld.proto\"Q\n" +
 	"\vServerBatch\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12.\n" +
-	"\x06events\x18\x02 \x03(\v2\x16.game.v1.ServerMessageR\x06events\"\xc1\x17\n" +
+	"\x06events\x18\x02 \x03(\v2\x16.game.v1.ServerMessageR\x06events\"\xbc\x19\n" +
 	"\rServerMessage\x12,\n" +
 	"\awelcome\x18\x01 \x01(\v2\x10.game.v1.WelcomeH\x00R\awelcome\x12:\n" +
 	"\rfull_map_view\x18\x02 \x01(\v2\x14.game.v1.FullMapViewH\x00R\vfullMapView\x120\n" +
@@ -7411,7 +7798,12 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\fstash_update\x18/ \x01(\v2\x14.game.v1.StashUpdateH\x00R\vstashUpdate\x12A\n" +
 	"\rliving_object\x180 \x01(\v2\x1a.game.v1.LivingObjectEventH\x00R\flivingObject\x123\n" +
 	"\n" +
-	"trail_wear\x181 \x01(\v2\x12.game.v1.TrailWearH\x00R\ttrailWearB\t\n" +
+	"trail_wear\x181 \x01(\v2\x12.game.v1.TrailWearH\x00R\ttrailWear\x12<\n" +
+	"\rminimap_index\x182 \x01(\v2\x15.game.v1.MinimapIndexH\x00R\fminimapIndex\x12B\n" +
+	"\x0fminimap_sectors\x183 \x01(\v2\x17.game.v1.MinimapSectorsH\x00R\x0eminimapSectors\x12?\n" +
+	"\x0eobjective_hint\x184 \x01(\v2\x16.game.v1.ObjectiveHintH\x00R\robjectiveHint\x126\n" +
+	"\vworld_clock\x185 \x01(\v2\x13.game.v1.WorldClockH\x00R\n" +
+	"worldClockB\t\n" +
 	"\amessage\"\xfd\x01\n" +
 	"\fTutorialStep\x12,\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x16.game.v1.TutorialStateR\x05state\x12\x17\n" +
@@ -7614,14 +8006,15 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\tInventory\x12+\n" +
 	"\x05slots\x18\x01 \x03(\v2\x15.game.v1.EquippedItemR\x05slots\x12,\n" +
 	"\apockets\x18\x02 \x03(\v2\x12.game.v1.ItemStackR\apockets\x12!\n" +
-	"\fpocket_slots\x18\x03 \x01(\rR\vpocketSlots\"\xb0\x01\n" +
+	"\fpocket_slots\x18\x03 \x01(\rR\vpocketSlots\"\xd7\x01\n" +
 	"\rContainerOpen\x12!\n" +
 	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x1a\n" +
 	"\bcapacity\x18\x03 \x01(\rR\bcapacity\x12(\n" +
 	"\x05items\x18\x04 \x03(\v2\x12.game.v1.ItemStackR\x05items\x12\x1d\n" +
 	"\n" +
-	"has_parent\x18\x05 \x01(\bR\thasParent\"^\n" +
+	"has_parent\x18\x05 \x01(\bR\thasParent\x12%\n" +
+	"\x04mods\x18\x06 \x01(\v2\x11.game.v1.ItemModsR\x04mods\"^\n" +
 	"\x0fContainerUpdate\x12!\n" +
 	"\fcontainer_id\x18\x01 \x01(\rR\vcontainerId\x12(\n" +
 	"\x05items\x18\x02 \x03(\v2\x12.game.v1.ItemStackR\x05items\"3\n" +
@@ -7870,7 +8263,26 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\bcapacity\x18\x02 \x01(\rR\bcapacity\x12(\n" +
 	"\x05items\x18\x03 \x03(\v2\x12.game.v1.ItemStackR\x05items\x12,\n" +
 	"\x06result\x18\x04 \x01(\x0e2\x14.game.v1.StashResultR\x06result\x12'\n" +
-	"\x05chest\x18\x05 \x01(\v2\x11.game.v1.PositionR\x05chest*\x7f\n" +
+	"\x05chest\x18\x05 \x01(\v2\x11.game.v1.PositionR\x05chest\"B\n" +
+	"\fMinimapIndex\x122\n" +
+	"\x06floors\x18\x01 \x03(\v2\x1a.game.v1.MinimapFloorIndexR\x06floors\";\n" +
+	"\x11MinimapFloorIndex\x12\f\n" +
+	"\x01z\x18\x01 \x01(\rR\x01z\x12\x18\n" +
+	"\asectors\x18\x02 \x03(\rR\asectors\"Z\n" +
+	"\x0eMinimapSectors\x120\n" +
+	"\asectors\x18\x01 \x03(\v2\x16.game.v1.MinimapSectorR\asectors\x12\x16\n" +
+	"\x06answer\x18\x02 \x01(\bR\x06answer\"\x81\x01\n" +
+	"\rMinimapSector\x12\f\n" +
+	"\x01z\x18\x01 \x01(\rR\x01z\x12\x16\n" +
+	"\x06sector\x18\x02 \x01(\rR\x06sector\x12\x1a\n" +
+	"\bexplored\x18\x03 \x01(\fR\bexplored\x12\x18\n" +
+	"\apalette\x18\x04 \x03(\rR\apalette\x12\x14\n" +
+	"\x05tiles\x18\x05 \x01(\fR\x05tiles\"\x86\x01\n" +
+	"\rObjectiveHint\x12\x19\n" +
+	"\bquest_id\x18\x01 \x01(\tR\aquestId\x12\x17\n" +
+	"\astep_id\x18\x02 \x01(\tR\x06stepId\x12)\n" +
+	"\x06center\x18\x03 \x01(\v2\x11.game.v1.PositionR\x06center\x12\x16\n" +
+	"\x06radius\x18\x04 \x01(\rR\x06radius*\x7f\n" +
 	"\rTutorialState\x12\x1e\n" +
 	"\x1aTUTORIAL_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15TUTORIAL_STATE_ACTIVE\x10\x01\x12\x17\n" +
@@ -7995,7 +8407,7 @@ func file_game_v1_server_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_server_proto_enumTypes = make([]protoimpl.EnumInfo, 15)
-var file_game_v1_server_proto_msgTypes = make([]protoimpl.MessageInfo, 73)
+var file_game_v1_server_proto_msgTypes = make([]protoimpl.MessageInfo, 78)
 var file_game_v1_server_proto_goTypes = []any{
 	(TutorialState)(0),         // 0: game.v1.TutorialState
 	(CreatureKind)(0),          // 1: game.v1.CreatureKind
@@ -8085,16 +8497,22 @@ var file_game_v1_server_proto_goTypes = []any{
 	(*QuestLogEntry)(nil),      // 85: game.v1.QuestLogEntry
 	(*MilestoneInfo)(nil),      // 86: game.v1.MilestoneInfo
 	(*StashUpdate)(nil),        // 87: game.v1.StashUpdate
-	(*LivingObjectEvent)(nil),  // 88: game.v1.LivingObjectEvent
-	(*TrailWear)(nil),          // 89: game.v1.TrailWear
-	(*LocalizedText)(nil),      // 90: game.v1.LocalizedText
-	(*ItemStack)(nil),          // 91: game.v1.ItemStack
-	(*Position)(nil),           // 92: game.v1.Position
-	(Direction)(0),             // 93: game.v1.Direction
-	(*BodyLook)(nil),           // 94: game.v1.BodyLook
-	(EquipmentSlot)(0),         // 95: game.v1.EquipmentSlot
-	(MarketSide)(0),            // 96: game.v1.MarketSide
-	(*ItemMods)(nil),           // 97: game.v1.ItemMods
+	(*MinimapIndex)(nil),       // 88: game.v1.MinimapIndex
+	(*MinimapFloorIndex)(nil),  // 89: game.v1.MinimapFloorIndex
+	(*MinimapSectors)(nil),     // 90: game.v1.MinimapSectors
+	(*MinimapSector)(nil),      // 91: game.v1.MinimapSector
+	(*ObjectiveHint)(nil),      // 92: game.v1.ObjectiveHint
+	(*LivingObjectEvent)(nil),  // 93: game.v1.LivingObjectEvent
+	(*TrailWear)(nil),          // 94: game.v1.TrailWear
+	(*WorldClock)(nil),         // 95: game.v1.WorldClock
+	(*LocalizedText)(nil),      // 96: game.v1.LocalizedText
+	(*ItemStack)(nil),          // 97: game.v1.ItemStack
+	(*Position)(nil),           // 98: game.v1.Position
+	(Direction)(0),             // 99: game.v1.Direction
+	(*BodyLook)(nil),           // 100: game.v1.BodyLook
+	(EquipmentSlot)(0),         // 101: game.v1.EquipmentSlot
+	(*ItemMods)(nil),           // 102: game.v1.ItemMods
+	(MarketSide)(0),            // 103: game.v1.MarketSide
 }
 var file_game_v1_server_proto_depIdxs = []int32{
 	16,  // 0: game.v1.ServerBatch.events:type_name -> game.v1.ServerMessage
@@ -8145,111 +8563,119 @@ var file_game_v1_server_proto_depIdxs = []int32{
 	84,  // 45: game.v1.ServerMessage.quest_log:type_name -> game.v1.QuestLog
 	31,  // 46: game.v1.ServerMessage.creature_look:type_name -> game.v1.CreatureLook
 	87,  // 47: game.v1.ServerMessage.stash_update:type_name -> game.v1.StashUpdate
-	88,  // 48: game.v1.ServerMessage.living_object:type_name -> game.v1.LivingObjectEvent
-	89,  // 49: game.v1.ServerMessage.trail_wear:type_name -> game.v1.TrailWear
-	0,   // 50: game.v1.TutorialStep.state:type_name -> game.v1.TutorialState
-	90,  // 51: game.v1.TutorialStep.text:type_name -> game.v1.LocalizedText
-	90,  // 52: game.v1.PresenceCheck.question:type_name -> game.v1.LocalizedText
-	59,  // 53: game.v1.PresenceCheck.options:type_name -> game.v1.DialogOption
-	91,  // 54: game.v1.Tile.items:type_name -> game.v1.ItemStack
-	20,  // 55: game.v1.MapArea.palette:type_name -> game.v1.Tile
-	21,  // 56: game.v1.MapArea.floors:type_name -> game.v1.MapFloor
-	27,  // 57: game.v1.MapArea.creatures:type_name -> game.v1.Creature
-	89,  // 58: game.v1.MapArea.wear:type_name -> game.v1.TrailWear
-	22,  // 59: game.v1.FullMapView.area:type_name -> game.v1.MapArea
-	22,  // 60: game.v1.MapSlice.area:type_name -> game.v1.MapArea
-	92,  // 61: game.v1.TileUpdate.pos:type_name -> game.v1.Position
-	20,  // 62: game.v1.TileUpdate.tile:type_name -> game.v1.Tile
-	1,   // 63: game.v1.Creature.kind:type_name -> game.v1.CreatureKind
-	92,  // 64: game.v1.Creature.pos:type_name -> game.v1.Position
-	93,  // 65: game.v1.Creature.dir:type_name -> game.v1.Direction
-	26,  // 66: game.v1.Creature.outfit:type_name -> game.v1.Outfit
-	2,   // 67: game.v1.Creature.skull:type_name -> game.v1.Skull
-	32,  // 68: game.v1.Creature.cosmetics:type_name -> game.v1.Cosmetics
-	94,  // 69: game.v1.Creature.look:type_name -> game.v1.BodyLook
-	28,  // 70: game.v1.Creature.equipment:type_name -> game.v1.VisibleEquipment
-	30,  // 71: game.v1.Creature.worn:type_name -> game.v1.Worn
-	29,  // 72: game.v1.Worn.head:type_name -> game.v1.WornPiece
-	29,  // 73: game.v1.Worn.torso:type_name -> game.v1.WornPiece
-	29,  // 74: game.v1.Worn.legs:type_name -> game.v1.WornPiece
-	29,  // 75: game.v1.Worn.feet:type_name -> game.v1.WornPiece
-	29,  // 76: game.v1.Worn.shield:type_name -> game.v1.WornPiece
-	29,  // 77: game.v1.Worn.weapon:type_name -> game.v1.WornPiece
-	94,  // 78: game.v1.CreatureLook.look:type_name -> game.v1.BodyLook
-	28,  // 79: game.v1.CreatureLook.equipment:type_name -> game.v1.VisibleEquipment
-	32,  // 80: game.v1.CreatureCosmetics.cosmetics:type_name -> game.v1.Cosmetics
-	32,  // 81: game.v1.CosmeticsState.equipped:type_name -> game.v1.Cosmetics
-	2,   // 82: game.v1.CreatureSkull.skull:type_name -> game.v1.Skull
-	27,  // 83: game.v1.CreatureAppear.creature:type_name -> game.v1.Creature
-	3,   // 84: game.v1.CreatureDisappear.reason:type_name -> game.v1.DisappearReason
-	92,  // 85: game.v1.CreatureMove.from:type_name -> game.v1.Position
-	92,  // 86: game.v1.CreatureMove.to:type_name -> game.v1.Position
-	93,  // 87: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
-	26,  // 88: game.v1.CreatureOutfit.outfit:type_name -> game.v1.Outfit
-	92,  // 89: game.v1.Effect.pos:type_name -> game.v1.Position
-	92,  // 90: game.v1.Projectile.from:type_name -> game.v1.Position
-	92,  // 91: game.v1.Projectile.to:type_name -> game.v1.Position
-	4,   // 92: game.v1.CreatureAttack.kind:type_name -> game.v1.AttackKind
-	92,  // 93: game.v1.CreatureAttack.to:type_name -> game.v1.Position
-	47,  // 94: game.v1.PlayerConditions.conditions:type_name -> game.v1.ActiveCondition
-	92,  // 95: game.v1.FloatingText.pos:type_name -> game.v1.Position
-	5,   // 96: game.v1.FloatingText.kind:type_name -> game.v1.FloatingTextKind
-	51,  // 97: game.v1.PlayerSkills.skills:type_name -> game.v1.SkillProgress
-	95,  // 98: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
-	91,  // 99: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
-	53,  // 100: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
-	91,  // 101: game.v1.Inventory.pockets:type_name -> game.v1.ItemStack
-	91,  // 102: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
-	91,  // 103: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
-	6,   // 104: game.v1.Message.kind:type_name -> game.v1.MessageKind
-	92,  // 105: game.v1.Message.pos:type_name -> game.v1.Position
-	90,  // 106: game.v1.Message.localized:type_name -> game.v1.LocalizedText
-	90,  // 107: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
-	90,  // 108: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
-	59,  // 109: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
-	62,  // 110: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
-	7,   // 111: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
-	91,  // 112: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
-	91,  // 113: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
-	96,  // 114: game.v1.MarketOffer.side:type_name -> game.v1.MarketSide
-	97,  // 115: game.v1.MarketOffer.mods:type_name -> game.v1.ItemMods
-	91,  // 116: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
-	96,  // 117: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
-	65,  // 118: game.v1.MarketUpdate.sells:type_name -> game.v1.MarketOffer
-	65,  // 119: game.v1.MarketUpdate.buys:type_name -> game.v1.MarketOffer
-	65,  // 120: game.v1.MarketUpdate.own:type_name -> game.v1.MarketOffer
-	66,  // 121: game.v1.MarketUpdate.mailbox_items:type_name -> game.v1.MarketMailItem
-	67,  // 122: game.v1.MarketUpdate.history:type_name -> game.v1.MarketHistoryEntry
-	97,  // 123: game.v1.MarketUpdate.owned_mods:type_name -> game.v1.ItemMods
-	92,  // 124: game.v1.WalkRejected.pos:type_name -> game.v1.Position
-	93,  // 125: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
-	8,   // 126: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
-	90,  // 127: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
-	9,   // 128: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
-	74,  // 129: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
-	10,  // 130: game.v1.GuildUpdate.rank:type_name -> game.v1.GuildRank
-	78,  // 131: game.v1.GuildUpdate.members:type_name -> game.v1.GuildMember
-	79,  // 132: game.v1.GuildUpdate.pending:type_name -> game.v1.GuildPendingInvite
-	80,  // 133: game.v1.GuildUpdate.invitations:type_name -> game.v1.GuildInvitation
-	77,  // 134: game.v1.GuildUpdate.wars:type_name -> game.v1.GuildWar
-	11,  // 135: game.v1.GuildWar.state:type_name -> game.v1.GuildWarState
-	10,  // 136: game.v1.GuildMember.rank:type_name -> game.v1.GuildRank
-	92,  // 137: game.v1.StationOpen.pos:type_name -> game.v1.Position
-	91,  // 138: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
-	12,  // 139: game.v1.RefineResult.outcome:type_name -> game.v1.RefineOutcome
-	91,  // 140: game.v1.RefineResult.item:type_name -> game.v1.ItemStack
-	90,  // 141: game.v1.RefineResult.text:type_name -> game.v1.LocalizedText
-	85,  // 142: game.v1.QuestLog.entries:type_name -> game.v1.QuestLogEntry
-	13,  // 143: game.v1.QuestLogEntry.state:type_name -> game.v1.QuestLogState
-	86,  // 144: game.v1.QuestLogEntry.milestone:type_name -> game.v1.MilestoneInfo
-	91,  // 145: game.v1.StashUpdate.items:type_name -> game.v1.ItemStack
-	14,  // 146: game.v1.StashUpdate.result:type_name -> game.v1.StashResult
-	92,  // 147: game.v1.StashUpdate.chest:type_name -> game.v1.Position
-	148, // [148:148] is the sub-list for method output_type
-	148, // [148:148] is the sub-list for method input_type
-	148, // [148:148] is the sub-list for extension type_name
-	148, // [148:148] is the sub-list for extension extendee
-	0,   // [0:148] is the sub-list for field type_name
+	93,  // 48: game.v1.ServerMessage.living_object:type_name -> game.v1.LivingObjectEvent
+	94,  // 49: game.v1.ServerMessage.trail_wear:type_name -> game.v1.TrailWear
+	88,  // 50: game.v1.ServerMessage.minimap_index:type_name -> game.v1.MinimapIndex
+	90,  // 51: game.v1.ServerMessage.minimap_sectors:type_name -> game.v1.MinimapSectors
+	92,  // 52: game.v1.ServerMessage.objective_hint:type_name -> game.v1.ObjectiveHint
+	95,  // 53: game.v1.ServerMessage.world_clock:type_name -> game.v1.WorldClock
+	0,   // 54: game.v1.TutorialStep.state:type_name -> game.v1.TutorialState
+	96,  // 55: game.v1.TutorialStep.text:type_name -> game.v1.LocalizedText
+	96,  // 56: game.v1.PresenceCheck.question:type_name -> game.v1.LocalizedText
+	59,  // 57: game.v1.PresenceCheck.options:type_name -> game.v1.DialogOption
+	97,  // 58: game.v1.Tile.items:type_name -> game.v1.ItemStack
+	20,  // 59: game.v1.MapArea.palette:type_name -> game.v1.Tile
+	21,  // 60: game.v1.MapArea.floors:type_name -> game.v1.MapFloor
+	27,  // 61: game.v1.MapArea.creatures:type_name -> game.v1.Creature
+	94,  // 62: game.v1.MapArea.wear:type_name -> game.v1.TrailWear
+	22,  // 63: game.v1.FullMapView.area:type_name -> game.v1.MapArea
+	22,  // 64: game.v1.MapSlice.area:type_name -> game.v1.MapArea
+	98,  // 65: game.v1.TileUpdate.pos:type_name -> game.v1.Position
+	20,  // 66: game.v1.TileUpdate.tile:type_name -> game.v1.Tile
+	1,   // 67: game.v1.Creature.kind:type_name -> game.v1.CreatureKind
+	98,  // 68: game.v1.Creature.pos:type_name -> game.v1.Position
+	99,  // 69: game.v1.Creature.dir:type_name -> game.v1.Direction
+	26,  // 70: game.v1.Creature.outfit:type_name -> game.v1.Outfit
+	2,   // 71: game.v1.Creature.skull:type_name -> game.v1.Skull
+	32,  // 72: game.v1.Creature.cosmetics:type_name -> game.v1.Cosmetics
+	100, // 73: game.v1.Creature.look:type_name -> game.v1.BodyLook
+	28,  // 74: game.v1.Creature.equipment:type_name -> game.v1.VisibleEquipment
+	30,  // 75: game.v1.Creature.worn:type_name -> game.v1.Worn
+	29,  // 76: game.v1.Worn.head:type_name -> game.v1.WornPiece
+	29,  // 77: game.v1.Worn.torso:type_name -> game.v1.WornPiece
+	29,  // 78: game.v1.Worn.legs:type_name -> game.v1.WornPiece
+	29,  // 79: game.v1.Worn.feet:type_name -> game.v1.WornPiece
+	29,  // 80: game.v1.Worn.shield:type_name -> game.v1.WornPiece
+	29,  // 81: game.v1.Worn.weapon:type_name -> game.v1.WornPiece
+	100, // 82: game.v1.CreatureLook.look:type_name -> game.v1.BodyLook
+	28,  // 83: game.v1.CreatureLook.equipment:type_name -> game.v1.VisibleEquipment
+	32,  // 84: game.v1.CreatureCosmetics.cosmetics:type_name -> game.v1.Cosmetics
+	32,  // 85: game.v1.CosmeticsState.equipped:type_name -> game.v1.Cosmetics
+	2,   // 86: game.v1.CreatureSkull.skull:type_name -> game.v1.Skull
+	27,  // 87: game.v1.CreatureAppear.creature:type_name -> game.v1.Creature
+	3,   // 88: game.v1.CreatureDisappear.reason:type_name -> game.v1.DisappearReason
+	98,  // 89: game.v1.CreatureMove.from:type_name -> game.v1.Position
+	98,  // 90: game.v1.CreatureMove.to:type_name -> game.v1.Position
+	99,  // 91: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
+	26,  // 92: game.v1.CreatureOutfit.outfit:type_name -> game.v1.Outfit
+	98,  // 93: game.v1.Effect.pos:type_name -> game.v1.Position
+	98,  // 94: game.v1.Projectile.from:type_name -> game.v1.Position
+	98,  // 95: game.v1.Projectile.to:type_name -> game.v1.Position
+	4,   // 96: game.v1.CreatureAttack.kind:type_name -> game.v1.AttackKind
+	98,  // 97: game.v1.CreatureAttack.to:type_name -> game.v1.Position
+	47,  // 98: game.v1.PlayerConditions.conditions:type_name -> game.v1.ActiveCondition
+	98,  // 99: game.v1.FloatingText.pos:type_name -> game.v1.Position
+	5,   // 100: game.v1.FloatingText.kind:type_name -> game.v1.FloatingTextKind
+	51,  // 101: game.v1.PlayerSkills.skills:type_name -> game.v1.SkillProgress
+	101, // 102: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
+	97,  // 103: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
+	53,  // 104: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
+	97,  // 105: game.v1.Inventory.pockets:type_name -> game.v1.ItemStack
+	97,  // 106: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
+	102, // 107: game.v1.ContainerOpen.mods:type_name -> game.v1.ItemMods
+	97,  // 108: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
+	6,   // 109: game.v1.Message.kind:type_name -> game.v1.MessageKind
+	98,  // 110: game.v1.Message.pos:type_name -> game.v1.Position
+	96,  // 111: game.v1.Message.localized:type_name -> game.v1.LocalizedText
+	96,  // 112: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
+	96,  // 113: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
+	59,  // 114: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
+	62,  // 115: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
+	7,   // 116: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
+	97,  // 117: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
+	97,  // 118: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
+	103, // 119: game.v1.MarketOffer.side:type_name -> game.v1.MarketSide
+	102, // 120: game.v1.MarketOffer.mods:type_name -> game.v1.ItemMods
+	97,  // 121: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
+	103, // 122: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
+	65,  // 123: game.v1.MarketUpdate.sells:type_name -> game.v1.MarketOffer
+	65,  // 124: game.v1.MarketUpdate.buys:type_name -> game.v1.MarketOffer
+	65,  // 125: game.v1.MarketUpdate.own:type_name -> game.v1.MarketOffer
+	66,  // 126: game.v1.MarketUpdate.mailbox_items:type_name -> game.v1.MarketMailItem
+	67,  // 127: game.v1.MarketUpdate.history:type_name -> game.v1.MarketHistoryEntry
+	102, // 128: game.v1.MarketUpdate.owned_mods:type_name -> game.v1.ItemMods
+	98,  // 129: game.v1.WalkRejected.pos:type_name -> game.v1.Position
+	99,  // 130: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
+	8,   // 131: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
+	96,  // 132: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
+	9,   // 133: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
+	74,  // 134: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
+	10,  // 135: game.v1.GuildUpdate.rank:type_name -> game.v1.GuildRank
+	78,  // 136: game.v1.GuildUpdate.members:type_name -> game.v1.GuildMember
+	79,  // 137: game.v1.GuildUpdate.pending:type_name -> game.v1.GuildPendingInvite
+	80,  // 138: game.v1.GuildUpdate.invitations:type_name -> game.v1.GuildInvitation
+	77,  // 139: game.v1.GuildUpdate.wars:type_name -> game.v1.GuildWar
+	11,  // 140: game.v1.GuildWar.state:type_name -> game.v1.GuildWarState
+	10,  // 141: game.v1.GuildMember.rank:type_name -> game.v1.GuildRank
+	98,  // 142: game.v1.StationOpen.pos:type_name -> game.v1.Position
+	97,  // 143: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
+	12,  // 144: game.v1.RefineResult.outcome:type_name -> game.v1.RefineOutcome
+	97,  // 145: game.v1.RefineResult.item:type_name -> game.v1.ItemStack
+	96,  // 146: game.v1.RefineResult.text:type_name -> game.v1.LocalizedText
+	85,  // 147: game.v1.QuestLog.entries:type_name -> game.v1.QuestLogEntry
+	13,  // 148: game.v1.QuestLogEntry.state:type_name -> game.v1.QuestLogState
+	86,  // 149: game.v1.QuestLogEntry.milestone:type_name -> game.v1.MilestoneInfo
+	97,  // 150: game.v1.StashUpdate.items:type_name -> game.v1.ItemStack
+	14,  // 151: game.v1.StashUpdate.result:type_name -> game.v1.StashResult
+	98,  // 152: game.v1.StashUpdate.chest:type_name -> game.v1.Position
+	89,  // 153: game.v1.MinimapIndex.floors:type_name -> game.v1.MinimapFloorIndex
+	91,  // 154: game.v1.MinimapSectors.sectors:type_name -> game.v1.MinimapSector
+	98,  // 155: game.v1.ObjectiveHint.center:type_name -> game.v1.Position
+	156, // [156:156] is the sub-list for method output_type
+	156, // [156:156] is the sub-list for method input_type
+	156, // [156:156] is the sub-list for extension type_name
+	156, // [156:156] is the sub-list for extension extendee
+	0,   // [0:156] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_server_proto_init() }
@@ -8309,6 +8735,10 @@ func file_game_v1_server_proto_init() {
 		(*ServerMessage_StashUpdate)(nil),
 		(*ServerMessage_LivingObject)(nil),
 		(*ServerMessage_TrailWear)(nil),
+		(*ServerMessage_MinimapIndex)(nil),
+		(*ServerMessage_MinimapSectors)(nil),
+		(*ServerMessage_ObjectiveHint)(nil),
+		(*ServerMessage_WorldClock)(nil),
 	}
 	file_game_v1_server_proto_msgTypes[43].OneofWrappers = []any{
 		(*Message_Text)(nil),
@@ -8320,7 +8750,7 @@ func file_game_v1_server_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_server_proto_rawDesc), len(file_game_v1_server_proto_rawDesc)),
 			NumEnums:      15,
-			NumMessages:   73,
+			NumMessages:   78,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

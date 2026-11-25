@@ -571,6 +571,9 @@ func (s *Service) PurgeExpiredSessions(ctx context.Context) (int64, error) {
 	return n + m, nil
 }
 
+// MaxCharacters is how many characters an account may have (Config.MaxCharacters).
+func (s *Service) MaxCharacters() int { return s.maxChars }
+
 // Characters lists the account's characters.
 func (s *Service) Characters(ctx context.Context, accountID int64) ([]store.Character, error) {
 	cs, err := s.repo.ListCharacters(ctx, accountID)

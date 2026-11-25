@@ -17,6 +17,10 @@ export interface ItemMods {
   attribute: string;
   value: number;
   refine: number;
+  /** Remains a monster left: its data/monsters id (named and drawn after it, docs/05). */
+  remainsOf?: string;
+  /** A player's body: the player's name ("body of <player>"). */
+  bodyOf?: string;
 }
 
 export interface ItemDef {
@@ -86,7 +90,7 @@ export interface ItemDef {
   /** data/items `kind` ("weapon", "armor", "consumable"...): the card's type line and the
    * shop's category. */
   kind?: string;
-  /** Grams (docs/06), shown in oz. Absent for 0. */
+  /** Grams (docs/06), shown in g or kg (state/units.ts). Absent for 0. */
   weight?: number;
   weapon?: WeaponStats;
   /** Ammunition: the type of the bows that shoot it and the attack it adds. */
@@ -282,13 +286,6 @@ export interface SoundDef {
   entries?: number[] | undefined;
 }
 
-/** Which loop plays where: by island id, and under the sea floor (z > 7). */
-export interface LoopRules {
-  fadeMs: number;
-  islands: Record<string, string>;
-  underground: string | undefined;
-}
-
 /** Crossfade lengths of the music, ms, by what changed (audio/director.ts Fades). */
 export interface MusicFades {
   zone: number;
@@ -339,7 +336,6 @@ export interface SoundManifest {
   /** Event name → sound ids (one is picked at random). */
   events: Record<string, string[]>;
   music: MusicRules;
-  ambient: LoopRules;
 }
 
 /** An island's rectangle (world/world.yaml), to know where the player is. */
@@ -409,6 +405,11 @@ export interface ClientContent {
   cosmetics?: CosmeticDef[];
   /** Vocation IDs a new character can pick (data/vocations.yaml, in file order). */
   vocations: string[];
+  /**
+   * Each vocation's start_kit (data/vocations.yaml, item ids): the creation screen shows
+   * the class's own pieces. Optional so fixtures can leave it out (then no kit line).
+   */
+  startKits?: Record<string, { item: string; count: number }[]>;
   /** data/spells.yaml in file order. */
   spells: SpellDef[];
   /** data/recipes.yaml in file order (T3.4). */

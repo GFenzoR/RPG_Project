@@ -1,9 +1,14 @@
 // Map tile art (docs/17 ART-3, ART-4, ART-7): which texture a ground or item draws on a tile
 // beyond its one sprite. Pure (no PixiJS), so the client, the map editor (MapView) and the
 // mapcli render pick the same pixels for the same tile:
-// - variants: a ground has alternate looks (<sprite>/var_<n>), picked by a hash of the tile;
-//   so does a border piece (docs/17 ART-4), its looks evenly, and an animated look has its
+// - variants: a ground has alternate looks (<sprite>/var_<n>), picked per tile by groundLook
+//   (a hash of the tile, a slow noise that makes whole areas lean to some looks, and never
+//   the same alternate look on two tiles side by side); so does a border piece (docs/17 ART-4), its looks evenly, and an animated look has its
 //   own frames (<sprite>/var_<n>/frame_<m>: the surf of each shape of shore);
+// - decals: a ground's sparse details (<sprite>/decal_<n>: a shell, a twig, a flower), laid
+//   flat on a few of its tiles by groundDecal: ground art, never items (docs/17 ART-4);
+// - tone: every ground and flat piece is tinted by groundTone, a slow noise of the position,
+//   so wide areas shift subtly in shade instead of repeating one tile;
 // - frames: an animated sprite (<sprite>/frame_<n>) plays in step with the world, with a
 //   phase per tile, or as a rare glint per tile;
 // - walls: a wall sprite has 16 pieces (<sprite>/wall_<mask>), one per set of wall
@@ -25,6 +30,11 @@ export interface TileMeta {
    * each look n has its own <sprite>/var_<n>/frame_<m>.
    */
   variants?: number;
+  /**
+   * A ground's sparse details <sprite>/decal_1..decal_<decals>: transparent, drawn flat over
+   * a few of its tiles (groundDecal).
+   */
+  decals?: number;
   /** Share of the tiles that show look 0 (default: MAIN_WEIGHT on a ground, even on an item). */
   weight?: number;
   /** Frames of an animated sprite, the sprite itself included: <sprite>/frame_1.. */
@@ -78,6 +88,8 @@ export interface TileArt<T> {
   variants?: readonly T[];
   /** Share of look 0, when the atlas sets one (lookOf has the defaults). */
   weight?: number;
+  /** A ground's decals (TileMeta decals), when it has them. */
+  decals?: readonly T[];
   /** Every frame, the base first. */
   frames?: readonly T[];
   /** The frames of each animated look (index 0 is `frames`), the look itself first. */
@@ -119,23 +131,240 @@ export const variantName = (sprite: string, n: number): string => `${sprite}/var
 export const variantFrameName = (sprite: string, n: number, m: number): string =>
   n === 0 ? tileFrameName(sprite, m) : tileFrameName(variantName(sprite, n), m);
 export const tileFrameName = (sprite: string, n: number): string => `${sprite}/frame_${n}`;
+export const decalName = (sprite: string, n: number): string => `${sprite}/decal_${n}`;
 export const wallName = (sprite: string, mask: number): string => `${sprite}/wall_${mask}`;
 export const shadowName = (sprite: string): string => `${sprite}/shadow`;
 
-/** A tile-art part's name: <base>/var_<n>, frame_<n>, wall_<mask> or shadow. */
+/** A tile-art part's name: <base>/var_<n>, decal_<n>, frame_<n>, wall_<mask> or shadow. */
 export const TILE_PART =
-  /^(.+)\/(?:var_[1-9][0-9]*|frame_[1-9][0-9]*|wall_(?:[0-9]|1[0-5])|shadow)$/;
+  /^(.+)\/(?:var_[1-9][0-9]*|decal_[1-9][0-9]*|frame_[1-9][0-9]*|wall_(?:[0-9]|1[0-5])|shadow)$/;
 
 /**
  * Deterministic hash of a tile to [0, 1): the same tile always gets the same look and
  * phase, neighbours look unrelated.
  */
 export function tileHash(x: number, y: number, z: number): number {
+  return saltedHash(x, y, z, 0);
+}
+
+/**
+ * tileHash on its own channel: each salt gives values unrelated to the others' (salt 0 is
+ * tileHash), so the look, the decal and the noise of a tile do not follow one another.
+ */
+export function saltedHash(x: number, y: number, z: number, salt: number): number {
   let h =
-    Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1) ^ Math.imul(z | 0, 0x1b873593);
+    Math.imul(x | 0, 0x27d4eb2d) ^
+    Math.imul(y | 0, 0x165667b1) ^
+    Math.imul(z | 0, 0x1b873593) ^
+    Math.imul(salt | 0, 0x9e3779b1);
   h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+// ---- ground variety (docs/17 ART-4) ------------------------------------------------------
+// One tile repeated over a field reads as a grid. Three layers break it, all pure functions
+// of the position, so the client, the editor and mapcli draw the same:
+// - groundLook: which of its looks a tile shows. A slow noise (macroNoise) makes whole areas
+//   lean to a run of neighbouring looks (a rippled stretch of beach, a coarse one) and to
+//   more or fewer of them; two tiles side by side never show the same alternate look (the
+//   looks of one parity go on the tiles of one colour of a checkerboard), diagonal ones
+//   rarely do.
+// - groundTone: a tint from another slow noise, so an area is a shade warmer or darker.
+// - groundDecal: a sparse detail (a shell, a flower) on a few tiles, never two touching.
+
+const SALT_BUSY = 101;
+const SALT_WINDOW = 202;
+const SALT_PICK = 303;
+const SALT_TONE = 404;
+const SALT_WARM = 505;
+const SALT_DECAL = 606;
+const SALT_DECAL_AREA = 707;
+const SALT_DECAL_PICK = 808;
+
+const smooth = (t: number): number => t * t * (3 - 2 * t);
+
+/**
+ * Smooth value noise of the position in [0, 1): random values on a lattice every `scale`
+ * tiles, blended with a smoothstep. Two neighbouring tiles differ by at most 1.5 / scale.
+ */
+export function smoothNoise(x: number, y: number, z: number, scale: number, salt: number): number {
+  const fx = x / scale;
+  const fy = y / scale;
+  const ix = Math.floor(fx);
+  const iy = Math.floor(fy);
+  const sx = smooth(fx - ix);
+  const sy = smooth(fy - iy);
+  const a = saltedHash(ix, iy, z, salt);
+  const b = saltedHash(ix + 1, iy, z, salt);
+  const c = saltedHash(ix, iy + 1, z, salt);
+  const d = saltedHash(ix + 1, iy + 1, z, salt);
+  const top = a + (b - a) * sx;
+  const bottom = c + (d - c) * sx;
+  return top + (bottom - top) * sy;
+}
+
+/** Lattice spacings of the two octaves of macroNoise, tiles. */
+export const MACRO_SCALE = 14;
+export const MACRO_DETAIL_SCALE = 6;
+const MACRO_STRETCH = 1.8;
+/** The most macroNoise changes from a tile to its neighbour. */
+export const MACRO_MAX_STEP = MACRO_STRETCH * 1.5 * (0.8 / MACRO_SCALE + 0.2 / MACRO_DETAIL_SCALE);
+
+/**
+ * Low-frequency noise of the position in [0, 1], spread out so it reaches both ends: areas
+ * of a dozen tiles with a finer wobble on their edges. Neighbours differ by at most
+ * MACRO_MAX_STEP.
+ */
+export function macroNoise(x: number, y: number, z: number, salt: number): number {
+  const v =
+    smoothNoise(x, y, z, MACRO_SCALE, salt) * 0.8 +
+    smoothNoise(x, y, z, MACRO_DETAIL_SCALE, salt + 1) * 0.2;
+  return Math.min(1, Math.max(0, (v - 0.5) * MACRO_STRETCH + 0.5));
+}
+
+/** Share of a ground's alternate looks one area draws from (the others show elsewhere). */
+export const LOOK_WINDOW = 0.5;
+/** How far the share of the main look swings between calm and busy areas (x0.5..x1.5). */
+export const BUSY_SWING = 0.5;
+
+/**
+ * Whether tile (x, y) shows its main look, look 0: on a share `weight` of the tiles on
+ * average, more in calm areas and fewer in busy ones.
+ */
+function showsMain(x: number, y: number, z: number, weight: number): boolean {
+  const busy = macroNoise(x, y, z, SALT_BUSY);
+  const w = Math.min(0.95, weight * (1 + BUSY_SWING * (1 - 2 * busy)));
+  return tileHash(x, y, z) < w;
+}
+
+/**
+ * The alternate looks (1..count-1) tile (x, y) may show: the ones of its area's window (a
+ * run of neighbouring looks chosen by macroNoise) whose parity is the tile's colour on a
+ * checkerboard; every look of that parity when the window has none.
+ */
+function candidates(x: number, y: number, z: number, count: number): number[] {
+  const m = count - 1;
+  const parity = (x + y) & 1;
+  const size = Math.min(m, Math.max(2, Math.round(m * LOOK_WINDOW)));
+  const start = Math.min(m - 1, Math.floor(macroNoise(x, y, z, SALT_WINDOW) * m));
+  const out: number[] = [];
+  for (let i = 0; i < size; i++) {
+    const look = ((start + i) % m) + 1;
+    if (((look - 1) & 1) === parity) out.push(look);
+  }
+  if (out.length > 0) return out;
+  for (let look = 1; look <= m; look++) if (((look - 1) & 1) === parity) out.push(look);
+  return out;
+}
+
+/**
+ * Rows of alternate looks chain in bands of this many rows: the first row of a band takes
+ * its first pick, each row below steps aside from the looks its upper diagonal neighbours
+ * really show (the same function, one row up), so only the band's first row may repeat a
+ * diagonal.
+ */
+export const LOOK_BAND = 8;
+
+/** The alternate look of a tile that does not show its main one (see pickGroundLook). */
+function alternateLook(
+  x: number,
+  y: number,
+  z: number,
+  count: number,
+  weight: number,
+  memo: Map<string, number>,
+): number {
+  const key = `${x},${y}`;
+  const known = memo.get(key);
+  if (known !== undefined) return known;
+  const c = candidates(x, y, z, count);
+  const first = Math.floor(saltedHash(x, y, z, SALT_PICK) * c.length);
+  let look = c[first] ?? 1;
+  if ((y & (LOOK_BAND - 1)) !== 0 && c.length > 1) {
+    const avoid: number[] = [];
+    for (const dx of [-1, 1])
+      if (!showsMain(x + dx, y - 1, z, weight))
+        avoid.push(alternateLook(x + dx, y - 1, z, count, weight, memo));
+    for (let i = 0; i < c.length; i++) {
+      const k = c[(first + i) % c.length] as number;
+      if (!avoid.includes(k)) {
+        look = k;
+        break;
+      }
+    }
+  }
+  memo.set(key, look);
+  return look;
+}
+
+/**
+ * Which of a ground's `count` looks tile (x, y, z) shows (docs/17 ART-4): look 0 on about a
+ * share `weight` of the tiles, otherwise one of its area's alternate looks. Two tiles side
+ * by side never share an alternate look (count >= 3), and a tile steps aside from the looks
+ * of its upper diagonal neighbours when it has another (LOOK_BAND), so diagonals rarely
+ * repeat either.
+ */
+export function pickGroundLook(
+  x: number,
+  y: number,
+  z: number,
+  count: number,
+  weight = MAIN_WEIGHT,
+): number {
+  if (count <= 1 || showsMain(x, y, z, weight)) return 0;
+  if (count === 2) return 1;
+  return alternateLook(x, y, z, count, weight, new Map());
+}
+
+/** pickGroundLook for a ground's tile art (MAIN_WEIGHT unless the atlas sets its weight). */
+export function groundLook(art: TileArt<unknown>, x: number, y: number, z: number): number {
+  return pickGroundLook(x, y, z, art.variants?.length ?? 0, art.weight ?? MAIN_WEIGHT);
+}
+
+/** How much darker the darkest areas of groundTone are (the lightest keep their colour). */
+export const TONE_DEPTH = 0.1;
+/** How far an area leans warm (less blue) or cool (less red). */
+export const TONE_WARMTH = 0.035;
+
+/**
+ * The tint (0xRRGGBB, no channel above 255) of the ground, its decal and the flat pieces of
+ * tile (x, y, z): one slow noise of the position for all of them, so a fringe matches the
+ * ground it comes from and the shade drifts over areas, never by a step between tiles.
+ */
+export function groundTone(x: number, y: number, z: number): number {
+  const dark = 1 - TONE_DEPTH * macroNoise(x, y, z, SALT_TONE);
+  const warm = macroNoise(x, y, z, SALT_WARM);
+  const r = dark * (1 - TONE_WARMTH * (1 - warm));
+  const b = dark * (1 - TONE_WARMTH * warm);
+  const ch = (v: number): number => Math.max(0, Math.min(255, Math.round(v * 255)));
+  return (ch(r) << 16) | (ch(dark) << 8) | ch(b);
+}
+
+/** Share of a ground's tiles with a decal, on average (more in some areas, fewer in others). */
+export const DECAL_DENSITY = 0.05;
+
+function decalSeed(x: number, y: number, z: number): boolean {
+  const area = 0.3 + 1.4 * macroNoise(x, y, z, SALT_DECAL_AREA);
+  return saltedHash(x, y, z, SALT_DECAL) < DECAL_DENSITY * area;
+}
+
+/**
+ * Which of a ground's `count` decals tile (x, y, z) shows, or -1 for none: a few tiles by a
+ * hash, more in some areas than in others, never two touching (a tile gives way to its left
+ * and upper neighbours). The caller draws it only inside a field of its ground (the four
+ * neighbours of the same ground), so no border covers half of it.
+ */
+export function groundDecal(x: number, y: number, z: number, count: number): number {
+  if (count <= 0 || !decalSeed(x, y, z)) return -1;
+  for (const [dx, dy] of [
+    [-1, 0],
+    [-1, -1],
+    [0, -1],
+    [1, -1],
+  ] as const)
+    if (decalSeed(x + dx, y + dy, z)) return -1;
+  return Math.min(count - 1, Math.floor(saltedHash(x, y, z, SALT_DECAL_PICK) * count));
 }
 
 /**
@@ -241,6 +470,15 @@ export function resolveTileArt<T>(
   if (meta.variants) {
     const v = list(meta.variants + 1, (n) => variantName(sprite, n));
     if (v.length > 1) art.variants = v;
+  }
+  if (meta.decals) {
+    const d: T[] = [];
+    for (let n = 1; n <= meta.decals; n++) {
+      const t = lookup(decalName(sprite, n));
+      if (t === undefined) break;
+      d.push(t);
+    }
+    if (d.length > 0) art.decals = d;
   }
   if (meta.frames) {
     const f = list(meta.frames, (n) => tileFrameName(sprite, n));

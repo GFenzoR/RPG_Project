@@ -13,6 +13,7 @@ import { ShopPage } from "./Shop.tsx";
 import { CreditsPage } from "./Credits.tsx";
 import { authConfig } from "../net/api.ts";
 import { excerpt } from "./markdown.ts";
+import { formatArea } from "../state/units.ts";
 import {
   LEVEL,
   categoryKey,
@@ -820,7 +821,7 @@ function HousesPage(props: { t: Translate }): JSX.Element {
                   .map((h) => (
                     <tr key={h.id} data-house={h.id}>
                       <td>{t(h.name)}</td>
-                      <td>{t("site.houses.tiles", { count: h.size })}</td>
+                      <td>{formatArea(h.size, t)}</td>
                       <td>{t("site.houses.coins", { price: h.rent })}</td>
                       <td>
                         {h.owner

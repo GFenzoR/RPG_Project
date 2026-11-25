@@ -203,6 +203,12 @@ func (w *World) TrainForTest(p *Player, id string, n int64) { w.addTries(p, w.sk
 // SetCapacityForTest sets p's capacity in grams (T3.4).
 func (w *World) SetCapacityForTest(p *Player, grams int) { p.capacity = grams }
 
+// CapacityForTest returns p's capacity in grams.
+func (p *Player) CapacityForTest() int { return p.capacity }
+
+// FreeCellsForTest returns the free cells at the top level of p's packs.
+func (p *Player) FreeCellsForTest() int { return p.freeCells() }
+
 // SetStorageForTest sets a quest_state value of p (tests only, loop goroutine).
 func (p *Player) SetStorageForTest(key string, v int64) { p.storage.Set(key, v) }
 
@@ -211,6 +217,9 @@ func (w *World) DupeForTest(p *Player, id string, n int) { w.giveItem(p, w.cfg.I
 
 // ProjectileForTest shows a physical projectile between two tiles.
 func (w *World) ProjectileForTest(from, to world.Pos) { w.projectile(from, to, ElementPhysical) }
+
+// EarnedItemsForTest is the item units p's outlier window counts as earned.
+func (w *World) EarnedItemsForTest(p *Player) int64 { return p.earn.items }
 
 // EarningsForTest is how many characters have an outlier window in memory.
 func (w *World) EarningsForTest() int { return len(w.earnings) }
@@ -509,9 +518,41 @@ func (w *World) FullViewForTest(p *Player) *pb.MapArea {
 // FaceForTest turns m towards p as a fight does (tests only, loop goroutine).
 func (w *World) FaceForTest(m *Monster, p world.Pos) { w.face(m, p) }
 
-// GiveUpForTest makes m give up its fight: full health, told to who sees it (tests only,
-// loop goroutine).
+// GiveUpForTest makes m give up its fight (tests only, loop goroutine).
 func (w *World) GiveUpForTest(ctx *game.TickContext, m *Monster) { w.giveUp(ctx, m) }
+
+// HealthChangedForTest tells who sees m its health bar (tests only, loop goroutine).
+func (w *World) HealthChangedForTest(m *Monster) { w.healthChanged(m) }
+
+// PursuingForTest reports whether m chases its target beyond its leash area now.
+func (m *Monster) PursuingForTest() bool { return m.pursuing }
+
+// PursuitChanceForTest is the chance that m keeps chasing p where p stands (pursuitChance).
+func (w *World) PursuitChanceForTest(m *Monster, p *Player) float64 {
+	return w.pursuitChance(m, p, chebyshev(p.pos, m.slot.spawn.Center), w.leash(m))
+}
+
+// CalmForTest has m deal or take damage now, as far as its regeneration knows (regen).
+func (m *Monster) CalmForTest(ctx *game.TickContext) { m.calmAt = ctx.Tick }
+
+// MoveMonsterForTest puts m on p without a step (tests only, loop goroutine).
+func (w *World) MoveMonsterForTest(m *Monster, p world.Pos) {
+	w.munindex(m)
+	m.pos = p
+	w.mindex(m)
+}
+
+// HealMonsterForTest heals m as its own heal_self does (tests only, loop goroutine).
+func (w *World) HealMonsterForTest(m *Monster, amount int) { w.healMonster(m, amount) }
+
+// SetTargetForTest has m target p (tests only, loop goroutine).
+func (m *Monster) SetTargetForTest(p *Player) { m.setTarget(p) }
+
+// PackRollsForTest is how many pursuit decisions the spawn of m holds.
+func (w *World) PackRollsForTest(m *Monster) int { return len(w.packs[m.slot.spawn]) }
+
+// StraysForTest is how many monsters World.strays holds.
+func (w *World) StraysForTest() int { return len(w.strays) }
 
 // DespawnForTest takes m out of the world without a death (DISAPPEAR_REASON_DESPAWN), as
 // the summons of a monster that died or gave up go (despawnSummons).
@@ -608,3 +649,6 @@ func (w *World) MarkQuestCompletedForTest(p *Player, id string) {
 // StaticCount is staticCount: the stack index of the first loose item of pos (the living
 // world's object, if any, is the index just below it).
 func (w *World) StaticCount(pos world.Pos) int { return w.staticCount(pos) }
+
+// InviteLimitsForTest returns how many accounts have a party invitation limit kept.
+func (w *World) InviteLimitsForTest() int { return len(w.inviteTAT) }

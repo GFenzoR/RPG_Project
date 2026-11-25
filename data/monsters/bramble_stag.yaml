@@ -10,6 +10,7 @@ behavior:
   aggressive: false
   flee_at_health_pct: 15
   target_distance: 1
+pursuit: { persistence: 0.3, give_up_below_hp_pct: 50 }
 attacks:
   - { type: melee, min: 0, max: 34, interval_ms: 2000 }
 resistances: { earth: 20, fire: -10 }

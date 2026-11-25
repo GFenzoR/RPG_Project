@@ -18,8 +18,7 @@ if (command !== "build" && command !== "check") {
 
 if (command === "build") {
   const built = buildSounds(root, values.only);
-  for (const b of built)
-    console.log(`${String(b.bytes).padStart(7)} B  assets/sounds/${b.path}.ogg`);
+  for (const b of built) console.log(`${String(b.bytes).padStart(7)} B  assets/${b.path}`);
   console.log(`soundgen: ${built.length} sounds`);
 }
 const files = manifestFiles(root);

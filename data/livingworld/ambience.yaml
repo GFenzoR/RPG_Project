@@ -1,0 +1,99 @@
+# The living world's positional ambience (livingworld/README.md "Ambiente", docs/06 "Mundo
+# vivo"; the owner's request of 2026-11-23): what the player hears under the music by what
+# is around them, instead of one bed per island. Cosmetic: the server never reads it.
+#
+#   radius       half side of the square window around the player, tiles (2..16)
+#   fade_ms      a layer's gain goes from silent to full (or back) over this
+#   voices       most loops at once; voices_lite on a phone or with reduced animations
+#   rescan_ms    the whole window is counted again this often (tiles that changed)
+#
+# beds: <id>: the mix of the tiles in the window.
+#   sound        a sound of assets/sounds.yaml on channel ambient
+#   volume       gain at full level (0..1)
+#   floors       surface (z <= 7, the default) | underground (z > 7) | any
+#   full         share of weighted tiles in the window that gives full level
+#   base         level whatever the tiles (a cave sounds like a cave everywhere)
+#   surfaces     weight of a tile by its ground's surface (data/items ground.surface)
+#   items        weight of a tile with this item (data/items id)
+#   A tile counts its heaviest weight; the level is share / full, capped at 1 (plus base).
+#
+# emitters: <data/items id>: a map item that sounds by itself.
+#   sound, volume
+#   radius       tiles; heard within it (at most the window's radius), culled beyond
+#   falloff      smooth ((1 - d/r)², the default) | linear (1 - d/r)
+#   Emitters of one sound make one voice (√Σg², panned to where they are).
+radius: 10
+fade_ms: 2500
+voices: 6
+voices_lite: 3
+rescan_ms: 2000
+
+beds:
+  # The sea: open water and the wet sand of the shore. A third of the window being sea
+  # is full waves; a town ten tiles inland hears none.
+  waves:
+    sound: amb_waves
+    volume: 0.6
+    full: 0.35
+    surfaces: { water_shallow: 1, wet_sand: 0.4 }
+  # Dry sand and ash: the wind over open ground. A sandy town square or a beach strip adds
+  # a little; a desert (60 % of the window sand) is full.
+  desert_wind:
+    sound: amb_desert_wind
+    volume: 0.45
+    full: 0.6
+    surfaces: { sand: 0.6, ash: 0.4 }
+  # Open meadows: the same wind, much softer, over grass (it merges with the desert's
+  # into one voice).
+  breeze:
+    sound: amb_desert_wind
+    volume: 0.15
+    full: 0.8
+    surfaces: { grass: 1, tall_grass: 1 }
+  # Trees in the wind: a forest is full from about one tile in seven with a tree.
+  forest:
+    sound: amb_forest
+    volume: 0.55
+    full: 0.14
+    items: { oak_tree: 1, pine_tree: 1, birch_tree: 1, elm_tree: 1, bush: 0.4, tall_grass: 0.15 }
+  # Lava: the volcano's rumble and bubbling, near the lava itself.
+  lava:
+    sound: amb_volcan
+    volume: 0.5
+    full: 0.12
+    surfaces: { lava: 1, ash: 0.15 }
+  # Under the sea floor: drips and the stillness of rock, everywhere below.
+  cave:
+    sound: amb_cave
+    volume: 0.5
+    floors: underground
+    base: 1
+  # A town: people far off, where there are stalls, barrels, benches and lamps.
+  town:
+    sound: amb_town
+    volume: 0.3
+    full: 0.04
+    items:
+      market_stall: 1
+      market_board: 1
+      flag_pole: 0.6
+      lamp_post: 0.6
+      bench: 0.5
+      table: 0.5
+      barrel: 0.5
+      sacks: 0.5
+      cargo_crate: 0.4
+      flower_box: 0.4
+      fishing_net: 0.4
+      mooring_post: 0.3
+
+emitters:
+  fountain: { sound: amb_fountain, volume: 0.6, radius: 7 }
+  # A well: still water far down, much quieter than a fountain.
+  well: { sound: amb_fountain, volume: 0.18, radius: 3 }
+  # The campfire is the hearth where people cook; braziers burn smaller.
+  cooking_hearth: { sound: amb_campfire, volume: 0.6, radius: 6 }
+  brazier: { sound: amb_campfire, volume: 0.35, radius: 5 }
+  wall_torch: { sound: amb_torch, volume: 0.25, radius: 3, falloff: linear }
+  lamp_post: { sound: amb_torch, volume: 0.12, radius: 2, falloff: linear }
+  smelting_forge: { sound: amb_forge, volume: 0.6, radius: 7 }

@@ -47,7 +47,7 @@ const content: ClientContent = {
   vocations: [],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.414, maxPathTiles: 100 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],
@@ -132,7 +132,7 @@ function world(rows: string[], portals?: Record<string, string>): WorldState {
   return w;
 }
 
-const steer = () => new Steering({ diagonalCost: 1.5, maxPathTiles: 100 });
+const steer = () => new Steering({ diagonalCost: 1.414, maxPathTiles: 100 });
 const self = (w: WorldState) => w.self as CreatureState;
 const at = (x: number, y: number) => ({ x: X0 + x, y: Y0 + y, z: 7 });
 const pos = (x: number, y: number) => ({ $typeName: "game.v1.Position" as const, x, y, z: 7 });
@@ -458,7 +458,7 @@ describe("Steering: the mouse held on the map (docs/17 MOV-3)", () => {
 
   it("never steps onto stairs, a hole or a teleport on the way, only onto the one held", () => {
     const portals = { [`${X0 + 1},${Y0},7`]: "hole" };
-    const cfg = { portals, diagonalCost: 1.5, maxPathTiles: 100 };
+    const cfg = { portals, diagonalCost: 1.414, maxPathTiles: 100 };
     // The cursor past a hole: round it, the camera following (the cursor points east).
     const w = world(["@.....", "......"], portals);
     const sent = run(w, new Steering(cfg), 0, 2500, cursor(w, 3, 0));

@@ -12,3 +12,8 @@ client/e2e/screenshots/
 editor/e2e/screenshots/
 deploy/.env
 deploy/backups/
+
+# Local git worktrees and build outputs never belong in an image.
+.wt/
+build/
+*.exe

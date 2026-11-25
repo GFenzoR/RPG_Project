@@ -325,6 +325,75 @@ func (x *TrailWear) GetLevels() []byte {
 	return nil
 }
 
+// WorldClock is the world's time of day (server → client; livingworld/server/daynight,
+// data/livingworld/daynight.yaml). Sent at login, every `sync_seconds` and at once after a
+// staff /time. The client runs it on from there at `rate` and draws the sky, the light and
+// the cast shadows; no game rule depends on it.
+type WorldClock struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// day: cycles since the world's epoch. The moon's phase is day mod lunar_days, except
+	// at dawn: the dawn still has the moon of the night before, (day - 1) mod lunar_days.
+	Day uint32 `protobuf:"varint,1,opt,name=day,proto3" json:"day,omitempty"`
+	// cycle_ms: how far into the cycle; 0 is the start of dawn, day_minutes the start of
+	// the night.
+	CycleMs uint32 `protobuf:"varint,2,opt,name=cycle_ms,json=cycleMs,proto3" json:"cycle_ms,omitempty"`
+	// rate: world milliseconds per real millisecond (1 normal; 0 stopped by staff).
+	Rate          uint32 `protobuf:"varint,3,opt,name=rate,proto3" json:"rate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorldClock) Reset() {
+	*x = WorldClock{}
+	mi := &file_game_v1_livingworld_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorldClock) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorldClock) ProtoMessage() {}
+
+func (x *WorldClock) ProtoReflect() protoreflect.Message {
+	mi := &file_game_v1_livingworld_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorldClock.ProtoReflect.Descriptor instead.
+func (*WorldClock) Descriptor() ([]byte, []int) {
+	return file_game_v1_livingworld_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *WorldClock) GetDay() uint32 {
+	if x != nil {
+		return x.Day
+	}
+	return 0
+}
+
+func (x *WorldClock) GetCycleMs() uint32 {
+	if x != nil {
+		return x.CycleMs
+	}
+	return 0
+}
+
+func (x *WorldClock) GetRate() uint32 {
+	if x != nil {
+		return x.Rate
+	}
+	return 0
+}
+
 var File_game_v1_livingworld_proto protoreflect.FileDescriptor
 
 const file_game_v1_livingworld_proto_rawDesc = "" +
@@ -346,7 +415,12 @@ const file_game_v1_livingworld_proto_rawDesc = "" +
 	"\tTrailWear\x12\f\n" +
 	"\x01z\x18\x01 \x01(\rR\x01z\x12\x14\n" +
 	"\x05tiles\x18\x02 \x03(\rR\x05tiles\x12\x16\n" +
-	"\x06levels\x18\x03 \x01(\fR\x06levels*\xad\x02\n" +
+	"\x06levels\x18\x03 \x01(\fR\x06levels\"M\n" +
+	"\n" +
+	"WorldClock\x12\x10\n" +
+	"\x03day\x18\x01 \x01(\rR\x03day\x12\x19\n" +
+	"\bcycle_ms\x18\x02 \x01(\rR\acycleMs\x12\x12\n" +
+	"\x04rate\x18\x03 \x01(\rR\x04rate*\xad\x02\n" +
 	"\x10LivingObjectKind\x12\"\n" +
 	"\x1eLIVING_OBJECT_KIND_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16LIVING_OBJECT_KIND_HIT\x10\x01\x12\x1c\n" +
@@ -371,21 +445,22 @@ func file_game_v1_livingworld_proto_rawDescGZIP() []byte {
 }
 
 var file_game_v1_livingworld_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_game_v1_livingworld_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_game_v1_livingworld_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_game_v1_livingworld_proto_goTypes = []any{
 	(LivingObjectKind)(0),     // 0: game.v1.LivingObjectKind
 	(*PushObject)(nil),        // 1: game.v1.PushObject
 	(*LivingObjectEvent)(nil), // 2: game.v1.LivingObjectEvent
 	(*TrailWear)(nil),         // 3: game.v1.TrailWear
-	(*Position)(nil),          // 4: game.v1.Position
-	(Direction)(0),            // 5: game.v1.Direction
+	(*WorldClock)(nil),        // 4: game.v1.WorldClock
+	(*Position)(nil),          // 5: game.v1.Position
+	(Direction)(0),            // 6: game.v1.Direction
 }
 var file_game_v1_livingworld_proto_depIdxs = []int32{
-	4, // 0: game.v1.PushObject.pos:type_name -> game.v1.Position
-	5, // 1: game.v1.PushObject.dir:type_name -> game.v1.Direction
+	5, // 0: game.v1.PushObject.pos:type_name -> game.v1.Position
+	6, // 1: game.v1.PushObject.dir:type_name -> game.v1.Direction
 	0, // 2: game.v1.LivingObjectEvent.kind:type_name -> game.v1.LivingObjectKind
-	4, // 3: game.v1.LivingObjectEvent.pos:type_name -> game.v1.Position
-	4, // 4: game.v1.LivingObjectEvent.to:type_name -> game.v1.Position
+	5, // 3: game.v1.LivingObjectEvent.pos:type_name -> game.v1.Position
+	5, // 4: game.v1.LivingObjectEvent.to:type_name -> game.v1.Position
 	5, // [5:5] is the sub-list for method output_type
 	5, // [5:5] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
@@ -405,7 +480,7 @@ func file_game_v1_livingworld_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_livingworld_proto_rawDesc), len(file_game_v1_livingworld_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

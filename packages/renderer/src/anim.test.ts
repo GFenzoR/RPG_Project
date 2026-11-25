@@ -6,6 +6,9 @@ import {
   HIT_FLASH_MS,
   HIT_MS,
   IDLE_AFTER_MS,
+  STRAIGHT_DIRS,
+  ANIM_DIRS,
+  LUNGE_BACK_MS,
   LUNGE_OUT_MS,
   LUNGE_PX,
   VANISH_FLICKER_MS,
@@ -22,6 +25,10 @@ import {
   startDeath,
   startHit,
   startVanish,
+  dirOf,
+  faceTo,
+  turnTo,
+  walkPerStep,
 } from "./anim.ts";
 import type { AnimInput, AnimMeta, AnimState, Pose } from "./anim.ts";
 
@@ -396,5 +403,153 @@ describe("procedural motion of single-frame sprites (ANI-5)", () => {
     const { s, in_, out } = setup();
     in_.now = 5;
     expect(animate(s, LPC, in_, out)).toBe(out);
+  });
+});
+
+describe("facings (docs/17 ANI-1)", () => {
+  it("names the facing of a direction by its signs", () => {
+    expect(dirOf(1, -1)).toBe("ne");
+    expect(dirOf(-3, 2)).toBe("sw");
+    expect(dirOf(0, -1)).toBe("n");
+    expect(dirOf(-1, 0)).toBe("w");
+    expect(dirOf(0, 0)).toBe("s");
+    // Every sign pair, from one table (no string built per call, docs/07).
+    const want = ["nw", "n", "ne", "w", "s", "e", "sw", "s", "se"];
+    for (const dy of [-1, 0, 1])
+      for (const dx of [-1, 0, 1]) expect(dirOf(dx * 4, dy * 9)).toBe(want[(dy + 1) * 3 + dx + 1]);
+  });
+
+  it("turns a figure to the attack it plays, and keeps it there until it walks or turns", () => {
+    // Facing south, a blow to the north-east: the clip plays turned to it (eight facings).
+    const { s, in_, out } = setup();
+    const EIGHT: AnimMeta = {
+      ...LPC,
+      actions: { ...LPC.actions, attack: { frames: 6, ms: 60, dirs: [...ANIM_DIRS] } },
+    };
+    expect(faceTo(s, EIGHT, 900, 0, 1, false, true)).toBe("s");
+    startAttack(s, 1000, 1, -1);
+    expect(faceTo(s, EIGHT, 1000, 0, 1, false, true)).toBe("ne");
+    in_.now = 1100;
+    in_.dir = s.facing;
+    expect(animate(s, EIGHT, in_, out).action).toBe("attack");
+    // Walking away mid-clip does not turn it: the clip is drawn where it was aimed.
+    expect(faceTo(s, EIGHT, 1200, -1, 0, true, true)).toBe("ne");
+    // The clip over (6 × 60 ms): the step's facing.
+    expect(faceTo(s, EIGHT, 1360, -1, 0, true, true)).toBe("w");
+    expect(faceTo(s, EIGHT, 1400, 0, 1, false, true)).toBe("s");
+
+    // Standing still it keeps facing its target between blows...
+    startAttack(s, 2000, -1, 1);
+    expect(faceTo(s, EIGHT, 2100, 0, 1, false, true)).toBe("sw");
+    expect(faceTo(s, EIGHT, 5000, 0, 1, false, true)).toBe("sw");
+    // ...until it looks another way (a Turn), and not back again after that.
+    expect(faceTo(s, EIGHT, 5050, 1, 0, false, true)).toBe("e");
+    expect(faceTo(s, EIGHT, 5100, 0, 1, false, true)).toBe("s");
+
+    // A step in the direction it already looked also ends it.
+    startAttack(s, 6000, 1, -1);
+    expect(faceTo(s, EIGHT, 6500, 0, 1, false, true)).toBe("ne");
+    expect(faceTo(s, EIGHT, 6550, 0, 1, true, true)).toBe("s");
+
+    // Four facings: the half of the diagonal it already faces, else the horizontal one;
+    // without a clip the turn lasts the lunge at least.
+    const four = setup().s;
+    faceTo(four, STILL, 0, 0, -1, false, false);
+    startAttack(four, 100, 1, -1);
+    expect(faceTo(four, STILL, 100, 0, -1, false, false)).toBe("n");
+    startAttack(four, 200, -1, 1);
+    expect(faceTo(four, STILL, 200, 0, -1, false, false)).toBe("w");
+    expect(faceTo(four, STILL, 210, 1, 0, true, false)).toBe("w"); // the lunge still plays
+    expect(faceTo(four, STILL, 200 + LUNGE_OUT_MS + LUNGE_BACK_MS, 1, 0, true, false)).toBe("e");
+
+    // An attack on its own tile turns nothing; a dying figure no longer turns to one.
+    startAttack(four, 1000, 0, 0);
+    expect(faceTo(four, STILL, 1000, 1, 0, false, false)).toBe("e");
+    startAttack(four, 2000, 0, 1);
+    startDeath(four, 2001);
+    expect(faceTo(four, STILL, 2002, 1, 0, false, false)).toBe("e");
+  });
+
+  it("aims an attack by its octant, not its signs", () => {
+    const { s } = setup();
+    startAttack(s, 0, 6, -1);
+    expect([s.attackDx, s.attackDy]).toEqual([1, 0]);
+    startAttack(s, 0, 1, -5);
+    expect([s.attackDx, s.attackDy]).toEqual([0, -1]);
+    startAttack(s, 0, -4, 3);
+    expect([s.attackDx, s.attackDy]).toEqual([-1, 1]);
+    startAttack(s, 0, 2, 1);
+    expect([s.attackDx, s.attackDy]).toEqual([1, 1]);
+  });
+
+  it("turns an eight-facing figure to a diagonal direction", () => {
+    expect(turnTo("n", 1, -1, true)).toBe("ne");
+    expect(turnTo("e", -1, 1, true)).toBe("sw");
+    expect(turnTo("ne", 0, 1, true)).toBe("s");
+    expect(turnTo("nw", 0, 0, true)).toBe("nw"); // no direction keeps the facing
+  });
+
+  it("keeps, with four facings, the half of a diagonal it already faces", () => {
+    // North-east after facing north stays north; after facing east, east.
+    expect(turnTo("n", 1, -1, false)).toBe("n");
+    expect(turnTo("e", 1, -1, false)).toBe("e");
+    expect(turnTo("s", -1, 1, false)).toBe("s");
+    expect(turnTo("w", -1, 1, false)).toBe("w");
+    // Neither half: the horizontal one, as before.
+    expect(turnTo("s", 1, -1, false)).toBe("e");
+    expect(turnTo("e", -1, -1, false)).toBe("w");
+    // A figure that was drawn eight ways and lost a layer's diagonals: never a diagonal.
+    expect(turnTo("ne", 1, -1, false)).toBe("e");
+    // Even with no direction to turn to: the diagonal's horizontal half, one of its four.
+    expect(turnTo("ne", 0, 0, false)).toBe("e");
+    expect(turnTo("se", 0, 0, false)).toBe("e");
+    expect(turnTo("sw", 0, 0, false)).toBe("w");
+    expect(turnTo("nw", 0, 0, false)).toBe("w");
+    for (const d of STRAIGHT_DIRS) expect(turnTo(d, 0, 0, false)).toBe(d);
+    // Straight directions are themselves.
+    expect(turnTo("n", 0, 1, false)).toBe("s");
+  });
+
+  it("plays a diagonal step by distance: hypot of the frames across and down", () => {
+    const walk = { frames: 8, ms: 0, perTile: 8, perTileNS: 13.86, dirs: DIRS };
+    const in_ = newAnimInput();
+    in_.dir = "e";
+    in_.moveDx = 1;
+    in_.moveDy = -1;
+    expect(walkPerStep(walk, in_)).toBeCloseTo(Math.hypot(8, 13.86), 6);
+    in_.moveDy = 0;
+    expect(walkPerStep(walk, in_)).toBe(8);
+    in_.moveDx = 0;
+    in_.moveDy = 1;
+    in_.dir = "s";
+    expect(walkPerStep(walk, in_)).toBe(13.86);
+    // An animal (no perTileNS): √2 times its frames per tile on a diagonal.
+    const trot = { frames: 4, ms: 0, perTile: 2, dirs: DIRS };
+    in_.moveDx = -1;
+    expect(walkPerStep(trot, in_)).toBeCloseTo(2 * Math.SQRT2, 6);
+  });
+
+  it("advances the cycle by the diagonal's length, so the feet do not slide", () => {
+    const HUMAN: AnimMeta = {
+      ...LPC,
+      actions: {
+        ...LPC.actions,
+        walk: { frames: 8, ms: 0, perTile: 8, perTileNS: 13.86, dirs: DIRS },
+      },
+    };
+    const { s, in_, out } = setup();
+    in_.dir = "e";
+    in_.moveDx = 1;
+    in_.moveDy = 1;
+    in_.walkStart = 0;
+    in_.walkMs = 700;
+    in_.now = 350; // half the step: hypot(8, 13.86) / 2 = 8.0 frames in
+    expect(animate(s, HUMAN, in_, out).frame).toBe(Math.floor(Math.hypot(8, 13.86) / 2) % 8);
+    in_.walkStart = 700;
+    in_.now = 700;
+    animate(s, HUMAN, in_, out);
+    // The diagonal counted its whole length into the cycle (16 frames: two cycles).
+    expect(s.walkPer).toBeCloseTo(Math.hypot(8, 13.86), 6);
+    expect(s.walkPhase).toBeCloseTo(Math.hypot(8, 13.86) % 8, 6);
   });
 });

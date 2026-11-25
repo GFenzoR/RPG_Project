@@ -28,6 +28,7 @@ import {
   actionDir,
 } from "@rpg/renderer";
 import type { AnimDir, LayerSlot, Pose } from "@rpg/renderer";
+import type { ShadowSink } from "./cast-shadows.ts";
 import { clipTexture, dirIndex, headLift } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
 
@@ -96,9 +97,17 @@ export class CreatureBody {
   readonly sprite: Sprite;
   /** How far the drawing rises above the tile (labels go over it), sprite pixels. */
   readonly lift: number;
+  /**
+   * Drawn in eight facings (docs/17 ANI-1): its clips, and every layer of a paper doll,
+   * have the diagonals. One layer without them turns the whole figure four ways: a doll
+   * never mixes a diagonal body with a straight cloak.
+   */
+  readonly eight: boolean;
   private readonly shadow: Graphics | undefined;
   private readonly baseX: number;
   private readonly baseY: number;
+  /** Empty rows under the feet in the textures (bc sprites): the cast shadow turns there. */
+  private readonly foot: number;
   private tint: number;
   /** Paper doll: one sprite per layer, in `layers` order; empty for a one-sprite body. */
   private readonly sprites: Sprite[] = [];
@@ -113,6 +122,8 @@ export class CreatureBody {
   private faded = false;
   /** The alpha it was last drawn with (the pose's times `opacity`). */
   private drawnAlpha = 1;
+  /** The pose's sideways offset last drawn (a lunge): the cast shadow follows the feet. */
+  private drawnX = 0;
   /**
    * Multiplies the pose's alpha: the own player drawn see-through while invisible (T3.2).
    * The caller sets it instead of its container's alpha, which would fade layer by layer.
@@ -138,7 +149,8 @@ export class CreatureBody {
     const h = meta?.h ?? first?.height ?? tile;
     const bc = meta?.anchor === "bc";
     this.baseX = bc ? tile / 2 : tile - w / 2;
-    this.baseY = bc ? tile - FEET_LINE + (meta?.foot ?? 0) : tile;
+    this.foot = bc ? (meta?.foot ?? 0) : 0;
+    this.baseY = bc ? tile - FEET_LINE + this.foot : tile;
     this.lift = headLift(meta, { w, h }, tile, FEET_LINE);
     if (meta?.shadow === "ellipse") {
       this.shadow = new Graphics(shadowShape());
@@ -147,6 +159,7 @@ export class CreatureBody {
     }
     this.tint = tint;
     this.layers = layers;
+    this.eight = clips.eight && layers.every((l) => l.clips.eight);
     this.orders = ANIM_DIRS.map((d) => layerOrder(layers, d));
     if (layers.length > 0) {
       this.pool = pool;
@@ -228,6 +241,7 @@ export class CreatureBody {
   draw(pose: Pose, dir: number): void {
     const alpha = pose.alpha * this.opacity;
     this.drawnAlpha = alpha;
+    this.drawnX = pose.x;
     if (this.sprites.length > 0) {
       this.drawLayers(pose, dir);
       this.fadeLayers(alpha);
@@ -240,6 +254,27 @@ export class CreatureBody {
     if (this.shadow) {
       this.shadow.scale.set(pose.shadow * Math.abs(pose.scaleX));
       this.shadow.alpha = alpha;
+    }
+  }
+
+  /**
+   * Hands `into` the drawing as it was last drawn, for its cast shadow (render/cast-shadows.ts):
+   * every visible layer's texture with its mirror, squash and lean, standing at the feet (the
+   * feet line, `foot` rows above the texture's bottom edge). `x`, `y` is the body's
+   * container position (world pixels). The shadow stays on the ground under a
+   * hop (the pose's lift is left out); a body fading away below half casts none.
+   */
+  castShadow(into: ShadowSink, x: number, y: number): void {
+    if (this.drawnAlpha < 0.5) return;
+    const fx = x + this.baseX + this.drawnX;
+    const foot = this.foot;
+    const fy = y + this.baseY - foot;
+    if (this.sprites.length > 0) {
+      for (const sp of this.sprites)
+        if (sp.visible) into.part(sp.texture, fx, fy, sp.scale.x, sp.scale.y, foot, sp.skew.x);
+    } else {
+      const sp = this.sprite;
+      into.part(sp.texture, fx, fy, sp.scale.x, sp.scale.y, foot, sp.skew.x);
     }
   }
 

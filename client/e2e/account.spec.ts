@@ -76,6 +76,12 @@ test("sign up, confirm the email, reset the password", async ({ page, browser })
   await page.goto("/play/?lang=es");
   await expect(page.getByTestId("characters")).toBeVisible();
   await expect(page.getByTestId("verify-notice")).toHaveCount(0);
+  // docs/02 "Cuentas": an account without characters goes straight to the creation form,
+  // with no "Volver" (there is no list to go back to).
+  await expect(page.getByTestId("create-character")).toBeVisible();
+  await expect(page.getByTestId("create-back")).toHaveCount(0);
+  await expect(page.getByTestId("characters")).toHaveAttribute("data-view", "create");
+  await shot(page, "account-03-first-character");
 
   // Another browser forgets the password: "forgot" link → the website's page.
   const other = await browser.newContext({ baseURL: mailClientURL });

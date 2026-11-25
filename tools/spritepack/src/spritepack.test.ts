@@ -414,6 +414,8 @@ describe("buildAtlas", () => {
     put("assets/sprites/ground/water.png", tile);
     for (const n of [1, 2, 3]) put(`assets/sprites/ground/water/frame_${n}.png`, tile);
     put("assets/sprites/ground/sand.png", tile);
+    // Two decals of the sand (docs/17 ART-4): small transparent details.
+    for (const n of [1, 2]) put(`assets/sprites/ground/sand/decal_${n}.png`, tile);
     put("assets/sprites/walls/stone.png", tall);
     for (let m = 0; m < 16; m++) put(`assets/sprites/walls/stone/wall_${m}.png`, tall);
     put("assets/sprites/decor/tree.png", tall);
@@ -445,7 +447,7 @@ tiles:
       "decor/tree": { anchor: "bc", shadow: true, particles: "pollen" },
       "doors/gate": { joins: true },
       "ground/grass": { variants: 3, weight: 0.6 },
-      "ground/sand": { steps: "dust" },
+      "ground/sand": { decals: 2, steps: "dust" },
       "ground/water": { frames: 4, ms: 220, sync: "world", particles: "spray" },
       "walls/stone": { wall: true },
     });
@@ -459,6 +461,7 @@ tiles:
     put("assets/sprites/walls/stone/wall_0.png", tile);
     put("assets/sprites/decor/lost/shadow.png", tile);
     put("assets/sprites/ground/sand.png", tile);
+    put("assets/sprites/ground/sand/decal_2.png", tile);
     // An animated sprite whose second look lacks its frames, and frames on a look of a still one.
     for (const n of ["", "/frame_1", "/var_1", "/var_1/frame_1", "/var_2"])
       put(`assets/sprites/borders/surf/n${n}.png`, tile);
@@ -494,6 +497,7 @@ tiles:
       expect.stringMatching(/decor\/lost: decor\/lost\/shadow needs the sprite decor\/lost itself/),
       expect.stringMatching(/ground\/grass: var_<n> must be var_1..var_1 without gaps/),
       expect.stringMatching(/ground\/nothing: a tiles entry needs a sprite of that name/),
+      expect.stringMatching(/ground\/sand: decal_<n> must be decal_1..decal_1 without gaps/),
       expect.stringMatching(/ground\/sand: ms and sync need frames/),
       expect.stringMatching(/walls\/stone: a wall needs all 16 pieces/),
       expect.stringMatching(/borders\/odd\/n\/var_1: a look's frames go with the sprite's/),
@@ -565,6 +569,11 @@ tiles:
       expect(readFileSync(join(out2, f))).toEqual(readFileSync(join(out1, f)));
     }
     expect(() => readFileSync(join(out2, "atlas-7.png"))).toThrow();
+    // What the client downloads carries no indentation (docs/07): one line each.
+    for (const f of ["atlas-0.json", "atlas.json"]) {
+      const text = readFileSync(join(out1, f), "utf8");
+      expect(text).toBe(JSON.stringify(JSON.parse(text)) + "\n");
+    }
     const png = decodePng(readFileSync(join(out1, "atlas-0.png")));
     expect([png.width, png.height]).toEqual([64, 32]);
   });

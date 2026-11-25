@@ -5,6 +5,7 @@
 import type { JSX } from "preact";
 import type { Translate } from "../i18n/i18n.ts";
 import { Icon } from "./icons.tsx";
+import { logoutTitle } from "./LogoutButton.tsx";
 import type { IconName } from "./icons.tsx";
 import { WINDOW_KEY_LABEL, WINDOW_TITLE } from "./windows.ts";
 import type { WindowId, WindowsState } from "./windows.ts";
@@ -47,8 +48,14 @@ export function Toolbar(props: {
   /** Guild invitations wait for an answer: the guild button shows a dot. */
   guildBadge: boolean;
   onLogout(): void;
+  /**
+   * Seconds left of the logout lock of a fight (ui/LogoutButton.tsx LogoutLock), undefined
+   * when the player may leave: the button looks locked and counts down.
+   */
+  logoutSeconds?: number | undefined;
 }): JSX.Element {
   const { t } = props;
+  const locked = props.logoutSeconds;
   const market = props.marketOpen
     ? t("client.toolbar.market_close")
     : t("client.toolbar.market_hint");
@@ -95,11 +102,21 @@ export function Toolbar(props: {
         type="button"
         class="tool tool-logout"
         data-testid="logout"
-        aria-label={t("client.game.logout")}
-        title={t("client.game.logout")}
+        data-locked={locked === undefined ? undefined : ""}
+        aria-label={
+          locked === undefined
+            ? t("client.game.logout")
+            : t("client.game.logout_locked_label", { seconds: locked })
+        }
+        title={logoutTitle(t, locked)}
         onClick={() => props.onLogout()}
       >
         <Icon name="logout" />
+        {locked !== undefined && (
+          <span class="tool-count" data-testid="logout-countdown" aria-hidden="true">
+            {t("client.status.badge_seconds", { seconds: locked })}
+          </span>
+        )}
       </button>
     </nav>
   );

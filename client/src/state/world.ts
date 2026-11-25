@@ -47,8 +47,11 @@ import type { ClientContent, ItemDef, ItemMods } from "../content-types.ts";
 import type { Cooldown } from "./hotkeys.ts";
 import { EquippedBackpack } from "./backpack.ts";
 import { TrailWearState } from "./trail-wear.ts";
+import { WorldClockState } from "./world-clock.ts";
 import { modsOf } from "./mods.ts";
+import { mapItemKey } from "./corpse-art.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
+import { stepMs } from "./step-time.ts";
 import {
   PLAYOUT_CATCH_UP,
   PLAYOUT_MAX_LAG_MS,
@@ -91,6 +94,7 @@ import type { TutorialView } from "./tutorial.ts";
 import type { Pos } from "./geometry.ts";
 import { CLASSIC_VIEW, serverView } from "./view.ts";
 import type { ViewTiles } from "./view.ts";
+import { MinimapState, colourItem } from "./minimap.ts";
 
 export interface Walk {
   from: Pos;
@@ -267,6 +271,19 @@ export interface ChatLine {
   at: number;
 }
 
+/**
+ * Something said aloud by a creature the player sees (docs/17 UI-11): a local chat line
+ * that came with its speaker's position, or an NPC's line of its dialog. The canvas draws
+ * it over the speaker's head (render/bubbles.ts) and takes it with takeSpeech.
+ */
+export interface SpeechSaid {
+  speakerId: number;
+  kind: MessageKind;
+  text: string | undefined;
+  localized: { key: string; params: TextParam[] } | undefined;
+  at: number;
+}
+
 export interface PlayerStatsState {
   health: number;
   maxHealth: number;
@@ -395,6 +412,9 @@ function pushLive<T extends { start: number }>(list: T[], x: T, ms: number): voi
 /** LivingObjectEvents kept for the canvas at most (a hidden tab draws no frames). */
 const LIVING_QUEUE = 64;
 
+/** Speech kept for the canvas at most (a hidden tab draws no frames), oldest dropped. */
+export const SPEECH_QUEUE = 16;
+
 /** Status log length. */
 const LOG_SIZE = 5;
 /** Chat lines kept on screen. */
@@ -436,6 +456,8 @@ export interface ContainerState {
   capacity: number;
   items: ItemView[];
   hasParent: boolean;
+  /** The container's own mods: whose remains or body it is (its window's title). */
+  mods?: ItemMods | undefined;
 }
 
 const itemView = (s: ItemStack): ItemView => {
@@ -545,6 +567,9 @@ export class WorldState implements TileSource {
    * sends it (at login), or from a server without one.
    */
   quests: QuestLogView | undefined;
+  /** The minimap (docs/02 "Minimapa"): explored tiles, server colours and the tracked hint. */
+  readonly minimap = new MinimapState();
+  private readonly itemOf = (id: number): ItemDef | undefined => this.content.items[id];
   /** The server's clock minus the client's at the Welcome (ms): a task's countdown. */
   clockOffset = 0;
   /** The player's own active conditions (T3.2), in the server's order. */
@@ -568,6 +593,8 @@ export class WorldState implements TileSource {
    * frame (takeLiving). At most LIVING_QUEUE wait, the oldest dropped first.
    */
   private living: { event: LivingObjectEvent; at: number }[] = [];
+  /** Speech for the bubbles over the heads, until the canvas takes it (takeSpeech). */
+  private speech: SpeechSaid[] = [];
   /** Running cooldowns (SpellCooldown) by spell ID and by spell group. */
   readonly spellCooldowns = new Map<string, Cooldown>();
   readonly groupCooldowns = new Map<string, Cooldown>();
@@ -600,6 +627,8 @@ export class WorldState implements TileSource {
   private readonly chunks = new Map<string, ChunkTiles>();
   /** The living world's trail wear the server sent (state/trail-wear.ts). */
   readonly trailWear = new TrailWearState();
+  /** The world time (WorldClock): render/sky.ts draws the day and night from it. */
+  readonly worldClock = new WorldClockState();
   private readonly content: ClientContent;
 
   constructor(content: ClientContent) {
@@ -611,7 +640,7 @@ export class WorldState implements TileSource {
   }
 
   item(id: number): ItemDef | undefined {
-    return this.content.items[id];
+    return this.itemOf(id);
   }
 
   /** Item IDs of a known tile (ground first), or undefined. */
@@ -646,6 +675,18 @@ export class WorldState implements TileSource {
     const out = this.living;
     this.living = [];
     return out;
+  }
+
+  /** The speech said since the last call, oldest first (docs/17 UI-11). */
+  takeSpeech(): SpeechSaid[] {
+    const out = this.speech;
+    this.speech = [];
+    return out;
+  }
+
+  private said(s: SpeechSaid): void {
+    this.speech.push(s);
+    if (this.speech.length > SPEECH_QUEUE) this.speech.shift();
   }
 
   /**
@@ -697,7 +738,10 @@ export class WorldState implements TileSource {
       const first = t[0] ?? 0;
       const hasGround = this.item(first)?.ground === true;
       if (hasGround) ground[i] = String(first);
-      const stack = (hasGround ? t.slice(1) : t).map(String);
+      // The remains of a monster draw as its own corpse (state/corpse-art.ts).
+      const mods = c.mods[i];
+      const from = hasGround ? 1 : 0;
+      const stack = t.slice(from).map((id, j) => mapItemKey(id, mods?.[from + j]));
       if (stack.length > 0)
         items.push({ x: i % CHUNK_TILES, y: Math.floor(i / CHUNK_TILES), stack });
     });
@@ -764,6 +808,9 @@ export class WorldState implements TileSource {
         break;
       case "trailWear":
         this.trailWear.apply(msg.value);
+        break;
+      case "worldClock":
+        this.worldClock.set(msg.value, now);
         break;
       case "tileUpdate": {
         const p = posOf(msg.value.pos);
@@ -880,6 +927,29 @@ export class WorldState implements TileSource {
       case "questLog":
         this.quests = questLogFrom(msg.value);
         break;
+      case "minimapIndex":
+        this.minimap.applyIndex(msg.value.floors);
+        break;
+      case "minimapSectors":
+        this.minimap.applySectors(msg.value.sectors, msg.value.answer);
+        break;
+      case "objectiveHint": {
+        const h = msg.value;
+        this.minimap.tracked = h.questId;
+        this.minimap.hint =
+          h.questId !== "" && h.center
+            ? {
+                questId: h.questId,
+                stepId: h.stepId,
+                x: h.center.x,
+                y: h.center.y,
+                z: h.center.z,
+                radius: h.radius,
+              }
+            : undefined;
+        this.minimap.version++;
+        break;
+      }
       case "presenceCheck":
         if (msg.value.checkId === this.presenceAnswered) break;
         this.presence = {
@@ -935,6 +1005,16 @@ export class WorldState implements TileSource {
             params: o.text?.params ?? [],
           })),
         };
+        // docs/17 UI-11: the NPC says its line over its head too.
+        if (v.text?.key && v.npcCreatureId !== 0) {
+          this.said({
+            speakerId: v.npcCreatureId,
+            kind: MessageKind.NPC,
+            text: undefined,
+            localized: { key: v.text.key, params: v.text.params },
+            at: now,
+          });
+        }
         break;
       }
       case "dialogClose":
@@ -1007,18 +1087,26 @@ export class WorldState implements TileSource {
         const m = msg.value;
         if (m.kind !== MessageKind.SYSTEM) {
           if (m.body.case === undefined) break;
+          const text = m.body.case === "text" ? m.body.value : undefined;
+          const localized =
+            m.body.case === "localized"
+              ? { key: m.body.value.key, params: m.body.value.params }
+              : undefined;
           this.chat.push({
             kind: m.kind,
             speakerName: m.speakerName,
             speakerContentId: m.speakerContentId,
-            text: m.body.case === "text" ? m.body.value : undefined,
-            localized:
-              m.body.case === "localized"
-                ? { key: m.body.value.key, params: m.body.value.params }
-                : undefined,
+            text,
+            localized,
             at: now,
           });
           if (this.chat.length > CHAT_SIZE) this.chat.shift();
+          // docs/17 UI-11: the server sends the speaker's position only to whoever sees
+          // it (never for global, party, guild or system lines, nor an invisible speaker):
+          // that line also goes over the speaker's head.
+          if (m.pos && m.speakerId !== 0) {
+            this.said({ speakerId: m.speakerId, kind: m.kind, text, localized, at: now });
+          }
           break;
         }
         if (m.body.case !== "localized") break;
@@ -1133,6 +1221,8 @@ export class WorldState implements TileSource {
           items: v.items.map(itemView),
           hasParent: v.hasParent,
         };
+        const mods = modsOf(v);
+        if (mods) c.mods = mods;
         this.containers = [...this.containers.filter((o) => o.id !== c.id), c];
         this.backpack.opened(c, now);
         break;
@@ -1171,6 +1261,8 @@ export class WorldState implements TileSource {
 
   private setTile(x: number, y: number, z: number, stack: readonly ItemStack[] | undefined): void {
     const items = stack?.map((s) => s.itemId);
+    // The minimap remembers the tile's colour past prune() and the next FullMapView.
+    if (items) this.minimap.noteTile(x, y, z, colourItem(items, this.itemOf));
     const cx = Math.floor(x / CHUNK_TILES);
     const cy = Math.floor(y / CHUNK_TILES);
     const key = chunkKey(z, cx, cy);
@@ -1581,11 +1673,7 @@ export class WorldState implements TileSource {
   stepDuration(to: Pos, speed: number, diagonal: boolean): number {
     const ground = this.item(this.tile(to.x, to.y, to.z)?.[0] ?? 0);
     const terrain = ground?.ground ? ground.speed : 100;
-    const mv = this.content.movement;
-    const ms = Math.ceil(
-      (mv.baseStepMs * terrain * (diagonal ? mv.diagonalCost : 1)) / Math.max(speed, 1),
-    );
-    return Math.max(Math.ceil(ms / 50), 1) * 50;
+    return stepMs(this.content.movement, terrain, speed, diagonal);
   }
 
   /**

@@ -9,6 +9,8 @@ defense: 20
 behavior:
   aggressive: true
   target_distance: 1
+pursuit: { persistence: 0, max_chase_tiles: 0 }  # a boss stays in its forge
+regen: { pct: 0.5 }  # a full heal takes about 16 minutes
 attacks:
   - { type: melee, min: 0, max: 60, interval_ms: 2000 }
   # Slag slam: it pounds the floor and burns every tile around it.

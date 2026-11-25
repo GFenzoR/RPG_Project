@@ -30,6 +30,7 @@ func (*fakeAccounts) Logout(context.Context, string) error { return nil }
 func (*fakeAccounts) Characters(context.Context, int64) ([]store.Character, error) {
 	return nil, nil
 }
+func (*fakeAccounts) MaxCharacters() int { return 2 }
 func (*fakeAccounts) IssuePlayToken(context.Context, int64, int64) (auth.Token, error) {
 	return auth.Token{}, nil
 }

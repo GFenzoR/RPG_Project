@@ -3,6 +3,7 @@
 package store_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"reflect"
@@ -128,6 +129,46 @@ func TestPlayTokensAndCharacterState(t *testing.T) {
 	}
 	if pc, _ = st.PlayCharacter(ctx, acc, c.ID, now); !reflect.DeepEqual(pc.Storage, state.Storage) {
 		t.Fatalf("storage after replacing: %v", pc.Storage)
+	}
+	// Explored sectors (the minimap) are upserted: a save without one keeps it.
+	if len(pc.Explored) != 0 {
+		t.Fatalf("explored before any: %+v", pc.Explored)
+	}
+	bits := func(b byte) []byte {
+		out := make([]byte, 128)
+		out[0] = b
+		return out
+	}
+	state.Explored = []store.ExploredSector{{Z: 7, SX: 96, SY: 196, Bits: bits(1)}, {Z: 8, SX: 1, SY: 2, Bits: bits(3)}}
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	state.Explored = []store.ExploredSector{{Z: 7, SX: 96, SY: 196, Bits: bits(5)}}
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	state.Explored = nil
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	pc, _ = st.PlayCharacter(ctx, acc, c.ID, now)
+	if len(pc.Explored) != 2 || pc.Explored[0].Z != 7 || pc.Explored[0].Bits[0] != 5 || pc.Explored[1].Bits[0] != 3 {
+		t.Fatalf("explored after saves: %+v", pc.Explored)
+	}
+	// Bits are only ever gained: an older copy of a sector written after a newer one (it
+	// lacks bits the row has) takes nothing away, byte by byte up to the last one.
+	older := bits(2)
+	older[127] = 0x80
+	state.Explored = []store.ExploredSector{{Z: 7, SX: 96, SY: 196, Bits: older}}
+	if err := st.SaveCharacterState(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	state.Explored = nil
+	pc, _ = st.PlayCharacter(ctx, acc, c.ID, now)
+	want := bits(7)
+	want[127] = 0x80
+	if len(pc.Explored) != 2 || !bytes.Equal(pc.Explored[0].Bits, want) || !bytes.Equal(pc.Explored[1].Bits, bits(3)) {
+		t.Fatalf("explored after an older copy: %+v", pc.Explored)
 	}
 	// Conditions (T3.2) are replaced by every save; none is an empty list.
 	if len(pc.Conditions) != 0 {

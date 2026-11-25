@@ -45,6 +45,7 @@ type config struct {
 	seed       uint64
 	scenario   scenario
 	worldPath  string
+	dataPath   string
 	metricsURL string
 	reportPath string
 	minGap     time.Duration
@@ -65,6 +66,7 @@ func main() {
 	flag.StringVar(&c.prefix, "prefix", "load", "account prefix: bots reuse accounts with the same prefix")
 	flag.Uint64Var(&c.seed, "seed", 1, "random seed of the bots' behaviour")
 	flag.StringVar(&c.worldPath, "world", "../../build/world.bin", "compiled map for path planning (missing: bots walk at random)")
+	flag.StringVar(&c.dataPath, "data", "../../data", "content directory: paths weigh a diagonal as its balance.yaml says (missing: the default cost)")
 	flag.StringVar(&c.metricsURL, "metrics", "", "server's internal /metrics (default "+localMetricsURL+" when -url is on this machine; empty elsewhere: client-side numbers only)")
 	flag.StringVar(&c.reportPath, "report", "", "write the JSON report here")
 	flag.BoolVar(&c.requireMetrics, "require-metrics", false, "fail if the server's /metrics cannot be read")
@@ -200,6 +202,8 @@ func run(ctx context.Context, c config) *Report {
 	if _, err := os.Stat(c.worldPath); err == nil {
 		if nav, err = bot.LoadNav(c.worldPath); err != nil {
 			fmt.Fprintln(os.Stderr, "bots:", err)
+		} else if err := nav.UseBalance(c.dataPath); err != nil {
+			fmt.Fprintf(os.Stderr, "bots: %v: paths use the default diagonal cost\n", err)
 		}
 	} else {
 		fmt.Fprintf(os.Stderr, "bots: no map at %s (make mapcompile): bots walk at random\n", c.worldPath)

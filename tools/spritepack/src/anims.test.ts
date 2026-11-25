@@ -360,6 +360,39 @@ describe("buildAtlas with animations", () => {
     expect(page?.["creatures/ghost"]).toEqual(page?.["creatures/ghost/idle_s_0"]);
   });
 
+  it("animates the diagonal facings of files named <action>_<ne|se|sw|nw>_<n> (docs/17 ANI-1)", () => {
+    const frame = (rows: number): Buffer => {
+      const img = createImage(32, 32);
+      fillRect(img, 8, 30 - rows, 16, rows, GREY);
+      return encodePng(img);
+    };
+    const dirs = ["n", "e", "s", "w", "ne", "se", "sw", "nw"];
+    for (const d of dirs) {
+      for (const n of [0, 1]) put(`assets/sprites/humans/doll/walk_${d}_${n}.png`, frame(10 + n));
+      put(`assets/sprites/humans/doll/idle_${d}_0.png`, frame(10));
+    }
+    // Only two diagonals of the attack: a clip lists the facings it has frames for.
+    for (const d of ["s", "se", "nw"])
+      put(`assets/sprites/humans/doll/attack_${d}_0.png`, frame(12));
+    // Not a facing: a sprite of its own, never a frame of the doll.
+    put("assets/sprites/humans/doll/walk_nn_0.png", frame(10));
+    put("assets/sprites.yaml", "sprites: {}\n");
+    put("data/monsters/doll.yaml", "id: doll\nsprite: humans/doll\n");
+    const r = buildAtlas(root, { strict: true });
+    expect(errors(r)).toEqual([]);
+    // The straight facings first, then the diagonals: the order the client indexes them in.
+    expect(r.atlas?.index.anims["humans/doll"]?.actions).toEqual({
+      idle: { frames: 1, ms: 500, dirs },
+      walk: { frames: 2, ms: 0, perTile: 1, dirs },
+      attack: { frames: 1, ms: 60, dirs: ["s", "se", "nw"] },
+    });
+    const page = r.atlas?.pages[0]?.json.frames;
+    for (const d of ["ne", "se", "sw", "nw"]) {
+      expect(page?.[`humans/doll/walk_${d}_1`], d).toBeDefined();
+      expect(page?.[`humans/doll/idle_${d}_0`], d).toBeDefined();
+    }
+  });
+
   it("packs paper-doll frames cropped (trim) and sets the walk's frames per tile (per_tile, per_tile_ns)", () => {
     // A 64x64 layer whose frames hold a 4x6 mark: packed as 4x6, placed as 64x64.
     const frame = (x: number): Buffer => {

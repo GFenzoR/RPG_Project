@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { readBorders } from "@rpg/map-format";
 import { borderItems } from "@rpg/map-format/ops";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
+import { parseAmbience } from "@rpg/living-world/ambience";
 import { parseLivingWorldData } from "@rpg/living-world/data";
 import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
@@ -39,7 +40,6 @@ import type {
   NewsPost,
   OutfitDef,
   SiteContent,
-  LoopRules,
   MusicFades,
   MusicRules,
   QuestMusic,
@@ -96,13 +96,16 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 
 const readYaml = (file: string): unknown => parse(readFileSync(file, "utf8")) as unknown;
 
-/** data/livingworld/surfaces.yaml and plants.yaml as the living world uses them. */
+/** data/livingworld/surfaces.yaml, plants.yaml, ambience.yaml and daynight.yaml as the living world uses them. */
 function loadLivingWorld(root: string): LivingWorldData {
   const read = (name: string): unknown => {
     const file = join(root, "data", "livingworld", name);
     return existsSync(file) ? readYaml(file) : undefined;
   };
-  return parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml"));
+  return {
+    ...parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml"), read("daynight.yaml")),
+    ambience: parseAmbience(read("ambience.yaml")),
+  };
 }
 
 /** Builds the content module from data/ and i18n/ under root. Throws on unreadable data. */
@@ -178,7 +181,6 @@ export function loadClientContent(root: string): ClientContent {
   // The attributes' card lines live in items.yaml (attribute.*): the client takes them too.
   for (const a of Object.values(attributes)) descKeys.add(a.text);
   const balance = readYaml(join(root, "data", "balance.yaml"));
-  const mv = isObj(balance) && isObj(balance["movement"]) ? balance["movement"] : {};
   const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
   const chat = isObj(balance) && isObj(balance["chat"]) ? balance["chat"] : {};
   const guild = isObj(balance) && isObj(balance["guild"]) ? balance["guild"] : {};
@@ -236,6 +238,16 @@ export function loadClientContent(root: string): ClientContent {
   const vocations = Array.isArray(vocs)
     ? vocs.flatMap((v) => (isObj(v) && typeof v["id"] === "string" ? [v["id"]] : []))
     : [];
+  // The start_kit of each vocation (docs/02 "Equipo inicial"), for the creation screen.
+  const startKits: Record<string, { item: string; count: number }[]> = {};
+  for (const v of Array.isArray(vocs) ? vocs : []) {
+    if (!isObj(v) || typeof v["id"] !== "string" || !Array.isArray(v["start_kit"])) continue;
+    startKits[v["id"]] = v["start_kit"].flatMap((e) =>
+      isObj(e) && typeof e["item"] === "string"
+        ? [{ item: e["item"], count: num(e["count"], 1) }]
+        : [],
+    );
+  }
   let rawSpells: unknown;
   try {
     rawSpells = readYaml(join(root, "data", "spells.yaml"));
@@ -315,14 +327,11 @@ export function loadClientContent(root: string): ClientContent {
     ...(lookOptions ? { lookOptions } : {}),
     cosmetics: loadCosmetics(root),
     vocations,
+    startKits,
     spells,
     recipes,
     ...(forge ? { forge } : {}),
-    movement: {
-      baseStepMs: num(mv["base_step_ms"], 1000),
-      diagonalCost: num(mv["diagonal_cost"], 1.5),
-      maxPathTiles: num(mv["max_path_tiles"], 100),
-    },
+    movement: loadMovement(balance),
     chat: { maxLength: num(chat["max_length"], 255) },
     experience: {
       a: num(curve["a"], 0),
@@ -469,6 +478,21 @@ export function cardFields(raw: Record<string, unknown>): Partial<ItemDef> {
  * attributes; a file that does not parse fails the build (a card without its lines would
  * go unnoticed).
  */
+/**
+ * balance.yaml `movement` as the client predicts with it. The schema requires every field;
+ * a missing one falls back to the server's default (world.DefaultDiagonalCost: a diagonal
+ * costs √2, docs/02 "Movimiento").
+ */
+export function loadMovement(balance: unknown): ClientContent["movement"] {
+  const mv = isObj(balance) && isObj(balance["movement"]) ? balance["movement"] : {};
+  const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
+  return {
+    baseStepMs: num(mv["base_step_ms"], 1000),
+    diagonalCost: num(mv["diagonal_cost"], 1.414),
+    maxPathTiles: num(mv["max_path_tiles"], 100),
+  };
+}
+
 export function loadAttributes(root: string): Record<string, AttributeDef> {
   const file = join(root, "data", "attributes.yaml");
   if (!existsSync(file)) return {};
@@ -784,15 +808,6 @@ const stringMap = (v: unknown): Record<string, string> => {
   return out;
 };
 
-const loopRules = (v: unknown): LoopRules => {
-  const l = isObj(v) ? v : {};
-  return {
-    fadeMs: typeof l["fade_ms"] === "number" ? l["fade_ms"] : 2000,
-    islands: stringMap(l["islands"]),
-    underground: typeof l["underground"] === "string" ? l["underground"] : undefined,
-  };
-};
-
 /** The music's timings when sounds.yaml says nothing (audio/director.ts). */
 export const MUSIC_DEFAULTS = {
   fades: { zone: 5000, bossIn: 1500, bossOut: 6000, title: 3000, next: 4000 },
@@ -884,7 +899,7 @@ export function loadSounds(root: string): SoundManifest {
       );
       if (ids.length > 0) events[ev] = ids;
     }
-  return { sounds, events, music: musicRules(m["music"]), ambient: loopRules(m["ambient"]) };
+  return { sounds, events, music: musicRules(m["music"]) };
 }
 
 /**

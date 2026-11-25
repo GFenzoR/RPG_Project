@@ -148,10 +148,13 @@ func TestQuestDropAgainAfterLosingIt(t *testing.T) {
 }
 
 // The leash and the quest drop: a warden that gives up its fight (its target left its
-// leash area and its reach, docs/02 "Correa") forgets who hurt it, so the seal goes only
-// to whoever hurts it after that. Here the runner hits it, draws it to the east wall of
-// the forge and steps out of its leash in its sight; a second player kills it later.
-func TestQuestDropForgottenWhenTheWardenGivesUp(t *testing.T) {
+// leash area and its reach, docs/02 "Correa") keeps its wounds and, for
+// combat.monster_pursuit.memory_ms, the damage of who fought it: nobody takes the kill of a
+// warden someone else wore down by finishing it after it gave up. Here the runner fights
+// it, draws it to the east wall of the forge and steps out of its leash in its sight; a
+// second player kills it right after: both get their seal. (Past the memory, or once it
+// regenerated to full, the runner is forgotten: TestPursuitGiveUpKeepsTheDamageShares.)
+func TestQuestDropRememberedWhenTheWardenGivesUp(t *testing.T) {
 	h := chapterThreeHarness(t)
 	join := func(id int64, name string, at world.Pos) *session.Player {
 		c := session.Character{ID: id, AccountID: id, Name: name, Vocation: "guardian", Level: 44, Health: 1000, Mana: 100}
@@ -182,16 +185,20 @@ func TestQuestDropForgottenWhenTheWardenGivesUp(t *testing.T) {
 	h.sim.RunUntil(func() bool {
 		return warden.TargetID() == runner.ID() && chebyshev(warden.Pos(), runner.Pos()) == 1
 	}, sim.MaxSeconds(10))
+	// One attack round of the warden on the runner: the fight is answered, so the wound
+	// stays when it gives up (one it never got to answer would close, giveUp).
+	h.sim.RunTicks(45)
 	if warden.DamageShareForTest(runner.ID()) != 10 {
 		t.Fatalf("the warden remembers %d damage from the runner, want 10", warden.DamageShareForTest(runner.ID()))
 	}
 	// Out of the leash (9 from the center), out of its reach (spell range 4) and in its
-	// sight (the warden stands at x 32 or more): it gives up, heals and forgets.
+	// sight (the warden stands at x 32 or more): it gives up, keeping its wounds and the
+	// runner's damage (it fought the runner back; memory_ms is 3 minutes in data/).
 	h.sim.Command(gameFunc(func() { h.w.Teleport(runner, pos(39, 44)) }))
 	h.sim.Step()
 	h.sim.RunUntil(func() bool { return warden.TargetID() == 0 }, sim.MaxSeconds(5))
-	if cur, full := warden.Health(); cur != full || warden.DamageShareForTest(runner.ID()) != 0 {
-		t.Fatalf("after giving up: health %d/%d, runner's damage %d (want full and 0)",
+	if cur, full := warden.Health(); cur != full-10 || warden.DamageShareForTest(runner.ID()) != 10 {
+		t.Fatalf("after giving up: health %d/%d, runner's damage %d (want 10 short of full and 10)",
 			cur, full, warden.DamageShareForTest(runner.ID()))
 	}
 	// Far from the forge (no respawn under anyone's eyes is needed: the warden lives).
@@ -211,8 +218,8 @@ func TestQuestDropForgottenWhenTheWardenGivesUp(t *testing.T) {
 	if n := h.w.CountItem(killer, "forge_seal"); n != 1 {
 		t.Errorf("the killer got %d seals, want 1", n)
 	}
-	if n := h.w.CountItem(runner, "forge_seal"); n != 0 {
-		t.Errorf("the runner, forgotten when the warden gave up, got %d seals", n)
+	if n := h.w.CountItem(runner, "forge_seal"); n != 1 {
+		t.Errorf("the runner, whose damage the warden still remembers, got %d seals, want 1", n)
 	}
 }
 
@@ -220,7 +227,7 @@ func TestQuestDropForgottenWhenTheWardenGivesUp(t *testing.T) {
 // leash area and its reach, the warden turns to another player who fights it from inside
 // instead of giving up. It keeps its wounds and who hurt it, so nobody can reset the
 // group's fight (or take its seals and experience) by stepping out; it gives up only with
-// nobody left inside (TestQuestDropForgottenWhenTheWardenGivesUp).
+// nobody left inside (TestQuestDropRememberedWhenTheWardenGivesUp).
 func TestQuestDropKeptWhenTheHolderStepsOut(t *testing.T) {
 	h := chapterThreeHarness(t)
 	join := func(id int64, name string, at world.Pos) *session.Player {

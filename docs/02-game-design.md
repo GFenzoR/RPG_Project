@@ -36,6 +36,26 @@ Todos los números de este documento son **valores iniciales** que viven en
     explica que se entra con el proveedor que ya usa y se vincula desde "Mi cuenta".
   - La app de escritorio no ofrece OAuth (necesitaría abrir el navegador del sistema y
     volver por deep link o loopback; pendiente): muestra que se haga en el sitio.
+- **Pantalla de personajes (pedido del dueño del 2026-11-23, `client/src/ui/App.tsx`
+  `Characters`, reglas puras en `client/src/state/characters.ts`):**
+  - Una cuenta **sin personajes** entra directo al formulario de creación (sin lista
+    vacía) y el formulario no tiene "Volver".
+  - Una cuenta **con personajes** ve primero su lista: nombre, vocación, nivel, la figura
+    del aspecto guardado (si lo tiene; los creados por la API sin `look` no muestran
+    figura hasta que el juego les elige uno) y "Jugar" en cada uno, más "Crear personaje
+    nuevo", que abre el formulario. Con el máximo de personajes por cuenta
+    (`max_characters` de `GET /api/characters`, docs/05) ese botón queda deshabilitado
+    con el motivo ("Tienes el máximo de N personajes por cuenta").
+  - El formulario tiene "Volver" a la lista, y muestra de cada vocación su estilo en una
+    línea (`vocation.<id>.desc`) y su equipo inicial ("Empieza con: …": cada pieza del
+    `start_kit` por su nombre, tal como está en los datos; "Equipo inicial").
+  - **Después de crear** se vuelve a la lista con el personaje nuevo marcado (no se entra
+    al juego): era lo que ya hacía la pantalla (crear agregaba a la lista) y deja elegir
+    con calma; un click en "Jugar" entra.
+  - "Cuenta y seguridad" (lote 17) sigue en la pantalla de la lista, y también bajo el
+    formulario del primer personaje: una cuenta sin personajes no tiene lista a la que
+    volver y debe poder cambiar su contraseña o cerrar sus sesiones. El formulario que se
+    abre desde la lista no lo muestra.
 
 ## Controles del mouse (docs/17 UI-6)
 Desde A4 el click derecho sobre un **objeto** abre su menú con la ficha (tipo, stats,
@@ -59,7 +79,11 @@ estación, una puerta, un tablero), en el modo de menú es la acción por defect
 el doble click o Ctrl+click derecho.
 
 ## Movimiento
-- Por casillas, 8 direcciones (diagonal más lenta: ×1.5 de costo como en Tibia clásico).
+- Por casillas, 8 direcciones. Un paso en diagonal cuesta ×√2 (`diagonal_cost: 1.414`):
+  recorre √2 casillas en √2 veces el tiempo, así la velocidad en pantalla y el ritmo de
+  los pasos son los mismos en las 8 direcciones (pedido del dueño, 2026-11-23; antes era
+  ×1.5 como en Tibia clásico y la diagonal se sentía más lenta). El A* del servidor y del
+  cliente pesan la diagonal igual. Redondeo a ticks en `05-network-protocol.md` "Caminar".
 - Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
   nivel y con condiciones (haste, paralyze; ver "Condiciones" en Combate).
 - **Click para caminar** (máx. 100 casillas): el cliente arma el camino con A* sobre las
@@ -93,7 +117,7 @@ el doble click o Ctrl+click derecho.
   cambia: cada paso dura lo que dice la fórmula de arriba y el servidor valida cada paso
   y su ritmo. Soltar la tecla en los últimos 50 ms de un paso todavía da el siguiente.
   - Dos flechas perpendiculares a la vez caminan en diagonal (arriba + derecha = noreste,
-    con su costo de ×1.5); si la diagonal está bloqueada, se camina por su mitad
+    con su costo de ×√2); si la diagonal está bloqueada, se camina por su mitad
     horizontal o vertical libre (se "desliza" junto a un muro).
   - **Girar sin caminar** (docs/17 MOV-2): quieto, una tecla (o el pad) hacia otro lado
     gira al personaje en el acto y camina solo si sigue apretada 80 ms: un toque corto
@@ -264,6 +288,35 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
   de su radio. Es reversible en una línea (`watched` con `eachObserver`) si el dueño
   prefiere que nada aparezca a la vista.
 
+## Minimapa (pedido del dueño del 2026-11-23)
+"Un minimapa como el de Tibia: hay que explorar para verlo, muestra los puntos cardinales y,
+si tenemos un objetivo activo, una estimación de dónde está."
+- **Explorar:** una casilla queda explorada cuando entra en la vista del jugador (la ventana
+  de 31x21 de "La vista", solo el piso propio) al caminar, al cambiar de piso o al entrar.
+  Lo explorado no se olvida nunca y es del **personaje**, no del dispositivo: lo guarda el
+  servidor (docs/05 "Minimapa", docs/07 "Minimapa"). Lo no explorado es **negro**.
+- **Qué muestra:** una o más casillas por píxel (cuatro niveles de zoom), cada casilla
+  explorada del color de lo que tiene: lo de más arriba que bloquea el paso (muro, árbol,
+  roca) o si no su suelo. El color es el promedio del sprite de ese item en el atlas
+  (`make sprites`, docs/17 "Minimapa"). Solo el piso propio. El jugador va al centro con una
+  marca que apunta hacia donde mira; los miembros del grupo a la vista son puntos. N, E, S y
+  O (W en inglés) en los lados del marco: el norte siempre arriba.
+- **Moverse por el minimapa:** arrastrarlo lo corre; "volver a centrar" lo devuelve al
+  jugador. Se pliega a su barra (en los teléfonos empieza plegado).
+- **Objetivo seguido:** el diario de misiones tiene "Seguir en el mapa" en cada quest en
+  curso (una a la vez). El minimapa muestra una **estimación**, nunca la casilla: un círculo
+  alrededor de un punto cercano al lugar del paso actual, que lo contiene entero. Si el
+  círculo queda fuera del minimapa, una flecha en el borde apunta hacia él con la distancia
+  aproximada (de a 5 casillas hasta 50, después de a 10); si está en otro piso, ▲ (arriba) o
+  ▼ (abajo). El lugar es el NPC con quien hablar, el spawn más cercano del monstruo que hay
+  que cazar (se vuelve a elegir al cambiar de piso, teletransportarse, viajar en barco o
+  despertar en el templo; no al caminar), el lugar al que hay que llegar o las placas de un hito, o el `hint_area` del
+  paso (docs/06). Un paso que se cumple en cualquier lado (llevar un item, una marca) no
+  tiene círculo. La estimación no revela mapa: el círculo y la flecha se dibujan sobre lo
+  que haya, y lo no explorado sigue negro. Es la misma para el mismo personaje, paso y
+  lugar, así que pedirla muchas veces no la afina; cada spawn de un mismo monstruo se corre
+  distinto, así que conocer uno no ubica los demás.
+
 ## Vocaciones (nombres provisionales)
 | Vocación | ID en data/ | Equivale a | Rol | Skills principales |
 |---|---|---|---|---|
@@ -335,22 +388,103 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
     ~40 h), a la par de los magos (arcanista ~34 h, druida ~32 h) y del montaraz (~35 h);
     sin brebajes de maná tarda ~39 h (el oro de cada uno: "Economía", brebajes de maná).
 
+  - **Identidad de cada vocación (pedido del dueño del 2026-11-23, rama
+    `feat/vocation-identity`):** cada clase empieza con su equipo, entrena rápido lo suyo
+    y lento lo ajeno, y tiene poderes propios en todo el camino del 1 al 30.
+
+#### Equipo inicial
+`start_kit` de cada vocación en `data/vocations.yaml` (docs/06 "Vocación"). Se da **una sola
+vez**, en el primer login del personaje (el mismo momento que la mochila inicial:
+`session/startkit.go`): cada pieza en su slot si está libre y el personaje la puede usar
+(nivel, vocación, manos), el resto en la mochila y después en los bolsillos. Se guarda en el
+acto y queda en el log de economía como `start_kit`, que no cuenta como ganancia para el
+detector de atípicos (no es botín). Nunca se repite: ni al morir (no hay mochila gratis
+después de la muerte, "Bolsillos") ni al volver a entrar. Lo aseguran dos cosas: el
+personaje ya tiene posición guardada y, además, lleva la marca `start_kit` en su storage
+(como los cofres con `chest.<id>`), que se guarda junto con el kit; así una fila cuya
+posición no se pueda leer no vuelve a contar como personaje nuevo. Dos entradas del mismo
+apilable se juntan en una pila. El servidor se niega a arrancar con un kit que no podría
+entregar entero: más pilas sueltas que celdas en la mochila inicial más los bolsillos, o
+más peso (con la mochila) que la capacidad de esa vocación a nivel 1.
+
+| Vocación | Propio | Para todos |
+|---|---|---|
+| Guardián | alfanje oxidado (`rusty_cutlass`) y tapa de barril (`barrel_lid_shield`) | túnica remendada, pantalones de lona, botas alquitranadas, 5 galletas de barco y 1 cataplasma de algas |
+| Arcanista | varita de chispa (`spark_wand`) | ídem |
+| Montaraz | arco corto (`short_bow`) y 60 flechas (puestas en el slot de munición) | ídem |
+| Druida | vara de retoño (`sapling_staff`) | ídem |
+
+Todo son items que ya existían (banda 1 del catálogo). Como el arma de clase viene en el
+kit, la jefa del puerto ya no la da al aceptar `ch1_shipwreck`: da la galleta de siempre
+y, al montaraz, sus 20 monedas para flechas, como antes del kit. **Quien no lleva su arma
+de clase la recibe ahí** (`lacks_item` en `data/npcs/harbor_master.yaml`): un personaje
+creado antes de que existiera el kit ya tiene posición guardada y no lo recibe, y nadie
+debe empezar el capítulo desarmado. Vale una sola vez por personaje (la quest solo se
+acepta una vez), así que quien suelte o guarde el arma del kit antes de hablar consigue a
+lo sumo una segunda arma inicial (10 monedas de reventa); un arma refinada no cuenta
+como llevada (`spareable`). El escudo, la ropa y las flechas del kit no se reponen: el
+armero los vende.
+
+**Presupuesto de inicio.** Una cuenta tiene hasta 10 personajes y cada uno recibe su kit,
+así que todo lo que un personaje nuevo pueda convertir en monedas es oro que se fabrica
+creando personajes. Regla: un personaje nuevo, vendido entero, vale lo mismo que antes
+del kit, es decir la reventa de su arma de clase (10) más, en el montaraz, las 20 monedas
+para flechas, y una moneda por cada pieza sencilla. Por eso:
+- la jefa del puerto no da monedas por el arma que ya viene en el kit;
+- el armero paga una sola moneda por la tapa de barril, la túnica remendada, los
+  pantalones de lona y las botas alquitranadas (antes 8, 6, 3 y 3; `make validate` exige
+  que todo item que se consigue tenga comprador, así que no pueden quedar sin ninguno), y
+  nadie compra las flechas, las galletas ni la cataplasma;
+- `TestStartKitResaleBudget` (`server/internal/session/startkit_test.go`) suma, con los
+  datos reales, la reventa del kit y las monedas del accept de quien lleva su arma, y falla
+  si pasa de 14 en el guardián, 13 en el arcanista y el druida y 33 en el montaraz (antes
+  de este ajuste eran 60, 52, 72 y 52). Subir ese tope es una decisión del dueño: se
+  cambia el número del test junto con los datos.
+
+`make validate` revisa cada kit (que la vocación pueda usar cada pieza a
+nivel 1, sin items retirados, cantidades solo en apilables y dentro de su pila, nunca un
+arma de dos manos con escudo, que lo que no se lleva puesto entre en la mochila inicial
+más los bolsillos y que el kit con la mochila no pese más que la capacidad de la vocación
+a nivel 1; una segunda pieza para el mismo slot es un aviso).
+
+#### Entrenamiento por vocación
+Intentos para llevar una skill a 30 (el nivel mágico a 15) con los `skill_factors` de
+`data/vocations.yaml`, y cuántas veces los de la vocación que la entrena más rápido:
+
+| Skill | Guardián | Arcanista | Montaraz | Druida |
+|---|---|---|---|---|
+| Espada, hacha, maza (30) | **2 889 (1×)** | 11,7 M (4 041×) | 13 662 (4,7×) | 11,7 M (4 041×) |
+| Escudo (30) | **5 457 (1×)** | 990 mil (181×) | **6 124 (1,1×)** | 990 mil (181×) |
+| Distancia (30) | 120 mil (55×) | 13,4 M (6 142×) | **2 176 (1×)** | 8,3 M (3 815×) |
+| Nivel mágico (15) | 2 520 M (50 511×) | **49 888 (1×)** | 845 mil (17×) | **49 888 (1×)** |
+
+Un arcanista entrena la espada miles de veces más lento que un guardián; el montaraz, como
+híbrido, unas 4-5 veces. La auditoría del 2026-11-23 no cambió ningún número: las
+diferencias ya eran claras. Las fija `packages/content-schema/src/vocations-balance.test.ts`
+("each vocation trains its own skills, the others slowly"): cada vocación entrena lo suyo
+lo más rápido (el escudo del montaraz, hasta 1,2 veces el del guardián) y las demás
+necesitan al menos 15 veces más intentos (el montaraz en cuerpo a cuerpo, al menos 3).
+
 #### Hechizos por vocación
 Nivel / nivel mágico / maná. Las palabras son propias (nunca las de Tibia); los nombres van
-en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11.
+en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11; en _cursiva_, los de
+la identidad de vocación (2026-11-23).
 
 | Vocación | Hechizo | Palabras | Nivel / NM / maná | Qué hace |
 |---|---|---|---|---|
 | Todas | `swift_stride` | pede celeri | 8 / 0 / 30 | haste 25 s |
 | Todas | `purge_venom` | venenum pelle | 9 / 0 / 25 | cura el veneno |
+| Guardián | _`cleave`_ | lata caedes | 3 / 0 / 12 | físico, radio 1, escala con el arma: su primer golpe |
 | Guardián | **`iron_resolve`** | sanguis firmus | 12 / 0 / 30 | se cura ~7-9 % de su vida (sobre todo por nivel) |
 | Guardián | **`sweeping_blow`** | ferrum gyrus | 20 / 1 / 35 | físico, radio 1, escala con la skill del arma en la mano |
+| Guardián | _`sundering_blow`_ | gravis ictus | 26 / 1 / 40 | físico, radio 1, escala con el arma, entre los dos de al lado, cooldown 6 s |
 | Guardián | **`steel_whirl`** | turbo chalybis | 35 / 2 / 60 | el anterior más fuerte, cooldown 6 s |
 | Arcanista | `arc_bolt` | fulgur iacio | 1 / 0 / 10 | energía a 4 casillas, a veces electriza |
 | Arcanista | `conjure_arc_rune` | runa fulguris | 5 / 1 / 60 | conjura una runa de arco |
 | Arcanista | `light_heal` | vita lumen | 6 / 0 / 25 | cura |
 | Arcanista | `ember_ring` | ignis corona | 10 / 3 / 45 | fuego, radio 2, a veces quema |
 | Arcanista | `shroud` | umbra tegit | 14 / 4 / 110 | invisibilidad 40 s |
+| Arcanista | _`cinder_lance`_ | pyra iaculum | 18 / 9 / 30 | fuego a 4 casillas, a veces quema |
 | Arcanista | `tempest_ring` | tonitrus corona | 28 / 14 / 80 | energía, radio 2, a veces electriza |
 | Arcanista | **`storm_spear`** | fulmen telum | 40 / 26 / 90 | energía a 4 casillas, su golpe más fuerte |
 | Arcanista | **`dusk_maelstrom`** | vortex noctis | 48 / 30 / 160 | muerte, radio 3: el área más ancha |
@@ -367,6 +501,7 @@ en `i18n/*/spells.yaml`. En **negrita**, los de la progresión de 2026-11.
 | Montaraz | `ranger_mend` | cura silvae | 4 / 0 / 20 | cura |
 | Montaraz | `keen_eye` | oculus acer | 10 / 0 / 50 | +7 de distancia en combate |
 | Montaraz | `briar_arrow` | spina volans | 12 / 1 / 35 | tierra a 5 casillas, escala con distancia |
+| Montaraz | _`pinning_shot`_ | sagitta figit | 18 / 3 / 30 | físico a 5 casillas, escala con distancia, a veces frena (`slowed` 4 s) |
 | Montaraz | **`scatter_volley`** | imber sagittarum | 25 / 5 / 40 | físico, radio 2, escala con distancia |
 | Montaraz | **`heartwood_shot`** | sagitta gravis | 40 / 9 / 70 | físico a 5 casillas, su golpe más fuerte, cooldown 6 s |
 
@@ -376,6 +511,20 @@ más fuerte en cada franja de la carrera del 12 al 49, con lo que cada vocación
 lanzar ahí; el arcanista tiene el área más ancha, el montaraz el alcance más largo, los
 golpes del guardián escalan con su arma, todo cabe en las 12 teclas de la hotbar) los fija
 `packages/content-schema/src/vocations-balance.test.ts`.
+
+**Poderes propios en cada franja (2026-11-23):** cada vocación aprende al menos un hechizo
+solo suyo en cada franja de niveles 1-7, 8-15, 16-23 y 24-30, y los compartidos son solo dos
+básicos de apoyo (haste y la cura del veneno, sin daño ni cura, antes del nivel 10). Antes
+el guardián no tenía nada propio hasta el 12 ni entre el 21 y el 34, y el arcanista y el
+montaraz nada entre el 15 y el 27 y entre el 13 y el 24: `cleave` (3) y `sundering_blow` (26)
+del guardián, `cinder_lance` (18) del arcanista y `pinning_shot` (18) del montaraz los llenan.
+Efecto y sonido salen de su elemento (docs/05, `assets/sounds.yaml`), como los demás. Con
+ellos la carrera simulada sigue en las bandas de ritmo (el guardián va del 1 al 50 en
+~32 h, antes ~35; los demás entre 0,5 y 1,5 veces su tiempo por franja) y cada uno se lanza
+en las cazas de sus primeros niveles. Las franjas las fija un solo test, "every
+vocation learns a spell of its own in each band" (`vocations-balance.test.ts`), y que cada
+hechizo se lance, `TestVocationCareers` (`server/internal/sim/balance_vocations_test.go`); el tope de hechizos propios subió de 8 a
+10 (con los dos compartidos, todos siguen entrando en las 12 teclas de la hotbar).
 
 ## Experiencia y nivel
 - Experiencia por matar monstruos (repartida según daño; un grupo puede compartirla, ver
@@ -668,6 +817,119 @@ umbrales en `01-architecture.md`, "Detección de bots"):
     de cura (antídoto); que un jugador vea invisibles.
 - Zonas de protección: no se puede atacar ni ser atacado. El PvP está en "PvP (T5.2)".
 
+## Unidades (pedido del dueño, 2026-11-23)
+Todo lo que el jugador lee está en el sistema métrico. Nada de onzas, libras, pies ni
+millas (el "oz" del inventario era una herencia).
+
+- **Distancia: 1 casilla = 1 metro.** Un alcance (`weapon.range`, el de un hechizo) es de
+  metros: la ficha de un arma a distancia dice "Alcance: 5 m" (`client.unit.m`,
+  `formatLength`). Un área de casillas es de metros cuadrados: una casa de 32 casillas
+  mide 32 m² (`house.look_free`, `client.house.facts`, la tabla de `/houses` del sitio;
+  `formatArea`). En la lore vale hablar en pasos ("a dos pasos"), nunca en pies.
+- **Peso:** los datos están en gramos (`weight` de `data/items`, por unidad; la capacidad de
+  `data/vocations.yaml`; `PlayerStats.capacity` y el parámetro `weight` de los mensajes
+  `look.*`). La UI escribe g por debajo de 1 kg ("350 g", redondeado al gramo) y kg desde
+  ahí, con hasta dos decimales y sin ceros de más ("3 kg", "3,25 kg", "12,4 kg"), con el
+  separador decimal y la agrupación del idioma (`Intl.NumberFormat`: coma en español).
+  Un peso que redondea a 1000 g ya se escribe "1 kg". Es `formatMass` de
+  `client/src/state/units.ts` (puro, con tests); los símbolos son textos
+  (`client.unit.g`, `client.unit.kg`, `client.unit.m`, `client.unit.m2`).
+- **Velocidad:** queda interna (puntos de `speed`, docs/02 "Movimiento"); ningún texto
+  muestra una velocidad. El atributo `speed` dice "+N de velocidad", un bono de puntos,
+  no una velocidad: si algún día se muestra una velocidad, va en m/s.
+- **Temperatura**, si un texto la nombra: °C.
+- `packages/content-schema/src/metric-units.test.ts` falla si un catálogo de `i18n/`
+  (es o en) nombra una unidad imperial; deja pasar, texto por texto, las palabras que ahí
+  no son unidades (el slot "pies"/"feet", "al pie de la escalera", "set foot", "Yard").
+
+### Cargas realistas
+Con el sistema métrico se reescalaron los números (decisión del dueño): un personaje que
+empieza ya no carga 420 kg.
+
+| Vocación | Nivel 1 | Por nivel | Nivel 10 | Nivel 30 | Nivel 75 |
+|---|---|---|---|---|---|
+| Guardián | 45 kg | +1 kg | 54 kg | 74 kg | 119 kg |
+| Montaraz | 42 kg | +0,8 kg | 49,2 kg | 65,2 kg | 101,2 kg |
+| Druida | 41 kg | +0,7 kg | 47,3 kg | 61,3 kg | 92,8 kg |
+| Arcanista | 40 kg | +0,7 kg | 46,3 kg | 60,3 kg | 91,8 kg |
+
+La capacidad sale de la vocación y el nivel (`content.Vocation.AtLevel`): no se guarda por
+personaje, así que los personajes que ya existen no necesitan migración.
+
+Pesos de referencia (`data/items`, cada item auditado; el equipo del catálogo sigue la
+fórmula por banda de "Catálogo de equipo"): espadas 1–1,5 kg, hachas 0,9–2,15 kg, mazas
+0,7–2,45 kg, arcos 0,7–1,2 kg, ballestas de mano 3–3,75 kg, varitas 300–400 g, varas
+1,5–2 kg; escudos 3–6 kg; torsos pesados 4 kg (cuero de ciervo), 9 kg (coraza de acero de
+ascua), 14 kg (cota de escamas de dragoncillo) y 19 kg (coraza de acero de marea), túnicas
+1,4–1,9 kg; cabeza 200 g (gorro) a 2,6 kg (yelmo), piernas 0,7–4,45 kg, pies 1–2,5 kg;
+amuletos 60 g, anillos 15 g; mochila 1 kg; brebajes 300–350 g; runa 50 g; flecha 25 g, virote 35 g; moneda de cobre 3 g, de plata
+5 g, de oro 8 g; comida en gramos (galleta 100 g, pescado 300–400 g, carne 400–500 g,
+guiso 600 g); materiales pesados: troncos 2,5–3,5 kg, mineral de hierro 900 g y de ascua
+1,3 kg, lingote 1 kg, piel de lobo 1,2 kg y de sabueso 1,5 kg, cornamenta 1,5 kg, cofre
+sellado 2,5 kg, núcleo de escoria 4 kg; la piedra suelta de la minería es
+un trozo de mano de 500 g (así minar no llena la capacidad en unos golpes).
+
+**Una cacería entra en la mochila.** `TestHuntLootFits` (`server/internal/sim`) arma a cada
+vocación cada cinco niveles, del 1 al 50, con el kit de las simulaciones de balance
+(`kitFor`, `casterKit`, `crossbowKit`; desde el nivel 50, la armadura de la banda 5 con
+su cota de 14 kg, `wyrmArmor`, porque esos kits se quedan en la del nivel 30), la mochila, las herramientas que uno lleva siempre
+(soga y pala, 3,3 kg), una bolsa de monedas (100 de cobre y 10 de plata), provisiones (10
+galletas; 10 brebajes de vida el guardián, 20 de maná los magos, 5 y 5 más 100 flechas o
+virotes el montaraz) y le suma el botín esperado de **60 muertes** (unos 30 minutos a
+~30 s por muerte) de cada monstruo común de su nivel (objetivo entre nivel − 4 y nivel + 2,
+con todo lo que suelta, monedas incluidas), con un 15 % de margen por la suerte. El test
+falla también si un monstruo común no queda cubierto por ningún nivel. La tabla sale de
+`DEBUG_BALANCE=1 go test ./internal/sim -run TestHuntLootFits -v` (botín de la cacería
+**con** el 15 % de suerte, contra lo libre de la vocación más justa; al tocar pesos,
+capacidades o botín, regenerarla):
+
+| Nivel | Lo más pesado de cazar | Botín con suerte | Libre (el más justo) | Se llena tras |
+|---|---|---|---|---|
+| 1 | gaviota ladrona | 0,5 kg | 23,4 kg (druida) | miles de muertes |
+| 5 | lobo | 21,3 kg | 23,6 kg (druida) | 67 muertes |
+| 10 | ciervo de zarza | 22,9 kg | 27,1 kg (druida y montaraz) | 71 |
+| 10 | escarabajo de mena | 20,8 kg | 27,1 kg (druida y montaraz) | 78 |
+| 15 | minero ahogado | 23,5 kg | 24,8 kg (montaraz) | 63 |
+| 25 | reptante hueco | 30,8 kg | 32,8 kg (montaraz) | 64 |
+| 30 | sabueso de ceniza | 25,2 kg | 29,4 kg (montaraz) | 70 |
+| 50 | dragoncillo de ascua | 17,6 kg | 38,3 kg (montaraz) | 131 |
+
+El más justo desde el nivel 15 es el montaraz de ballesta (coraza, escudo, ballesta y 100
+virotes); antes, los magos, por sus 20 brebajes de maná (7 kg).
+
+**Los que sueltan material a kilos no entran** (`heavyHaul` en el test): el espinoso
+(troncos de olmo de 3,5 kg y corazón de espino), el minero de obsidiana (mineral de ascua, picos) y
+el gólem de escoria (mineral de ascua y núcleos de 4 kg). Nadie carga 60 muertes de eso:
+el cazador elige qué levanta o vuelve antes. El test les exige que entren al menos
+**15 muertes** (unos 8 minutos), y falla si alguno ya entra entero (para sacarlo de la
+lista). Es una decisión de balance pendiente del dueño (docs/14):
+
+| Nivel | Monstruo | Botín de 60 muertes con suerte | Se llena tras (el más justo) |
+|---|---|---|---|
+| 20 | espinoso | 100,3 kg | 17 muertes (montaraz) |
+| 35 | minero de obsidiana | 46,3 kg | 43 (montaraz; el guardián sí carga las 60) |
+| 40–45 | gólem de escoria | 112,5 kg | 20–22 (montaraz) |
+
+Para que entrara se tocó el botín: el escarabajo de mena suelta mineral de hierro con 20 %
+(antes 35 %), el jabalí carne con 35 % (antes 50 %) y el sabueso de ceniza su piel con
+18 % (antes 22 %); el cobre pesa 3 g (lo que más se junta: ~1900 monedas en una cacería
+de sabuesos). Y, al sumar las herramientas y cubrir todos los niveles (revisión del
+2026-11-24), los magos pasaron a 40 y 41 kg con +0,7 kg por nivel (antes 36 y 37 kg con
++0,6 y +0,65), el mineral de hierro a 900 g (antes 1,2 kg), la piel de lobo a 1,2 kg
+(antes 1,5 kg) y el cofre sellado a 2,5 kg (antes 4 kg). Llenarse sigue pasando en una
+cacería larga o minando, y es parte del juego: se vuelve al pueblo a vender.
+
+**Vender nunca tira las monedas por peso** (`shopSell`, `TestOverloadedSellerKeepsTheCoins`).
+Un personaje sobrecargado (uno que ya existía y cargaba más de lo que ahora puede) vende
+para salir: si lo que cobra pesa menos que lo que vende, las monedas van a sus bolsillos y
+su mochila aunque siga por encima de su capacidad. Si las monedas pesan más que lo vendido
+y no entran en su capacidad, la venta se rechaza entera (`shop.no_room`), como una compra
+que no cabe. Solo caen al suelo si no hay ni una celda libre (vender parte de una pila con
+todo lleno), como siempre. Las recompensas de quest y lo cobrado del mercado siguen la
+regla general: lo que no entra por peso cae a los pies del personaje (reservado para él
+solo hasta que se guarda), así que a un sobrecargado le conviene vender o soltar antes de
+entregar una quest.
+
 ## Items, equipo e inventario
 Implementado en T1.8 (`server/internal/session/inventory.go`):
 - **Instancias:** cada item es una instancia que vive en un solo lugar: en el suelo (sobre
@@ -695,7 +957,7 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
 - **Capacidad:** cada vocación tiene capacidad (gramos) por nivel; el peso es el de los
   items equipados con su contenido y el de lo que llevan los bolsillos (abajo)
   (`weight × cantidad`). Solo lo que entra al inventario desde afuera consume capacidad.
-  La UI muestra oz = gramos / 100.
+  La UI la muestra en kg y g (ver "Unidades"; los números, en "Cargas realistas").
 - **Alcance:** tomar, soltar, abrir o usar en el suelo exige el mismo piso y distancia
   ≤ `inventory.reach` (1); un contenedor del suelo se cierra al alejarse. Mirar alcanza
   todo lo visible. Los items fijos del mapa (`world.bin`) se pueden mirar pero no mover.
@@ -706,12 +968,14 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   y pasaría de ese tope se rechaza sin comerla ni gastar el cooldown ("Tienes el estómago lleno"); la
   que además cura se come siempre y su tiempo se recorta. Las runas (T1.9) y las
   herramientas (T1.12) se usan sobre una criatura o casilla con `UseItemOn`.
-- **Personaje nuevo:** empieza con `inventory.start_container` (una mochila vacía) en el
-  slot de mochila (el tutorial la abre) y con sus bolsillos vacíos. El kit de cada vocación
-  llega con los diálogos (T1.10): al aceptar el
-  capítulo 1, el capitán del puerto da un alfanje al guardián, una varita de chispa al
-  arcanista (auditoría de contenido m5; antes, monedas), un arco corto y monedas para
-  flechas al montaraz, y una vara de retoño al druida. El armero vende arcos, flechas y la
+- **Personaje nuevo:** empieza con `inventory.start_container` (una mochila) en el slot de
+  mochila (el tutorial la abre) y con el `start_kit` de su vocación ("Equipo inicial",
+  2026-11-23): el arma de clase, la ropa y, según la vocación, el escudo o las flechas ya
+  puestos, y las galletas y la cataplasma en la mochila; los bolsillos, vacíos. Al aceptar
+  el capítulo 1 la jefa del puerto da una galleta, 20 monedas para flechas al montaraz y
+  el arma de clase solo a quien no la lleve (antes del kit la daba siempre: T1.10 y la
+  auditoría de contenido m5; sin más monedas, "Equipo inicial", presupuesto de inicio). El
+  armero vende arcos, flechas y la
   ropa del kit inicial (para cualquier vocación: desde el lote 11 solo el torso pesado pide
   guardián o montaraz, "Catálogo de equipo"); el buzo vende las varitas, las varas y el
   brebaje de maná. En el Bosque las varas, las
@@ -731,6 +995,25 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   deja su cuerpo caído (`corpse` en `data/monsters`: la bestia de costado, el artrópodo
   panza arriba, el montón de escoria...); sin `corpse`, los restos por defecto
   (`creature_remains`, que es también el cuerpo de un jugador).
+- **Los restos dicen de quién son** (pedido del dueño del 2026-11-23): el contenedor sigue
+  siendo el de la familia (mismas reglas de botín, 10 lugares, no se apila ni se levanta),
+  pero el servidor lo marca con el monstruo que cayó (`ItemMods.remains_of`, docs/05
+  "Restos") y el cliente lo nombra y lo dibuja por él:
+  - **El nombre**, en todos lados (mirar con Mayús+click, el texto del cursor, el título
+    del menú del click derecho, la ficha, la ventana del botín y las líneas del log):
+    `client.item.remains_of`, "restos de {monster}" en español ("restos de lobo",
+    "restos de araña de musgo") y "{monster} remains" en inglés ("wolf remains").
+  - **El cuerpo**: cada monstruo tiene el suyo, `corpses/<id>`, hecho de su propio arte
+    (el último frame de su muerte; uno sin muerte, el sprite volcado de costado y
+    aplastado), más oscuro, del tamaño de la criatura y donde estaban sus pies
+    (`tools/spritegen/src/recipes/corpses.ts`, docs/17 "Cadáveres"). Un monstruo nuevo lo
+    tiene con `make spritegen`, en una sola pasada y sin item ni receta a mano; uno sin
+    arte del que sacarlo es un problema de `spritegen check`. El sprite de la familia queda
+    como respaldo (un atlas sin el cadáver).
+  - **El cuerpo de un jugador** dice de quién es (`ItemMods.body_of`, el nombre):
+    `client.item.body_of`, "cuerpo de {player}" / "body of {player}". Se dibuja todavía
+    con `creature_remains` (`CorpseItem`, `session/death.go` `playerCorpse`: huesos sobre
+    un cuero); el muñeco del jugador tendido es un pendiente (docs/14).
 
 ### Bolsillos (decisión del dueño, 2026-11-19)
 La prueba de Thimblewick del 2026-11-19 mostró que la muerte deja la mochila en el
@@ -875,10 +1158,12 @@ tabla, `catalog.test.ts` y este doc cambian juntos.
   elemento de la vocación (arcanista energía, druida hielo; las de las bandas 1 y 2
   conservan el suyo: chispa de energía, coral y madera de escarcha de hielo, retoño de
   tierra).
-- **Peso** (gramos, *i* = b − 1): espada 3000 + 150·i; hacha 4000 + 300·i; maza 3800 +
-  400·i; arco 2400 + 300·i; ballesta 3200 + 400·(b − 3); varita 1200 + 100·i; vara 1400 +
-  100·i; escudo 3500 + 600·i; torso pesado 8000 + 1000·(b − 3); túnica 2000 + 300·i; cabeza
-  800 + 400·i; piernas 1600 + 500·i; pies 1200 + 400·i; amuleto 300; anillo 100.
+- **Peso** (gramos reales, "Cargas realistas"; *i* = b − 1): espada 1000 + 100·i; hacha
+  900 + 250·i; maza 700 + 350·i; arco 700 + 100·i; ballesta 3000 + 250·(b − 3); varita
+  300 + 20·i; vara 1500 + 100·i; escudo 3000 + 600·i; torso pesado 4000 + 5000·(b − 3) (el
+  abrigo de cuero 4 kg, la coraza 9 kg, la cota de escamas 14 kg, la de placas 19 kg);
+  túnica 1400 + 100·i; cabeza 200 + 480·i; piernas 700 + 750·i; pies 1000 + 300·i; amuleto
+  60; anillo 15.
 - **Valor:** V de la banda por el factor de la línea (armas 1; ballesta 0,9; escudo 0,75;
   torso pesado 0,9; túnica 0,6; cabeza, piernas y pies 0,4; amuleto 0,8; anillo 0,6),
   redondeado a 5 debajo de 100, a 10 debajo de 1000, a 50 debajo de 5000 y a 100 arriba.
@@ -1334,18 +1619,23 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
 - **Correa** (`balance.yaml combat.monster_leash_tiles`, 6; 0 o sin la clave = sin correa,
   el comportamiento anterior). El **área de casa** de un monstruo es el radio de su spawn
   (distancia Chebyshev al centro); su **área de correa**, ese radio más
-  `monster_leash_tiles`. Con correa:
-  - Solo elige objetivos dentro de su área de correa, y nunca sale de ella persiguiendo ni
-    huyendo (si huyendo llega al borde, acorralado pelea, como siempre).
-  - Si su objetivo queda fuera del área de correa y fuera del alcance de sus ataques, lo
-    cambia por otro: el más cercano de los que lo hirieron y puede pelear (a la vista,
+  `monster_leash_tiles`. El área de correa es su **zona de confort**: adentro persigue
+  siempre; afuera decide si sigue (**Persecución**, abajo). Con correa:
+  - Solo elige objetivos dentro de su área de correa, y nunca sale de ella huyendo (si
+    huyendo llega al borde, acorralado pelea, como siempre) ni persiguiendo, salvo
+    mientras decidió seguir a su objetivo más allá (hasta su tope, abajo).
+  - Si su objetivo queda fuera del área de correa y fuera del alcance de sus ataques, y no
+    decide seguirlo (o pasó su tope), lo cambia por otro: el más cercano de los que lo hirieron y puede pelear (a la vista,
     dentro de su correa o a su alcance) o, si es agresivo y no hay ninguno, el que
     elegiría. Lo hace sin curarse ni olvidar quién lo hirió: que el que tenía el aggro
     salga del área no le quita la pelea, la experiencia ni el botín de quest al resto del
     grupo, ni sirve para sabotearlo (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si
-    no queda nadie lo suelta: recupera toda la vida, se le terminan las condiciones (una
-    quemadura no sigue sumando daño), olvida el daño recibido de todos (nadie cobra
-    experiencia por esa pelea) y vuelve caminando a casa. Un objetivo fuera del área pero
+    no queda nadie lo suelta (**se rinde**): **conserva su vida** (pedido del dueño del
+    2026-11-23: antes se curaba entero; solo se cierra en el acto el daño que nunca llegó
+    a responder, abajo), se le terminan las condiciones (una quemadura no sigue sumando
+    daño), **recuerda a quiénes lo hirieron y el daño de cada uno** durante `memory_ms`
+    (abajo; sin memoria lo olvida en el acto) y vuelve caminando a casa a su velocidad. Un
+    objetivo fuera del área pero
     a su alcance (un jugador pegado al borde, o a tiro de un ataque a distancia) se sigue
     peleando desde adentro.
   - Tampoco hay lugares seguros dentro del área. Mientras su objetivo está fuera de su
@@ -1364,7 +1654,7 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
       como inalcanzable (`TestLeashCreatureInTheWay`).
     Un objetivo dejado así cuenta como fuera de la correa para ese monstruo durante
     `combat.monster_shun_ms` (30 s), **solo en esa casilla** y fuera de su alcance: no lo
-    elige, cada golpe suyo lo hace soltarlo (y curarse si no queda nadie) y entrena como
+    elige, cada golpe suyo lo hace soltarlo (y cerrar esa herida si no queda nadie) y entrena como
     contra un objetivo que no responde (`TestLeashGivesUpATargetItCannotReach`). En otra
     casilla es un objetivo como cualquiera: si tampoco se llega, vuelve a costar los 2 s
     (`TestLeashShunsATile`); a los 30 s vence (`TestLeashShunExpires`). Cuando la
@@ -1372,13 +1662,23 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     a casa): no gasta en cada tick la cuota de búsquedas de los demás monstruos.
   - Sin objetivo (lo soltó, o el jugador murió, salió, entró a una zona de protección o se
     perdió de vista), si está fuera de su área de casa vuelve caminando hacia el centro del
-    spawn a su velocidad, en vez de deambular, hasta entrar en ella (sin curarse en ese
-    caso; si en el camino ve a alguien dentro de su correa, lo puede atacar). Da el paso
+    spawn a su velocidad, en vez de deambular, hasta entrar en ella (sin curarse, salvo el
+    daño sin responder cuando lo soltó o lo perdió; si en el camino ve a alguien dentro de su correa, lo puede atacar). Da el paso
     que más acerca; contra un muro o agua busca un rodeo (A*, con la cuota del tick) y lo
     sigue entero. Si no hay camino, espera ahí (`monster_path_retry_ms` entre búsquedas):
     nunca se teletransporta.
   - Un golpe desde fuera de la correa lo hace responder como siempre, pero enseguida
-    suelta a ese objetivo (por otro que lo pelee desde adentro, o se rinde y se cura); una
+    suelta a ese objetivo (por otro que lo pelee desde adentro, o se rinde y cierra esas
+    heridas). La regla es una sola (**daño sin responder**, `damageShare.unanswered`): el
+    daño que un jugador le hace desde fuera del alcance de sus ataques queda "sin
+    responder" hasta que el monstruo le tira una ronda de ataque a ese jugador (acierte o
+    no), o a otro mientras ese jugador está donde el monstruo puede ir (la pelea de un
+    grupo, abajo "Botín, experiencia y abusos"); si se rinde antes, ese daño se cura en el acto y sale de la parte de ese jugador.
+    Vale igual desde fuera de la correa o del tope, desde el otro lado del agua (aunque
+    cambie de casilla cada vez que el monstruo rechaza una, `TestPursuitUnreachableHopsDoNotWearItDown`)
+    o disparando desde adentro y saliendo cuando el monstruo llega
+    (`TestPursuitHitAndStepOutClosesTheWounds`); lo que regenera mientras tanto se descuenta
+    primero de ese daño (`TestPursuitRegenAndGiveUpDoNotHealTwice`). Una
     condición (quemadura, veneno) cuyo autor está
     fuera de la correa y de su alcance se termina en su siguiente golpe sin hacer daño (solo
     esa: si otro jugador lo está peleando adentro, la pelea sigue igual). No se puede matar
@@ -1390,6 +1690,149 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     devolvía: el sendero se llenaba de monstruos que mataban a quien pasaba. La correa los
     deja salir unas casillas por la abertura y los devuelve; vale para todo el mundo, no
     solo para la isla de pruebas.
+- **Persecución** (pedido del dueño del 2026-11-23: los monstruos deberían seguirte, o
+  decidir si te siguen; `server/internal/session/pursuit.go`, números en
+  `balance.yaml combat.monster_pursuit` y por monstruo en `pursuit`, docs/06 "Monstruo"):
+  - **Dentro de su zona de confort** (el área de correa) persigue siempre, como antes
+    (`TestPursuitChasesInsideTheComfortZone`).
+  - **Fuera de ella**, con su objetivo fuera de su alcance, tira cada `roll_ms` (3 s) si
+    sigue. La tirada usa el generador sembrado del loop (`ctx.Rand`, nunca `math/rand`
+    global): con la misma semilla la persecución es idéntica, tick a tick
+    (`TestPursuitGiveUpIsReproducible`). La probabilidad es
+    `persistence^(1 + e·(d − correa) / (tope − correa))`, con `d` la distancia (Chebyshev)
+    del objetivo al centro del spawn y `e` el `distance_exponent` del balance (2; con 0 la
+    distancia no cuenta): cerca del borde de la zona es casi su `persistence`,
+    en el tope su cubo (0,85 → 0,61; 0,5 → 0,125; 0,15 → 0,003), y con `persistence: 1`
+    no se rinde nunca antes del tope (`TestPursuitChance`,
+    `TestPursuitChanceBalanceNumbers`). Con su vida bajo
+    `give_up_below_hp_pct` no sigue (los cobardes se rinden; huir sigue siendo
+    `flee_at_health_pct`); con la vida de su objetivo bajo `insist_target_hp_pct` la
+    probabilidad sube `insist_boost` del camino hacia 1 (0,5: a mitad de camino; los
+    agresivos insisten con la presa herida, `TestPursuitInsistsOnAWeakTarget`). Una tirada
+    vale para **todo su spawn** (la manada) contra ese objetivo hasta la próxima: los lobos
+    de un cubil siguen o se vuelven juntos (`TestPursuitPackSharesOneRoll`). Si dos
+    jugadores tiran de la misma manada, hay una decisión **por objetivo**: los lobos que
+    siguen a uno deciden juntos, aparte de los que siguen al otro
+    (`TestPursuitPackDecidesPerTarget`). El cobarde es la excepción: uno bajo su
+    `give_up_below_hp_pct` se vuelve solo, sin tirar, y su rendición no es la decisión de
+    la manada (`TestPursuitCowardLeavesItsPack`). Un invocado sigue la
+    persecución de quien lo llamó (los del custodio se quedan en su forja con él). Una
+    persistencia de 0 o 1 no gasta tirada.
+  - **Tope duro** `max_chase_tiles` (Chebyshev desde el centro del spawn, nunca menos que
+    el área de correa, a lo sumo 40): nunca pasa de ahí aunque gane la tirada; un objetivo
+    más allá y fuera de su alcance se suelta (`TestPursuitHardCap`).
+  - **Se rinde seguro** cuando su objetivo pasa `lose_sight_ms` (4 s) fuera de su vista
+    (la ventana clásica de 15x11 + 1; mientras tanto lo sigue hacia donde está,
+    `TestPursuitLosesSight`; con 0 lo pierde en el acto, como antes), en cuanto entra a
+    una zona de protección (`TestPursuitProtectionZone`) y en cuanto cambia de piso (los
+    monstruos no usan portales, `TestPursuitFloorChange`). Un monstruo con objetivo
+    piensa aunque su sector se quede sin jugadores cerca (`World.strays`), así que
+    también se rinde si quien peleaba solo con él sube una escalera, toma un barco o se
+    teletransporta: no guarda la pelea dormido para seguirla cuando vuelva
+    (`TestPursuitFloorChangeAlone`). Quien está en otro piso está fuera de su alcance
+    aunque en planta quede dentro de la correa: una quemadura suya termina sin dañar
+    (`TestPursuitBurnFromAnotherFloorEnds`). Un invisible se pierde en el
+    acto, como siempre. Nunca entra a una zona de protección. **Perder a su objetivo es
+    rendirse** (segunda revisión): hace lo mismo que con uno que salió de su correa, o
+    sea pasa a otro jugador que lo esté peleando desde donde puede ir (también mientras
+    perseguía fuera de su zona, `TestPursuitRetargetsWhilePursuing`) o, si no hay, se
+    rinde, con todo lo de abajo: cierra el daño sin responder, terminan sus condiciones y
+    empieza su memoria.
+  - Al rendirse vuelve a casa caminando a su velocidad y **con la vida que tiene**
+    (`TestPursuitGiveUpKeepsHealth`; menos el daño sin responder, arriba). Recuerda a
+    quiénes lo hirieron, y el daño de cada uno, `combat.monster_pursuit.memory_ms` (3 min)
+    desde su último golpe: si vuelven a su zona de confort, en su siguiente mirada (cada
+    250 ms) los elige **antes que a nadie**, aun siendo pasivo
+    (`TestPursuitReaggroesARememberedAttacker`), y quien lo termine reparte la experiencia,
+    el botín y el drop de quest con ellos; pasada la memoria (o regenerado a vida llena)
+    los olvida a ellos y a su daño (`TestPursuitGiveUpKeepsTheDamageShares`). Una pelea
+    que terminó sin rendición (su objetivo murió o salió del juego) se olvida igual a los
+    `memory_ms` de quedar sin nadie a quien pelear (`TestPursuitLostFightIsForgotten`). La
+    memoria y el reparto van por id de criatura, que un jugador recibe de nuevo cada vez
+    que entra al mundo: quien sale y vuelve a entrar es un desconocido para el monstruo y
+    pierde su parte. Lo acota el bloqueo de logout en combate (nadie sale en medio de la
+    pelea para borrar el recuerdo); aceptado así.
+  - **Por tipo** (`data/monsters`): el lobo es persistente (0,85, tope 22, 6 s sin verte,
+    insiste bajo 40 %), el sabueso de ceniza (0,8, tope 20) y el murciélago (0,7, tope
+    18) también; el jabalí 0,6 e insiste bajo 35 %; los humanos 0,6 y se rinden bajo
+    30 %; la rata (0,4) y el ciervo (0,3) se rinden bajo 50 % y la gaviota (0,2) bajo
+    60 %; los lentos (salamandra, sapo, escarabajo, gólem, espinoso, cangrejo, minero
+    ahogado: 0,15, tope 12, 2 s sin verte) abandonan enseguida; el resto usa el valor por
+    defecto (0,5, tope 16); el custodio (jefe) no sale nunca de su forja (0, tope 0).
+- **Regeneración fuera de combate** (`balance.yaml combat.monster_regen`, por monstruo
+  `regen`): sin objetivo y `delay_ms` (10 s) después de su última pelea (el último tick en
+  que tuvo objetivo, o hizo o recibió daño: una pelea larga sin golpes, huyendo o sin
+  alcanzar a su objetivo, no le deja regeneración acumulada para cobrar al terminar,
+  `TestPursuitRegenStartsWhenTheFightEnds`), recupera `pct` % (1 %) de su vida
+  máxima cada `interval_ms` (5 s): una curación completa tarda unos 8
+  minutos, así que quien se va a curar y vuelve lo encuentra todavía herido. La fracción
+  de punto se acumula: una rata de 15 de vida recupera 1 punto cada 7 intervalos, no 1
+  por intervalo (`TestPursuitRegenCarriesTheFraction`). Se cuenta por
+  ticks: el tiempo que pasó sin pensar (nadie cerca) también suma, y lo recupera de golpe
+  la próxima vez que piensa (`TestPursuitRegeneration`). Quien lo ve recibe la barra de
+  vida nueva, sin número verde ni efecto de curación. **En combate (con objetivo) no
+  regenera**, salvo con un hechizo `heal_self`. Lo que recupera, regenerando o con
+  `heal_self`, sale primero del daño sin responder, así rendirse después no cierra dos
+  veces la misma herida (`TestPursuitRegenAndGiveUpDoNotHealTwice`,
+  `TestPursuitOwnHealAndGiveUpDoNotHealTwice`). Lo que regenera también sale del reparto
+  de daño que recuerda: las partes se recortan, en proporción, a las heridas que le
+  quedan, así quien lo hiere, lo deja regenerar y vuelve no acumula más parte que la vida
+  que le quitó (`TestPursuitRegenTakesFromTheShares`). Al volver a vida llena olvida el
+  daño de las peleas que recordaba. El ritmo es el de su propio tipo, también para un invocado
+  (la persecución de un invocado es la de quien lo llamó; cuánto sana su cuerpo, no). El
+  custodio regenera 0,5 % (unos 16 minutos).
+- **Errantes y respawn:** un monstruo fuera de su área de casa sigue contando como vivo
+  para su spawn (no reaparece otro). Para que vuelva siempre, uno fuera de casa piensa
+  aunque su sector no tenga jugadores cerca (`World.strays`): el que perseguía a alguien
+  que salió del juego o se alejó vuelve caminando (`TestPursuitIdleWalkHome`). Si sin
+  objetivo pasa `combat.monster_stray_ms` (5 min) sin llegar (no hay camino) y ningún
+  jugador lo tiene en pantalla (la ventana ancha de 31x21, no la clásica:
+  `TestPursuitStrayStaysWhileOnScreen`), vuelve a su spawn: desaparece (`DESPAWN`) y su
+  spawn lo repone como un respawn, sin experiencia ni botín
+  (`TestPursuitStuckStrayRespawns`). El tiempo que pasó fuera persiguiendo a alguien no
+  cuenta (`TestPursuitStrayFromItsFirstStepOut`). Nunca se teletransporta a la vista de
+  nadie.
+- **Botín, experiencia y abusos de la persecución:**
+  - La experiencia y el botín siguen las reglas de siempre: se reparten por el daño que
+    cada uno le hizo (y el aporte de grupo con su ventana `party.contribution_ms`).
+    Rendirse **conserva ese reparto** mientras dure `memory_ms` desde el último golpe de
+    cada uno (menos el daño sin responder, que se cura y no cuenta): así nadie le roba la
+    muerte a quien lo dejó herido y salió un paso de su zona, rematándolo cuando se rinde.
+    Pasada la memoria, o cuando regenera a vida llena, ese daño se olvida.
+  - **Arrastrar monstruos a otros spawns o a pueblos:** el tope duro (16 por defecto, 22
+    el lobo, desde el centro de su spawn) y la probabilidad que baja con la distancia lo
+    limitan; los pueblos son zona de protección, nunca entra en ellas, y un objetivo que
+    entra en una lo pierde en el acto. Un monstruo arrastrado no elige objetivos nuevos
+    fuera de su zona de confort (solo a los que lo hirieron, y a ellos solo dentro de
+    ella), así que no se suma a la pelea de otro spawn.
+  - **Granjear experiencia arrastrándolo a un lugar seguro, o matarlo sin riesgo:** el
+    daño hecho desde fuera del alcance de sus ataques que el monstruo no llegó a responder
+    se cura cuando se rinde: desde fuera de lo que
+    puede pisar, desde una casilla sin camino (durante la búsqueda y aunque el jugador
+    salte de casilla en casilla), o disparando desde adentro y saliendo de la correa o del
+    tope, entrando a una zona de protección o saliendo de su vista cuando llega (también
+    el custodio, atado a su forja). **Responder** es una ronda de ataque: sobre ese
+    jugador, o sobre otro mientras ese jugador está donde el monstruo puede ir (un
+    objetivo válido, dentro de su correa y no en una casilla rechazada). Así el arquero o
+    el mago de un grupo cuyo tanque sostiene al monstruo pelea de verdad aunque nunca
+    reciba una ronda: si el grupo se retira a curarse, el monstruo se rinde todavía herido
+    y el arquero conserva su parte (`TestPursuitGroupDamageIsAnswered`); el que le pega
+    desde fuera de la correa mientras otro lo sostiene, no. Las condiciones de un autor
+    fuera de su correa y de su alcance terminan sin dañar, y los golpes desde fuera de su correa o desde
+    una casilla rechazada entrenan como contra un objetivo que no responde
+    (`skills.afk.factor`). El único daño que queda al rendirse es el de una pelea en la que
+    respondió (`TestLeashGivesUpATargetItCannotReach`,
+    `TestPursuitUnreachableHopsDoNotWearItDown`, `TestPursuitHitAndStepOutClosesTheWounds`,
+    `TestPursuitShootAndHideClosesTheWounds`).
+    Consecuencia aceptada: quien lo hiere solo a distancia sin que nunca lo alcance y se
+    va, se esconde o entra a una zona de protección, lo encuentra curado de ese daño.
+  - **Estacionarlo en el borde de una zona de protección:** quien entra a la zona se
+    pierde en el acto, y perderlo es rendirse: el monstruo no espera en el borde, vuelve
+    caminando a casa (a los 10 s empieza a regenerar) y el daño que le hicieron de lejos
+    sin que llegara a responder se cierra, igual que al salir de su correa. Disparar desde
+    el borde y entrar cuando llega, una y otra vez, no lo desgasta
+    (`TestPursuitShootAndHideClosesTheWounds`). Quedarse afuera a pegarle es pelear: el
+    monstruo responde, ese daño queda y sigue las reglas de arriba.
 
 ## Muerte
 Valores iniciales (balance.yaml):
@@ -1440,7 +1883,8 @@ Valores iniciales (balance.yaml):
   (`session/death.go` `playerCorpse`; la ventana del cuerpo muestra todos sus lugares).
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
-- El cuerpo (`creature_remains`, contenedor) queda `corpse_ms` en el suelo con lo que cayó;
+- El cuerpo (`creature_remains`, contenedor, "cuerpo de <jugador>": `ItemMods.body_of`,
+  ver "Restos") queda `corpse_ms` en el suelo con lo que cayó;
   durante `corpse_owner_only_ms` solo el dueño puede sacar, usar o meter algo en él (otros
   pueden abrirlo y mirar), también tras una muerte por PvP. Con marca de asesino o
   proscrito se pierde más ("PvP", "Castigo").
@@ -1458,9 +1902,30 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   ventana que impide zarpar ("Viajes en barco"), la desconexión por inactividad y los
   chequeos de presencia.
 - **Salir del juego en combate** se rechaza con `combat.logout_locked` ("Estás en
-  combate: todavía no puedes salir del juego. Espera unos segundos lejos de la pelea.");
-  con el bloqueo PvP, con `pvp.logout_locked`, como antes. La conexión sigue y el jugador puede volver a
-  intentarlo cuando la pelea termine.
+  combate: podrás salir del juego en {seconds} s, lejos de la pelea. Si cierras el juego,
+  tu personaje se queda en el mundo hasta que termine."); con el bloqueo PvP, con
+  `pvp.logout_locked`. Los dos llevan `seconds`, lo que falta del bloqueo redondeado hacia
+  arriba. La conexión sigue y el jugador puede volver a intentarlo cuando la pelea termine.
+- **Se ve antes de chocar con él** (el dueño el 2026-11-23: "como en Tibia, no te puedes
+  desconectar durante una batalla"): el estado "En combate" de la bandeja ("Estados del
+  personaje") cuenta los segundos, y el botón "Salir del juego" (barra de herramientas y
+  menú del teléfono) se ve bloqueado mientras dure: gris, con los segundos encima y un
+  tooltip que dice por qué y qué pasa si se cierra el juego; un lector de pantalla oye lo
+  mismo en el nombre del botón (`client.game.logout_locked_label`, "Salir del juego (en
+  combate: 8 s)"). Un click igual manda el `Logout` (decide el servidor) y el rechazo
+  flota sobre el mapa. La cuenta del botón es la del cliente, desde lo último que supo
+  del servidor: puede quedar libre hasta 1 s antes de tiempo (docs/05 "Estados",
+  `statusSlack`), y un click en ese segundo se rechaza igual. Si el juego se cerró en
+  combate (pestaña, recarga, app de escritorio) o el servidor cortó la conexión en combate
+  por algo que no saca al personaje (red, cliente lento, cambio de contraseña, cerrar
+  sesión en todos lados), la siguiente lista de personajes lo dice una vez (una nota por
+  personaje en el `localStorage` del navegador, `client/src/state/stayed.ts`: solo en ese
+  navegador). La lista muestra solo las notas de los personajes de la cuenta que entró;
+  la pantalla de login no muestra ninguna, para que nadie lea el nombre sin autenticarse
+  en un navegador compartido. Mientras la nota tiene menos de 2 min (el tope de
+  link-dead) dice que al volver a entrar se retoma el personaje
+  (`client.characters.stayed_in_fight`); después, y hasta los 10 min, solo que quedó en
+  el mundo hasta que terminó la pelea (`client.characters.stayed_in_fight_earlier`).
 - **Cerrar la conexión en combate** (cerrar la pestaña o el juego, perder la red, un cliente
   lento que el servidor corta, un reseteo de contraseña) no saca al personaje: queda en el
   mundo sin conexión ("link-dead"). No actúa (suelta su objetivo, se para, lo que su
@@ -1488,6 +1953,23 @@ medio de una pelea no la evita. Código: `server/internal/session/linkdead.go`.
   hay dos en el mundo.
 - **Lo que saca en el acto igual:** una expulsión o un ban del staff, un guardado que falló
   (T5.3) y el apagado del servidor (que guarda a todos, también a los link-dead).
+- **Todas las salidas, una por una** (revisadas el 2026-11-24, tests en
+  `server/internal/session/combat_exit_test.go`, `linkdead_test.go`, `pvp_linkdead_test.go`
+  e `idle_test.go`):
+
+  | Salida en combate | Qué pasa |
+  |---|---|
+  | "Salir del juego" | rechazada (`combat.logout_locked` / `pvp.logout_locked` con los segundos) |
+  | Cerrar la pestaña o el navegador, recargar, cerrar la app de escritorio, perder la red | el servidor solo ve la conexión cerrada (`Leave`): link-dead hasta que termina la pelea |
+  | Cliente lento, flood de mensajes o mensaje inválido (el gateway corta) | igual: link-dead |
+  | Cambiar la contraseña, resetearla o "Cerrar sesión en todos lados" (lote 17) | son acciones de seguridad: cortan la conexión en el acto (y el login que iba en camino), pero el personaje queda link-dead hasta que termina la pelea: nunca son una salida de una pelea |
+  | Desconexión por inactividad, chequeo de presencia | nunca en combate: esperan a que termine |
+  | Volver a entrar | retoma al mismo personaje con su pelea (sigue bloqueado); nunca hay dos |
+  | Expulsión o ban del staff, guardado fallido, apagado | sacan en el acto (arriba) |
+
+- **Tope de personajes por cuenta:** un link-dead cuenta como en línea para el máximo de
+  personajes de una cuenta a la vez (lote 16, 2): no se puede dejar uno peleando sin
+  conexión y entrar con otros dos. Volver a entrar con el link-dead no es uno nuevo.
 - Una zona de protección **no** corta el bloqueo (tampoco el PvP): quien se refugia en un
   templo espera ahí a que venza, a salvo.
 
@@ -2269,9 +2751,11 @@ manda a buscarla a Ivernel. Tres quests encadenadas, todo en datos (`data/quests
    ("Monstruos"), si el que tiene el aggro sale de su área de correa y de su alcance, el
    custodio pasa a otro del grupo que lo pelee desde adentro sin curarse ni olvidar: el
    sello sigue siendo de todos los que lo hirieron
-   (`TestQuestDropKeptWhenTheHolderStepsOut`). Solo si no queda nadie suelta la pelea y
-   olvida quién lo hirió: el sello es para los que le hagan daño después
-   (`TestQuestDropForgottenWhenTheWardenGivesUp`).
+   (`TestQuestDropKeptWhenTheHolderStepsOut`). Si no queda nadie suelta la pelea, pero
+   recuerda el daño de quienes lo pelearon `memory_ms` (3 min; docs/02 "Persecución"): si
+   otro lo mata en ese plazo, el sello también es de ellos
+   (`TestQuestDropRememberedWhenTheWardenGivesUp`); pasada la memoria o regenerado a vida
+   llena, solo de los que le hagan daño después.
 - **Bestiario de Karvask** (nivel objetivo de `TestVolcanBalance`): sabueso de
   ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
   ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas que revientan sobre su objetivo y sus vecinos), gólem de
@@ -2645,13 +3129,31 @@ Números en `data/balance.yaml` (`chat`), nunca en código.
 ## Grupos (T3.3)
 Números en `data/balance.yaml` (`party`), nunca en código. Código:
 `server/internal/session/party.go`.
-- **Formar:** el líder (o un jugador sin grupo, que pasa a ser líder) invita a un jugador
-  que **ve** (lista de batalla, botón "+", o `/invite Nombre`). Invitar a alguien fuera de
-  vista o invisible responde igual que un nombre que no existe: el grupo no sirve para
-  buscar a nadie. Cada invitación cuenta para el anti-flood del chat y termina la invisibilidad del que
-  invita (el invitado recibe su nombre). El invitado acepta o
-  rechaza; la invitación vence a los `invite_ms` (45 s, por tick del loop). Hasta
-  `max_members` (6) miembros contando al líder.
+- **Formar:** el líder (o un jugador sin grupo, que pasa a ser líder) invita a otro
+  jugador de dos maneras:
+  - **A uno que ve:** lista de batalla, botón "+". Uno fuera de vista o invisible no se
+    encuentra (`party.player_not_seen`).
+  - **Por nombre, esté donde esté:** el botón **"Invitar"** de la ventana de grupo (pide el
+    nombre del personaje; Enter o "Invitar" lo manda, Escape o "Cancelar" lo cierra) o
+    `/invite Nombre`. El nombre tiene que ser exacto (sin importar mayúsculas) y el
+    personaje tiene que estar **en línea**: uno desconectado y uno que no existe reciben la
+    misma respuesta (`party.player_not_found`), así nadie averigua qué personajes existen.
+    Un invisible que el que invita no ve cuenta como desconectado (como en `/report`).
+    Invitarse a sí mismo → `party.invite_self`.
+  - **Anti-spam:** cada intento (por nombre o desde la lista, se encuentre o no) cuenta para
+    el anti-flood del chat y para `invites_per_minute` (6): hasta 6 seguidos y después uno
+    cada 10 s; pasado el límite no se manda nada y el jugador oye cuántos segundos esperar
+    (`party.invite_rate`). Así tampoco se puede probar una lista de nombres para saber
+    quién está conectado. El límite es de la **cuenta** y vive en el mundo: reloguear o
+    usar el otro personaje de la cuenta no da intentos nuevos.
+  - No hay lista de ignorados todavía: cuando exista, invitar a quien te ignora debería
+    responder como un nombre desconectado.
+
+  Invitar termina la invisibilidad del que invita (el invitado recibe su nombre). El
+  invitado recibe la misma ventana de aceptar o rechazar aunque esté lejos; la invitación
+  vence a los `invite_ms` (45 s, por tick del loop). Hasta `max_members` (6) miembros
+  contando al líder (`party.full`); el que ya está en un grupo no se puede invitar
+  (`party.already_in_party`) y solo el líder invita a su grupo (`party.not_leader`).
 - **Gestionar:** cualquiera puede salir; el líder expulsa, pasa el liderazgo y apaga (o
   vuelve a prender) la experiencia compartida. Pasar el liderazgo y prender o apagar cuentan para el
   anti-flood del chat (cada cambio se anuncia a todos). Un grupo que queda con un solo miembro se disuelve.
@@ -2915,9 +3417,14 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
   jugador. Se oye hasta 8 casillas (distancia de Chebyshev), con paneo estéreo según la
   diferencia en x. No se oyen los eventos de otro piso. Los sonidos propios (pasos,
   mensajes, UI) no son posicionales.
-- **Ambiente**: un loop por isla (`world/world.yaml`): olas en Puerto, bosque en Bosque y
-  el volcán en Karvask; bajo tierra no hay ambiente. Al cambiar de isla hay un
-  fundido cruzado (`ambient.fade_ms`).
+- **Ambiente** (lote 18, pedido del dueño del 2026-11-23; `livingworld/README.md`
+  "Ambiente"): ya no es un loop por isla. Bajo la música suena lo que hay alrededor del
+  jugador: olas cerca del mar, viento en la arena (y una brisa suave en el pasto), viento
+  en los árboles de un bosque, la lava, gotas en las cuevas y un murmullo donde hay puestos
+  y bancos; y, cerca de cada uno, el agua de una fuente o un pozo, el crepitar de un fogón
+  o un brasero, una antorcha o un farol y la fragua, paneados según de qué lado están. Las
+  capas entran y salen con fundidos lentos, sin cortes, y cada loop arranca en un punto
+  distinto. Usa el canal y el volumen de ambiente.
 - **Música: el director** (pedido del dueño, 2026-11-18; `client/src/audio/director.ts`,
   `sounds.yaml` `music`). Lo que oye el jugador:
   - **Cada lugar tiene una pool de temas enteros** (~3 minutos cada uno): Puerto alterna sus
@@ -3322,6 +3829,22 @@ jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.
 ### Pendiente
 Un ranking público de guerras. (Las marcas ya tienen sprites propios:
 `assets/sprites/ui/marks/`, dibujados por `client/src/render/marks.ts`.)
+
+## Día y noche (pedido del dueño del 2026-11-23)
+
+El mundo tiene un ciclo de **180 minutos reales de día y 60 de noche** (decisión del dueño);
+el amanecer y el atardecer son los primeros y los últimos 15 minutos del día. La luna
+cambia de fase cada día, de nueva a llena y vuelta en 8 días. La hora la lleva el servidor
+(la misma para todos; con la velocidad normal sigue la hora real entre reinicios) y la manda a cada cliente.
+
+**Por ahora es solo visual:** de noche la superficie se ve azul y más oscura (más clara y
+plateada con luna llena, más oscura con luna nueva, pero nunca tanto que cueste jugar),
+brillan las fogatas, antorchas, faroles y ventanas, salen las luciérnagas, y las sombras de
+los personajes siguen al sol (a la mañana hacia el oeste, al mediodía cortas bajo los pies,
+a la tarde hacia el este) y de noche a la luna, tenues. Ninguna regla (monstruos, daño,
+visión, tiendas) depende de la hora; las cuevas no cambian. Los números están en
+`data/livingworld/daynight.yaml` y el detalle en `livingworld/README.md` "Día y noche". El
+staff la cambia para probar con `/time` (docs/16).
 
 ## Mundo vivo (lote 17)
 

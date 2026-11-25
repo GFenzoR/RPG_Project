@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -143,9 +144,26 @@ func TestBotEntersAndWalks(t *testing.T) {
 			t.Fatal(err)
 		}
 		if c.HasPos && c.X == 10 && c.Y == 3 && c.Z == 7 {
-			// A character that never played got the starting backpack, saved with it.
-			if len(c.Inventory) != 1 || c.Inventory[0].Slot != 3 || c.Inventory[0].ItemID != int(items[balance.Inventory.StartContainer].Numeric) {
-				t.Fatalf("saved inventory %+v", c.Inventory)
+			// A character that never played got the starting backpack and its vocation's
+			// kit (docs/02 "Equipo inicial"), saved with it: the backpack in its slot, and
+			// every piece of the kit worn or inside the backpack, nothing else.
+			want := map[int]int{int(items[balance.Inventory.StartContainer].Numeric): 1}
+			for _, k := range vocations["guardian"].StartKit {
+				want[int(items[k.Item].Numeric)] += k.Units()
+			}
+			got := map[int]int{}
+			pack := false
+			for _, it := range c.Inventory {
+				got[it.ItemID] += it.Count
+				if it.Slot == 3 && it.ItemID == int(items[balance.Inventory.StartContainer].Numeric) {
+					pack = true
+				}
+				for _, in := range it.Items {
+					got[in.ItemID] += in.Count
+				}
+			}
+			if !pack || !reflect.DeepEqual(got, want) {
+				t.Fatalf("saved inventory %+v, want the backpack in slot 3 and the kit %v", c.Inventory, want)
 			}
 			break
 		}

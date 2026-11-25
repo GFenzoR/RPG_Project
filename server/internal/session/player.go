@@ -7,6 +7,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/antibot"
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/explore"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/quest"
@@ -127,6 +128,18 @@ type Player struct {
 	reachFloors   uint16
 	reachStale    bool
 	questLogDirty bool
+	// The minimap (minimap.go): what the character explored, when the next delta may go,
+	// the MinimapRequest budget, the tracked quest and the last ObjectiveHint sent (hintStale:
+	// recompute it at the flush; hintForce: send it even if unchanged, a TrackQuest answer).
+	explored         *explore.Map
+	minimapAt        game.Tick
+	minimapBudget    int
+	minimapBudgetAt  game.Tick
+	minimapBudgetRem int // twentieths of a sector the last refill left over
+	tracked          string
+	hintStale        bool
+	hintForce        bool
+	hintSent         hintKey
 	// milestoneMarks is the fingerprint of the met marks last sent in the quest log.
 	milestoneMarks uint64
 	// sigilMet is what it met of the milestone of the plate it stands on when last
@@ -418,6 +431,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		PvP:         w.pvpState(p),
 		Cosmetics:   p.cos,
 		Look:        p.look,
+		Explored:    p.explored.Snapshot(w.saveSeq),
 		Final:       final,
 	}
 }
@@ -468,6 +482,9 @@ func (w *World) Saved(characterID int64, seq uint64) game.Command {
 		}
 		w.confirmed(characterID, seq)
 		w.stashSaved(characterID, seq)
+		if p := w.byChar[characterID]; p != nil {
+			p.explored.Saved(seq) // its minimap sectors up to seq are written
+		}
 	})
 }
 
@@ -579,6 +596,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.PvP = s.PvP
 		c.Cosmetics = s.Cosmetics
 		c.Look = s.Look
+		c.ExploredUnsaved = s.Explored // the final save may not be written yet
 	}
 
 	stats := voc.AtLevel(c.Level)
@@ -610,7 +628,10 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	// character is saved at once with it (below), so a crash before its first autosave
 	// does not roll another at the next login.
 	rolled := slices.ContainsFunc(c.Inventory, w.needsRoll)
-	w.loadInventory(p, c.Inventory, !c.HasPos && !c.InventoryLoaded)
+	// A fresh start (the backpack and the start_kit) is for a character that never played:
+	// no position, and no mark of an earlier one (startKitKey).
+	fresh := !c.HasPos && !c.InventoryLoaded && c.Storage[startKitKey] == 0
+	kit := w.loadInventory(p, c.Inventory, fresh)
 	// After the equipment: its attributes may raise the maximums (attributes.go).
 	p.health = min(max(c.Health, 0), p.maxHealth)
 	if p.health == 0 {
@@ -618,6 +639,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	}
 	p.mana = min(max(c.Mana, 0), p.maxMana)
 	p.storage = quest.NewLog(c.Storage)
+	if fresh && len(c.Inventory) == 0 {
+		p.storage.Set(startKitKey, 1) // saved with the kit, or with the first position
+	}
 	w.loadPvP(ctx, p, c.PvP) // before anyone is told about p (Creature.skull)
 	if carry != nil {
 		w.carryFight(carry, p) // a link-dead character taken over keeps its fight and locks
@@ -637,6 +661,9 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	joined = true
 	stashRolled := w.stashJoin(p, c) // stash.go: the one in memory, or else the one this login read
 	w.index(p)
+	p.explored = loadExplored(c)
+	p.minimapBudget = minimapBudget
+	p.exploreView()
 
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		CreatureId:     p.id,
@@ -647,6 +674,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		ViewHeight:     ViewTilesH,
 		AttackEvents:   true, // CreatureAttack and CreatureDisappear.reason (attack.go)
 	}}})
+	w.dayNightJoin(ctx.Tick, p) // the sky before the first frame
 	// Saved conditions first (T3.2): the first stats, and what observers get, already
 	// carry their speed (and an invisible player is never shown).
 	w.loadConditions(ctx, p, c.Conditions)
@@ -655,12 +683,17 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	w.sendInventory(p)
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	w.sendCosmetics(p) // T5.7
+	// The minimap (minimap.go): every explored sector, this login's first view included;
+	// those are not sent again as a delta.
+	p.emit(p.minimapIndex())
+	p.explored.TakePending()
 	// The quest log (questlog.go), empty too, goes at the flush of this tick: one QuestLog
 	// even when checkReach below completes a step.
 	p.questLogDirty = true
 	w.tellDiedAway(p) // after its state: the death screen of a death while link-dead
 	w.appearToObservers(p)
 	w.startLedger(ctx.Tick, p)
+	w.econStartKit(p, kit) // after the ledger's base, which counted it
 	w.antibotJoin(ctx.Tick, p)
 	p.joinedAt = ctx.Tick
 	// After the ledger: resuming may end the tutorial and give its reward (T4.2).
@@ -679,7 +712,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 	first := 1 + game.Tick(ctx.Rand.Uint64N(uint64(w.cfg.AutosaveEvery)))
 	w.scheduleAutosave(ctx, p, first)
 	w.scheduleRegen(ctx, p)
-	if rolled {
+	if rolled || len(kit) > 0 { // the kit is saved at once: given, it is never given again
 		w.save(w.snapshot(p, false))
 	}
 	if stashRolled && !w.readOnly {
@@ -702,7 +735,8 @@ func (w *World) state(p *Player, c Character) Character {
 	c.Pos, c.HasPos = p.pos, true
 	c.Cosmetics = p.cos
 	c.Look = p.look
-	if p.premSeq > c.PremiumSeq { // the online player heard of a newer shop change
+	c.ExploredUnsaved = p.explored.All() // all of it: its touched sectors may not be saved yet
+	if p.premSeq > c.PremiumSeq {        // the online player heard of a newer shop change
 		c.Owned, c.Premium, c.PremiumSeq = p.owned, p.premium, p.premSeq
 	}
 	return c

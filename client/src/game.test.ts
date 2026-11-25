@@ -12,6 +12,8 @@ import {
   CreatureKind,
   CreatureLookSchema,
   CreatureSchema,
+  TileUpdateSchema,
+  PartyAction,
   create,
 } from "@rpg/protocol";
 import type { ServerMessage } from "@rpg/protocol";
@@ -66,7 +68,7 @@ const content = {
   vocations: ["guardian"],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.414, maxPathTiles: 100 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],
@@ -213,5 +215,129 @@ describe('Game look draft (docs/02 "Apariencia")', () => {
     expect(sent.map((i) => i.case)).toEqual(["setLook"]);
     serve(look(TOM, 64)); // the answer
     expect(last?.lookDraft).toBeUndefined();
+  });
+});
+
+describe('Game names the remains of a death (docs/02 "Muerte")', () => {
+  const FUR = 91;
+  const remains = {
+    ...content,
+    items: {
+      1: { ...base, id: "grass", ground: true, walkable: true },
+      [FUR]: { ...base, id: "remains_fur", slots: 10, fixed: true, walkable: true },
+    },
+  } as unknown as ClientContent;
+  // The wolf has a name (a monster without one falls back to the family's: item-name.ts).
+  const t = (key: string, params?: Record<string, string | number>): string =>
+    key === "monster.wolf.name" ? "wolf" : params ? `${key}${JSON.stringify(params)}` : key;
+  const NAME = 'client.item.remains_of{"monster":"wolf"}';
+  let last: GameUi | undefined;
+  let game: InstanceType<typeof Game>;
+  /** The Game's private map handlers (what the canvas calls). */
+  let map: {
+    longPressTile(pos: { x: number; y: number; z: number }, x: number, y: number): void;
+    hoverText(pos: { x: number; y: number; z: number }): string;
+  };
+
+  beforeEach(() => {
+    sent.length = 0;
+    last = undefined;
+    vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    vi.stubGlobal("document", { body: { classList: { toggle: vi.fn() } } });
+    game = new Game({
+      host: {} as HTMLElement,
+      content: remains,
+      t,
+      locale: "es",
+      sessionToken: "token",
+      vocation: "guardian",
+      entered: vi.fn(),
+      ended: vi.fn(),
+      update: (ui) => {
+        last = ui;
+      },
+    });
+    map = game as unknown as typeof map;
+    deliver?.({
+      tick: 1n,
+      events: [
+        {
+          message: {
+            case: "tileUpdate",
+            value: create(TileUpdateSchema, {
+              pos: { x: 5, y: 5, z: 7 },
+              tile: {
+                items: [{ itemId: 1 }, { itemId: FUR, mods: { remainsOf: "wolf" } }],
+              },
+            }),
+          } as ServerMessage["message"],
+        },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("in the title and the card of the tile's menu", () => {
+    map.longPressTile({ x: 5, y: 5, z: 7 }, 100, 100);
+    expect(last?.menu?.title).toBe(NAME);
+    expect(last?.menu?.card?.remainsOf).toBe("wolf");
+  });
+
+  it("in the text beside the cursor", () => {
+    const hint = map.hoverText({ x: 5, y: 5, z: 7 });
+    expect(hint).toContain("client.action.");
+    expect(hint).toContain("client.item.remains_of");
+    expect(hint).toContain("wolf");
+  });
+});
+
+describe('Game party invite by name (docs/02 "Grupos")', () => {
+  let last: GameUi | undefined;
+  let game: InstanceType<typeof Game>;
+
+  beforeEach(() => {
+    sent.length = 0;
+    last = undefined;
+    vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    vi.stubGlobal("document", { body: { classList: { toggle: vi.fn() } } });
+    game = new Game({
+      host: {} as HTMLElement,
+      content,
+      t: (key) => key,
+      locale: "es",
+      sessionToken: "token",
+      vocation: "guardian",
+      entered: vi.fn(),
+      ended: vi.fn(),
+      update: (ui) => {
+        last = ui;
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("opens the prompt, sends INVITE_NAME with the trimmed name and closes it", () => {
+    game.partyInvitePrompt(true);
+    expect(last?.partyInviting).toBe(true);
+    expect(sent).toEqual([]);
+    game.partyInviteByName("  Bruno Holt ");
+    expect(sent.map((i) => i.case)).toEqual(["partyCommand"]);
+    expect(sent[0]?.value).toMatchObject({ action: PartyAction.INVITE_NAME, name: "Bruno Holt" });
+    expect(last?.partyInviting).toBe(false);
+  });
+
+  it("sends nothing for an empty name or a cancel", () => {
+    game.partyInvitePrompt(true);
+    game.partyInviteByName("   ");
+    game.partyInvitePrompt(true);
+    game.partyInvitePrompt(false);
+    expect(sent).toEqual([]);
+    expect(last?.partyInviting).toBe(false);
   });
 });

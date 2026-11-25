@@ -33,7 +33,7 @@ const REPO = 'C:\\ProyectosVSCode\\RPG_Project'
 const BASE = args.base
 const NAME = args.name
 const PATHX = 'export PATH="/c/Program Files/Go/bin:/c/Program Files/Docker/Docker/resources/bin:/c/Users/fenzo/go/bin:/c/Users/fenzo/AppData/Roaming/npm:$PATH"'
-const ATTR = 'End every commit message with these two lines:\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VYGzVYFrCR4iudV4Qtt54T'
+const ATTR = 'End every commit message with these two lines:\nCo-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01VYGzVaXXq1gtpVXN5LfFrF'
 const RISKS = ['high', 'server', 'content', 'client', 'docs']
 for (const it of args.items) {
   if (!it.slug || !it.branch || !it.wt || !it.brief || !RISKS.includes(it.risk)) {
@@ -136,7 +136,7 @@ function stack(r, it) {
     const base = prev
     const out = await run(`${RULES}
 Rebase the local branch ${it.branch} (worktree ${REPO}\\.wt\\${it.wt}; cd into it in every Bash call) onto ${base}: git rebase ${base}. If a rebase is already in progress or the tree is dirty, an earlier run was cut: finish it. Resolve conflicts keeping both sides' intent (lists in data/i18n/docs/sprites/CREDITS: union; ids: make gen-ids; generated code: make gen / make sprites; migrations: unique increasing numbers). Then make lint test validate green (no Docker, no e2e: the batch runs them once at the end). Commit any fix. ${ATTR}
-Answer (structured): ok (rebased and green), summary (Spanish: conflicts and how you resolved them).`, { label: `stack:${it.slug}`, phase: 'Stack', schema: DONE, effort: 'low' })
+Answer (structured): ok (rebased and green), summary (Spanish: conflicts and how you resolved them).`, { label: `stack:${it.slug}`, phase: 'Stack', schema: DONE, model: 'sonnet', effort: 'low' })
     if (out && out.ok) { prev = it.branch; stacked.push(it.branch) }
     return { slug: it.slug, ok: !!(out && out.ok), summary: `${r.impl.summary}\n\n${r.notes}\n\nApilado: ${out ? out.summary : '(falló)'}`, e2e_notes: r.impl.e2e_notes }
   })

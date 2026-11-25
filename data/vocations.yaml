@@ -1,10 +1,15 @@
 # Vocations (docs/02-game-design.md): guardian and arcanist (MVP), ranger and druid (T3.1).
 # Our own numbers (CLAUDE.md legal rule): never copy another game's constants.
+# start_kit (2026-11-23): what a new character gets once, at its first login (docs/02
+# "Equipo inicial"): each piece in the slot it fits, the rest in the backpack.
+# Capacity is in grams, a realistic human load (owner, 2026-11-23; docs/02 "Unidades"):
+# 40-45 kg at level 1 (the guardian strongest, the arcanist weakest), about 80-120 kg at
+# level 75. TestHuntLootFits (server/internal/sim) checks a hunt's loot still fits.
 - id: guardian
   name: vocation.guardian.name
   description: vocation.guardian.desc
-  start: { health: 145, mana: 20, capacity: 420000, speed: 205 }
-  per_level: { health: 14, mana: 4, capacity: 23000, speed: 3 }
+  start: { health: 145, mana: 20, capacity: 45000, speed: 205 }
+  per_level: { health: 14, mana: 4, capacity: 1000, speed: 3 }
   regen: { health: 3, mana: 1, interval_ms: 7000 }
   skill_factors:
     fist: 1.13
@@ -16,12 +21,21 @@
     magic: 2.7
     fishing: 1.11
   weapons: [sword, axe, club]
+  start_kit:
+    - { item: rusty_cutlass }
+    - { item: barrel_lid_shield }
+    # Everyone: plain clothes, a few biscuits and a poultice.
+    - { item: patched_tunic }
+    - { item: canvas_trousers }
+    - { item: tarred_boots }
+    - { item: ship_biscuit, count: 5 }
+    - { item: seaweed_poultice, count: 1 }
 
 - id: arcanist
   name: vocation.arcanist.name
   description: vocation.arcanist.desc
-  start: { health: 140, mana: 75, capacity: 380000, speed: 205 }
-  per_level: { health: 6, mana: 28, capacity: 11000, speed: 3 }
+  start: { health: 140, mana: 75, capacity: 40000, speed: 205 }
+  per_level: { health: 6, mana: 28, capacity: 700, speed: 3 }
   regen: { health: 1, mana: 3, interval_ms: 4000 }
   skill_factors:
     fist: 1.45
@@ -33,14 +47,22 @@
     magic: 1.11
     fishing: 1.11
   weapons: [wand]
+  start_kit:
+    - { item: spark_wand }
+    # Everyone: plain clothes, a few biscuits and a poultice.
+    - { item: patched_tunic }
+    - { item: canvas_trousers }
+    - { item: tarred_boots }
+    - { item: ship_biscuit, count: 5 }
+    - { item: seaweed_poultice, count: 1 }
 
 # Ranger (T3.1): distance damage and a hybrid. Trains distance fastest of all, shield
 # almost like a guardian and some magic; health and mana per level sit between both.
 - id: ranger
   name: vocation.ranger.name
   description: vocation.ranger.desc
-  start: { health: 145, mana: 40, capacity: 405000, speed: 205 }
-  per_level: { health: 9, mana: 13, capacity: 19000, speed: 3 }
+  start: { health: 145, mana: 40, capacity: 42000, speed: 205 }
+  per_level: { health: 9, mana: 13, capacity: 800, speed: 3 }
   regen: { health: 2, mana: 2, interval_ms: 5500 }
   skill_factors:
     fist: 1.25
@@ -52,14 +74,23 @@
     magic: 1.45
     fishing: 1.11
   weapons: [distance, sword, axe, club]
+  start_kit:
+    - { item: short_bow }
+    - { item: arrow, count: 60 }
+    # Everyone: plain clothes, a few biscuits and a poultice.
+    - { item: patched_tunic }
+    - { item: canvas_trousers }
+    - { item: tarred_boots }
+    - { item: ship_biscuit, count: 5 }
+    - { item: seaweed_poultice, count: 1 }
 
 # Druid (T3.1): support and healing. Magic trains as fast as the arcanist's, the body
 # is as fragile, and its staffs shoot like wands.
 - id: druid
   name: vocation.druid.name
   description: vocation.druid.desc
-  start: { health: 140, mana: 75, capacity: 380000, speed: 205 }
-  per_level: { health: 6, mana: 27, capacity: 11500, speed: 3 }
+  start: { health: 140, mana: 75, capacity: 41000, speed: 205 }
+  per_level: { health: 6, mana: 27, capacity: 700, speed: 3 }
   regen: { health: 1, mana: 3, interval_ms: 4000 }
   skill_factors:
     fist: 1.45
@@ -71,3 +102,11 @@
     magic: 1.11
     fishing: 1.11
   weapons: [wand]
+  start_kit:
+    - { item: sapling_staff }
+    # Everyone: plain clothes, a few biscuits and a poultice.
+    - { item: patched_tunic }
+    - { item: canvas_trousers }
+    - { item: tarred_boots }
+    - { item: ship_biscuit, count: 5 }
+    - { item: seaweed_poultice, count: 1 }

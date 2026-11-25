@@ -48,8 +48,6 @@ assets/        Sprites, sonidos, atlas generados, CREDITS.md
 i18n/          Textos traducibles (es, en)
 deploy/        docker-compose, Caddyfile, scripts de backup
 docs/          Diseño y arquitectura. Lee el doc relevante ANTES de tocar un área.
-livingworld/   Mundo vivo: su código (client/ paquete TS, server/ módulo Go) en una carpeta
-               auditable aparte (ver livingworld/README.md y livingworld/CLAUDE.md)
 ```
 
 ## Docs a consultar según la tarea

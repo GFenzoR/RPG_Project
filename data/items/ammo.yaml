@@ -1,3 +1,5 @@
+# Weights are realistic grams per unit (docs/02 "Unidades", "Cargas realistas"); the UI
+# shows them in g or kg.
 # Ammunition (T3.1): goes in the ammo slot; a distance weapon whose weapon.ammo matches
 # spends one per shot and adds its attack.
 - id: arrow
@@ -5,7 +7,7 @@
   sprite: ammo/arrow
   name: item.arrow.name
   description: item.arrow.desc
-  weight: 40
+  weight: 25
   stackable: true
   max_stack: 100
   tradeable: true
@@ -19,7 +21,7 @@
   sprite: ammo/bolt
   name: item.bolt.name
   description: item.bolt.desc
-  weight: 50
+  weight: 35
   stackable: true
   max_stack: 100
   tradeable: true

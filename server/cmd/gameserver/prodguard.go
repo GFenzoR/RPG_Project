@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/payments"
+	"github.com/GFenzoR/RPG_Project/server/internal/session"
 )
 
 // Switches that exist only for tests and local harnesses (lote 16, docs/09 "Interruptores
@@ -42,7 +43,8 @@ func oauthOverrides(getenv func(string) string) []string {
 	return set
 }
 
-// checkProductionFlags refuses the test-only flags in production (-auth-rate-burst) and
+// checkProductionFlags refuses the test-only flags in production (-auth-rate-burst,
+// -world-time) and
 // warns about the ones a home server may legitimately need (-cookie-secure=false for
 // friends on plain http://<LAN IP>, docs/13). Development and test accept them silently.
 func checkProductionFlags(logger *slog.Logger, env payments.Env, o options) error {
@@ -52,6 +54,9 @@ func checkProductionFlags(logger *slog.Logger, env payments.Env, o options) erro
 	if o.authRateBurst != 0 {
 		return fmt.Errorf("%w: -auth-rate-burst=%d (only for test harnesses; set RPG_ENV=development or test on a server only you reach)",
 			errTestOnlyInProduction, o.authRateBurst)
+	}
+	if o.worldTime != "" {
+		return fmt.Errorf("%w: -world-time=%s (only for test harnesses)", errTestOnlyInProduction, o.worldTime)
 	}
 	if !o.cookieSecure {
 		logger.Warn("INSECURE: -cookie-secure=false in production: the session cookie travels over plain HTTP "+
@@ -99,3 +104,18 @@ func seedLogAttrs(explicit bool, env payments.Env, lo, hi uint64) []any {
 
 // cryptoRand is crypto/rand's reader (a variable so tests can make it fail).
 var cryptoRand io.Reader = crand.Reader
+
+// checkWorldTime refuses a -world-time that is not a /time word, or one without a day and
+// night to fix.
+func checkWorldTime(c *session.DayNightCycle, word string) error {
+	if word == "" {
+		return nil
+	}
+	if c == nil {
+		return fmt.Errorf("-world-time=%s: there is no data/livingworld/daynight.yaml", word)
+	}
+	if _, ok := c.PhaseStart(word); !ok {
+		return fmt.Errorf("-world-time=%s: want one of %s", word, strings.Join(session.DayNightWords(), ", "))
+	}
+	return nil
+}

@@ -84,7 +84,7 @@ func (c *fakeClient) take() []*pb.ServerMessage {
 
 func testBalance() content.Balance {
 	var b content.Balance
-	b.Movement = content.Movement{BaseStepMs: 1000, DiagonalCost: 1.5, MaxPathTiles: 100, MaxQueuedSteps: 4}
+	b.Movement = content.Movement{BaseStepMs: 1000, DiagonalCost: 1.414, MaxPathTiles: 100, MaxQueuedSteps: 4}
 	b.Experience.Curve.A, b.Experience.Curve.B, b.Experience.Curve.C = 12, -24, 12
 	b.Experience.Pace = []content.PaceAnchor{{Level: 8, Hours: 1}, {Level: 20, Hours: 8}, {Level: 50, Hours: 80}}
 	b.Skills.Base = map[string]content.SkillBase{"sword": {StartLevel: 10, BaseTries: 45}, "fist": {StartLevel: 10, BaseTries: 45},
@@ -103,7 +103,7 @@ func testBalance() content.Balance {
 	b.Chat.Ranges.Yell = content.ChatRange{X: 18, Y: 14}
 	b.Chat.Flood.Burst, b.Chat.Flood.RefillMs, b.Chat.Flood.MuteMs = 5, 2000, 10000
 	b.Chat.GlobalIntervalMs = 10000
-	b.Party = content.Party{MaxMembers: 3, InviteMs: 5000, UpdateMs: 1000, ShareDistance: 10, ContributionMs: 60000,
+	b.Party = content.Party{MaxMembers: 3, InviteMs: 5000, InvitesPerMinute: 6, UpdateMs: 1000, ShareDistance: 10, ContributionMs: 60000,
 		LevelRangePct: 70, LevelGapAlways: 3, SharedByDefault: true, BonusPctBySharers: []int{5, 10}}
 	// T4.1: reconcile every ledger every tick (newHarness fails the test on a
 	// mismatch), so every test of the package checks the economy log too.

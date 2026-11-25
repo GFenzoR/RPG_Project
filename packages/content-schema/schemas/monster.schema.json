@@ -132,6 +132,28 @@
         }
       }
     },
+    "pursuit": {
+      "description": "Overrides balance.yaml combat.monster_pursuit for this monster (docs/02 \"Monstruos\"): how persistently it chases beyond its leash area, its hard cap from its spawn's center, how long it keeps a target out of sight, below which own health % it does not chase beyond its leash, below which target health % it insists.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "persistence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "max_chase_tiles": { "type": "integer", "minimum": 0, "maximum": 40 },
+        "lose_sight_ms": { "type": "integer", "minimum": 0 },
+        "give_up_below_hp_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "insist_target_hp_pct": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "regen": {
+      "description": "Overrides balance.yaml combat.monster_regen for this monster: out-of-combat regeneration of pct % of its maximum health every interval_ms, delay_ms after its last fight.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "delay_ms": { "type": "integer", "minimum": 0 },
+        "interval_ms": { "type": "integer", "minimum": 50 },
+        "pct": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
     "attacks": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/attack" } },
     "phases": {
       "description": "A boss's phases: each is on while the monster's health is below its below_hp_pct (every phase it has reached at once): its attacks_add join the attacks, its speed is multiplied by speed_mult and every attack interval by attack_interval_mult. Healed above it, the phase ends.",

@@ -55,6 +55,27 @@ func TestLevelPercent(t *testing.T) {
 	}
 }
 
+// movement.diagonal_cost is 1..MaxDiagonalCost: the pathfinder's costs are sized for it.
+func TestDiagonalCostRange(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "data", "balance.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const line = "diagonal_cost: 1.414"
+	if !strings.Contains(string(raw), line) {
+		t.Fatalf("balance.yaml has no %q", line)
+	}
+	for cost, ok := range map[string]bool{"1": true, "1.5": true, "2": true, "2.001": false, "10": false, "0.99": false} {
+		_, err := ParseBalance([]byte(strings.Replace(string(raw), line, "diagonal_cost: "+cost, 1)))
+		if ok && err != nil {
+			t.Errorf("diagonal_cost %s: %v", cost, err)
+		}
+		if !ok && (err == nil || !strings.Contains(err.Error(), "diagonal_cost")) {
+			t.Errorf("diagonal_cost %s: err = %v, want it refused", cost, err)
+		}
+	}
+}
+
 func TestParseBalanceErrors(t *testing.T) {
 	for name, src := range map[string]string{
 		"no movement":   "skills: {}",

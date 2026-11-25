@@ -1,3 +1,5 @@
+# Weights are realistic grams per unit (docs/02 "Unidades", "Cargas realistas"); the UI
+# shows them in g or kg.
 # Shields, armor and jewelry: the compact catalog (lote 11, docs/02 "Catálogo de equipo").
 # One piece per line, slot and band, numbers from the band formula of docs/02. The torso
 # has two weight classes: armor (heavy, the guardian's and the ranger's) and robes (light,
@@ -11,7 +13,7 @@
   sprite: shields/barrel_lid_shield
   name: item.barrel_lid_shield.name
   description: item.barrel_lid_shield.desc
-  weight: 3500
+  weight: 3000
   tradeable: true
   shield: { defense: 9 }
   worn: { shape: buckler, tint: weathered }
@@ -23,7 +25,7 @@
   sprite: armor/sailcloth_cap
   name: item.sailcloth_cap.name
   description: item.sailcloth_cap.desc
-  weight: 800
+  weight: 200
   tradeable: true
   armor: { slot: head, armor: 1 }
   worn: { shape: cap, tint: canvas }
@@ -35,7 +37,7 @@
   sprite: armor/patched_tunic
   name: item.patched_tunic.name
   description: item.patched_tunic.desc
-  weight: 2000
+  weight: 1400
   tradeable: true
   armor: { slot: body, armor: 2 }
   worn: { shape: tunic, tint: canvas }
@@ -47,7 +49,7 @@
   sprite: armor/canvas_trousers
   name: item.canvas_trousers.name
   description: item.canvas_trousers.desc
-  weight: 1600
+  weight: 700
   tradeable: true
   armor: { slot: legs, armor: 1 }
   worn: { shape: trousers, tint: canvas }
@@ -59,7 +61,7 @@
   sprite: armor/tarred_boots
   name: item.tarred_boots.name
   description: item.tarred_boots.desc
-  weight: 1200
+  weight: 1000
   tradeable: true
   armor: { slot: feet, armor: 1 }
   worn: { shape: boots, tint: tar }
@@ -74,7 +76,7 @@
   sprite: shields/plank_shield
   name: item.plank_shield.name
   description: item.plank_shield.desc
-  weight: 4100
+  weight: 3600
   tradeable: true
   shield: { defense: 12 }
   worn: { shape: tower, tint: weathered }
@@ -89,7 +91,7 @@
   sprite: shields/elmwood_shield
   name: item.elmwood_shield.name
   description: item.elmwood_shield.desc
-  weight: 4700
+  weight: 4200
   tradeable: true
   shield: { defense: 18 }
   worn: { shape: round, tint: elm }
@@ -101,7 +103,7 @@
   sprite: armor/stagleather_coat
   name: item.stagleather_coat.name
   description: item.stagleather_coat.desc
-  weight: 8000
+  weight: 4000
   tradeable: true
   armor: { slot: body, armor: 6 }
   worn: { shape: leather, tint: stagleather }
@@ -113,7 +115,7 @@
   sprite: armor/mossweave_robe
   name: item.mossweave_robe.name
   description: item.mossweave_robe.desc
-  weight: 2600
+  weight: 1600
   tradeable: true
   armor: { slot: body, armor: 3 }
   worn: { shape: robe, tint: moss }
@@ -125,7 +127,7 @@
   sprite: armor/stagleather_hood
   name: item.stagleather_hood.name
   description: item.stagleather_hood.desc
-  weight: 1600
+  weight: 1160
   tradeable: true
   armor: { slot: head, armor: 2 }
   worn: { shape: hood, tint: stagleather }
@@ -137,7 +139,7 @@
   sprite: armor/stagleather_leggings
   name: item.stagleather_leggings.name
   description: item.stagleather_leggings.desc
-  weight: 2600
+  weight: 2200
   tradeable: true
   armor: { slot: legs, armor: 2 }
   worn: { shape: trousers, tint: stagleather }
@@ -149,7 +151,7 @@
   sprite: armor/stagleather_boots
   name: item.stagleather_boots.name
   description: item.stagleather_boots.desc
-  weight: 2000
+  weight: 1600
   tradeable: true
   armor: { slot: feet, armor: 2 }
   worn: { shape: boots, tint: stagleather }
@@ -161,7 +163,7 @@
   sprite: jewelry/antler_amulet
   name: item.antler_amulet.name
   description: item.antler_amulet.desc
-  weight: 300
+  weight: 60
   tradeable: true
   armor: { slot: neck, armor: 1 }
   requires: { level: 15 }
@@ -172,7 +174,7 @@
   sprite: jewelry/briar_ring
   name: item.briar_ring.name
   description: item.briar_ring.desc
-  weight: 100
+  weight: 15
   tradeable: true
   armor: { slot: ring, armor: 0 }
   requires: { level: 15 }
@@ -185,7 +187,7 @@
   sprite: shields/embersteel_shield
   name: item.embersteel_shield.name
   description: item.embersteel_shield.desc
-  weight: 5300
+  weight: 4800
   tradeable: true
   shield: { defense: 22 }
   worn: { shape: kite, tint: embersteel }
@@ -209,7 +211,7 @@
   sprite: armor/ashweave_robe
   name: item.ashweave_robe.name
   description: item.ashweave_robe.desc
-  weight: 2900
+  weight: 1700
   tradeable: true
   armor: { slot: body, armor: 4 }
   worn: { shape: robe, tint: ash }
@@ -221,7 +223,7 @@
   sprite: armor/embersteel_helm
   name: item.embersteel_helm.name
   description: item.embersteel_helm.desc
-  weight: 2000
+  weight: 1640
   tradeable: true
   armor: { slot: head, armor: 3 }
   worn: { shape: open_helm, tint: embersteel }
@@ -233,7 +235,7 @@
   sprite: armor/embersteel_greaves
   name: item.embersteel_greaves.name
   description: item.embersteel_greaves.desc
-  weight: 3100
+  weight: 2950
   tradeable: true
   armor: { slot: legs, armor: 3 }
   worn: { shape: greaves, tint: embersteel }
@@ -245,7 +247,7 @@
   sprite: armor/embersteel_sabatons
   name: item.embersteel_sabatons.name
   description: item.embersteel_sabatons.desc
-  weight: 2400
+  weight: 1900
   tradeable: true
   armor: { slot: feet, armor: 3 }
   worn: { shape: sabatons, tint: embersteel }
@@ -257,7 +259,7 @@
   sprite: jewelry/cinder_amulet
   name: item.cinder_amulet.name
   description: item.cinder_amulet.desc
-  weight: 300
+  weight: 60
   tradeable: true
   armor: { slot: neck, armor: 1 }
   requires: { level: 30 }
@@ -268,7 +270,7 @@
   sprite: jewelry/obsidian_ring
   name: item.obsidian_ring.name
   description: item.obsidian_ring.desc
-  weight: 100
+  weight: 15
   tradeable: true
   armor: { slot: ring, armor: 0 }
   requires: { level: 30 }
@@ -282,7 +284,7 @@
   sprite: shields/wyrmscale_pavise
   name: item.wyrmscale_pavise.name
   description: item.wyrmscale_pavise.desc
-  weight: 5900
+  weight: 5400
   tradeable: true
   shield: { defense: 26 }
   worn: { shape: tower, tint: wyrmscale }
@@ -294,7 +296,7 @@
   sprite: armor/wyrmscale_mail
   name: item.wyrmscale_mail.name
   description: item.wyrmscale_mail.desc
-  weight: 10000
+  weight: 14000
   tradeable: true
   armor: { slot: body, armor: 10 }
   worn: { shape: mail, tint: wyrmscale }
@@ -306,7 +308,7 @@
   sprite: armor/duskweave_robe
   name: item.duskweave_robe.name
   description: item.duskweave_robe.desc
-  weight: 3200
+  weight: 1800
   tradeable: true
   armor: { slot: body, armor: 5 }
   worn: { shape: robe, tint: dusk }
@@ -318,7 +320,7 @@
   sprite: armor/wyrmcrest_helm
   name: item.wyrmcrest_helm.name
   description: item.wyrmcrest_helm.desc
-  weight: 2400
+  weight: 2120
   tradeable: true
   armor: { slot: head, armor: 4 }
   worn: { shape: full_helm, tint: wyrmscale }
@@ -330,7 +332,7 @@
   sprite: armor/wyrmhide_greaves
   name: item.wyrmhide_greaves.name
   description: item.wyrmhide_greaves.desc
-  weight: 3600
+  weight: 3700
   tradeable: true
   armor: { slot: legs, armor: 4 }
   worn: { shape: greaves, tint: wyrmhide }
@@ -342,7 +344,7 @@
   sprite: armor/wyrmhide_boots
   name: item.wyrmhide_boots.name
   description: item.wyrmhide_boots.desc
-  weight: 2800
+  weight: 2200
   tradeable: true
   armor: { slot: feet, armor: 4 }
   worn: { shape: boots, tint: wyrmhide }
@@ -354,7 +356,7 @@
   sprite: jewelry/wyrmtooth_amulet
   name: item.wyrmtooth_amulet.name
   description: item.wyrmtooth_amulet.desc
-  weight: 300
+  weight: 60
   tradeable: true
   armor: { slot: neck, armor: 2 }
   requires: { level: 50 }
@@ -365,7 +367,7 @@
   sprite: jewelry/emberheart_ring
   name: item.emberheart_ring.name
   description: item.emberheart_ring.desc
-  weight: 100
+  weight: 15
   tradeable: true
   armor: { slot: ring, armor: 1 }
   requires: { level: 50 }
@@ -378,7 +380,7 @@
   sprite: shields/tidesteel_shield
   name: item.tidesteel_shield.name
   description: item.tidesteel_shield.desc
-  weight: 6500
+  weight: 6000
   tradeable: true
   shield: { defense: 30 }
   worn: { shape: kite, tint: tidesteel }
@@ -390,7 +392,7 @@
   sprite: armor/tidesteel_plate
   name: item.tidesteel_plate.name
   description: item.tidesteel_plate.desc
-  weight: 11000
+  weight: 19000
   tradeable: true
   armor: { slot: body, armor: 12 }
   worn: { shape: plate, tint: tidesteel }
@@ -402,7 +404,7 @@
   sprite: armor/pearlweave_robe
   name: item.pearlweave_robe.name
   description: item.pearlweave_robe.desc
-  weight: 3500
+  weight: 1900
   tradeable: true
   armor: { slot: body, armor: 6 }
   worn: { shape: robe, tint: pearlcloth }
@@ -414,7 +416,7 @@
   sprite: armor/tidesteel_helm
   name: item.tidesteel_helm.name
   description: item.tidesteel_helm.desc
-  weight: 2800
+  weight: 2600
   tradeable: true
   armor: { slot: head, armor: 5 }
   worn: { shape: full_helm, tint: tidesteel }
@@ -426,7 +428,7 @@
   sprite: armor/tidesteel_greaves
   name: item.tidesteel_greaves.name
   description: item.tidesteel_greaves.desc
-  weight: 4100
+  weight: 4450
   tradeable: true
   armor: { slot: legs, armor: 5 }
   worn: { shape: greaves, tint: tidesteel }
@@ -438,7 +440,7 @@
   sprite: armor/tidesteel_sabatons
   name: item.tidesteel_sabatons.name
   description: item.tidesteel_sabatons.desc
-  weight: 3200
+  weight: 2500
   tradeable: true
   armor: { slot: feet, armor: 5 }
   worn: { shape: sabatons, tint: tidesteel }
@@ -450,7 +452,7 @@
   sprite: jewelry/blackpearl_amulet
   name: item.blackpearl_amulet.name
   description: item.blackpearl_amulet.desc
-  weight: 300
+  weight: 60
   tradeable: true
   armor: { slot: neck, armor: 2 }
   requires: { level: 75 }
@@ -461,7 +463,7 @@
   sprite: jewelry/tidestone_ring
   name: item.tidestone_ring.name
   description: item.tidestone_ring.desc
-  weight: 100
+  weight: 15
   tradeable: true
   armor: { slot: ring, armor: 1 }
   requires: { level: 75 }
@@ -475,7 +477,7 @@
   sprite: armor/leather_jerkin
   name: item.leather_jerkin.name
   description: item.leather_jerkin.desc
-  weight: 7400
+  weight: 3000
   tradeable: true
   armor: { slot: body, armor: 4 }
   worn: { shape: leather, tint: tan_leather }
@@ -488,7 +490,7 @@
   sprite: shields/riveted_round_shield
   name: item.riveted_round_shield.name
   description: item.riveted_round_shield.desc
-  weight: 6400
+  weight: 4800
   tradeable: true
   shield: { defense: 15 }
   worn: { shape: round, tint: iron }
@@ -501,7 +503,7 @@
   sprite: armor/hide_vest
   name: item.hide_vest.name
   description: item.hide_vest.desc
-  weight: 3650
+  weight: 2500
   tradeable: true
   armor: { slot: body, armor: 3 }
   worn: { shape: leather, tint: hide }

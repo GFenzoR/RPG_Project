@@ -48,10 +48,10 @@ async function newGuardian(
 }
 
 /**
- * Logs in and presses "Jugar" (the canvas may not come up: the callers wait for it). The
- * creation form's figure (LookPreview) reads the same atlas on the characters screen: it
- * is waited for, ready or failed, and `beforePlay` runs just before "Jugar", so a test
- * counts only the canvas's requests.
+ * Logs in and presses "Jugar" (the canvas may not come up: the callers wait for it). With a
+ * character the screen shows the list first (docs/02 "Cuentas"), and a character created
+ * through the API has no saved look, so no figure reads the atlas there; `beforePlay` runs
+ * just before "Jugar", so a test counts only the canvas's requests.
  */
 async function play(
   page: Page,
@@ -66,11 +66,8 @@ async function play(
   await loginForm.getByRole("button", { name: "Entrar", exact: true }).click();
   const playButton = page.getByTestId("characters").getByRole("button", { name: "Jugar" });
   await expect(playButton).toBeVisible();
-  await expect(page.getByTestId("create-look").getByTestId("look-preview")).not.toHaveAttribute(
-    "data-atlas",
-    "loading",
-    { timeout: 20_000 },
-  );
+  await expect(page.getByTestId("create-character")).toHaveCount(0);
+  await expect(page.getByTestId("character-look")).toHaveCount(0);
   beforePlay();
   // Marks this page: a reload would lose it.
   await page.evaluate(() => {

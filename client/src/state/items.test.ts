@@ -14,7 +14,6 @@ import type { ClientContent, ItemDef } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
 import { tileActions } from "../input/actions.ts";
 import {
-  formatOz,
   halfStack,
   locationInit,
   menuItem,
@@ -57,7 +56,7 @@ const content: ClientContent = {
   vocations: [],
   spells: [],
   recipes: [],
-  movement: { baseStepMs: 1000, diagonalCost: 1.5, maxPathTiles: 100 },
+  movement: { baseStepMs: 1000, diagonalCost: 1.414, maxPathTiles: 100 },
   chat: { maxLength: 255 },
   sounds: NO_SOUNDS,
   islands: [],
@@ -274,18 +273,23 @@ describe("inventory state", () => {
 });
 
 describe("look messages", () => {
-  const t = translator({
-    "look.weapon": "You see {items} (attack {attack}). It weighs {weight} oz.",
-    "item.iron_sword.name": "iron sword",
-    "item.iron_sword.desc": "A reliable sword.",
-    "item.copper_coin.name": "copper coin",
-    "item.signpost.name": "sign",
-    "item.brasal_dock_sign.name": "sign",
-    "text.volcan.dock_sign": "Dock of Cinderstead.",
-    "look.item": "You see {items}. It weighs {weight} oz.",
-    "look.ground": "You see {items}.",
-    "client.log.item_count": "{count} {name}",
-  });
+  const t = translator(
+    {
+      "look.weapon": "You see {items} (attack {attack}). It weighs {weight}.",
+      "item.iron_sword.name": "iron sword",
+      "item.iron_sword.desc": "A reliable sword.",
+      "item.copper_coin.name": "copper coin",
+      "item.signpost.name": "sign",
+      "item.brasal_dock_sign.name": "sign",
+      "text.volcan.dock_sign": "Dock of Cinderstead.",
+      "look.item": "You see {items}. It weighs {weight}.",
+      "client.unit.g": "{g} g",
+      "client.unit.kg": "{kg} kg",
+      "look.ground": "You see {items}.",
+      "client.log.item_count": "{count} {name}",
+    },
+    "en",
+  );
   const look = (key: string, itemId: number, count: number, weight: number): string =>
     formatMessage(
       {
@@ -309,12 +313,11 @@ describe("look messages", () => {
       t,
     );
 
-  it("adds the description and shows the weight in oz", () => {
-    expect(look("look.weapon", 20, 0, 3300)).toBe(
-      "You see iron sword (attack 13). It weighs 33.00 oz. A reliable sword.",
+  it('adds the description and shows the weight in g or kg (docs/02 "Unidades")', () => {
+    expect(look("look.weapon", 20, 0, 1250)).toBe(
+      "You see iron sword (attack 13). It weighs 1.25 kg. A reliable sword.",
     );
-    expect(look("look.item", 8, 5, 50)).toBe("You see 5 copper coin. It weighs 0.50 oz.");
-    expect(formatOz(420000)).toBe("4200.00");
+    expect(look("look.item", 8, 5, 15)).toBe("You see 5 copper coin. It weighs 15 g.");
   });
 
   it('names a refined instance with its level (the forge, docs/02 "Forja")', () => {
@@ -332,7 +335,14 @@ describe("look messages", () => {
                 $typeName: "game.v1.ItemStack",
                 itemId: 20,
                 count: 0,
-                mods: { $typeName: "game.v1.ItemMods", attribute: "attack", value: 2, refine: 6 },
+                mods: {
+                  $typeName: "game.v1.ItemMods",
+                  attribute: "attack",
+                  value: 2,
+                  refine: 6,
+                  remainsOf: "",
+                  bodyOf: "",
+                },
               },
             },
           },

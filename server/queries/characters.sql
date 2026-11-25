@@ -1,5 +1,5 @@
 -- name: ListCharactersByAccount :many
-SELECT id, name, vocation, level
+SELECT id, name, vocation, level, look_sex, look_body, look_skin, look_hair, look_hair_color, look_beard
 FROM characters
 WHERE account_id = sqlc.arg(account_id)
 ORDER BY id;
@@ -127,3 +127,25 @@ DELETE FROM pvp_unjust_kills WHERE character_id = sqlc.arg(character_id);
 -- name: SaveCharacterUnjustKills :exec
 INSERT INTO pvp_unjust_kills (character_id, killed_at)
 SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(killed_at)::timestamptz[]);
+
+-- name: GetCharacterExplored :many
+-- The minimap's explored sectors of a character (migration 00028).
+SELECT z, sx, sy, bits
+FROM character_explored
+WHERE character_id = sqlc.arg(character_id)
+ORDER BY z, sx, sy;
+
+-- name: SaveCharacterExplored :exec
+-- A snapshot upserts the sectors that gained bits during the login. Explored bits are
+-- only ever set, so a sector already saved keeps its bits and gains the new ones (a
+-- bitwise OR, byte by byte: bits is always 128 bytes, migration 00028). The snapshots of
+-- one character are written in the order they were taken (the persistence queue is FIFO
+-- per character), so the new copy is normally a superset; the OR keeps the map whole even
+-- if an older snapshot were ever written after a newer one.
+INSERT INTO character_explored AS e (character_id, z, sx, sy, bits)
+SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(zs)::smallint[]), unnest(sqlc.arg(sxs)::smallint[]),
+       unnest(sqlc.arg(sys)::smallint[]), unnest(sqlc.arg(bits)::bytea[])
+ON CONFLICT (character_id, z, sx, sy) DO UPDATE SET bits = (
+    SELECT string_agg(set_byte(decode('00', 'hex'), 0, get_byte(e.bits, i) | get_byte(EXCLUDED.bits, i)), ''::bytea ORDER BY i)
+    FROM generate_series(0, 127) AS i
+);

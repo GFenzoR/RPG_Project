@@ -20,12 +20,16 @@ import {
   applyChatOpacity,
   applyScales,
   loadCameraShake,
+  loadChatBubbles,
   loadChatOpacity,
+  loadNameSize,
   loadReducedMotion,
   loadTextScale,
   loadUiScale,
   saveCameraShake,
+  saveChatBubbles,
   saveChatOpacity,
+  saveNameSize,
   saveReducedMotion,
   saveTextScale,
   saveUiScale,
@@ -68,7 +72,7 @@ declare global {
     __rpgAudio?: {
       unlocked(): boolean;
       history(): string[];
-      loops(): { music: string | undefined; ambient: string | undefined };
+      loops(): { music: string | undefined; ambient: string | undefined; ambience: string[] };
       /** The music director's state: its pool and voices (audio/engine.ts MusicState). */
       music(): MusicState;
     };
@@ -126,6 +130,10 @@ function Root(): JSX.Element {
   const [uiScale, setUiScale] = useState(() => loadUiScale(storage));
   const [textScale, setTextScale] = useState(() => loadTextScale(storage));
   const [shake, setShake] = useState(() => loadCameraShake(storage));
+  // docs/17 UI-11: the speech bubbles over the heads (Options → Interface).
+  const [bubbles, setBubbles] = useState(() => loadChatBubbles(storage));
+  // docs/17 UI-3: how big the names over creatures are (Options → Interface).
+  const [nameSize, setNameSize] = useState(() => loadNameSize(storage));
   useEffect(() => {
     applyScales(document.documentElement, uiScale, textScale);
   }, [uiScale, textScale]);
@@ -166,6 +174,12 @@ function Root(): JSX.Element {
       textScale={textScale}
       shake={shake}
       chatOpacity={chatOpacity}
+      bubbles={bubbles}
+      nameSize={nameSize}
+      onNameSize={(v) => {
+        saveNameSize(v, storage);
+        setNameSize(v);
+      }}
       onUiScale={(v) => {
         saveUiScale(v, storage);
         setUiScale(v);
@@ -181,6 +195,10 @@ function Root(): JSX.Element {
       onChatOpacity={(v) => {
         saveChatOpacity(v, storage);
         setChatOpacity(v);
+      }}
+      onBubbles={(on) => {
+        saveChatBubbles(on, storage);
+        setBubbles(on);
       }}
     />
   );
@@ -222,6 +240,8 @@ function Root(): JSX.Element {
         },
         uiScale,
         cameraShake: shake,
+        chatBubbles: bubbles,
+        nameSize,
         interfaceOptions: interfaceOptions(),
       }}
       audio={audio}

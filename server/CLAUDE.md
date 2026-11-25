@@ -146,7 +146,8 @@ server/
   `Player.fightAt`, que pone `markFight` al pegar, recibir daño o ser atacado por un
   monstruo, o el bloqueo PvP); un camino nuevo de daño o de ataque llama a `markFight`.
   `Logout` en combate se rechaza (`logoutBlock`: `pvp.logout_locked` o
-  `combat.logout_locked`). `Leave` en combate deja al jugador link-dead
+  `combat.logout_locked`, con `seconds` de `logoutWaitSeconds`). Cada salida en combate
+  tiene su test en `combat_exit_test.go` (tabla en docs/02). `Leave` en combate deja al jugador link-dead
   (`linkDeadOnLeave`, sin enviarle nada) hasta que `checkLinkDead` (cada tick, solo sobre
   `World.linkDead`) lo saca: cuando `holdsLinkDead` deja de valer (la pelea terminó o pasó
   `travel.link_dead_max_ms` desde `Player.linkDeadAt`; el bloqueo PvP no tiene tope). Un
@@ -549,3 +550,15 @@ server/
   commitea). `internal/store` envuelve las queries y traduce errores de Postgres a
   errores propios (`store.ErrNameTaken`...); los servicios dependen de interfaces para
   poder testearse sin Postgres (ver `internal/auth/authtest`).
+
+- **Minimapa** (`session/minimap.go`, `explore`, docs/02 y docs/05 "Minimapa"): lo explorado
+  es `Player.explored` (`explore.Map`, bits por sector de 32x32, solo crecen), cargado con
+  `Character.Explored` (y `ExploredUnsaved` de un relogueo rápido) y guardado en el snapshot
+  (`Snapshot.Explored`: los sectores que ganaron bits en el login, upsert en
+  `character_explored`). `move` (sin `through`), `relocate` y `join` llaman a
+  `exploreView`: un camino nuevo que cambie la casilla de un jugador sin pasar por ellos
+  también. `flushMinimap` manda los deltas (uno por segundo como mucho) y
+  `minimapRequest` contesta solo casillas exploradas, con presupuesto por jugador. La pista
+  del objetivo (`flushHint`) se recalcula cuando `questsChanged` o `relocate` (`hintMoved`;
+  ambos solo **levantan** `hintStale`, nunca lo bajan) y siempre pasa por
+  `quest.FuzzHint`: nunca mandes el lugar exacto de un paso.

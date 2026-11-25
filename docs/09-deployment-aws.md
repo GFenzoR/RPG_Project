@@ -761,7 +761,7 @@ en `make lint`/`make test` y en el job `deploy-lint` de `images.yml`.
   Si el cliente empieza a necesitar algo de otro origen (fuentes, imágenes, un script de
   pagos), agrégalo aquí y en `tauri.conf.json`, nunca con `unsafe-inline`.
 - **Interruptores solo de prueba:** con `RPG_ENV` de producción (vacío, `production` o
-  cualquier valor desconocido) el gameserver **no arranca** con `-auth-rate-burst` ni con
+  cualquier valor desconocido) el gameserver **no arranca** con `-auth-rate-burst`, `-world-time` ni con
   las URL del proveedor OAuth falso (`GOOGLE_/DISCORD_` + `AUTH_URL`, `TOKEN_URL`,
   `JWKS_URL`, `ISSUER`, `API_URL`). `-cookie-secure=false` solo avisa (en el log, nivel
   `WARN`, `INSECURE: …`): el hosting en casa lo necesita para jugar por la IP de la LAN.

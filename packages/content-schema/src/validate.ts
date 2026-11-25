@@ -101,6 +101,11 @@ interface ContentIndex {
 type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+/** The number at key k of o, if o is an object that has one. */
+const numberAt = (o: unknown, k: string): number | undefined => {
+  const v = isObj(o) ? o[k] : undefined;
+  return typeof v === "number" ? v : undefined;
+};
 const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /** The twelve pieces of a fringe and of the surf (BORDER_PIECES of @rpg/map-format ops). */
 const BORDER_PIECES = [
@@ -195,6 +200,7 @@ class Validator {
   private balance: SourceFile | undefined;
   private recipes: SourceFile | undefined;
   private spells: SourceFile | undefined;
+  private vocations: SourceFile | undefined;
   private tutorial: SourceFile | undefined;
   /** data/livingworld/*.yaml (livingworld/README.md), checked after the items. */
   private living: SourceFile[] = [];
@@ -225,6 +231,7 @@ class Validator {
     this.checkToolTargets();
     this.checkItemTrade();
     this.checkRetiredItems();
+    this.checkStartKits();
     this.checkEquipLevels();
     this.checkForge();
     this.checkChests();
@@ -279,6 +286,7 @@ class Validator {
     if (balance) this.checkBalance(balance);
 
     const vocations = single("vocations.yaml", "vocations", true);
+    this.vocations = vocations;
     if (vocations) {
       for (const [i, voc] of asList(vocations.data).entries()) {
         this.register("vocation", voc, vocations, [i]);
@@ -403,6 +411,7 @@ class Validator {
       const src = this.load(join(abs, entry), rel, `livingworld-${name}`);
       if (src && name === "objects") this.living.push(src); // a list, not an object
       if (!src || !isObj(src.data)) continue;
+      if (name === "ambience") this.checkAmbience(src, src.data);
       if (name === "plants") {
         const seen = new Map<string, number>();
         for (const [i, p] of asList(src.data["plants"]).entries()) {
@@ -432,6 +441,57 @@ class Validator {
         }
       }
     }
+  }
+
+  /**
+   * data/livingworld/ambience.yaml (livingworld/README.md "Ambiente"): every bed and
+   * emitter names an ambient sound of assets/sounds.yaml and items that exist, no emitter
+   * is heard past the window (`radius`) and the lite cap is at most the full one.
+   */
+  private checkAmbience(src: SourceFile, data: Obj): void {
+    const items = new Set<string>();
+    for (const { item } of this.items) if (typeof item["id"] === "string") items.add(item["id"]);
+    const soundsAbs = join(this.root, "assets", "sounds.yaml");
+    const soundsSrc = existsSync(soundsAbs)
+      ? parseYaml(readFileSync(soundsAbs, "utf8"), "assets/sounds.yaml", [])
+      : undefined;
+    const sounds =
+      soundsSrc && isObj(soundsSrc.data) && isObj(soundsSrc.data["sounds"])
+        ? soundsSrc.data["sounds"]
+        : undefined;
+    const sound = (path: PathSegment[], id: unknown): void => {
+      if (typeof id !== "string" || !sounds) return;
+      const s = sounds[id];
+      if (!isObj(s)) this.error(src, path, `unknown sound "${id}" (not in the sound manifest)`);
+      else if (s["channel"] !== "ambient")
+        this.error(src, path, `sound "${id}" is on channel ${String(s["channel"])}, not ambient`);
+    };
+    const item = (path: PathSegment[], id: string): void => {
+      if (!items.has(id)) this.error(src, path, `unknown item "${id}" (data/items)`);
+    };
+    const radius = typeof data["radius"] === "number" ? data["radius"] : 10;
+    const beds = isObj(data["beds"]) ? data["beds"] : {};
+    for (const [id, b] of Object.entries(beds)) {
+      if (!isObj(b)) continue;
+      sound(["beds", id, "sound"], b["sound"]);
+      if (isObj(b["items"]))
+        for (const it of Object.keys(b["items"])) item(["beds", id, "items", it], it);
+    }
+    const emitters = isObj(data["emitters"]) ? data["emitters"] : {};
+    for (const [id, e] of Object.entries(emitters)) {
+      if (!isObj(e)) continue;
+      item(["emitters", id], id);
+      sound(["emitters", id, "sound"], e["sound"]);
+      if (typeof e["radius"] === "number" && e["radius"] > radius)
+        this.error(
+          src,
+          ["emitters", id, "radius"],
+          `radius ${e["radius"]} is past the window's (${radius}): it would cut off`,
+        );
+    }
+    const voices = typeof data["voices"] === "number" ? data["voices"] : 6;
+    if (typeof data["voices_lite"] === "number" && data["voices_lite"] > voices)
+      this.error(src, ["voices_lite"], `voices_lite ${data["voices_lite"]} > voices ${voices}`);
   }
 
   private loadDir(
@@ -741,6 +801,16 @@ class Validator {
           `reference_min_sellers (${n("reference_min_sellers")}) is more than reference_min_votes (${n("reference_min_votes")}): each vote has one seller`,
         );
     }
+    // Monster pursuit and regeneration: a chance needs its roll, a heal its interval, or
+    // the monster would roll or heal every tick (server content Pursuit.Check and
+    // MonsterRegenRate.Check; a monster's own numbers: checkMonster).
+    const combat = isObj(src.data) ? src.data["combat"] : undefined;
+    const pursuit = isObj(combat) ? combat["monster_pursuit"] : undefined;
+    const regen = isObj(combat) ? combat["monster_regen"] : undefined;
+    if ((numberAt(pursuit, "persistence") ?? 0) > 0 && numberAt(pursuit, "roll_ms") === undefined)
+      this.error(src, ["combat", "monster_pursuit", "persistence"], "a persistence needs roll_ms");
+    if ((numberAt(regen, "pct") ?? 0) > 0 && numberAt(regen, "interval_ms") === undefined)
+      this.error(src, ["combat", "monster_regen", "pct"], "a pct needs interval_ms");
   }
 
   private checkVocation(voc: unknown, src: SourceFile, path: PathSegment[]): void {
@@ -890,6 +960,31 @@ class Validator {
         );
       }
     }
+    // Its own persistence or regeneration against balance.yaml, which holds the roll_ms
+    // (balance only) and the default interval_ms: without them the server does not start
+    // (session pursuitOf).
+    const combat = isObj(this.balance?.data) ? this.balance.data["combat"] : undefined;
+    const defPursuit = isObj(combat) ? combat["monster_pursuit"] : undefined;
+    const defRegen = isObj(combat) ? combat["monster_regen"] : undefined;
+    if (
+      (numberAt(m["pursuit"], "persistence") ?? 0) > 0 &&
+      numberAt(defPursuit, "roll_ms") === undefined
+    )
+      this.error(
+        src,
+        ["pursuit", "persistence"],
+        "a persistence needs balance.yaml combat.monster_pursuit.roll_ms",
+      );
+    if (
+      (numberAt(m["regen"], "pct") ?? 0) > 0 &&
+      numberAt(m["regen"], "interval_ms") === undefined &&
+      numberAt(defRegen, "interval_ms") === undefined
+    )
+      this.error(
+        src,
+        ["regen", "pct"],
+        "a pct needs an interval_ms, here or in balance.yaml combat.monster_regen",
+      );
   }
 
   /**
@@ -2101,6 +2196,124 @@ class Validator {
   }
 
   /**
+   * The starting kit of each vocation (data/vocations.yaml start_kit, docs/02 "Equipo
+   * inicial"): every piece is one a new character of that vocation can carry and, if it is
+   * equipment, wear at level 1 (no retired item, no level, no other vocation, a weapon type
+   * the vocation wields); a count only for a stackable, within its stack. A two-handed
+   * weapon leaves no hand for a shield. Like the server (session/startkit.go), the first
+   * piece of each slot is worn and the rest goes to the starting backpack and the pockets:
+   * a second piece for a slot is a warning (it is carried, not worn) and a kit with more
+   * carried piles than those hold is an error (the server would leave the last ones out).
+   * Unknown ids are checkRefs' (x-ref).
+   */
+  private checkStartKits(): void {
+    const src = this.vocations;
+    if (!src) return;
+    for (const [i, voc] of asList(src.data).entries()) {
+      if (!isObj(voc)) continue;
+      const id = String(voc["id"]);
+      const wields = asList(voc["weapons"]).map(String);
+      let twoHanded = false;
+      let shield = false;
+      const wornSlots = new Set<string>();
+      const carried = new Set<string>(); // piles in the backpack and pockets
+      let grams = this.startPackWeight(); // the kit and the starting backpack
+      for (const [j, entry] of asList(voc["start_kit"]).entries()) {
+        if (!isObj(entry)) continue;
+        const path: PathSegment[] = [i, "start_kit", j];
+        const owned = this.index.ids.item.get(String(entry["item"]));
+        const item = owned ? this.itemDef(owned) : undefined;
+        if (!item) continue;
+        const name = String(entry["item"]);
+        if (item["retired"] === true) this.error(src, path, `${name} is retired`);
+        const count = typeof entry["count"] === "number" ? entry["count"] : 1;
+        const stack = typeof item["max_stack"] === "number" ? item["max_stack"] : 100;
+        if (count > 1 && item["stackable"] !== true)
+          this.error(src, [...path, "count"], `${name} does not stack: one per entry`);
+        else if (count > stack)
+          this.error(src, [...path, "count"], `${count} ${name} is more than its stack (${stack})`);
+        if (typeof item["weight"] === "number") grams += item["weight"] * count;
+        const req = isObj(item["requires"]) ? item["requires"] : {};
+        if (Number(req["level"] ?? 1) > 1)
+          this.error(
+            src,
+            path,
+            `${name} asks for level ${String(req["level"])}: a new character is level 1`,
+          );
+        const only = asList(req["vocations"]).map(String);
+        if (only.length > 0 && !only.includes(id))
+          this.error(src, path, `${name} is for ${only.join(", ")}, not ${id}`);
+        const weapon = isObj(item["weapon"]) ? item["weapon"] : undefined;
+        if (weapon && !wields.includes(String(weapon["type"])))
+          this.error(src, path, `${id} does not wield ${String(weapon["type"])} (${name})`);
+        if (weapon && weapon["hands"] === 2) twoHanded = true;
+        if (isObj(item["shield"])) shield = true;
+        const slot = kitSlot(item);
+        if (slot && !wornSlots.has(slot)) {
+          wornSlots.add(slot);
+          continue;
+        }
+        if (slot)
+          this.warn(
+            src,
+            path,
+            `${name} is a second piece for the ${slot} slot: it is carried in the backpack, not worn`,
+          );
+        // Units of one stackable share a pile (the counts are within a stack each).
+        carried.add(item["stackable"] === true ? name : `${name}#${j}`);
+      }
+      const room = this.startRoom();
+      if (carried.size > room)
+        this.error(
+          src,
+          [i, "start_kit"],
+          `${carried.size} carried piles do not fit the starting backpack and the pockets (${room} cells)`,
+        );
+      if (twoHanded && shield)
+        this.error(
+          src,
+          [i, "start_kit"],
+          "a two-handed weapon and a shield: one of them never fits",
+        );
+      // Nothing weighs the kit when it is given (session/startkit.go): it must not start a
+      // character over its capacity.
+      const start = isObj(voc["start"]) ? voc["start"]["capacity"] : undefined;
+      if (asList(voc["start_kit"]).length > 0 && typeof start === "number" && grams > start)
+        this.error(
+          src,
+          [i, "start_kit"],
+          `the kit weighs ${grams} g with the starting backpack, more than the ${start} g a level 1 ${id} carries`,
+        );
+    }
+  }
+
+  /** The weight in grams of balance.yaml inventory.start_container (0 without one). */
+  private startPackWeight(): number {
+    const inv =
+      this.balance && isObj(this.balance.data) ? this.balance.data["inventory"] : undefined;
+    if (!isObj(inv)) return 0;
+    const owned = this.index.ids.item.get(String(inv["start_container"]));
+    const pack = owned ? this.itemDef(owned) : undefined;
+    return pack && typeof pack["weight"] === "number" ? pack["weight"] : 0;
+  }
+
+  /**
+   * The cells a new character has for what it does not wear: the top level of
+   * balance.yaml inventory.start_container plus its pocket_slots.
+   */
+  private startRoom(): number {
+    const inv =
+      this.balance && isObj(this.balance.data) ? this.balance.data["inventory"] : undefined;
+    if (!isObj(inv)) return 0;
+    const owned = this.index.ids.item.get(String(inv["start_container"]));
+    const pack = owned ? this.itemDef(owned) : undefined;
+    const container = pack && isObj(pack["container"]) ? pack["container"] : undefined;
+    const slots = container && typeof container["slots"] === "number" ? container["slots"] : 0;
+    const pockets = typeof inv["pocket_slots"] === "number" ? inv["pocket_slots"] : 0;
+    return slots + pockets;
+  }
+
+  /**
    * Lote 11 (compact catalog, docs/06 "Item"): a retired item stays defined so the
    * characters that own one keep it, but nothing gives a new one: no shop sells it (dev-only
    * NPCs included), no monster or resource drops it, no recipe makes it, no dialog gives it,
@@ -2600,7 +2813,7 @@ class Validator {
       const s = sounds[id];
       return isObj(s) ? s["channel"] : undefined;
     };
-    const ref = (path: PathSegment[], id: unknown, loop?: "music" | "ambient"): void => {
+    const ref = (path: PathSegment[], id: unknown, loop?: "music"): void => {
       if (typeof id !== "string") return;
       const ch = channelOf(id);
       if (ch === undefined) this.error(src, path, `unknown sound "${id}"`);
@@ -2616,7 +2829,8 @@ class Validator {
     }
     const islands = this.worldIslands();
     // The music: pools of music sounds, and places that name a pool (the director's,
-    // client/src/audio/director.ts). The ambient bed names its loops directly.
+    // client/src/audio/director.ts). The ambience names its loops in
+    // data/livingworld/ambience.yaml (checkAmbience).
     const music = isObj(src.data["music"]) ? src.data["music"] : {};
     const pools = isObj(music["pools"]) ? music["pools"] : {};
     for (const [pool, ids] of Object.entries(pools))
@@ -2625,21 +2839,18 @@ class Validator {
       if (typeof id === "string" && !(id in pools))
         this.error(src, path, `unknown pool "${id}" (music.pools)`);
     };
-    for (const loop of ["music", "ambient"] as const) {
-      const l = src.data[loop];
-      if (!isObj(l)) continue;
-      const name = (path: PathSegment[], id: unknown): void =>
-        loop === "music" ? pool(path, id) : ref(path, id, "ambient");
-      name([loop, "underground"], l["underground"]);
+    {
+      const l = music;
+      pool(["music", "underground"], l["underground"]);
       const by = isObj(l["islands"]) ? l["islands"] : {};
       for (const [island, id] of Object.entries(by)) {
         if (islands && !islands.has(island))
           this.error(
             src,
-            [loop, "islands", island],
+            ["music", "islands", island],
             `unknown island "${island}" (world/world.yaml)`,
           );
-        name([loop, "islands", island], id);
+        pool(["music", "islands", island], id);
       }
     }
     // Over the zone's: the title screen's pool and each boss's.
@@ -2843,4 +3054,17 @@ function placeholders(text: string): string {
   return [...new Set([...text.matchAll(/\{([a-z_][a-z0-9_]*)/gi)].map((m) => m[1]))]
     .sort()
     .join(", ");
+}
+
+/**
+ * The equipment slot a start_kit piece is worn in (the server's slotFor, session/
+ * inventory.go), or undefined for what is only carried. A container is carried: the
+ * backpack slot already holds the starting container.
+ */
+function kitSlot(item: Obj): string | undefined {
+  if (isObj(item["weapon"])) return "weapon";
+  if (isObj(item["shield"])) return "shield";
+  if (isObj(item["armor"])) return `${String(item["armor"]["slot"])} armor`;
+  if (isObj(item["ammo"])) return "ammo";
+  return undefined;
 }

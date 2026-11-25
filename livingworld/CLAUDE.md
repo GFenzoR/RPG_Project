@@ -1,7 +1,8 @@
 # livingworld/ — mundo vivo (guía corta para agentes)
 
 **Propósito:** el entorno reacciona a quien pasa (huellas, plantas que se doblan, ondas,
-polvo, hojas, bichos, pasos con sonido, y en el servidor rompibles, empujables y desgaste).
+polvo, hojas, bichos, pasos con sonido, día y noche, y en el servidor rompibles, empujables,
+desgaste y el reloj del mundo).
 La fuente única es `livingworld/README.md`: léela antes de tocar nada.
 
 **Invariantes:**
@@ -13,6 +14,9 @@ La fuente única es `livingworld/README.md`: léela antes de tocar nada.
   game loop: sin locks, sin I/O, el tiempo es el tick. Guardar y mandar es del pegamento
   de `server/` (`session/trailwear.go`, `app/trailwear.go`).
 - "Animaciones reducidas" apaga todos los efectos (el desgaste, que es estado, se sigue viendo).
+- Ambiente posicional (`client/src/ambience.ts`, `data/livingworld/ambience.yaml`): puro,
+  sin Web Audio; capas por la mezcla de casillas (incremental) y emisores por item. Nunca
+  un salto de ganancia, tope de voces (liviano en teléfonos y con animaciones reducidas).
 - Objetos del mapa (rompibles, empujables, placas y compuertas): aleatoriedad solo con el
   `Rand` del loop; muros, puertas, suelos y casas nunca se rompen ni se mueven; nada aparece
   sobre una criatura o un item suelto; el botín se tira una vez por rotura; su estado es

@@ -2,7 +2,8 @@ import { createImage, decodePng, fillRect, GLYPH_H, textWidth } from "@rpg/sprit
 import type { Image, Rgba } from "@rpg/spritepack";
 import { CHUNK_SIZE, chunkKey, emptyChunk } from "@rpg/map-format";
 import type { ContentIndex, ItemInfo, World } from "@rpg/map-format";
-import { pickVariant, tileHash } from "@rpg/renderer/tile-art";
+import { groundDecal, groundLook, groundTone, pickVariant, tileHash } from "@rpg/renderer/tile-art";
+import type { TileArt } from "@rpg/renderer/tile-art";
 import { describe, expect, it } from "vitest";
 import { renderArea } from "./render.ts";
 import type { SpriteFrames } from "./render.ts";
@@ -59,6 +60,13 @@ function at(img: Image, x: number, y: number, dx = 16, dy = 16): number[] {
   return Array.from(img.data.subarray(i, i + 3));
 }
 
+/** A colour as drawn on ground tile (x, y) of floor 7: tinted by its tone (groundTone). */
+function toned(rgb: readonly number[], x: number, y: number): number[] {
+  const t = groundTone(x, y, 7);
+  const k = [(t >> 16) & 255, (t >> 8) & 255, t & 255];
+  return rgb.map((c, i) => (c * ((k[i] ?? 255) / 255)) | 0);
+}
+
 describe("renderArea tile art (the game's, docs/17)", () => {
   const opts = {
     floor: 7,
@@ -91,7 +99,7 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     expect(at(img, 3, 3)).toEqual([10, 100, 200]);
     expect(at(img, 3, 4)).toEqual([10, 100, 200]); // N
     expect(at(img, 2, 2)).toEqual([20, 100, 200]);
-    expect(at(img, 5, 5)).toEqual([0, 80, 0]);
+    expect(at(img, 5, 5)).toEqual(toned([0, 80, 0], 5, 5));
   });
 
   it("shows a border piece's look by tile, evenly, as the game does (docs/17 ART-4)", () => {
@@ -146,8 +154,8 @@ describe("renderArea tile art (the game's, docs/17)", () => {
       [7, 1],
       [6, 7],
     ] as const) {
-      const v = pickVariant(tileHash(x, y, 7), 2, 0.7);
-      expect(at(img, x, y)).toEqual(v === 0 ? [0, 80, 0] : [0, 120, 0]);
+      const v = groundLook({ variants: [0, 1] } as unknown as TileArt<unknown>, x, y, 7);
+      expect(at(img, x, y)).toEqual(toned(v === 0 ? [0, 80, 0] : [0, 120, 0], x, y));
     }
     // The 64 px bush is centred on tile 4: it covers half of tiles 3 and 5.
     expect(at(img, 3, 2, 20, 16)).toEqual([70, 90, 30]);
@@ -159,6 +167,28 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     expect(at(img, 4, 6)).toEqual([90, 60, 30]);
     expect(at(img, 5, 6, 8, 16)[1]).toBeLessThan((at(bare, 5, 6, 8, 16)[1] ?? 0) * 0.8);
     expect(at(img, 5, 6, 24, 16)).toEqual(at(bare, 5, 6, 24, 16));
+  });
+
+  it("lays a ground's decals where groundDecal says, only inside a field, toned", () => {
+    const frames = framesOf([
+      ["ground/grass", 32, 32, [0, 80, 0, 255]],
+      ["ground/grass/decal_1", 32, 32, [200, 0, 0, 255]],
+      ["ground/grass/decal_2", 32, 32, [0, 0, 200, 255]],
+    ]);
+    frames.tiles = { "ground/grass": { decals: 2 } };
+    const c = content([item("grass", "ground/grass")]);
+    const area = { x: 0, y: 0, w: 16, h: 16 };
+    const img = decodePng(renderArea(world("grass", []), c, frames, { ...opts, area }).png);
+    let decals = 0;
+    for (let y = 0; y < 16; y++)
+      for (let x = 0; x < 16; x++) {
+        // Tiles on the island's edge (x or y = 0) border nothing: no decal there.
+        const d = x > 0 && y > 0 ? groundDecal(x, y, 7, 2) : -1;
+        if (d >= 0) decals++;
+        const rgb = d === 0 ? [200, 0, 0] : d === 1 ? [0, 0, 200] : [0, 80, 0];
+        expect(at(img, x, y), `${x},${y}`).toEqual(toned(rgb, x, y));
+      }
+    expect(decals).toBeGreaterThan(0);
   });
 
   it("draws a flat border piece with the grounds, under shadows and the sprites beside it", () => {
@@ -188,9 +218,10 @@ describe("renderArea tile art (the game's, docs/17)", () => {
       item("tree", "decor/tree"),
     ]);
     const img = decodePng(renderArea(w, c, frames, opts).png);
-    expect(at(img, 5, 2, 20, 16)).toEqual([200, 180, 120]);
+    // The piece takes the tone of its tile, like the ground it comes from.
+    expect(at(img, 5, 2, 20, 16)).toEqual(toned([200, 180, 120], 5, 2));
     expect(at(img, 5, 2, 12, 16)).toEqual([70, 90, 30]); // the bush over the piece
-    expect(at(img, 5, 6, 24, 16)).toEqual([200, 180, 120]);
+    expect(at(img, 5, 6, 24, 16)).toEqual(toned([200, 180, 120], 5, 6));
     expect(at(img, 5, 6, 8, 16)[0]).toBeLessThan(200 * 0.8); // the shadow over the piece
   });
 
@@ -217,7 +248,7 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     const img = decodePng(renderArea(w, c, frames, opts).png);
     expect(at(img, 3, 2)).toEqual([140, 90, 50]);
     expect(at(img, 3, 2, 16, 30)).toEqual([250, 220, 0]); // the coin, over the frame
-    expect(at(img, 5, 2)).toEqual([0, 80, 0]); // a door of another floor
+    expect(at(img, 5, 2)).toEqual(toned([0, 80, 0], 5, 2)); // a door of another floor
     // Without the item in data/items, nothing is drawn (and nothing is missing).
     const bare = decodePng(
       renderArea(
@@ -227,7 +258,7 @@ describe("renderArea tile art (the game's, docs/17)", () => {
         opts,
       ).png,
     );
-    expect(at(bare, 3, 2)).toEqual([0, 80, 0]);
+    expect(at(bare, 3, 2)).toEqual(toned([0, 80, 0], 3, 2));
   });
 
   it("draws what is stacked on a crate higher by its elevation (ART-8)", () => {

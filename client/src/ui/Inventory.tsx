@@ -24,6 +24,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import type { ClientContent } from "../content-types.ts";
 import { tipMods } from "../state/mods.ts";
+import { instanceName } from "../state/item-name.ts";
+import type { NameMods } from "../state/item-name.ts";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { sameRef } from "../input/actions.ts";
@@ -38,7 +40,7 @@ import {
   slotBox,
   slotDrop,
 } from "../state/equipment.ts";
-import { formatOz } from "../state/items.ts";
+import { formatMass } from "../state/units.ts";
 import { pocketCells, pocketRef } from "../state/pockets.ts";
 import type { ItemRef } from "../state/items.ts";
 import type { ContainerState, ItemView } from "../state/world.ts";
@@ -245,8 +247,8 @@ function Capacity(props: { t: Translate; free: number; max: number }): JSX.Eleme
       </span>
       <p>
         {props.t("client.inventory.capacity", {
-          free: formatOz(props.free),
-          max: formatOz(props.max),
+          free: formatMass(props.free, props.t),
+          max: formatMass(props.max, props.t),
         })}
       </p>
     </div>
@@ -279,7 +281,7 @@ export function ContainerView(props: {
     >
       {!props.framed && (
         <header>
-          <span>{itemName(content, t, c.itemId)}</span>
+          <span>{itemName(content, t, c.itemId, c.mods)}</span>
           <button
             type="button"
             aria-label={t("client.inventory.close")}
@@ -335,9 +337,14 @@ export function emptySlotStyle(
   };
 }
 
-export function itemName(content: ClientContent, t: Translate, itemId: number): string {
-  const def = content.items[itemId];
-  return def ? t(`item.${def.id}.name`) : String(itemId);
+/** An item's name, with the instance's mods when it has them (state/item-name.ts). */
+export function itemName(
+  content: ClientContent,
+  t: Translate,
+  itemId: number,
+  mods?: NameMods | undefined,
+): string {
+  return instanceName(t, content.items[itemId], itemId, mods);
 }
 
 function ItemCell(props: {
@@ -355,6 +362,8 @@ function ItemCell(props: {
   const ref = props.itemRef(item);
   // T5.6: the item picked by a tap (waiting for its destination) is outlined.
   const picked = props.picked !== undefined && sameRef(props.picked, ref);
+  // By its data/items name, without the instance's mods: what a cell holds is never the
+  // remains of a death (they stay on the map; state/mods.ts tipMods).
   const name = itemName(props.content, props.t, item.itemId);
   const icon = game?.itemIcon(item.itemId);
   const scale = icon && props.box ? iconScale(props.box, icon) : 1;

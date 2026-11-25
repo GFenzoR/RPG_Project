@@ -38,6 +38,9 @@ type PlayCharacter struct {
 	Inventory []InventoryItem
 	// Storage is the quest progress and flags (quest_state: key → value).
 	Storage map[string]int64
+	// Explored is the minimap's explored sectors (character_explored, migration 00028):
+	// every saved one.
+	Explored []ExploredSector
 	// Conditions are the saved conditions (characters.conditions, T3.2).
 	Conditions []Condition
 	// PvP is the character's skull, kill counter and recent unjustified kills (T5.2).
@@ -188,6 +191,9 @@ type CharacterState struct {
 	Inventory []InventoryItem
 	// Storage replaces every quest_state row of the character, in the same transaction.
 	Storage map[string]int64
+	// Explored is the minimap's explored sectors (character_explored, migration 00028):
+	// the ones to upsert (those that gained bits during the login).
+	Explored []ExploredSector
 	// Conditions replace the saved ones (T3.2).
 	Conditions []Condition
 	// PvP replaces the skull, the kill counter and every pvp_unjust_kills row (T5.2).
@@ -280,7 +286,12 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 	if err != nil {
 		return PlayCharacter{}, err
 	}
+	explored, err := s.q.GetCharacterExplored(ctx, id)
+	if err != nil {
+		return PlayCharacter{}, fmt.Errorf("character explored: %w", err)
+	}
 	return PlayCharacter{
+		Explored:  exploredSectors(explored),
 		Stash:     stash,
 		Cosmetics: Cosmetics{Outfit: row.Outfit, Color: row.OutfitColor, NameEffect: row.NameEffect},
 		Look: Look{Sex: row.LookSex, Body: row.LookBody, Skin: row.LookSkin, Hair: row.LookHair, HairColor: row.LookHairColor,
@@ -374,6 +385,9 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 			return fmt.Errorf("save quest state of character %d: %w", c.ID, err)
 		}
 	}
+	if err := saveExplored(ctx, q, c.ID, c.Explored); err != nil {
+		return err
+	}
 	if err := q.DeleteCharacterUnjustKills(ctx, c.ID); err != nil {
 		return fmt.Errorf("clear unjust kills of character %d: %w", c.ID, err)
 	}
@@ -455,4 +469,47 @@ func tsOrNull(t time.Time) pgtype.Timestamptz {
 		return pgtype.Timestamptz{}
 	}
 	return ts(t)
+}
+
+// ExploredSector is one sector of the minimap's fog (server/internal/explore): floor Z,
+// sector column SX and row SY (tile / 32) and its 128-byte bitset.
+type ExploredSector struct {
+	Z, SX, SY int
+	Bits      []byte
+}
+
+// exploredBytes is the size of a sector's bitset (the table's CHECK).
+const exploredBytes = 128
+
+func exploredSectors(rows []db.GetCharacterExploredRow) []ExploredSector {
+	out := make([]ExploredSector, 0, len(rows))
+	for _, r := range rows {
+		if len(r.Bits) != exploredBytes {
+			continue
+		}
+		out = append(out, ExploredSector{Z: int(r.Z), SX: int(r.Sx), SY: int(r.Sy), Bits: r.Bits})
+	}
+	return out
+}
+
+// saveExplored upserts a snapshot's explored sectors (never deletes: bits only grow).
+func saveExplored(ctx context.Context, q *db.Queries, charID int64, in []ExploredSector) error {
+	if len(in) == 0 {
+		return nil
+	}
+	p := db.SaveCharacterExploredParams{CharacterID: charID, Zs: make([]int16, 0, len(in)),
+		Sxs: make([]int16, 0, len(in)), Sys: make([]int16, 0, len(in)), Bits: make([][]byte, 0, len(in))}
+	for _, e := range in {
+		if len(e.Bits) != exploredBytes || e.Z < 0 || e.Z > 15 || e.SX < 0 || e.SX > 4095 || e.SY < 0 || e.SY > 4095 {
+			continue
+		}
+		p.Zs, p.Sxs, p.Sys, p.Bits = append(p.Zs, int16(e.Z)), append(p.Sxs, int16(e.SX)), append(p.Sys, int16(e.SY)), append(p.Bits, e.Bits)
+	}
+	if len(p.Zs) == 0 {
+		return nil
+	}
+	if err := q.SaveCharacterExplored(ctx, p); err != nil {
+		return fmt.Errorf("save explored sectors of character %d: %w", charID, err)
+	}
+	return nil
 }
