@@ -285,6 +285,10 @@ quien arma un mapa (las vigila `packages/map-format/src/town-props.test.ts`):
   de una casa, en un cartel o libro de `texts.yaml`, en el templo, ni en las casillas que
   camina o usa el E2E (la lista `E2E_TILES` del test: si el E2E cambia de camino, se cambia
   ahí también). Lo demás (que todo se siga alcanzando a pie) lo revisa la validación.
+  Desde el lote 20 vale también para los arbustos (`bush`), que ahora bloquean: al
+  sembrarlos con `scatter`, ninguno en esas casillas ni cerrando un paso de una casilla de
+  ancho (`packages/map-format/src/solid-objects.test.ts` compara las zonas caminables con
+  y sin arbustos).
 - **Una cueva lleva una antorcha de pared cada 6 a 8 casillas** en las caras de su roca:
   ninguna cara a más de 6 casillas (Chebyshev) de una antorcha y ninguna antorcha a menos
   de 6 de otra; las salas hondas, que las antorchas del muro norte no alcanzan, llevan
@@ -504,7 +508,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - Cada tile con items tiene suelo; templo, spawns y NPCs están sobre tiles caminables:
   suelo `walkable` y ningún item de la pila que bloquee el paso. Bloquea el paso un item
   con `blocks_movement: true`, y **todo item `kind: wall` salvo que declare
-  `blocks_movement: false`** (regla del contrato: `mapcompile` la aplica igual).
+  `blocks_movement: false`** (regla del contrato: `mapcompile` la aplica igual). Qué
+  objetos bloquean (arbustos, árboles, rocas, muebles) y cuáles se pisan: docs/06 "Qué
+  bloquea el paso".
 - Portales salen de un tile caminable de la isla y llegan a uno caminable de cualquier
   isla. `stairs`/`ladder` cambian de piso y tienen pareja: otro portal
   `stairs`/`ladder` que sale a distancia ≤ 1 del destino y llega a distancia ≤ 1 del

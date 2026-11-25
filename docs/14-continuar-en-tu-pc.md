@@ -129,6 +129,24 @@ el punto 5:
     ven quietos ahí, ya sin los frames viejos.
   - **Plantas de selva** (palmeras, helechos, lianas): los tipos `palm`, `vine` y los demás
     ya tienen sus valores; falta el arte. `make sway-preview` es el paso de revisión.
+- **Arbustos sólidos (hecho, rama `feat/solid-flora`; el dueño el 2026-11-24: "se puede
+  caminar sobre los arbustos"):** `bush` bloquea el paso y la regla de qué bloquea está en
+  docs/06 "Qué bloquea el paso", con `data/solid_families.yaml` y su chequeo en
+  `make validate`. Queda:
+  - **Decisión del dueño: ¿los árboles tapan la vista?** Hoy no (ni flechas ni hechizos ni
+    la vista de los monstruos): solo muros, portones cerrados, cajones apilados y
+    enredaderas. Volverlos opacos es `blocks_sight: true` en los cuatro árboles, y después
+    mirar los spawns del bosque (los monstruos dejan de ver detrás de un tronco).
+  - **Decisión del dueño: banco, cama y jardinera** siguen caminables (regla de las casas
+    del lote 12). Si deben bloquear fuera de las casas, hacen falta items aparte para las
+    casas o revisar `town-props.test.ts`.
+  - **Quien salió del juego parado sobre un arbusto** despierta una vez en su templo (la
+    regla de siempre para una casilla que el mapa cambió), no al lado del arbusto.
+  - **Arbusto en el agua:** el de 4215,6157,7 (Bosque) está sobre `water_shallow`; ya
+    estaba así y se ve raro. Sacarlo o moverlo en el próximo pase de mapas.
+  - **E2E** (lo corre el lote al final): ningún test nombra la casilla de un arbusto, pero
+    los caminos por click de Puerto, Bosque y Volcán ahora los rodean; mirar que ninguna
+    captura cambie de recorrido.
 - **Globos de diálogo (hecho, rama `feat/chat-bubbles`; el dueño el 2026-11-23: lo dicho en
   el canal local aparece sobre la cabeza; docs/17 UI-11):** decir, gritar, susurrar y la
   línea del NPC en su diálogo, con ajuste de línea, apilado, separación entre hablantes y
@@ -532,7 +550,8 @@ el punto 5:
       `game-canvas.ts` (solo el E2E).
     - **Hora en la interfaz:** no hay reloj ni icono de la luna en el HUD.
   - **Plantas en los mapas:** `grass_tuft`, `tall_grass`, `wildflowers` y `reeds` existen
-    pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.
+    pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan (los
+    arbustos y los árboles, sólidos, al pasar por una casilla vecina).
   - **Superficies sin suelo:** `snow`, `mud` y `tall_grass` están en el enum y en
     `surfaces.yaml`, pero ningún suelo las usa aún.
   - **Medir en el navegador:** los topes están en docs/07; falta mirar el tiempo de frame

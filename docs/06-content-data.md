@@ -30,7 +30,7 @@ i18n/
 ## Esquemas y validador
 - Esquemas (JSON Schema 2020-12) en `packages/content-schema/schemas/`: `balance`,
   `vocations`, `items`, `attributes`, `monster`, `npc`, `quest`, `spells`, `recipes`,
-  `boat_routes`, `borders`, `outfits`, `cosmetics`, `i18n`,
+  `boat_routes`, `borders`, `outfits`, `cosmetics`, `solid_families`, `i18n`,
   `ids-lock`, más `common` con las definiciones compartidas (IDs, claves i18n, condiciones,
   acciones, elementos, skills). Son la fuente de verdad del formato; este doc da ejemplos.
 - Dos keywords propios: `x-ref: <tipo>` marca un ID que debe existir (`item`, `monster`,
@@ -273,7 +273,7 @@ items:
   `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
   atravesable (arco, cortina) declara `blocks_movement: false`. El suelo decide con
-  `ground.walkable`.
+  `ground.walkable`. Qué objeto bloquea y cuál no: "Qué bloquea el paso", abajo.
 - **Puertas y llaves** (reglas en `02-game-design.md` "Puertas con llave"): una puerta es
   un par de items fijos con bloque `door`; la cerrada nombra la abierta (`open`) y puede
   llevar `key` (id de llave, mismo formato que un id); la abierta nombra la cerrada
@@ -361,6 +361,55 @@ items:
   - **En el mapa** (`mapcli validate`, docs/03 "Validación"): cada `id` de cofre está una
     sola vez en todo el mundo (dos copias del item se abrirían una vez entre las dos) y
     junto a una casilla a la que se llega a pie desde el templo de su isla.
+
+### Qué bloquea el paso (lote 20, pedido del dueño del 2026-11-24)
+Un objeto del mapa bloquea lo que su sprite muestra. Antes se caminaba sobre los arbustos:
+`bush` no decía `blocks_movement`. La regla, una sola para todos los items de
+`data/items`:
+
+| El objeto… | `blocks_movement` | `blocks_sight` | Items de hoy |
+|---|---|---|---|
+| **Llena su casilla hasta la cintura o más**: planta leñosa, roca, mueble, poste | `true` | no | `bush`, `thick_bush`, `oak_tree`, `pine_tree`, `birch_tree`, `elm_tree`, `boulder`, `mossy_boulder`, `cracked_rock`, `iron_vein`, `ember_vein`, `well`, `fountain`, `barrel`, `rickety_barrel`, `weathered_crate`, `clay_pot`, `sacks`, `fishing_net`, `table`, `shelf`, `anvil`, `smelting_forge`, `cooking_hearth`, `brazier`, `market_stall`, `market_board`, `stash_chest`, los cofres, los atriles con libro, `lamp_post`, `flag_pole`, `mooring_post`, los carteles, `rotten_barricade`, `spider_web`, `portcullis_closed` |
+| **Además es una pared de materia de lado a lado y más alta que una persona**: no deja hueco por donde ver ni tirar | `true` | `true` | los `kind: wall` (por defecto), los portones cerrados (`forge_gate`, `pruebas_gate`, `morvund_gate`), `cargo_crate` y `heavy_crate` (cajones apilados), `thorny_vines` (una cortina de enredaderas) |
+| **Es bajo, está tirado o se pisa**: hierba, flores, restos, placas | no | no | `grass_tuft`, `tall_grass`, `wildflowers`, `reeds`, los restos de lo roto (`cut_bush`, `cut_vines`, `rock_rubble`, `*_debris`, `clay_pot_shards`, `barricade_planks`, `torn_web`), `pressure_plate`, las placas de sigilo, los rollos, los restos de criaturas, las piezas de borde |
+| **Cuelga de un muro o es una entrada** | no | no | `wall_torch`, `wall_banner` (van en la casilla del muro, que ya bloquea), las puertas y rejas abiertas, `house_door_frame`, escaleras, agujeros y teletransportes |
+| **Mueble de una casa que se alquila** (excepción decidida en el lote 12, docs/03 "Muebles y luces") | `false`, dicho | no | `bench`, `bed`, `flower_box`: no le quitan casilla al inquilino |
+
+- **Vista y proyectiles van juntos** (`blocks_sight`, docs/03 "Muros y línea de visión").
+  Un arbusto frena los pies pero no la vista ni las flechas: es bajo. **Un árbol tampoco**
+  tapa la vista: en su casilla solo está el tronco, más angosto que la casilla, y la copa
+  queda por encima de las cabezas (decisión de este lote: con árboles opacos, los
+  monstruos del bosque dejarían de ver a quien pasa detrás de un tronco y el combate a
+  distancia cambiaría en todas las zonas de caza; si el dueño lo quiere, es una línea
+  `blocks_sight: true` por árbol y revisar los spawns del bosque). Un poste, un farol, un
+  puesto de mercado o una reja dejan ver.
+- **`data/solid_families.yaml`** (`solid_families.schema.json`; solo lo lee el validador,
+  nunca el servidor): la lista `families` de palabras de id que nombran una familia sólida
+  (`tree`, `bush`, `shrub`, `hedge`, `boulder`, `rock`, `statue`, `well`, `fountain`,
+  `barrel`, `crate`, `fence`, `pillar`, `table`, `chest`, `gate`, `sign`...).
+  `make validate` falla si un objeto del mapa (`kind: decoration`, `pickupable: false`)
+  cuyo id tiene una de esas palabras (el id partido en `_`: `thick_bush` tiene `bush`) no
+  escribe `blocks_movement`, con `true` o con `false`. El miembro plano o abierto de una
+  familia lo dice en voz alta (`cut_bush`, `forge_gate_open`, `bench`:
+  `blocks_movement: false`). Las piezas de borde (sprite `borders/...`) no cuentan: llevan
+  el nombre de su suelo. Un arbusto, un cajón o una estatua nuevos ya no pueden quedar
+  caminables por olvido; una familia nueva (`cart`, por ejemplo) se agrega a la lista.
+- **Quién lee la regla:** `mapcompile` (el A* del servidor y la línea de visión),
+  `packages/map-format` (validador, editor, `mapcli`), el cliente (`ItemDef.blocks`: el
+  camino por click) y el MCP. Todos leen `data/items`; `make test-parity` y
+  `client/vite/content.test.ts` comparan los veredictos.
+- **Al volver sólido un item que ya está en los mapas:** `make validate` (templo, spawns,
+  NPCs, portales, casas, cofres, placas y lugares de quest alcanzables) y
+  `packages/map-format/src/solid-objects.test.ts`, que compara en cada isla las zonas
+  caminables de antes y de ahora: ningún lugar al que se llegaba queda partido. En el lote
+  20 los 434 arbustos del mundo no cortaron ningún camino; solo se quitó uno, el que
+  estaba en el centro del spawn `puerto_spiders` (3124,6416,7).
+- **Un personaje guardado sobre una casilla que ahora es sólida** despierta en su templo,
+  en la casilla libre más cercana (`placement` de `server/internal/session/player.go`: una
+  casilla que el mapa cambió no está en ninguna zona, y el servidor no adivina de qué lado
+  dejarlo; test `TestBushesAreSolidOnTheMap`).
+- **Mundo vivo:** una planta sólida (arbusto, árboles) nunca se pisa; se dobla o se sacude
+  cuando alguien pasa por una casilla vecina (`livingworld/README.md`, "Plantas").
 
 ## Atributo
 `data/attributes.yaml` (`attributes.schema.json`; opcional para el servidor: sin archivo,
