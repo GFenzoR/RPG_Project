@@ -346,7 +346,11 @@ calculan una vez, al armar la lista (cuando entra o sale un chunk), no por frame
 mallas de los sprites que siguen en pantalla se conservan. Draw calls: ninguno más (las
 mallas van en el batch del atlas, `batchMode: "batch"`); vértices: 68 por planta en vez de
 4. Con "Animaciones reducidas" o `prefers-reduced-motion` no hay mallas ni cálculo. El
-tiempo de frame en el navegador sobre un bosque se mira en el E2E final del lote.
+tiempo de frame en el navegador sobre un bosque lo mide el E2E "wind: crowns sway over
+still trunks…" de `client/e2e/game.spec.ts`, que cuenta las llamadas de dibujo de WebGL de
+la página y falla con 50 o más por frame. Medido el 2026-11-25 en el bosque de Ivernel
+(4221,6071; 51 árboles en la vista, 1280x800 a 2x, Chromium sin ventana con GPU):
+**60 fps y 7 draw calls por frame**: las mallas van en el batch del atlas.
 
 **Ambiente posicional** (lote 18): el cálculo cuesta casi nada. La ventana de 21x21 se
 mueve sumando una fila o columna de 21 casillas por paso (un anillo guarda lo que sumó

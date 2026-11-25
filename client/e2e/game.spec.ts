@@ -4040,3 +4040,178 @@ test("account security: change password, sign out everywhere, email prefill", as
   await expect(page.getByTestId("characters")).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+// Lote 20 (livingworld/README.md "Viento"): the trees of Ivernel's shore sway in the wind,
+// each a mesh of its map sprite: the crown moves and the foot of the trunk does not; with
+// "Animaciones reducidas" the map's own sprites come back and nothing moves; and the meshes
+// ride the atlas batch, so the trees cost no draw calls of their own (docs/07: fewer than 50
+// a frame).
+test("wind: crowns sway over still trunks, reduced motion stops them, draw calls stay in budget", async ({
+  page,
+  playwright,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  // Every WebGL draw of the page, counted from its first context on.
+  await page.addInitScript(() => {
+    const w = window as unknown as { e2eDraws: number };
+    w.e2eDraws = 0;
+    for (const proto of [WebGLRenderingContext.prototype, WebGL2RenderingContext.prototype]) {
+      for (const fn of [
+        "drawElements",
+        "drawArrays",
+        "drawElementsInstanced",
+        "drawArraysInstanced",
+      ]) {
+        const p = proto as unknown as Record<string, (...a: unknown[]) => unknown>;
+        const real = p[fn];
+        if (!real) continue;
+        p[fn] = function (this: unknown, ...a: unknown[]) {
+          w.e2eDraws++;
+          return real.apply(this, a);
+        };
+      }
+    }
+  });
+  const { email, password, name } = await newGuardian(playwright, "Breeze");
+  // In Ivernel's plaza, by the druid's grove; staff, to /tp into the thick of the forest.
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'bosque', level = 15, experience = 35280, pos_x = 4175, pos_y = 6110, pos_z = 7 WHERE name = '${name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${email}')`,
+  ]);
+  await enterGame(page, email, password);
+  errors.length = 0;
+  await arrived(page, 4175, 6110);
+
+  // A tree in view whose crown and foot are on the map, not under a window,
+  // with no tree in the rows south of it (no other crown over its trunk).
+  const trees = (): Promise<
+    { x: number; y: number; cx: number; cy: number; count: number } | undefined
+  > =>
+    page.evaluate(() => {
+      const c = window.__rpgClient;
+      const me = c?.self();
+      if (!c || !me) return undefined;
+      const kinds = ["oak_tree", "pine_tree", "birch_tree", "elm_tree"].map((id) =>
+        c.itemNumber(id),
+      );
+      const isTree = (x: number, y: number): boolean =>
+        (c.tile(x, y, 7) ?? []).slice(1).some((n) => kinds.includes(n));
+      const t = 32 * c.scale();
+      const onMap = (x: number, y: number): boolean =>
+        document.elementFromPoint(x, y)?.tagName === "CANVAS";
+      let count = 0;
+      let pick: { x: number; y: number; cx: number; cy: number } | undefined;
+      for (let y = me.y - 10; y <= me.y + 10; y++)
+        for (let x = me.x - 15; x <= me.x + 15; x++) {
+          if (!isTree(x, y)) continue;
+          count++;
+          const at = c.tileToClient(x, y);
+          let clear = Math.abs(x - me.x) > 2 || y < me.y - 1;
+          for (let dy = 1; dy <= 2 && clear; dy++)
+            for (let dx = -1; dx <= 1 && clear; dx++) if (isTree(x + dx, y + dy)) clear = false;
+          for (const [px, py] of [
+            [at.x - t / 2, at.y - 2 * t],
+            [at.x + t / 2, at.y - t],
+            [at.x, at.y - 1.5 * t],
+            [at.x, at.y + t / 2],
+          ] as const)
+            clear = clear && onMap(px, py);
+          if (clear && !pick) pick = { x, y, cx: at.x, cy: at.y };
+        }
+      return pick && { ...pick, count };
+    });
+  const tree = await trees();
+  if (!tree) throw new Error("no tree in the open in view of Ivernel's plaza");
+  const scale = (await page.evaluate(() => window.__rpgClient?.scale())) ?? 1;
+  const t = 32 * scale;
+  // tileToClient is the middle of the tile: the body of the crown is the tile and a half
+  // above the tree's (lower than whoever stands behind the tree), the foot of the trunk the
+  // lower third of its own.
+  const crown = { x: tree.cx - t / 2, y: tree.cy - t * 2, width: t, height: t };
+  const foot = { x: tree.cx - t / 4, y: tree.cy + t / 6, width: t / 2, height: t / 3 };
+  const frames = async (clip: typeof crown, n: number): Promise<number> => {
+    const seen = new Set<string>();
+    for (let i = 0; i < n; i++) {
+      seen.add((await page.screenshot({ clip })).toString("base64"));
+      await page.waitForTimeout(400);
+    }
+    return seen.size;
+  };
+  for (let i = 0; i < 4; i++) {
+    await shot(page, `120-wind-plaza-zoom${scale}-${i}`);
+    await page.waitForTimeout(400);
+  }
+  expect(await frames(crown, 6), "the crown sways").toBeGreaterThan(1);
+  expect(await frames(foot, 6), "the foot of the trunk stands").toBe(1);
+
+  // Reduced motion: the trees stand whole and still; switched off, they sway again.
+  await openWindow(page, "options");
+  await page.getByTestId("options").getByTestId("reduced-motion").check();
+  await closeWindow(page, "options");
+  await page.waitForTimeout(600);
+  expect(await frames(crown, 5), "the crown stands with reduced motion").toBe(1);
+  await shot(page, `121-wind-reduced-motion`);
+  await openWindow(page, "options");
+  await page.getByTestId("options").getByTestId("reduced-motion").uncheck();
+  await closeWindow(page, "options");
+  expect(await frames(crown, 6), "the crown sways again").toBeGreaterThan(1);
+
+  // The thick of the forest: the screen with the most trees of the island.
+  const say = page.getByTestId("say").getByRole("textbox");
+  await say.fill("/tp 4221 6071 7");
+  await say.press("Enter");
+  await arrived(page, 4221, 6071);
+  await say.blur();
+  await page.waitForTimeout(600);
+  const forest = await trees();
+  for (let i = 0; i < 4; i++) {
+    await shot(page, `122-wind-forest-zoom${scale}-${i}`);
+    await page.waitForTimeout(400);
+  }
+  // What a frame costs with them all in view, over two seconds.
+  const cost = await page.evaluate(
+    () =>
+      new Promise<{ fps: number; draws: number }>((resolve) => {
+        const w = window as unknown as { e2eDraws: number };
+        const first = w.e2eDraws;
+        const start = performance.now();
+        let n = 0;
+        const tick = (): void => {
+          n++;
+          const ms = performance.now() - start;
+          if (ms < 2000) requestAnimationFrame(tick);
+          else resolve({ fps: (n * 1000) / ms, draws: (w.e2eDraws - first) / n });
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  testInfo.annotations.push({
+    type: "wind",
+    description: `${forest?.count ?? 0} trees in view at ${scale}x: ${cost.fps.toFixed(1)} fps, ${cost.draws.toFixed(1)} draw calls a frame`,
+  });
+  console.log(
+    `wind: ${forest?.count ?? 0} trees in view at ${scale}x: ${cost.fps.toFixed(1)} fps, ${cost.draws.toFixed(1)} draw calls a frame`,
+  );
+  expect(cost.draws).toBeLessThan(50);
+
+  // The same at 1x (Ctrl+wheel down zooms all the way out).
+  const canvas = await page.getByTestId("game-canvas").boundingBox();
+  if (!canvas) throw new Error("no canvas");
+  await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 3);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, 100);
+  await page.keyboard.up("Control");
+  await expect.poll(() => page.evaluate(() => window.__rpgClient?.scale())).toBe(1);
+  for (let i = 0; i < 3; i++) {
+    await shot(page, `123-wind-forest-zoom1-${i}`);
+    await page.waitForTimeout(400);
+  }
+  expect(errors).toEqual([]);
+});
