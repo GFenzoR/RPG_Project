@@ -369,26 +369,29 @@ Un objeto del mapa bloquea lo que su sprite muestra. Antes se caminaba sobre los
 
 | El objeto… | `blocks_movement` | `blocks_sight` | Items de hoy |
 |---|---|---|---|
-| **Llena su casilla hasta la cintura o más**: planta leñosa, roca, mueble, poste | `true` | no | `bush`, `thick_bush`, `oak_tree`, `pine_tree`, `birch_tree`, `elm_tree`, `boulder`, `mossy_boulder`, `cracked_rock`, `iron_vein`, `ember_vein`, `well`, `fountain`, `barrel`, `rickety_barrel`, `weathered_crate`, `clay_pot`, `sacks`, `fishing_net`, `table`, `shelf`, `anvil`, `smelting_forge`, `cooking_hearth`, `brazier`, `market_stall`, `market_board`, `stash_chest`, los cofres, los atriles con libro, `lamp_post`, `flag_pole`, `mooring_post`, los carteles, `rotten_barricade`, `spider_web`, `portcullis_closed` |
-| **Además es una pared de materia de lado a lado y más alta que una persona**: no deja hueco por donde ver ni tirar | `true` | `true` | los `kind: wall` (por defecto), los portones cerrados (`forge_gate`, `pruebas_gate`, `morvund_gate`), `cargo_crate` y `heavy_crate` (cajones apilados), `thorny_vines` (una cortina de enredaderas) |
+| **Llena su casilla hasta la cintura o más**: planta leñosa, roca, mueble, poste | `true` | no | `bush`, `thick_bush`, `boulder`, `mossy_boulder`, `cracked_rock`, `iron_vein`, `ember_vein`, `well`, `fountain`, `barrel`, `rickety_barrel`, `weathered_crate`, `clay_pot`, `sacks`, `fishing_net`, `table`, `shelf`, `anvil`, `smelting_forge`, `cooking_hearth`, `brazier`, `market_stall`, `market_board`, `stash_chest`, los cofres, los atriles con libro, `lamp_post`, `flag_pole`, `mooring_post`, los carteles, `rotten_barricade`, `spider_web`, `portcullis_closed` |
+| **Además es alto y denso, más alto que una persona**: no deja hueco por donde ver ni tirar | `true` | `true` | los árboles (`oak_tree`, `pine_tree`, `birch_tree`, `elm_tree`), los `kind: wall` (por defecto), los portones cerrados (`forge_gate`, `pruebas_gate`, `morvund_gate`), `cargo_crate` y `heavy_crate` (cajones apilados), `thorny_vines` (una cortina de enredaderas) |
 | **Es bajo, está tirado o se pisa**: hierba, flores, restos, placas | no | no | `grass_tuft`, `tall_grass`, `wildflowers`, `reeds`, los restos de lo roto (`cut_bush`, `cut_vines`, `rock_rubble`, `*_debris`, `clay_pot_shards`, `barricade_planks`, `torn_web`), `pressure_plate`, las placas de sigilo, los rollos, los restos de criaturas, las piezas de borde |
 | **Cuelga de un muro o es una entrada** | no | no | `wall_torch`, `wall_banner` (van en la casilla del muro, que ya bloquea), las puertas y rejas abiertas, `house_door_frame`, escaleras, agujeros y teletransportes |
 | **Mueble de una casa que se alquila** (excepción decidida en el lote 12, docs/03 "Muebles y luces") | `false`, dicho | no | `bench`, `bed`, `flower_box`: no le quitan casilla al inquilino |
 
 - **Vista y proyectiles van juntos** (`blocks_sight`, docs/03 "Muros y línea de visión").
-  Un arbusto frena los pies pero no la vista ni las flechas: es bajo. **Un árbol tampoco**
-  tapa la vista: en su casilla solo está el tronco, más angosto que la casilla, y la copa
-  queda por encima de las cabezas (decisión de este lote: con árboles opacos, los
-  monstruos del bosque dejarían de ver a quien pasa detrás de un tronco y el combate a
-  distancia cambiaría en todas las zonas de caza; si el dueño lo quiere, es una línea
-  `blocks_sight: true` por árbol y revisar los spawns del bosque). Un poste, un farol, un
-  puesto de mercado o una reja dejan ver.
+  Un arbusto o una roca frenan los pies pero no la vista ni las flechas: son bajos. **Un
+  árbol sí tapa la vista**: es alto y denso, como un seto alto o un muro. Detrás de un
+  tronco no se ve ni se tira (flechas, hechizos, la vista de un monstruo que busca a quién
+  atacar); las casillas de los extremos no cuentan, así que un árbol vecino se tala o se
+  mira igual. Desde el centro de cada spawn del bosque se sigue viendo entre el 57 % y el
+  95 % de las casillas caminables a 7 de distancia (medido al cambiarlo): ninguno queda
+  ciego. Un poste, un farol, un puesto de mercado o una reja dejan ver.
 - **`data/solid_families.yaml`** (`solid_families.schema.json`; solo lo lee el validador,
   nunca el servidor): la lista `families` de palabras de id que nombran una familia sólida
   (`tree`, `bush`, `shrub`, `hedge`, `boulder`, `rock`, `statue`, `well`, `fountain`,
   `barrel`, `crate`, `fence`, `pillar`, `table`, `chest`, `gate`, `sign`...).
-  `make validate` falla si un objeto del mapa (`kind: decoration`, `pickupable: false`)
-  cuyo id tiene una de esas palabras (el id partido en `_`: `thick_bush` tiene `bush`) no
+  El archivo es obligatorio (sin él la regla se apagaría sola). `make validate` falla si un
+  objeto fijo del mapa (`pickupable: false`, de cualquier `kind` salvo `ground`, que se
+  pisa, y `wall`, que bloquea por defecto: un cajón registrable `kind: container` cuenta)
+  cuyo id tiene una de esas palabras (el id partido en `_`: `thick_bush` tiene `bush`; en
+  singular o en plural: `stacked_crates` tiene `crate`, `barrels` tiene `barrel`) no
   escribe `blocks_movement`, con `true` o con `false`. El miembro plano o abierto de una
   familia lo dice en voz alta (`cut_bush`, `forge_gate_open`, `bench`:
   `blocks_movement: false`). Las piezas de borde (sprite `borders/...`) no cuentan: llevan

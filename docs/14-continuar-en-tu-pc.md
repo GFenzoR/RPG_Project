@@ -133,17 +133,22 @@ el punto 5:
   caminar sobre los arbustos"):** `bush` bloquea el paso y la regla de qué bloquea está en
   docs/06 "Qué bloquea el paso", con `data/solid_families.yaml` y su chequeo en
   `make validate`. Queda:
-  - **Decisión del dueño: ¿los árboles tapan la vista?** Hoy no (ni flechas ni hechizos ni
-    la vista de los monstruos): solo muros, portones cerrados, cajones apilados y
-    enredaderas. Volverlos opacos es `blocks_sight: true` en los cuatro árboles, y después
-    mirar los spawns del bosque (los monstruos dejan de ver detrás de un tronco).
+  - **Los árboles tapan la vista** (`blocks_sight: true` en los cuatro, como pedía la
+    tarea: "alto y denso"): detrás de un tronco no pasan flechas ni hechizos ni la vista de
+    un monstruo que busca objetivo. **A probar por el dueño** en el Bosque con un arquero
+    o un mago; si molesta, volver atrás es sacar esa línea de los cuatro árboles en
+    `data/items/decoration.yaml` y ajustar `solid_test.go` y la tabla de docs/06.
   - **Decisión del dueño: banco, cama y jardinera** siguen caminables (regla de las casas
     del lote 12). Si deben bloquear fuera de las casas, hacen falta items aparte para las
     casas o revisar `town-props.test.ts`.
   - **Quien salió del juego parado sobre un arbusto** despierta una vez en su templo (la
-    regla de siempre para una casilla que el mapa cambió), no al lado del arbusto.
-  - **Arbusto en el agua:** el de 4215,6157,7 (Bosque) está sobre `water_shallow`; ya
-    estaba así y se ve raro. Sacarlo o moverlo en el próximo pase de mapas.
+    regla de siempre para una casilla que el mapa cambió), no al lado del arbusto. El
+    templo es el de su pueblo (`Town`): si el arbusto estaba en otra isla, ese despertar
+    lo lleva a su isla de origen, un viaje gratis de una sola vez que nadie puede elegir
+    después del cambio. Arreglarlo (templo de la isla donde quedó) toca `placement` en
+    `server/internal/session/player.go`; no se hizo.
+  - **`thick_bush` no se dobla** al rozarlo (`data/livingworld/plants.yaml` no lo nombra:
+    es un rompible del mundo vivo, ya era así). Decidir si un rompible también se mece.
   - **E2E** (lo corre el lote al final): ningún test nombra la casilla de un arbusto, pero
     los caminos por click de Puerto, Bosque y Volcán ahora los rodean; mirar que ninguna
     captura cambie de recorrido.
