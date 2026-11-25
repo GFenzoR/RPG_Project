@@ -96,14 +96,24 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 
 const readYaml = (file: string): unknown => parse(readFileSync(file, "utf8")) as unknown;
 
-/** data/livingworld/surfaces.yaml, plants.yaml, ambience.yaml and daynight.yaml as the living world uses them. */
-function loadLivingWorld(root: string): LivingWorldData {
+/**
+ * data/livingworld/surfaces.yaml, plants.yaml, ambience.yaml, daynight.yaml and the wind
+ * (wind.yaml and wind_sprites.yaml, joined to the plants by each item's sprite) as the
+ * living world uses them.
+ */
+function loadLivingWorld(root: string, items: Readonly<Record<number, ItemDef>>): LivingWorldData {
   const read = (name: string): unknown => {
     const file = join(root, "data", "livingworld", name);
     return existsSync(file) ? readYaml(file) : undefined;
   };
+  const itemSprites: Record<string, string> = {};
+  for (const item of Object.values(items)) if (item.sprite) itemSprites[item.id] = item.sprite;
   return {
-    ...parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml"), read("daynight.yaml")),
+    ...parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml"), read("daynight.yaml"), {
+      wind: read("wind.yaml"),
+      sprites: read("wind_sprites.yaml"),
+      itemSprites,
+    }),
     ambience: parseAmbience(read("ambience.yaml")),
   };
 }
@@ -315,7 +325,7 @@ export function loadClientContent(root: string): ClientContent {
   const forge = loadForge(balance, ids);
   return {
     items,
-    livingWorld: loadLivingWorld(root),
+    livingWorld: loadLivingWorld(root, items),
     attributes,
     monsterSprites: monsters,
     // A topic conflict is the content test's to report (vite/content.test.ts): the build

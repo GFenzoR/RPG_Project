@@ -31,13 +31,22 @@ describe("client content (T0.5)", () => {
     const lw = content.livingWorld;
     expect(lw?.surfaces.sand?.footprintMs).toBeGreaterThan(0);
     expect(lw?.surfaces.sand?.wind).toBeGreaterThan(0);
-    expect(lw?.plants["tall_grass"]).toEqual({
+    expect(lw?.plants["tall_grass"]).toMatchObject({
       reaction: "bend",
-      idle: true,
       leaves: false,
       trample: true,
+      wind: { kind: "tall_grass" },
     });
     expect(lw?.plants["oak_tree"]?.reaction).toBe("rustle");
+    // The wind (data/livingworld/wind.yaml and the sprites' metadata of make spritegen):
+    // every tree knows where its trunk ends, and what is left of a cut bush never sways.
+    expect(lw?.wind?.field.speed).toBeGreaterThan(0);
+    expect(lw?.plants["oak_tree"]?.wind).toMatchObject({ kind: "tree", pivotPx: 28 });
+    expect(lw?.plants["bush"]?.wind?.amplitude).toBeLessThan(
+      lw?.plants["oak_tree"]?.wind?.amplitude ?? 0,
+    );
+    expect(lw?.plants["cut_bush"]).toBeUndefined();
+    for (const [id, rule] of Object.entries(lw?.plants ?? {})) expect(rule.wind, id).toBeDefined();
     // Day and night (data/livingworld/daynight.yaml): the owner's 180 + 60 minutes.
     expect(lw?.dayNight?.dayMs).toBe(180 * 60_000);
     expect(lw?.dayNight?.nightMs).toBe(60 * 60_000);

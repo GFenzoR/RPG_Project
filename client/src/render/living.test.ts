@@ -78,9 +78,10 @@ describe("living objects glue", () => {
 });
 
 describe("the map's sprites for the living world", () => {
-  it("names each by its item's number, also the remains of a monster", () => {
-    // MapView hands the tile keys of the client (state/corpse-art.ts): "<n>@<monster>" for
-    // remains. The living world's rules are keyed by the item alone.
+  it("names each by its item's id of data/items, also the remains of a monster", () => {
+    // MapView hands the tile keys of the client (state/corpse-art.ts): the item's number,
+    // or "<n>@<monster>" for remains. data/livingworld names its plants by item id: with
+    // the number, no plant ever matched its rule (neither bent nor swayed).
     const view = {
       version: 3,
       forEachItemSprite(fn: (x: number, y: number, key: string, sprite: string) => void): void {
@@ -88,13 +89,13 @@ describe("the map's sprites for the living world", () => {
         fn(3, 4, "91@wolf", "corpse");
       },
     };
-    const src = plantSource(view);
+    const src = plantSource(view, { 14: { id: "jungle_fern" }, 91: { id: "creature_remains" } });
     expect(src.version()).toBe(3);
     const seen: [number, number, string, string][] = [];
     src.forEach((x, y, id, sprite) => seen.push([x, y, id, sprite]));
     expect(seen).toEqual([
-      [1, 2, "14", "fern"],
-      [3, 4, "91", "corpse"],
+      [1, 2, "jungle_fern", "fern"],
+      [3, 4, "creature_remains", "corpse"],
     ]);
   });
 });

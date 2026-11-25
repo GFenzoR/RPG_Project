@@ -424,8 +424,10 @@ export class MapView {
 
   /**
    * Calls fn for every item sprite of the built chunks (not the flat border pieces): its
-   * global tile, item id (the source's key, see ChunkData) and sprite. The caller may skew or nudge a sprite (the living
-   * world's plants) but must not keep it past the next version change.
+   * global tile, item id (the source's key, see ChunkData) and sprite. The caller may skew or
+   * nudge a sprite, or hide it and draw its own view in its place (same parent, position and
+   * zIndex, sorted after it: the living world's plants in the wind), but must not keep it
+   * past the next version change.
    */
   forEachItemSprite(fn: (x: number, y: number, id: string, sprite: Sprite) => void): void {
     for (const c of this.cache.values()) {

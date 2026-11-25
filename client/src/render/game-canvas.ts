@@ -541,7 +541,7 @@ export async function createGameCanvas(
   const particleView: ParticleView = { x: 0, y: 0, width: 0, height: 0 };
   // The living world's frame, reused (docs/07: a frame allocates nothing for it).
   const livingSelf = { x: 0, y: 0 };
-  const livingView = { x: 0, y: 0, width: 0, height: 0, z: 0, self: livingSelf };
+  const livingView = { x: 0, y: 0, width: 0, height: 0, z: 0, self: livingSelf, zoom: 1 };
   /** The trail wear version the living world has (state/trail-wear.ts). */
   let livingWear = -1;
   const emitters = (fn: Parameters<MapView["forEachEmitter"]>[0]): void => view.forEachEmitter(fn);
@@ -604,7 +604,16 @@ export async function createGameCanvas(
   // The day and night (livingworld/README.md "Día y noche", render/sky.ts): the world clock
   // the server sent, run on every frame into the sky's light and the sun's angle.
   const sky = new SkyView(content.livingWorld?.dayNight, world.worldClock);
-  const living = mountLivingWorld(view, world, content, atlas, reducedMotion, () => sky.night());
+  const living = mountLivingWorld(
+    view,
+    world,
+    content,
+    atlas,
+    reducedMotion,
+    () => sky.night(),
+    // No wind underground (livingworld/README.md "Viento").
+    () => isDark(world.self?.pos.z ?? 0),
+  );
   // The creatures' cast shadows (render/cast-shadows.ts): over the ground and the living
   // world's footprints, under the items and the creatures; off with reduced motion and
   // underground (no sun there: the contact ellipse stays).
@@ -1299,6 +1308,8 @@ export async function createGameCanvas(
     livingView.width = particleView.width;
     livingView.height = particleView.height;
     livingView.z = self.pos.z;
+    // The wind moves the plants in whole screen pixels at this zoom.
+    livingView.zoom = cam.zoom;
     livingSelf.x = self.pos.x;
     livingSelf.y = self.pos.y;
     // Trail wear (state/trail-wear.ts): handed over whole, only when it changed.
