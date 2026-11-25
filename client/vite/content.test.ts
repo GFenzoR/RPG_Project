@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadContent } from "@rpg/map-format";
+import { delta } from "../src/state/geometry.ts";
+import { findPath } from "../src/state/path.ts";
 import {
   GAME_SITE_KEYS,
   dialogTopics,
@@ -325,6 +327,40 @@ describe("client content (T0.5)", () => {
     // The temple walls of Thimblewick (kind: wall, no blocks_movement).
     expect(byId.get("stone_wall")?.blocks).toBe(true);
     expect(byId.get("wooden_wall")?.blocks).toBe(true);
+  });
+
+  // Owner's report of 2026-11-24: one walked over the bushes. What fills its tile blocks
+  // (docs/06 "Qué bloquea el paso"), so a click beyond a bush walks round it, as the
+  // server's path does; low growth and what lies flat are walked over.
+  it("walks by click round a bush, over grass and a cut bush", () => {
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    for (const id of ["bush", "thick_bush", "oak_tree", "pine_tree", "boulder", "well", "barrel"])
+      expect(byId.get(id)?.blocks, id).toBe(true);
+    for (const id of ["cut_bush", "grass_tuft", "tall_grass", "wildflowers", "reeds", "bench"])
+      expect(byId.get(id)?.blocks, id).toBe(false);
+    // A row of grass, 0..4, with one thing on its middle tile and open rows beside it.
+    const walk = (onTheWay: string): string[] => {
+      const passable = (x: number, y: number): boolean =>
+        x >= 0 &&
+        x <= 4 &&
+        y >= 0 &&
+        y <= 2 &&
+        !(x === 2 && y === 1 && byId.get(onTheWay)?.blocks === true);
+      const steps = findPath({ x: 0, y: 1, z: 7 }, { x: 4, y: 1, z: 7 }, passable, {
+        diagonalCost: 1.414,
+        maxSteps: 20,
+      });
+      expect(steps, onTheWay).toBeDefined();
+      let [x, y] = [0, 1];
+      return (steps ?? []).map((d) => {
+        const [dx, dy] = delta(d);
+        return `${(x += dx)},${(y += dy)}`;
+      });
+    };
+    expect(walk("bush")).not.toContain("2,1");
+    expect(walk("bush").at(-1)).toBe("4,1");
+    expect(walk("tall_grass")).toEqual(["1,1", "2,1", "3,1", "4,1"]);
+    expect(walk("cut_bush")).toEqual(["1,1", "2,1", "3,1", "4,1"]);
   });
 
   it("marks the map doors, open or shut, and only those (playtest m5)", () => {
