@@ -3129,13 +3129,31 @@ Números en `data/balance.yaml` (`chat`), nunca en código.
 ## Grupos (T3.3)
 Números en `data/balance.yaml` (`party`), nunca en código. Código:
 `server/internal/session/party.go`.
-- **Formar:** el líder (o un jugador sin grupo, que pasa a ser líder) invita a un jugador
-  que **ve** (lista de batalla, botón "+", o `/invite Nombre`). Invitar a alguien fuera de
-  vista o invisible responde igual que un nombre que no existe: el grupo no sirve para
-  buscar a nadie. Cada invitación cuenta para el anti-flood del chat y termina la invisibilidad del que
-  invita (el invitado recibe su nombre). El invitado acepta o
-  rechaza; la invitación vence a los `invite_ms` (45 s, por tick del loop). Hasta
-  `max_members` (6) miembros contando al líder.
+- **Formar:** el líder (o un jugador sin grupo, que pasa a ser líder) invita a otro
+  jugador de dos maneras:
+  - **A uno que ve:** lista de batalla, botón "+". Uno fuera de vista o invisible no se
+    encuentra (`party.player_not_seen`).
+  - **Por nombre, esté donde esté:** el botón **"Invitar"** de la ventana de grupo (pide el
+    nombre del personaje; Enter o "Invitar" lo manda, Escape o "Cancelar" lo cierra) o
+    `/invite Nombre`. El nombre tiene que ser exacto (sin importar mayúsculas) y el
+    personaje tiene que estar **en línea**: uno desconectado y uno que no existe reciben la
+    misma respuesta (`party.player_not_found`), así nadie averigua qué personajes existen.
+    Un invisible que el que invita no ve cuenta como desconectado (como en `/report`).
+    Invitarse a sí mismo → `party.invite_self`.
+  - **Anti-spam:** cada intento (por nombre o desde la lista, se encuentre o no) cuenta para
+    el anti-flood del chat y para `invites_per_minute` (6): hasta 6 seguidos y después uno
+    cada 10 s; pasado el límite no se manda nada y el jugador oye cuántos segundos esperar
+    (`party.invite_rate`). Así tampoco se puede probar una lista de nombres para saber
+    quién está conectado. El límite es de la **cuenta** y vive en el mundo: reloguear o
+    usar el otro personaje de la cuenta no da intentos nuevos.
+  - No hay lista de ignorados todavía: cuando exista, invitar a quien te ignora debería
+    responder como un nombre desconectado.
+
+  Invitar termina la invisibilidad del que invita (el invitado recibe su nombre). El
+  invitado recibe la misma ventana de aceptar o rechazar aunque esté lejos; la invitación
+  vence a los `invite_ms` (45 s, por tick del loop). Hasta `max_members` (6) miembros
+  contando al líder (`party.full`); el que ya está en un grupo no se puede invitar
+  (`party.already_in_party`) y solo el líder invita a su grupo (`party.not_leader`).
 - **Gestionar:** cualquiera puede salir; el líder expulsa, pasa el liderazgo y apaga (o
   vuelve a prender) la experiencia compartida. Pasar el liderazgo y prender o apagar cuentan para el
   anti-flood del chat (cada cambio se anuncia a todos). Un grupo que queda con un solo miembro se disuelve.

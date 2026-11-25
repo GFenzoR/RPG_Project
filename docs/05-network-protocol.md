@@ -690,7 +690,7 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 | `TradeAccept` / `TradeCancel` | — (T5.3) |
 | `MarketCommand` | `browse`, `create`, `cancel`, `accept`, `withdraw` o `close` (T5.3) |
 | `CloseContainer` | `container_id` (T1.8) |
-| `PartyCommand` | `action` (invitar, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id` (T3.3) |
+| `PartyCommand` | `action` (invitar, invitar por nombre, aceptar, rechazar, salir, expulsar, pasar liderazgo, compartir sí/no), `creature_id`, `name` (T3.3) |
 | `Craft` | `recipe_id`, `station` (posición de la estación, T3.4) |
 | `Refine` | `station` (el yunque), `item` (slot o contenedor), `item_id`, `level` (el nivel de refinado que ve el cliente), `protect` (gastar un ámbar) (la forja) |
 | `ReportPlayer` | `creature_id` (un jugador a la vista), `reason` (1..200 caracteres) (T4.1) |
@@ -1362,11 +1362,25 @@ por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
 
 ### Grupos (T3.3, `server/internal/session/party.go`)
 Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
-- **`PartyCommand{action, creature_id}`**:
+- **`PartyCommand{action, creature_id, name}`**:
   - `INVITE` (`creature_id` = un jugador que el cliente ve): solo el líder o alguien sin
-    grupo. Cuenta para el anti-flood del chat. Al invitado le llega
-    `PartyInvitation{inviter_id, inviter_name, expires_ms}`; al que invita, `party.invited`
-    (`name`). `/invite Nombre` en la línea de chat hace lo mismo por nombre.
+    grupo. Cuenta para el anti-flood del chat y para `party.invites_per_minute` (por cuenta:
+    un relogueo o el otro personaje no lo reinician). Al invitado
+    le llega `PartyInvitation{inviter_id, inviter_name, expires_ms}`; al que invita,
+    `party.invited` (`name`). Uno que el cliente no ve → `party.player_not_seen`.
+  - `INVITE_NAME` (9, agregado sin romper nada; `name` = campo 3, el nombre escrito;
+    `creature_id` se ignora): el botón "Invitar" de la ventana de grupo. Las mismas reglas
+    que `INVITE`, pero el servidor busca el nombre (exacto, sin importar mayúsculas, sin
+    espacios a los lados) entre los jugadores **en línea**, en el loop y sin la base: el
+    invitado puede estar en cualquier lado. Desconectado, inexistente o invisible sin ser
+    visto → `party.player_not_found` (`name`, tal como se escribió), siempre igual. Un
+    `name` vacío o de más de 80 bytes (4 × el nombre más largo) se ignora sin contestar; se
+    limpia como el chat (sin caracteres de control) antes de buscarlo y de devolverlo. `/invite Nombre` en la línea de chat hace lo mismo.
+  - Respuestas de una invitación, en orden: muteado por flood (`chat.muted`/`chat.flood`),
+    límite de invitaciones (`party.invite_rate`, `seconds`: cuánto esperar; el intento
+    rechazado no alarga la espera), a sí mismo (`party.invite_self`), no encontrado, no es
+    el líder (`party.not_leader`), ya está en un grupo (`party.already_in_party`), grupo
+    completo (`party.full`), ya invitado (`party.already_invited`) o `party.invited`.
   - `ACCEPT` / `DECLINE` (`creature_id` = quien invitó). Aceptar una invitación vencida, de
     alguien que ya no lidera o que se fue → `party.invite_gone`. Rechazar le avisa al que
     invitó (`party.declined`, `name`).
@@ -1399,7 +1413,8 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
 - Mensajes de sistema: `party.invited`, `party.player_not_found` (`name`),
   `party.player_not_seen`, `party.already_in_party` (`name`), `party.already_invited`
   (`name`), `party.leave_first`, `party.full`, `party.not_leader`, `party.none`,
-  `party.not_a_member`, `party.invite_gone`, `party.invite_usage`, `party.declined`,
+  `party.not_a_member`, `party.invite_gone`, `party.invite_usage`, `party.invite_self`,
+  `party.invite_rate` (`seconds`), `party.declined`,
   `party.joined`, `party.left`, `party.kicked`, `party.new_leader` (todos con `name`),
   `party.you_were_kicked`, `party.disbanded`, `party.shared_on`, `party.shared_off`,
   `party.shared_default` (al formarse un grupo con la experiencia compartida prendida: lo

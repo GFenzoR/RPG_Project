@@ -405,6 +405,22 @@ el punto 5:
   - **Una manada** es un spawn: dos spawns vecinos del mismo tipo deciden aparte.
   - **Integración y E2E** los corre el lote al final: mirar en `make play` a un lobo
     siguiendo fuera del corral y volviendo herido.
+- **Invitar al grupo por nombre (hecho, rama `feat/party-invite`; el dueño el 2026-11-23:
+  "la ventana de grupo tiene que tener un botón para invitar desde ahí, pidiendo el nombre
+  del personaje"; docs/02 "Grupos", docs/05 "Grupos"):** la ventana de grupo tiene un botón
+  "Invitar" (sin grupo, o siendo el líder) que abre un cuadro para escribir el nombre
+  (Enter manda, Escape cierra). Viaja como `PartyCommand` `INVITE_NAME` con `name`; el
+  servidor lo busca entre los jugadores en línea, esté donde esté, y `/invite Nombre` hace
+  lo mismo (antes solo encontraba a alguien a la vista). Desconectado e inexistente
+  responden igual. Límite nuevo `balance.yaml party.invites_per_minute` (6) para todo
+  intento de invitar. Queda:
+  - **Mirarlo en el juego** (la verificación final): abrir la ventana de grupo sin grupo,
+    tocar "Invitar", escribir el nombre del otro personaje lejos y ver que le llega la
+    invitación; en el teléfono, que el cuadro entra en la ventana y el teclado no la tapa.
+  - **Lista de ignorados:** no existe; cuando se haga, invitar a quien te ignora tiene que
+    responder `party.player_not_found` (como desconectado).
+  - El límite de invitaciones es por cuenta y vive en la memoria del mundo: sobrevive a un
+    relogueo y lo comparten los 2 personajes de la cuenta; un reinicio del servidor lo borra.
 - **Desgaste de senderos (hecho, rama `feat/trail-wear`, lote 17; el dueño el 2026-11-23:
   "si muchos jugadores caminan sobre el pasto, empieza a verse la tierra"; docs/02
   "Senderos", `livingworld/README.md`):** el servidor cuenta los pasos de los jugadores
