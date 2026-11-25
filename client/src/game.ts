@@ -177,6 +177,8 @@ export interface GameUi {
   /** The party and the invitations not answered yet (T3.3). */
   party: PartyView | undefined;
   invitations: InvitationView[];
+  /** The party window's "Invitar" prompt (a character name) is open. */
+  partyInviting?: boolean | undefined;
   /** The guild and the invitations to one (T5.1). */
   guild: GuildView | undefined;
   /** The safe mode switch (T5.2). */
@@ -522,6 +524,8 @@ export class Game {
   private shown: GameUi | undefined;
   /** A Shift+drag of a stack, dropped, waiting for how many move (ui/SplitPrompt.tsx). */
   private split: { ref: ItemRef; to: ItemLoc; x: number; y: number } | undefined;
+  /** The party window's invite-by-name prompt is open (ui/Party.tsx). */
+  private partyInviting = false;
   /** The item dragged with the pointer right now (docs/17 UI-5). */
   private dragging: ItemRef | undefined;
   /** The map's zoom this device remembers (undefined = fit the view) and the one drawn. */
@@ -887,8 +891,26 @@ export class Game {
 
   // ---- parties (T3.3): the server checks leadership, sight and the party size ---------
 
-  private party(action: PartyAction, creatureId = 0): void {
-    this.conn.send({ case: "partyCommand", value: { action, creatureId } });
+  private party(action: PartyAction, creatureId = 0, name = ""): void {
+    this.conn.send({ case: "partyCommand", value: { action, creatureId, name } });
+  }
+
+  /** Opens or closes the party window's invite-by-name prompt. */
+  partyInvitePrompt(open: boolean): void {
+    if (this.partyInviting === open) return;
+    this.partyInviting = open;
+    this.publish();
+  }
+
+  /**
+   * Invites the online character called `name`, wherever it is (the prompt's submit),
+   * and closes the prompt. The server finds it (case-insensitive, exact) and answers
+   * with a system message either way.
+   */
+  partyInviteByName(name: string): void {
+    const n = name.trim();
+    if (n) this.party(PartyAction.INVITE_NAME, 0, n);
+    this.partyInvitePrompt(false);
   }
 
   /** Invites a player the client sees (battle list). */
@@ -1931,6 +1953,7 @@ export class Game {
       clockOffset: w.clockOffset,
       party: w.party.party,
       invitations: [...w.party.invitations(performance.now())],
+      partyInviting: this.partyInviting,
       guild: w.guild.view(performance.now()),
       safeMode: this.safe,
       guildInvitations: [...w.guild.invitations(performance.now())],

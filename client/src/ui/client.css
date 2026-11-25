@@ -4226,3 +4226,34 @@ button.credits-link {
 .stash li button {
   margin-left: auto;
 }
+/* The party window's "Invitar" prompt: a character name, then invite or cancel. It takes
+   the whole row of the party's buttons; the field is wide enough to tap on a phone. */
+.party-invite-prompt {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--ui-iron-600);
+  background: rgb(15 13 11 / 0.6);
+}
+.party-invite-prompt label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+.party-invite-prompt input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2rem;
+  font-size: 1rem;
+}
+.party-invite-prompt .buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+.party-invite-prompt .buttons button {
+  min-height: 2rem;
+}

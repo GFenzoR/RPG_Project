@@ -1,6 +1,7 @@
 // Party panel (T3.3): members with their level and, while in view, health and mana; the
 // leader's actions; the shared experience indicator with the bonus % and who shares it;
-// a help line on what a party gives; and the invitations to answer. The server decides
+// a help line on what a party gives; the "Invitar" button (no party or the leader) with
+// its prompt for a character name; and the invitations to answer. The server decides
 // everything: the buttons only send intents.
 import type { JSX } from "preact";
 import type { Game, GameUi } from "../game.ts";
@@ -9,6 +10,90 @@ import { SharedExperience } from "@rpg/protocol";
 import { sharedKey, sharingCount } from "../state/party.ts";
 
 const SHARED_OFF = SharedExperience.OFF;
+
+/** The longest character name (server auth.MaxNameLen). */
+const NAME_MAX = 20;
+
+/**
+ * The name field takes the focus when the prompt opens (Preact ignores autoFocus). One
+ * function for every render: a new one each time would make Preact call it again on
+ * every update and take the focus back from wherever the player put it.
+ */
+const focusOnMount = (el: HTMLInputElement | null): void => el?.focus();
+
+/**
+ * The "Invitar" button, or its prompt while open: a character name, Enter or "Invitar"
+ * sends it (PartyCommand INVITE_NAME), Escape or "Cancelar" closes it. A plain function
+ * (no hooks): the open state lives in Game (GameUi.partyInviting).
+ */
+export function PartyInvite(props: {
+  t: Translate;
+  game: Pick<Game, "partyInvitePrompt" | "partyInviteByName"> | undefined;
+  open: boolean;
+}): JSX.Element {
+  const { t, game } = props;
+  if (!props.open) {
+    return (
+      <button
+        type="button"
+        data-testid="party-invite"
+        onClick={() => game?.partyInvitePrompt(true)}
+      >
+        {t("client.party.invite")}
+      </button>
+    );
+  }
+  return (
+    <form
+      class="party-invite-prompt"
+      role="dialog"
+      aria-labelledby="party-invite-title"
+      data-testid="party-invite-prompt"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const field = e.currentTarget.elements.namedItem("name") as HTMLInputElement | null;
+        const name = field?.value ?? "";
+        if (name.trim()) game?.partyInviteByName(name);
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        e.stopPropagation();
+        game?.partyInvitePrompt(false);
+      }}
+    >
+      <label>
+        <span id="party-invite-title">{t("client.party.invite_title")}</span>
+        <input
+          ref={focusOnMount}
+          name="name"
+          type="text"
+          maxLength={NAME_MAX}
+          required
+          autoComplete="off"
+          autoCapitalize="words"
+          spellcheck={false}
+          enterKeyHint="send"
+          placeholder={t("client.party.invite_name")}
+          aria-label={t("client.party.invite_name")}
+          data-testid="party-invite-name"
+        />
+      </label>
+      <div class="buttons">
+        <button type="submit" data-testid="party-invite-send">
+          {t("client.party.invite_send")}
+        </button>
+        <button
+          type="button"
+          data-testid="party-invite-cancel"
+          onClick={() => game?.partyInvitePrompt(false)}
+        >
+          {t("client.party.invite_cancel")}
+        </button>
+      </div>
+    </form>
+  );
+}
 
 export function PartyPanel(props: {
   t: Translate;
@@ -24,6 +109,9 @@ export function PartyPanel(props: {
       {!party ? (
         <>
           <p class="empty">{t("client.party.empty")}</p>
+          <div class="party-actions">
+            <PartyInvite t={t} game={props.game} open={ui.partyInviting === true} />
+          </div>
           <p class="party-help" data-testid="party-help">
             {t("client.party.help")}
           </p>
@@ -82,6 +170,7 @@ export function PartyPanel(props: {
             ))}
           </ul>
           <div class="party-actions">
+            {leader && <PartyInvite t={t} game={props.game} open={ui.partyInviting === true} />}
             {leader && (
               <button
                 type="button"

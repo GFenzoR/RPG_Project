@@ -13,6 +13,7 @@ import {
   CreatureLookSchema,
   CreatureSchema,
   TileUpdateSchema,
+  PartyAction,
   create,
 } from "@rpg/protocol";
 import type { ServerMessage } from "@rpg/protocol";
@@ -290,5 +291,53 @@ describe('Game names the remains of a death (docs/02 "Muerte")', () => {
     expect(hint).toContain("client.action.");
     expect(hint).toContain("client.item.remains_of");
     expect(hint).toContain("wolf");
+  });
+});
+
+describe('Game party invite by name (docs/02 "Grupos")', () => {
+  let last: GameUi | undefined;
+  let game: InstanceType<typeof Game>;
+
+  beforeEach(() => {
+    sent.length = 0;
+    last = undefined;
+    vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    vi.stubGlobal("document", { body: { classList: { toggle: vi.fn() } } });
+    game = new Game({
+      host: {} as HTMLElement,
+      content,
+      t: (key) => key,
+      locale: "es",
+      sessionToken: "token",
+      vocation: "guardian",
+      entered: vi.fn(),
+      ended: vi.fn(),
+      update: (ui) => {
+        last = ui;
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("opens the prompt, sends INVITE_NAME with the trimmed name and closes it", () => {
+    game.partyInvitePrompt(true);
+    expect(last?.partyInviting).toBe(true);
+    expect(sent).toEqual([]);
+    game.partyInviteByName("  Bruno Holt ");
+    expect(sent.map((i) => i.case)).toEqual(["partyCommand"]);
+    expect(sent[0]?.value).toMatchObject({ action: PartyAction.INVITE_NAME, name: "Bruno Holt" });
+    expect(last?.partyInviting).toBe(false);
+  });
+
+  it("sends nothing for an empty name or a cancel", () => {
+    game.partyInvitePrompt(true);
+    game.partyInviteByName("   ");
+    game.partyInvitePrompt(true);
+    game.partyInvitePrompt(false);
+    expect(sent).toEqual([]);
+    expect(last?.partyInviting).toBe(false);
   });
 });
