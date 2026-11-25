@@ -303,6 +303,13 @@ export interface Pose {
   shadow: number;
   /** A death finished: the caller can drop the sprite. */
   done: boolean;
+  /**
+   * Where the walk cycle drawn this frame is, 0 to 1 (a clip: frame 0's start is 0; without
+   * one, the hop of a step from take-off to landing), while the creature walks a step on its
+   * legs; -1 when it does not (standing, between steps, an attack clip or a death playing, a
+   * flier). The living world drops footprints by it (livingworld/README.md "Huellas").
+   */
+  walk: number;
 }
 
 export const newPose = (): Pose => ({
@@ -318,6 +325,7 @@ export const newPose = (): Pose => ({
   shimmer: false,
   shadow: 1,
   done: false,
+  walk: -1,
 });
 
 /**
@@ -404,6 +412,7 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
   out.shimmer = false;
   out.shadow = 1;
   out.done = false;
+  out.walk = -1;
   const top = Math.max(8, meta?.top ?? 24);
 
   // Steps: count each one when the next starts, so the cycle continues across tiles.
@@ -501,12 +510,15 @@ function walking(
       s.walkPhase %= walk.frames;
       const per = walkPerStep(walk, in_);
       s.walkPer = per;
-      s.walkFrame = Math.floor(s.walkPhase + t * per) % walk.frames;
+      const at = s.walkPhase + t * per;
+      s.walkFrame = Math.floor(at) % walk.frames;
+      out.walk = (at % walk.frames) / walk.frames;
     }
     out.frame = s.walkFrame;
     return;
   }
   if (meta?.flying || t === undefined) return;
+  out.walk = t;
   // ANI-5: a hop per tile, the top leaning 1 px towards the move, a squash on landing.
   out.y -= Math.round(HOP_PX * Math.sin(Math.PI * t));
   if (in_.moveDx !== 0) out.skewX = -in_.moveDx * Math.asin(1 / top);
@@ -527,6 +539,15 @@ export function walkPerStep(walk: AnimActionMeta, in_: AnimInput): number {
   const down = walk.perTileNS ?? across;
   if (in_.moveDx !== 0 && in_.moveDy !== 0) return Math.max(1, Math.hypot(across, down));
   return Math.max(1, in_.dir === "n" || in_.dir === "s" ? down : across);
+}
+
+/**
+ * Walk cycles one step plays (the footprints' spacing, livingworld): a clip's frames per
+ * step over its frames; without a walk clip, the one hop of a step.
+ */
+export function walkCyclesPerStep(meta: AnimMeta | undefined, in_: AnimInput): number {
+  const walk = meta?.actions.walk;
+  return walk && walk.frames > 0 ? walkPerStep(walk, in_) / walk.frames : 1;
 }
 
 function idle(
