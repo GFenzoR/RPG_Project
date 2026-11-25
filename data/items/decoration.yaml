@@ -43,6 +43,7 @@
   description: item.birch_tree.desc
   pickupable: false
   blocks_movement: true
+  blocks_sight: true
   resource:
     tool: woodcutting
     skill: woodcutting
@@ -100,14 +101,15 @@
   blocks_movement: true
 
 # Nature (T1.16): trees, bushes and boulders block walking (docs/06 "Qué bloquea el paso"). A
-# bush is low: it stops feet, not arrows or eyes. Neither does a tree: its trunk is thinner
-# than the tile and its crown is above the heads.
+# bush or a boulder is low: it stops feet, not arrows or eyes. A tree is tall and dense: it
+# also blocks sight and shots (blocks_sight).
 - id: oak_tree
   kind: decoration
   sprite: decor/oak_tree
   name: item.oak_tree.name
   pickupable: false
   blocks_movement: true
+  blocks_sight: true
 
 - id: pine_tree
   kind: decoration
@@ -115,6 +117,7 @@
   name: item.pine_tree.name
   pickupable: false
   blocks_movement: true
+  blocks_sight: true
 
 - id: bush
   kind: decoration
@@ -402,6 +405,7 @@
   description: item.elm_tree.desc
   pickupable: false
   blocks_movement: true
+  blocks_sight: true
   resource:
     tool: woodcutting
     skill: woodcutting

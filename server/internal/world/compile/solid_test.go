@@ -8,9 +8,9 @@ import (
 )
 
 // TestSolidObjects: what a map object of data/items blocks is what its sprite shows
-// (docs/06 "Qué bloquea el paso"). A bush stops feet like a tree or a boulder, and like
-// them it is low or thin enough to see and shoot past; a wall, a closed gate, stacked
-// crates and a curtain of vines also block sight. What lies flat stays walkable.
+// (docs/06 "Qué bloquea el paso"). A bush stops feet like a boulder, and like it is low
+// enough to see and shoot past; what is tall and dense (a tree, a wall, a closed gate,
+// stacked crates, a curtain of vines) also blocks sight. What lies flat stays walkable.
 func TestSolidObjects(t *testing.T) {
 	cont, err := LoadContent(repoRoot(t))
 	if err != nil {
@@ -20,7 +20,7 @@ func TestSolidObjects(t *testing.T) {
 	for id, want := range map[string]blocks{
 		// Plants and rock.
 		"bush": {true, false}, "thick_bush": {true, false}, "thorny_vines": {true, true},
-		"oak_tree": {true, false}, "pine_tree": {true, false}, "birch_tree": {true, false}, "elm_tree": {true, false},
+		"oak_tree": {true, true}, "pine_tree": {true, true}, "birch_tree": {true, true}, "elm_tree": {true, true},
 		"boulder": {true, false}, "mossy_boulder": {true, false}, "cracked_rock": {true, false},
 		"iron_vein": {true, false}, "ember_vein": {true, false},
 		// Town props and furniture that fill their tile.
