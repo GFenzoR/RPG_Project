@@ -208,6 +208,8 @@ class Validator {
   private plants: SourceFile | undefined;
   private wind: SourceFile | undefined;
   private windSprites: SourceFile | undefined;
+  /** data/livingworld/gaits.yaml, checked after the monsters and the NPCs. */
+  private gaits: SourceFile | undefined;
 
   private readonly root: string;
 
@@ -415,6 +417,7 @@ class Validator {
       }
       const src = this.load(join(abs, entry), rel, `livingworld-${name}`);
       if (src && name === "objects") this.living.push(src); // a list, not an object
+      if (src && name === "gaits") this.gaits = src;
       if (!src || !isObj(src.data)) continue;
       if (name === "ambience") this.checkAmbience(src, src.data);
       if (name === "wind") this.wind = src;
@@ -2769,12 +2772,37 @@ class Validator {
   }
 
   /**
+   * data/livingworld/gaits.yaml (livingworld/README.md "Huellas"): every default and every
+   * creature names a gait of the file, and every creature is a monster or an NPC.
+   */
+  private checkGaits(): void {
+    const src = this.gaits;
+    if (!src || !isObj(src.data)) return;
+    const gaits = isObj(src.data["gaits"]) ? src.data["gaits"] : {};
+    const known = new Set<string>();
+    for (const list of [this.monsters, this.npcs])
+      for (const c of list)
+        if (isObj(c.data) && typeof c.data["id"] === "string") known.add(c.data["id"]);
+    for (const block of ["defaults", "creatures"]) {
+      const map = src.data[block];
+      if (!isObj(map)) continue;
+      for (const [key, gait] of Object.entries(map)) {
+        if (typeof gait === "string" && !(gait in gaits))
+          this.error(src, [block, key], `unknown gait "${gait}"`);
+        if (block === "creatures" && !known.has(key))
+          this.error(src, [block, key], `unknown monster or NPC "${key}"`);
+      }
+    }
+  }
+
+  /**
    * data/livingworld/*.yaml (livingworld/README.md): one entry per item; never a wall, a
    * door or a ground; a breakable, pushable or closed gate blocks movement, its debris, an
    * open gate and a plate do not; sounds exist in assets/sounds.yaml; debris lies at most
    * as long as the respawn. The server's livingworld.Resolve applies the same rules.
    */
   private checkLivingWorld(): void {
+    this.checkGaits();
     if (this.living.length === 0) return;
     const items = new Map<string, Obj>();
     for (const { item } of this.items)

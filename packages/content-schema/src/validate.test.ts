@@ -608,6 +608,20 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes('plant "oak_tree" has no wind metadata'))).toBe(true);
   });
 
+  it('checks the gaits: known gaits, known creatures, contacts in a cycle (livingworld/README.md "Huellas")', () => {
+    edit("data/livingworld/gaits.yaml", "  beast: quadruped", "  beast: trot");
+    edit("data/livingworld/gaits.yaml", "  mire_toad: hop", "  no_such_beast: hop");
+    edit("data/livingworld/gaits.yaml", "- { at: 0.5, side: left }", "- { at: 1.5, side: up }");
+    edit("data/livingworld/gaits.yaml", "    print: dot", "    print: hoof");
+    const out = messages(root).filter((m) => m.includes("gaits.yaml"));
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has('unknown gait "trot"')).toBe(true);
+    expect(has('unknown monster or NPC "no_such_beast"')).toBe(true);
+    expect(has("contacts") && has("at")).toBe(true);
+    expect(has("print")).toBe(true);
+    expect(validateContent(REPO).diagnostics.filter((d) => d.file.includes("gaits"))).toEqual([]);
+  });
+
   it('checks the ambience: ambient sounds, items, radius and caps (livingworld/README.md "Ambiente")', () => {
     mkdirSync(file("assets"), { recursive: true });
     writeFileSync(

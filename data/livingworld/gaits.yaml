@@ -1,0 +1,122 @@
+# The living world's gaits (livingworld/README.md "Huellas"): when and where each foot of a
+# creature touches the ground in one cycle of the walk the client draws, so its footprints,
+# ripples, dust and the step's sound come with the animation. Cosmetic: the server never
+# reads this file.
+#
+#   view.depth  how much shorter the 3/4 view draws the map's north-south axis (the
+#               sprite engine's PROJECTION.depth): the feet's spread across a body
+#   slide_px    a drawing gliding over a correction further than this leaves no prints
+#   gaits       by name:
+#     print     the mark of a foot: feet | paw | big_paw | dot | trail
+#               (assets/livingworld/sprites/fx/footprint_<print>)
+#     stance    sprite px from the path's centre line to each foot
+#     reach     how far ahead of the body a foot lands, as a share of the distance one
+#               cycle travels (a biped's foot lands half a stride ahead: 0.25)
+#     rise      sprite px from the lowest row of the walk frames up to the ground point
+#               under the body (the near feet are drawn below it)
+#     scale     size of the prints (default 1)
+#     depth     opacity of a fresh print, 0 to 1 (default 1): a heavy body presses deeper
+#     contacts  the feet of one cycle: `at` (0 to 1, when it lands; a walk clip's frame 0
+#               starts at 0; a creature without a walk clip hops once per tile, landing at
+#               the end), `side` (left | right | centre) and `along` (sprite px along the
+#               body: front feet +, hind feet -)
+#   defaults    the gait of each kind of body: humanoid (players and creatures with a
+#               look), beast, big_beast (drawn more than 40 px over its tile), flying
+#   creatures   the gait of a monster or NPC by id, over its body's default
+view: { depth: 0.577 }
+slide_px: 2
+gaits:
+  # The engine humanoid (tools/spritegen specs/humanoid walkKeys): the right foot is
+  # planted from frame 0, the left from the middle of the cycle, each half a stride (8 px
+  # walking east) ahead of the hips, 2.2 px either side.
+  biped:
+    print: feet
+    stance: 2.2
+    reach: 0.25
+    rise: 6
+    depth: 0.9
+    contacts:
+      - { at: 0, side: right }
+      - { at: 0.5, side: left }
+  big_biped:
+    print: feet
+    stance: 4
+    reach: 0.25
+    rise: 5
+    scale: 1.6
+    contacts:
+      - { at: 0, side: right }
+      - { at: 0.5, side: left }
+  # A walking beast: hind left, fore left, hind right, fore right.
+  quadruped:
+    print: paw
+    stance: 2.5
+    rise: 3
+    depth: 0.75
+    contacts:
+      - { at: 0, side: left, along: -5 }
+      - { at: 0.25, side: left, along: 5 }
+      - { at: 0.5, side: right, along: -5 }
+      - { at: 0.75, side: right, along: 5 }
+  big_quadruped:
+    print: big_paw
+    stance: 4
+    rise: 4
+    contacts:
+      - { at: 0, side: left, along: -8 }
+      - { at: 0.25, side: left, along: 8 }
+      - { at: 0.5, side: right, along: -8 }
+      - { at: 0.75, side: right, along: 8 }
+  # Spiders, crabs, beetles: two dotted lines.
+  many_legs:
+    print: dot
+    stance: 5
+    rise: 3
+    depth: 0.8
+    contacts:
+      - { at: 0, side: left, along: 3 }
+      - { at: 0.125, side: right, along: -3 }
+      - { at: 0.25, side: left, along: -3 }
+      - { at: 0.375, side: right, along: 3 }
+      - { at: 0.5, side: left, along: 3 }
+      - { at: 0.625, side: right, along: -3 }
+      - { at: 0.75, side: left, along: -3 }
+      - { at: 0.875, side: right, along: 3 }
+  # A body dragged along the ground: a winding trail.
+  slither:
+    print: trail
+    stance: 1.5
+    rise: 3
+    depth: 0.8
+    contacts:
+      - { at: 0, side: left }
+      - { at: 0.25, side: right }
+      - { at: 0.5, side: left }
+      - { at: 0.75, side: right }
+  # A jumper: both feet together where it lands.
+  hop:
+    print: paw
+    stance: 4
+    reach: 0.05
+    rise: 3
+    depth: 0.9
+    contacts:
+      - { at: 0.95, side: left }
+      - { at: 0.95, side: right }
+  none:
+    print: feet
+    contacts: []
+defaults:
+  humanoid: biped
+  beast: quadruped
+  big_beast: big_quadruped
+  flying: none
+creatures:
+  thornling: biped
+  slag_golem: big_biped
+  slagbound_warden: big_biped
+  moss_spider: many_legs
+  tide_crab: many_legs
+  ore_beetle: many_legs
+  hollow_crawler: many_legs
+  mire_toad: hop

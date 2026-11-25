@@ -51,6 +51,13 @@ describe("client content (T0.5)", () => {
     expect(lw?.dayNight?.dayMs).toBe(180 * 60_000);
     expect(lw?.dayNight?.nightMs).toBe(60 * 60_000);
     expect(lw?.dayNight?.floor).toBeGreaterThanOrEqual(0.4);
+    // Gaits (data/livingworld/gaits.yaml): the footfalls of each body.
+    expect(lw?.gaits?.gaits["biped"]?.contacts).toHaveLength(2);
+    expect(lw?.gaits?.defaults.humanoid).toBe("biped");
+    expect(lw?.gaits?.creatures["moss_spider"]).toBe("many_legs");
+    // Every creature with a gait of its own is a monster or an NPC the client knows.
+    for (const id of Object.keys(lw?.gaits?.creatures ?? {}))
+      expect(content.monsterSprites[id] ?? content.npcSprites?.[id], id).toBeDefined();
   });
 
   it("ships the positional ambience: beds and emitters on ambient sounds (livingworld/README.md)", () => {
