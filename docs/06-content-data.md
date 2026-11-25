@@ -1679,6 +1679,14 @@ toca al contenido:
   `assets/sounds.yaml`; por defecto el nombre de la superficie) y `critters` (`bird`,
   `butterfly`, `firefly`, `fish`). `make validate` exige que toda superficie que usa un suelo
   esté descrita.
+- **`data/livingworld/gaits.yaml`** (`livingworld-gaits.schema.json`; cliente): cómo anda
+  cada cuerpo, para que huellas, ondas, polvo y sonido del paso salgan en cada pisada de la
+  animación. `view.depth`, `slide_px`, `gaits` (por nombre: `print` = `feet` | `paw` |
+  `big_paw` | `dot` | `trail`, `stance`, `reach`, `rise`, `scale`, `depth` y `contacts`,
+  una lista de `{ at, side, along }` con `at` de 0 a 1 en el ciclo de caminar), `defaults`
+  (`humanoid`, `beast`, `big_beast`, `flying`) y `creatures` (id de monstruo o NPC → andar).
+  `make validate` exige andares que existan y criaturas de `data/`. Un monstruo nuevo no
+  necesita fila si le sirve el andar de su cuerpo.
 - **`data/livingworld/plants.yaml`** (`livingworld-plants.schema.json`): `plants` es una
   lista de `{ item, reaction?: bend | rustle, leaves?, trample?, wind? }`; cada item una
   vez, con `reaction` o con `wind`. `trample`: sobre una casilla con desgaste de senderos
@@ -1786,8 +1794,9 @@ music:           # el director de música (client/src/audio/director.ts)
   prompt, si es provisional, y sus medidas: `seconds`, `end`, `entries`, `longest_quiet`,
   `lufs`, `kbps`, `bytes`). El resto del archivo es a mano.
 
-Pasos por superficie (mundo vivo): el paso propio prueba `step.self.<sound>` (el `sound` de
-su superficie en `data/livingworld/surfaces.yaml`) antes de `step.self`; un evento sin fila
+Pasos por superficie (mundo vivo): cada pisada del jugador propio (cada pie que la
+animación apoya, `data/livingworld/gaits.yaml`) prueba `step.self.<sound>` (el `sound` de
+la superficie bajo ese pie en `data/livingworld/surfaces.yaml`) antes de `step.self`; un evento sin fila
 suena como `step.self`. Hoy no hay sonidos propios por superficie (docs/14).
 
 ### Música de una quest importante (`music` en `data/quests/<id>.yaml`)

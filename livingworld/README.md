@@ -30,7 +30,9 @@ El cliente lo monta con una API angosta (`livingworld/client/src/index.ts`):
 
 ```ts
 const lw = createLivingWorld(stage, surfaceLookup, options);
-lw.onCreatureStep(step, now); // una criatura en vista empieza un paso
+lw.onCreatureStep(step, now); // una criatura en vista empieza un paso (las plantas)
+lw.onCreatureWalk(sample);    // cada frame, cada criatura en vista: su ciclo de caminar y sus pies
+lw.forgetCreature(id);        // la criatura salió de la vista
 lw.onTick(now, view);         // cada frame: casillas en vista, piso y casilla propia
 lw.applyWear(tiles);          // desgaste de senderos que manda el servidor
 lw.footstepEvents(to);        // eventos de sonido del paso propio
@@ -45,18 +47,32 @@ lw.destroy();
   `plants` (`version()` y `forEach` sobre los sprites de items del piso, cada uno con el id
   de `data/items` de su item: `MapView.version` y `MapView.forEachItemSprite`), `reduced()`,
   `night()` (la noche del cielo, `client/src/render/sky.ts`: luciérnagas en vez de pájaros
-  y mariposas, y viento más calmo) y `sheltered()` (bajo tierra: sin viento).
+  y mariposas, y viento más calmo),
+  `sheltered()` (bajo tierra: sin viento) y `onFootfall(pisada, eventos)`: un pie de una criatura
+  en vista tocó el suelo (con o sin efectos reducidos); `eventos` son los del sonido de un paso
+  sobre ese suelo. Los dos objetos se reutilizan: se leen dentro del callback.
 - `view` de `onTick`: además de las casillas en vista, `zoom` (px de pantalla por px de
   sprite): el viento mueve las plantas en px enteros de pantalla.
-- `CreatureStep`: `id`, `from`, `to`, `durationMs` y `print` (`feet` humanoide, `paw` bestia,
-  `big_paw` bestia grande, `none` voladora).
+- `CreatureStep`: `id`, `from`, `to` y `grounded` (una voladora no roza plantas).
+- `WalkSample` (un objeto que el pegamento reutiliza): `id`, `x`, `y` (dónde se dibujan sus
+  pies: el medio del cuerpo a lo ancho y la fila más baja de sus frames de caminar, en px de
+  sprite del mundo), `z`, `phase` (el ciclo de caminar dibujado, 0 a 1, `Pose.walk` de
+  `packages/renderer/src/anim.ts`; -1 si no camina), `frames` (los del clip de caminar; 0
+  sin clip), `dx`, `dy` (hacia dónde se mueve en el mapa), `cyclePx` (px de pantalla que
+  avanza el cuerpo en un ciclo entero), `gait` (su forma de andar, `gaitOf`), `sliding` (el
+  dibujo se desliza por una corrección), `self` y `stepMs`.
 
 ### Qué hace
-- **Huellas** (`footprints.ts`): al dejar una casilla de `sand`, `wet_sand`, `snow`, `mud` o
-  `ash`, una marca orientada hacia donde camina (pies alternados a cada lado de la línea;
-  patas sobre ella). Se gasta 1 ms por ms; con viento (`wind`, en la arena) se gasta más en
-  ráfagas que salen de la posición y la hora (`gust`, sin `Math.random`). Se desvanece en la
-  segunda mitad de su vida. Tope `MAX_FOOTPRINTS` (64): una nueva reemplaza a la más gastada.
+- **Pisadas** (`gait.ts`, "Huellas que coinciden con los pasos" abajo): el momento y el
+  lugar en que cada pie toca el suelo, leídos del ciclo de caminar que el cliente dibuja.
+  De cada pisada salen la huella, la onda, el polvo, las motas de MOV-7 y el sonido del
+  paso: un solo golpe con la animación.
+- **Huellas** (`footprints.ts`): cada pie que se apoya en `sand`, `wet_sand`, `snow`, `mud` o
+  `ash` deja su marca en el lugar de ese pie, girada hacia donde camina. Se gasta 1 ms por
+  ms; con viento (`wind`, en la arena) se gasta más en ráfagas que salen de la posición y la
+  hora (`gust`, sin `Math.random`). Se desvanece en la segunda mitad de su vida. Tope
+  `MAX_FOOTPRINTS` (64): una nueva reemplaza a la más gastada; los objetos se reutilizan
+  (ninguno nuevo por huella).
 - **Plantas** (`sway.ts`): un paso dobla la planta de la casilla y, a la mitad, las 8
   vecinas, hacia donde camina (de frente o de espaldas, las de los lados hacia afuera): un
   resorte amortiguado de `SWAY_MS` (900 ms). Tope `MAX_SWAYS` (48) plantas moviéndose por
@@ -66,9 +82,11 @@ lw.destroy();
   dobla como antes: un skew del sprite, o un corrimiento de 1 px.
 - **Viento** (`wind.ts`, `wind-mesh.ts`): árboles, arbustos, hierba, juncos, flores y
   enredaderas se mecen con un viento que recorre el mapa. Ver "Viento".
-- **Ondas y polvo** (`puffs.ts`): anillos que se abren al pisar agua (`ripple`) y una nube
-  de polvo al correr (`dust`, paso de `RUN_STEP_MS` = 260 ms o menos). Tope `MAX_PUFFS` (24).
-  Las motas de MOV-7 de cada paso (`client/src/render/particles.ts`) siguen como estaban.
+- **Ondas y polvo** (`puffs.ts`): anillos que se abren donde un pie pisa agua (`ripple`,
+  en vez de huella) y una nube de polvo bajo el pie al correr (`dust`, paso de
+  `RUN_STEP_MS` = 260 ms o menos). Tope `MAX_PUFFS` (24). Las motas de MOV-7
+  (`client/src/render/particles.ts`) salen también de la pisada, bajo el pie: en cada una
+  si el cuerpo anda en dos pies, en una de cada dos si tiene más (`kicksUp` del pegamento).
 - **Hojas** (`leaves.ts`): caen de los árboles con `leaves` en vista (`LEAF_RATE` por árbol y
   segundo) y al rozarlos; caen balanceándose, quedan en el suelo y se desvanecen. Tope
   `MAX_LEAVES` (24).
@@ -77,8 +95,60 @@ lw.destroy();
   noche; sombras de peces en el agua. Dónde viven sale del hash de la casilla y de los
   `critters` de su superficie; se buscan cada `SCAN_MS` (1 s), no cada frame. Tope
   `MAX_CRITTERS` (10).
-- **Pasos con sonido** (`footsteps.ts`): el paso propio pide `step.self.<sound>` y después
-  `step.self`; suena el primero que `assets/sounds.yaml` mapea.
+- **Pasos con sonido** (`footsteps.ts`): cada pisada del jugador propio pide
+  `step.self.<sound>` (el de la superficie bajo ese pie) y después `step.self`; suena el
+  primero que `assets/sounds.yaml` mapea. Suena también con "Animaciones reducidas" (un
+  sonido no es una animación). Sin `gaits.yaml` vuelve a sonar con el paso del servidor.
+
+### Huellas que coinciden con los pasos (rama `feat/footprint-sync`; el dueño, 2026-11-24)
+"Las marcas al caminar, por ejemplo en la arena, tienen que coincidir con los pasos que da
+el personaje; si no, se ve muy falso." Antes salía una marca por casilla (`onCreatureStep`),
+sin relación con los pies. Ahora:
+
+- **De dónde sale el ritmo.** La animación de caminar avanza por distancia
+  (`packages/renderer/src/anim.ts`, docs/17 "La regla de la zancada"). `animate` deja en
+  `Pose.walk` dónde va el ciclo dibujado, de 0 a 1 (con clip: por sus frames; sin clip, el
+  salto de un paso, ANI-5), o -1 si la criatura no camina sobre sus patas ese frame (quieta,
+  entre pasos, con un clip de ataque o muriendo, o voladora). `walkCyclesPerStep` dice
+  cuántos ciclos hace un paso (8/8 al este, 13,86/8 al norte, 16/8 en diagonal para el
+  humanoide), de donde sale `cyclePx`.
+- **Cuándo toca cada pie.** Un andar (`Gait`, de `data/livingworld/gaits.yaml`) lista los
+  contactos de un ciclo: `at` (cuándo), `side` (qué lado) y `along` (a qué altura del
+  cuerpo). El humanoide del motor apoya el pie derecho desde el frame 0 y el izquierdo
+  desde el 4 (`walkKeys` de `tools/spritegen`): `at: 0` y `at: 0.5`. `FootfallTracker`
+  guarda la fase de cada criatura y, cuando el ciclo pasa por un contacto, avisa una
+  pisada. Con clip, el contacto se ajusta al borde de frame: la pisada sale en el frame en
+  que ese pie aparece apoyado, no antes. Si el ciclo no avanza no hay pisada: quieto,
+  girando en el lugar o teletransportado no deja nada; al frenar a mitad de ciclo queda solo
+  el último pie apoyado, y al seguir el ciclo continúa donde quedó (un contacto justo en la
+  costura de dos pasos cuenta una vez).
+- **Dónde.** El lugar del cuerpo cuando el pie tocó (el frame puede llegar un poco después:
+  se retrocede lo que el ciclo se pasó, así el resultado no depende de los FPS ni de la
+  velocidad), más `reach` × `cyclePx` hacia adelante (el pie del humanoide cae media zancada
+  delante de la cadera: 8 px al este, 4,6 al norte), más `stance` hacia su lado y `along`
+  a lo largo del cuerpo (`footOffset`). La vista 3/4 acorta el eje norte-sur (`view.depth`,
+  0,577): caminando al este los pies quedan 1,3 px arriba y abajo de la línea; en diagonal
+  el cuerpo está girado 60° y los pies se separan según eso. `rise` sube del borde inferior
+  del sprite al punto del suelo bajo el cuerpo. La huella gira a la dirección real del
+  movimiento (8 direcciones) y queda separada por la zancada real: 16 px al este, 9,2 al
+  norte, (8; 8) en diagonal.
+- **Deslizamientos.** Una corrección del servidor desliza el dibujo sin que camine
+  (`Slide` de `client/src/state/motion.ts`): mientras al deslizamiento le falten más de
+  `slide_px` (2 px), la pisada no deja huella, onda ni polvo (el sonido sigue).
+- **Todas las criaturas, mismo sistema.** Jugadores, NPCs y monstruos en vista pasan por
+  `onCreatureWalk`. Las huellas de otro jugador salen de su animación dibujada en este
+  cliente, así que también coinciden. El andar sale de `gaitOf`: el propio de la criatura
+  (`creatures`, por id) o el de su tipo de cuerpo (`defaults`): humanoide (`biped`), bestia
+  (`quadruped`: cuatro huellas por ciclo, traseras y delanteras, más chicas), bestia grande
+  (`big_quadruped`: más grandes y más hondas), muchas patas (`many_legs`: dos líneas de
+  puntos), cuerpo arrastrado (`slither`: un surco), saltarín (`hop`: los dos pies donde
+  cae) y voladora (ninguna). Para una criatura con clip dibujado a mano (las de Gemini) los
+  contactos son una aproximación por fracción del ciclo: se ajustan en su entrada de
+  `creatures` con un andar propio.
+- **Rendimiento** (docs/07): un estado por criatura en vista (tope 256, reutilizados), una
+  `Footfall` y un `WalkSample` reutilizados; las huellas salen de una lista libre. Un frame
+  no crea objetos.
+- **Efectos reducidos:** ni huellas, ni ondas, ni polvo, ni motas; el sonido sí.
 - **Desgaste de senderos** (`wear.ts`): el nivel (1 a 3) de cada casilla que el servidor
   marcó, por `applyWear(tiles, replace)`. Cada casilla gastada lleva el sprite
   `livingworld/fx/trail_<nivel>_<vecinas>` (vecinas gastadas: N 1, E 2, S 4, O 8;
@@ -332,8 +402,9 @@ Los únicos archivos fuera de `livingworld/` que pueden importarlo:
   (casillas de `WorldState`, id y superficie de cada item, el tope liviano) y le da a
   `Game` las voces que pasa a `AudioEngine.setAmbience`
 - `client/src/render/living.ts`: monta el mundo vivo sobre el `MapView` (superficie de cada
-  casilla, sprites de plantas con el id de su item, texturas del atlas, si el piso está
-  bajo tierra) y arma los eventos de sonido del paso propio
+  casilla, sprites de plantas, texturas del atlas), da el andar de cada criatura
+  (`creatureGait`, `bodyKindOf`), pasa las pisadas al canvas (`onFootfall`, `kicksUp`) y arma
+  los eventos de sonido del paso propio
 - `client/vite/content.ts`: lee `data/livingworld/*.yaml` con `parseLivingWorldData` (y le
   da el sprite de cada item, para unir el viento de los sprites con las plantas)
 - `tools/spritegen/src/wind.ts`: la metadata de viento de los sprites de plantas
@@ -356,8 +427,12 @@ El ambiente lo usa `client/src/game.ts` a través de `client/src/audio/ambience.
 (`AmbientLoop`, la misma forma que `AmbienceVoice`) y no importa el módulo.
 
 Lo demás lo usan a través de `client/src/render/living.ts`: `client/src/render/game-canvas.ts`
-(monta, pasa pasos y frames, el zoom y si el piso es una cueva) y `client/src/game.ts` (sonido del paso, por
-`CueContext.stepEvents` de `client/src/audio/cues.ts`). El renderer compartido
+(monta, pasa pasos, frames y el ciclo de caminar de cada criatura; en cada pisada levanta las
+motas de MOV-7 y avisa la del jugador propio por `GameCanvasOptions.footstep`) y
+`client/src/game.ts` (el sonido del paso en esa pisada; `CueContext.footfalls` de
+`client/src/audio/cues.ts` apaga el del `CreatureMove` del servidor, que sigue de respaldo
+sin `gaits.yaml` por `CueContext.stepEvents`). `packages/renderer/src/anim.ts` suma
+`Pose.walk` y `walkCyclesPerStep`, sin saber del mundo vivo. El renderer compartido
 (`packages/renderer`) suma `MapView.groundOverlay`, `MapView.version` y
 `MapView.forEachItemSprite`, sin saber del mundo vivo (la malla de una planta con viento
 la agrega el módulo al padre del sprite que `MapView` le presta). El desgaste que manda el servidor
@@ -389,6 +464,15 @@ los demás módulos).
 `data/livingworld/surfaces.yaml` (por superficie): `footprints` (ms), `wind`, `dust`,
 `ripple`, `tint` (`#rrggbb`), `sound`, `critters`. `make validate` exige que toda superficie
 que usa un suelo esté descrita.
+
+`data/livingworld/gaits.yaml` (cliente, "Huellas que coinciden con los pasos" arriba):
+`view.depth` (cuánto acorta la vista 3/4 el eje norte-sur; el `PROJECTION.depth` del motor
+de sprites), `slide_px`, `gaits` (por nombre: `print` = `feet` | `paw` | `big_paw` | `dot` |
+`trail`, el sprite `livingworld/fx/footprint_<print>`; `stance`, `reach`, `rise`, `scale`,
+`depth` = opacidad de la huella fresca; `contacts`: lista de `{ at, side: left | right |
+centre, along }`; vacía: no deja pisadas), `defaults` (`humanoid`, `beast`, `big_beast`,
+`flying`) y `creatures` (id de monstruo o NPC → andar). `make validate` exige que cada
+andar nombrado exista y que cada criatura sea un monstruo o un NPC de `data/`.
 
 `data/livingworld/plants.yaml` (lista): `item` (de `data/items`), `reaction` (`bend` |
 `rustle`; sin ella, la de su tipo de viento), `leaves`, `trample` (aplastada sobre una
@@ -426,6 +510,15 @@ la superficie de un suelo y la reacción de una planta en la paleta.
   en `WIND_HINT_KINDS` (`tools/spritepack/src/tiles.ts`), en `WIND_KINDS` de
   `tools/gemini/import_art.py` y en los dos esquemas (`livingworld-wind` y
   `livingworld-wind_sprites`), y sus valores en `kinds` de `wind.yaml`.
+- **El andar de un monstruo nuevo:** nada si le sirve el de su cuerpo (bestia, bestia
+  grande, voladora, o humanoide si tiene `look`); si no, su fila en `creatures` de
+  `gaits.yaml` (`moss_spider: many_legs`). Un andar nuevo: su entrada en `gaits` con sus
+  contactos; una marca nueva, su receta `livingworld/fx/footprint_<print>` en
+  `tools/spritegen/src/recipes/living.ts` y el nombre en `PRINT_KINDS` y en el esquema.
+- **Una planta que se mueve:** el item en `data/items/plants.yaml` (o el que ya exista),
+  `make gen-ids`, sus nombres en `i18n/{es,en}/items.yaml`, su receta en
+  `tools/spritegen/src/recipes/living.ts` (`livingworld/plants/<id>`), `make spritegen
+  ONLY=livingworld/` y `make sprites`; su fila en `plants.yaml`.
 - **Un sonido de paso:** el archivo en `assets/livingworld/sounds/`, su fila en
   `assets/CREDITS.md` (o una receta de soundgen), el sonido en `sounds:` de
   `assets/sounds.yaml` y el evento `step.self.<sound>: <id>` en `events:`.
@@ -492,8 +585,27 @@ la superficie de un suelo y la reacción de una planta en la paleta.
   bosque); `client/src/audio/engine.test.ts` ("the ambience": el motor sobre un contexto
   falso); `client/vite/content.test.ts` (los datos reales); `packages/content-schema`
   (los errores de `ambience.yaml`); `tools/soundgen` (loops sin costura, nivel y tope).
+- Pisadas: `livingworld/client/src/gait.test.ts` corre `anim.ts` frame a frame como el
+  canvas (el pie se avisa en el frame en que aparece apoyado, el 0 y el 4; pies alternados;
+  las 8 direcciones con su zancada, su giro y su separación; mismas huellas a 20, 60 y 144
+  FPS y a cualquier velocidad; un giro a mitad de caminata; quieto; frenar a mitad de
+  ciclo; pasos de a una casilla; teletransporte; deslizamiento; una criatura vista a mitad
+  de su caminata; cuadrúpedo, saltarín, muchas patas, voladora; los datos reales).
+  `gait-humanoid.test.ts` renderiza cada pie del humanoide del motor solo, frame a frame,
+  y exige que su huella quede bajo él en las 8 direcciones (a 2,5 px en cada frame y a 1,75
+  de media: el pie se dibuja en píxeles enteros y avanza de a un frame). `index.test.ts`:
+  huella, onda y polvo en la pisada, el sonido en la pisada (también con efectos
+  reducidos), nada al deslizarse.
+- Captura sin navegador: `node --experimental-strip-types
+  livingworld/client/scripts/footfall-shot.ts --out DIR` escribe `footfalls-east.png`,
+  `-south`, `-south-east` y `-north-west`: los frames reales del humanoide sobre arena en
+  el momento de cada pisada, sólido a la izquierda y traslúcido a la derecha, para mirar
+  cada huella contra el pie que tiene encima.
 - Fuera de la carpeta: `client/vite/content.test.ts` (superficies y datos al cliente),
-  `client/src/audio/cues.test.ts` (sonido del paso), `packages/renderer/src/map-view.test.ts`
+  `client/src/audio/cues.test.ts` (sonido del paso), `client/src/render/living.test.ts`
+  (el andar de cada cuerpo, qué pisadas levantan motas), `packages/renderer/src/anim.test.ts`
+  (`Pose.walk`), `client/e2e/sandbox.spec.ts` ("sandbox footprints": la playa de
+  Thimblewick, recto y en diagonal, con capturas `99h` a `99j`), `packages/renderer/src/map-view.test.ts`
   (`groundOverlay`, `forEachItemSprite`), `packages/content-schema/src/validate.test.ts`,
   `tools/spritepack` y `tools/spritegen` (sprites en `assets/livingworld/sprites/`).
 - A ojo: `node --experimental-strip-types tools/spritegen/src/cli.ts preview --only
@@ -779,6 +891,10 @@ determinista):
 
 
 ## Pendiente
+- Huellas: descalzo o con botas dejan la misma marca; los contactos de las criaturas
+  dibujadas a mano (Gemini) son los de su tipo de cuerpo, sin medir sus frames; una
+  criatura sin sprite en el atlas (el bloque de color) no deja pisadas ni suena; el
+  sonido de paso es solo el del jugador propio.
 - Sonidos de paso propios por superficie: sin ffmpeg no se pudieron generar; los eventos ya
   existen y caen en `step`.
 - Día y noche: las sombras de árboles y casas no giran con el sol (solo se desvanecen);

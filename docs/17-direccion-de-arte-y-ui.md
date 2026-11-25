@@ -543,9 +543,17 @@ su fase, ninguna silueta rota. Falta mirarlo en movimiento en el juego (E2E del 
 Pedido del dueño: "el entorno reacciona a los jugadores que pasan, para que el mundo se
 sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
 (`livingworld/README.md` tiene el contrato; aquí, la dirección de arte):
-- **Huellas** sobre arena, arena mojada, nieve, barro y ceniza: una marca por paso,
-  orientada hacia donde camina (pies alternados a cada lado; patas de bestia sobre su línea,
-  más grandes para las bestias altas; las voladoras no dejan). Son máscaras blancas
+- **Huellas** sobre arena, arena mojada, nieve, barro y ceniza: una marca por cada pie que
+  se apoya, en el lugar de ese pie y en el frame en que la animación lo apoya (el dueño,
+  2026-11-24: "tienen que coincidir con los pasos que da el personaje; si no, se ve muy
+  falso"; `livingworld/README.md` "Huellas que coinciden con los pasos"). Pies
+  alternados a cada lado de la línea del camino, giradas a la dirección real (las 8) y
+  separadas por la zancada real (16 px al este, 9 al norte o al sur, 8 y 8 en diagonal:
+  "La regla de la zancada" abajo); las bestias dejan cuatro patas por ciclo, las grandes
+  más grandes y más hondas, arañas y cangrejos dos líneas de puntos, y las voladoras nada.
+  Ninguna con el pie en el aire, quieto, girando en el lugar, deslizándose por una
+  corrección ni al teletransportarse. El sonido del paso, la onda en el agua, el polvo al
+  correr y las motas de MOV-7 salen de la misma pisada. Son máscaras blancas
   (`livingworld/fx/footprint_*`) teñidas con el `tint` de su superficie, un tono más oscuro
   del suelo: se leen sin contorno. Se desvanecen en la segunda mitad de su vida; en la arena
   el viento las borra antes, en ráfagas que recorren el mapa.
@@ -554,7 +562,8 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
   se sacuden 1 px y sueltan alguna hoja (también de vez en cuando, solos). Desde el lote
   20 el doblez se suma al viento sobre las mismas tiras del sprite (abajo).
 - **Agua y polvo:** anillos achatados que se abren en el agua baja; una nube de polvo al
-  correr (paso de 260 ms o menos) por tierra, arena o ceniza. Las motas de MOV-7 siguen.
+  correr (paso de 260 ms o menos) por tierra, arena o ceniza, las dos bajo el pie que pisa.
+  Las motas de MOV-7 siguen, también desde la pisada.
 - **Bichos:** pájaros y mariposas por el pasto que huyen cuando el jugador se acerca,
   luciérnagas de noche y sombras de peces en el agua. Pocos (10) y
   donde el hash de la casilla diga: el mismo lugar siempre tiene el mismo bicho.

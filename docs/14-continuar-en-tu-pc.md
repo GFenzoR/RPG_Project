@@ -464,6 +464,26 @@ el punto 5:
   2026-11-23: "el entorno reacciona a los jugadores que pasan"; `livingworld/README.md`):**
   huellas, plantas que se doblan, ondas, polvo, hojas, bichos y pasos por superficie en
   `livingworld/client`. Queda:
+  - **Huellas que coinciden con los pasos (hecho, rama `feat/footprint-sync`; el
+    dueño el 2026-11-24: "las marcas tienen que coincidir con los pasos; si no, se ve muy
+    falso"):** una huella por pisada, bajo el pie, sacada del ciclo de caminar dibujado
+    (`livingworld/client/src/gait.ts`, `data/livingworld/gaits.yaml`); el sonido del paso,
+    la onda, el polvo y las motas salen de la misma pisada. Sin cambios de servidor ni de
+    protocolo. Queda:
+    - **Mirarlo en el juego:** el E2E "sandbox footprints" (capturas `99h` a `99j`) camina
+      por la playa de Thimblewick; la playa es angosta (5 casillas de arena en fila), así
+      que la diagonal solo se captura si hay tres casillas seguidas. La captura sin
+      navegador (`livingworld/client/scripts/footfall-shot.ts`) ya muestra las 4 direcciones.
+    - **El sonido ahora da dos golpes por casilla** caminando al este u oeste (uno por
+      pie; 1,15 al norte o al sur): que el dueño lo escuche; si cansa, se baja el volumen
+      de `step` en `assets/sounds.yaml` o se suena un pie de cada dos.
+    - **Descalzo o con botas:** la misma marca (no era barato: pide leer el calzado
+      visible de cada criatura y un sprite más).
+    - **Criaturas dibujadas a mano (Gemini):** usan los contactos de su tipo de cuerpo por
+      fracción del ciclo, sin medir sus frames; si alguna se ve desfasada, un andar propio
+      en `creatures` de `gaits.yaml`.
+    - **Sin sprite en el atlas** (el bloque de color) una criatura no deja pisadas ni
+      suena su paso.
   - **Sonidos de paso propios por superficie:** sin ffmpeg en la máquina no se pudieron
     generar. Los eventos `step.self.<sound>` ya se piden y caen en `step`; falta la receta
     de soundgen (o un pack con licencia) en `assets/livingworld/sounds/`, su fila en

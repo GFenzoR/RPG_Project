@@ -315,7 +315,8 @@ mientras no se usan). Por frame:
 
 | Efecto | Tope | Costo por frame |
 |---|---|---|
-| Huellas | 64 vivas (la nueva reemplaza a la más gastada) | gasto y alfa de cada una |
+| Huellas | 64 vivas (la nueva reemplaza a la más gastada; los objetos se reutilizan) | gasto y alfa de cada una |
+| Pisadas (`gait.ts`) | un estado por criatura en vista (256; los viejos se reutilizan) | por criatura dibujada: una resta de fases y los contactos de su andar (2 a 8 comparaciones); nada creado: un `WalkSample` y una `Footfall` reutilizados, los eventos de sonido de cada superficie hechos una vez |
 | Plantas | 48 moviéndose por pasos | el doblez de las plantas en vista; la lista se rearma solo cuando cambia `MapView.version` |
 | Viento (lote 20) | solo las plantas en vista (y 3 casillas de margen); una malla de hasta 17 tiras (68 vértices) por planta, en el batch de los sprites | por planta: una ráfaga (dos ruidos), tres senos y un seno por tira; los vértices se reescriben solo cuando una tira cambia de píxel de pantalla (la mayoría de los frames, ninguna) |
 | Ondas y polvo | 24 | frame y alfa |
