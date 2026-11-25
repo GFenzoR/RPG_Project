@@ -248,6 +248,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   panel del grupo (vida/maná solo de los miembros en vista, que es lo único que llega) y
   las invitaciones sobre el mapa. En la lista de batalla, un jugador tiene el botón "+"
   (invitar) si se lo puede invitar. El canal "Grupo" está en el selector del chat.
+- **Invitar por nombre** (lote 19, docs/02 "Grupos"): `PartyInvite` de `ui/Party.tsx` (sin
+  hooks) es el botón "Invitar" (sin grupo, o siendo el líder) o, abierto, el cuadro con el
+  nombre; el estado es `GameUi.partyInviting` (`Game.partyInvitePrompt`), y
+  `Game.partyInviteByName` manda `PartyCommand` `INVITE_NAME`. La respuesta es un mensaje
+  del sistema. Test ids: `party-invite`, `party-invite-prompt`, `party-invite-name`,
+  `party-invite-send`, `party-invite-cancel`. E2E: "party: the window's Invitar button…"
+  de `e2e/game.spec.ts` (screenshots `24b`–`24d`).
 - El plugin de Vite empaqueta los nombres de `world.yaml` (`island.<id>.name`).
 
 ## Notas de T3.4

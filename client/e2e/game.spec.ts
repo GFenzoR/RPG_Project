@@ -2152,6 +2152,81 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   await matePage.close();
 });
 
+test("party: the window's Invitar button invites a player by its name", async ({
+  browser,
+  playwright,
+}) => {
+  const lead = await newGuardian(playwright, "Caller");
+  const mate = await newGuardian(playwright, "Guest");
+  const errors: string[] = [];
+  const enter = async (who: { email: string; password: string }): Promise<Page> => {
+    const page = await browser.newPage();
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    page.on("pageerror", (e) => errors.push(e.message));
+    await enterGame(page, who.email, who.password);
+    return page;
+  };
+  const leadPage = await enter(lead);
+  const matePage = await enter(mate);
+  errors.length = 0; // the 401 of opening the page without a session cookie
+  await openWindow(leadPage, "party");
+  const panel = leadPage.getByTestId("party-panel");
+  const log = leadPage.getByTestId("game-log");
+  const prompt = leadPage.getByTestId("party-invite-prompt");
+  const field = leadPage.getByTestId("party-invite-name");
+
+  // Without a party the button is there; it opens the prompt with the field focused.
+  await leadPage.getByTestId("party-invite").click();
+  await expect(field).toBeFocused();
+  // Escape closes the prompt, not the window around it.
+  await field.press("Escape");
+  await expect(prompt).toHaveCount(0);
+  await expect(panel).toBeVisible();
+
+  // A name nobody online has: the server says so, with the name as typed. Typing in the
+  // field moves nobody and opens no window (the name has the keys of both).
+  const before = await self(leadPage);
+  await leadPage.getByTestId("party-invite").click();
+  await field.pressSequentially("Wasd Pibe");
+  await expect(field).toHaveValue("Wasd Pibe");
+  await field.press("Enter");
+  await expect(prompt).toHaveCount(0);
+  await expect(log).toContainText("No hay ningún jugador en línea llamado Wasd Pibe.");
+  await expect(panel).toBeVisible();
+  const after = await self(leadPage);
+  expect([after?.x, after?.y]).toEqual([before?.x, before?.y]);
+
+  // The other player, by its name in another case: it gets the usual invitation.
+  await leadPage.getByTestId("party-invite").click();
+  await field.fill(mate.name.toUpperCase());
+  await leadPage
+    .locator('.gwin[data-window="party"]')
+    .screenshot({ path: join(shots, "24b-party-invite-prompt.png") });
+  await shot(leadPage, "24c-party-invite-prompt-page");
+  await leadPage.getByTestId("party-invite-send").click();
+  await expect(prompt).toHaveCount(0);
+  await expect(log).toContainText(`Invitaste a ${mate.name}`);
+  const invitation = matePage.getByTestId("party-invitation");
+  await expect(invitation).toContainText(`${lead.name} te invita a su grupo.`);
+  await invitation.getByRole("button", { name: "Aceptar" }).click();
+  await openWindow(matePage, "party");
+  for (const page of [leadPage, matePage]) {
+    const members = page.getByTestId("party-panel").locator("li[data-member]");
+    await expect(members).toHaveCount(2);
+  }
+  // The leader keeps the button; a member that does not lead has none.
+  await expect(leadPage.getByTestId("party-invite")).toBeVisible();
+  await expect(matePage.getByTestId("party-invite")).toHaveCount(0);
+  await leadPage
+    .locator('.gwin[data-window="party"]')
+    .screenshot({ path: join(shots, "24d-party-invite-leader.png") });
+  expect(errors).toEqual([]);
+  await leadPage.close();
+  await matePage.close();
+});
+
 test("T3.4: cook a fish at the hearth of Lanternby from the station window", async ({
   page,
   playwright,

@@ -414,9 +414,9 @@ el punto 5:
   lo mismo (antes solo encontraba a alguien a la vista). Desconectado e inexistente
   responden igual. Límite nuevo `balance.yaml party.invites_per_minute` (6) para todo
   intento de invitar. Queda:
-  - **Mirarlo en el juego** (la verificación final): abrir la ventana de grupo sin grupo,
-    tocar "Invitar", escribir el nombre del otro personaje lejos y ver que le llega la
-    invitación; en el teléfono, que el cuadro entra en la ventana y el teclado no la tapa.
+  - **En el teléfono** falta mirarlo a mano: que el cuadro entra en la pestaña del grupo y
+    el teclado no lo tapa. En escritorio lo cubre el E2E "party: the window's Invitar
+    button invites a player by its name" (screenshots `24b`–`24d`).
   - **Lista de ignorados:** no existe; cuando se haga, invitar a quien te ignora tiene que
     responder `party.player_not_found` (como desconectado).
   - El límite de invitaciones es por cuenta y vive en la memoria del mundo: sobrevive a un
