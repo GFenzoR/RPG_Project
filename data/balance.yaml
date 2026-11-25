@@ -144,6 +144,7 @@ chat:                       # T1.13 (docs/02-game-design.md, "Chat")
 party:                      # T3.3 (docs/02-game-design.md, "Grupos")
   max_members: 6            # leader included
   invite_ms: 45000          # an invitation expires after this
+  invites_per_minute: 6     # anti-spam: invitation attempts of one player (any way, found or not)
   update_ms: 1000           # members' health/mana/level refresh at most this often
   # Shared experience: a kill is shared by the members that are on its floor within
   # `share_distance` tiles (Chebyshev) of it, contributed (damage to a monster, healing a

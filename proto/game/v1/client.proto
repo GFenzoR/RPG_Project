@@ -392,6 +392,10 @@ enum PartyAction {
   // Leader only: turn shared experience on or off (creature_id is ignored).
   PARTY_ACTION_SHARE_ON = 7;
   PARTY_ACTION_SHARE_OFF = 8;
+  // Invite the online character called name (case-insensitive, exact), wherever it is:
+  // the party window's "Invitar" button. Same rules as INVITE; an offline, unknown or
+  // unseen invisible name answers alike (party.player_not_found). creature_id is ignored.
+  PARTY_ACTION_INVITE_NAME = 9;
 }
 
 // PartyCommand is every party intent (T3.3). The server answers with PartyUpdate or a
@@ -399,6 +403,8 @@ enum PartyAction {
 message PartyCommand {
   PartyAction action = 1;
   uint32 creature_id = 2;
+  // INVITE_NAME only: the character name typed by the player.
+  string name = 3;
 }
 
 // GuildAction is what a GuildCommand asks for (T5.1, docs/02 "Gremios"). Members are

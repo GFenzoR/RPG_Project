@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/auth"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
@@ -37,6 +38,8 @@ const (
 	msgPartyNotAMember   = "party.not_a_member"
 	msgPartyInviteUsage  = "party.invite_usage"
 	msgPartyAlreadyAsked = "party.already_invited"
+	msgPartyInviteSelf   = "party.invite_self"
+	msgPartyInviteRate   = "party.invite_rate"
 )
 
 // party is one group of players. members are in join order; the leader is one of them.
@@ -67,7 +70,10 @@ type partyView struct {
 func (w *World) initParty() {
 	pc := w.cfg.Balance.Party
 	w.invites = map[inviteKey]game.Tick{}
+	w.inviteTAT = map[int64]game.Tick{}
 	w.inviteFor = ticksFor(pc.InviteMs)
+	w.inviteRefill = ticksFor(60_000 / max(pc.InvitesPerMinute, 1))
+	w.inviteBurst = w.inviteRefill * game.Tick(max(pc.InvitesPerMinute-1, 0))
 	w.partyEvery = ticksFor(pc.UpdateMs)
 	w.contribFor = ticksFor(pc.ContributionMs)
 }
@@ -78,6 +84,15 @@ func (w *World) partyCommand(ctx *game.TickContext, p *Player, m *pb.PartyComman
 	switch m.GetAction() {
 	case pb.PartyAction_PARTY_ACTION_INVITE:
 		w.invite(ctx, p, w.seenPlayer(p, id), "")
+	case pb.PartyAction_PARTY_ACTION_INVITE_NAME:
+		// Empty, or far longer than any name (the client caps the field at
+		// auth.MaxNameLen characters, up to 4 bytes each): a malformed intent, ignored.
+		// The name comes back in the answer: cleaned like chat (no control characters).
+		if raw := m.GetName(); len(raw) <= 4*auth.MaxNameLen {
+			if name := cleanChat(raw); name != "" {
+				w.invite(ctx, p, w.onlineFor(p, name), name)
+			}
+		}
 	case pb.PartyAction_PARTY_ACTION_ACCEPT:
 		w.acceptInvite(ctx, p, id)
 	case pb.PartyAction_PARTY_ACTION_DECLINE:
@@ -129,8 +144,19 @@ func (w *World) seenPlayer(p *Player, id uint32) *Player {
 	return w.playerByID(id)
 }
 
-// cmdInvite is "/invite Name": the same as PartyCommand INVITE, by name. Only a player
-// p sees is found; anyone else gets the same answer as an offline name.
+// onlineFor finds the online player called name (case-insensitive, exact) for p,
+// wherever it is. An invisible player p does not see is not found: answering otherwise
+// would tell p that it is online and hiding (like /report).
+func (w *World) onlineFor(p *Player, name string) *Player {
+	o := w.onlineByName(name)
+	if o != nil && o != p && o.invisible && !p.Knows(o.id) {
+		return nil
+	}
+	return o
+}
+
+// cmdInvite is "/invite Name": the same as PartyCommand INVITE_NAME (the party
+// window's button), so the invited player may be anywhere.
 func (w *World) cmdInvite(ctx *game.TickContext, p *Player, args []string) {
 	name := strings.Join(args, " ")
 	if name == "" {
@@ -139,27 +165,26 @@ func (w *World) cmdInvite(ctx *game.TickContext, p *Player, args []string) {
 		}
 		return
 	}
-	var o *Player
-	if t := w.onlineByName(name); t != nil {
-		o = w.seenPlayer(p, t.id)
-	}
-	w.invite(ctx, p, o, name)
+	w.invite(ctx, p, w.onlineFor(p, name), name)
 }
 
 // invite has p invite o (nil = not found; name is what p typed, if anything). Every
-// attempt counts against p's chat anti-flood: an invitation pops up on o's screen.
+// attempt counts against p's chat anti-flood (an invitation pops up on o's screen) and
+// against party.invites_per_minute, found or not: an offline name answers like an
+// unknown one, and nobody can probe many names for who is online.
 func (w *World) invite(ctx *game.TickContext, p, o *Player, name string) {
-	if !w.chatAllowed(ctx, p) {
+	if !w.chatAllowed(ctx, p) || !w.inviteAllowed(ctx, p) {
 		return
 	}
 	switch {
+	case o == p:
+		p.emit(systemMsg(msgPartyInviteSelf))
+		return
 	case o == nil && name != "":
 		p.emit(systemMsg(msgPartyNotFound, textParam("name", name)))
 		return
 	case o == nil:
 		p.emit(systemMsg(msgPartyNotSeen))
-		return
-	case o == p:
 		return
 	case p.party != nil && p.party.leader != p:
 		p.emit(systemMsg(msgPartyNotLeader))
@@ -188,6 +213,30 @@ func (w *World) invite(ctx *game.TickContext, p, o *Player, name string) {
 	o.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PartyInvitation{PartyInvitation: &pb.PartyInvitation{
 		InviterId: p.id, InviterName: p.name, ExpiresMs: uint32(int64(w.inviteFor) * game.TickDuration.Milliseconds()),
 	}}})
+}
+
+// inviteAllowed counts one invitation attempt of p against party.invites_per_minute
+// (GCRA, like the chat anti-flood but with no mute): past the burst, p is told how many
+// seconds to wait and nothing else happens. The count belongs to the account, in the
+// World: logging in again, or the account's other character, gets no fresh burst of
+// names to try.
+func (w *World) inviteAllowed(ctx *game.TickContext, p *Player) bool {
+	now := ctx.Tick
+	tat := max(w.inviteTAT[p.accountID], now)
+	if tat-now > w.inviteBurst {
+		p.emit(systemMsg(msgPartyInviteRate, num("seconds", seconds(tat-now-w.inviteBurst))))
+		return false
+	}
+	tat += w.inviteRefill
+	account := p.accountID
+	w.inviteTAT[account] = tat
+	// Forgotten once it is in the past (a later attempt replaced it otherwise).
+	ctx.Sched.After(tat-now, func(*game.TickContext) {
+		if w.inviteTAT[account] == tat {
+			delete(w.inviteTAT, account)
+		}
+	})
+	return true
 }
 
 // acceptInvite has p accept the invitation of inviter: p joins the inviter's party (a

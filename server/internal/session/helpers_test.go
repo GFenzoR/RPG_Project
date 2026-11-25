@@ -103,7 +103,7 @@ func testBalance() content.Balance {
 	b.Chat.Ranges.Yell = content.ChatRange{X: 18, Y: 14}
 	b.Chat.Flood.Burst, b.Chat.Flood.RefillMs, b.Chat.Flood.MuteMs = 5, 2000, 10000
 	b.Chat.GlobalIntervalMs = 10000
-	b.Party = content.Party{MaxMembers: 3, InviteMs: 5000, UpdateMs: 1000, ShareDistance: 10, ContributionMs: 60000,
+	b.Party = content.Party{MaxMembers: 3, InviteMs: 5000, InvitesPerMinute: 6, UpdateMs: 1000, ShareDistance: 10, ContributionMs: 60000,
 		LevelRangePct: 70, LevelGapAlways: 3, SharedByDefault: true, BonusPctBySharers: []int{5, 10}}
 	// T4.1: reconcile every ledger every tick (newHarness fails the test on a
 	// mismatch), so every test of the package checks the economy log too.

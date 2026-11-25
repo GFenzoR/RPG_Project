@@ -27,7 +27,7 @@ func TestPartyBonusSteps(t *testing.T) {
 }
 
 func TestPartyBonusCheck(t *testing.T) {
-	ok := Party{MaxMembers: 6, InviteMs: 1, UpdateMs: 1, ShareDistance: 1, ContributionMs: 1, LevelRangePct: 70,
+	ok := Party{MaxMembers: 6, InviteMs: 1, InvitesPerMinute: 6, UpdateMs: 1, ShareDistance: 1, ContributionMs: 1, LevelRangePct: 70,
 		BonusPctBySharers: []int{5, 10, 15, 20}}
 	if err := ok.check(); err != nil {
 		t.Fatal(err)
@@ -43,6 +43,13 @@ func TestPartyBonusCheck(t *testing.T) {
 		bad.BonusPctBySharers = steps
 		if bad.check() == nil {
 			t.Errorf("%s: %v accepted", name, steps)
+		}
+	}
+	for _, n := range []int{0, -1, 61} {
+		bad := ok
+		bad.InvitesPerMinute = n
+		if bad.check() == nil {
+			t.Errorf("invites_per_minute %d accepted", n)
 		}
 	}
 }

@@ -127,7 +127,11 @@ func (c Chat) check() error {
 type Party struct {
 	MaxMembers int `yaml:"max_members"`
 	InviteMs   int `yaml:"invite_ms"`
-	UpdateMs   int `yaml:"update_ms"`
+	// InvitesPerMinute caps the invitation attempts of one player (anti-spam, and no way
+	// to probe many names for who is online): that many at once, then one every
+	// 60000 / InvitesPerMinute ms.
+	InvitesPerMinute int `yaml:"invites_per_minute"`
+	UpdateMs         int `yaml:"update_ms"`
 	// A kill is shared by the members on its floor within ShareDistance tiles of it that
 	// contributed within ContributionMs and whose level is at least LevelRangePct % of
 	// the highest of them, or at most LevelGapAlways levels below it.
@@ -173,6 +177,9 @@ func (p Party) check() error {
 	}
 	if p.InviteMs > 600_000 {
 		return errors.New("party.invite_ms must be at most 600000")
+	}
+	if p.InvitesPerMinute < 1 || p.InvitesPerMinute > 60 {
+		return errors.New("party.invites_per_minute must be in 1..60")
 	}
 	if p.InviteMs <= 0 || p.UpdateMs <= 0 || p.ShareDistance <= 0 || p.ContributionMs <= 0 {
 		return errors.New("party: invite_ms, update_ms, share_distance and contribution_ms must be > 0")

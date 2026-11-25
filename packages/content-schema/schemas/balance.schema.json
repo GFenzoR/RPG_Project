@@ -379,6 +379,7 @@
       "required": [
         "max_members",
         "invite_ms",
+        "invites_per_minute",
         "update_ms",
         "share_distance",
         "contribution_ms",
@@ -400,6 +401,12 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 600000
+        },
+        "invites_per_minute": {
+          "description": "Invitation attempts of one player per minute (anti-spam): that many at once, then one every 60000 / this ms.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
         },
         "update_ms": {
           "description": "Members' state refreshes at most this often (ms).",

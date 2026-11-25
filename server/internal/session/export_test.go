@@ -649,3 +649,6 @@ func (w *World) MarkQuestCompletedForTest(p *Player, id string) {
 // StaticCount is staticCount: the stack index of the first loose item of pos (the living
 // world's object, if any, is the index just below it).
 func (w *World) StaticCount(pos world.Pos) int { return w.staticCount(pos) }
+
+// InviteLimitsForTest returns how many accounts have a party invitation limit kept.
+func (w *World) InviteLimitsForTest() int { return len(w.inviteTAT) }

@@ -155,6 +155,10 @@ const (
 	// Leader only: turn shared experience on or off (creature_id is ignored).
 	PartyAction_PARTY_ACTION_SHARE_ON  PartyAction = 7
 	PartyAction_PARTY_ACTION_SHARE_OFF PartyAction = 8
+	// Invite the online character called name (case-insensitive, exact), wherever it is:
+	// the party window's "Invitar" button. Same rules as INVITE; an offline, unknown or
+	// unseen invisible name answers alike (party.player_not_found). creature_id is ignored.
+	PartyAction_PARTY_ACTION_INVITE_NAME PartyAction = 9
 )
 
 // Enum value maps for PartyAction.
@@ -169,6 +173,7 @@ var (
 		6: "PARTY_ACTION_PASS_LEADER",
 		7: "PARTY_ACTION_SHARE_ON",
 		8: "PARTY_ACTION_SHARE_OFF",
+		9: "PARTY_ACTION_INVITE_NAME",
 	}
 	PartyAction_value = map[string]int32{
 		"PARTY_ACTION_UNSPECIFIED": 0,
@@ -180,6 +185,7 @@ var (
 		"PARTY_ACTION_PASS_LEADER": 6,
 		"PARTY_ACTION_SHARE_ON":    7,
 		"PARTY_ACTION_SHARE_OFF":   8,
+		"PARTY_ACTION_INVITE_NAME": 9,
 	}
 )
 
@@ -3642,9 +3648,11 @@ func (x *ShopSell) GetCount() uint32 {
 // PartyCommand is every party intent (T3.3). The server answers with PartyUpdate or a
 // system Message (party.*).
 type PartyCommand struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Action        PartyAction            `protobuf:"varint,1,opt,name=action,proto3,enum=game.v1.PartyAction" json:"action,omitempty"`
-	CreatureId    uint32                 `protobuf:"varint,2,opt,name=creature_id,json=creatureId,proto3" json:"creature_id,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Action     PartyAction            `protobuf:"varint,1,opt,name=action,proto3,enum=game.v1.PartyAction" json:"action,omitempty"`
+	CreatureId uint32                 `protobuf:"varint,2,opt,name=creature_id,json=creatureId,proto3" json:"creature_id,omitempty"`
+	// INVITE_NAME only: the character name typed by the player.
+	Name          string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3691,6 +3699,13 @@ func (x *PartyCommand) GetCreatureId() uint32 {
 		return x.CreatureId
 	}
 	return 0
+}
+
+func (x *PartyCommand) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
 }
 
 // GuildCommand is every guild intent (T5.1). The chat command "/guild ..." does the same.
@@ -4803,11 +4818,12 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\bShopSell\x12\x1b\n" +
 	"\tdialog_id\x18\x01 \x01(\rR\bdialogId\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\rR\x06itemId\x12\x14\n" +
-	"\x05count\x18\x03 \x01(\rR\x05count\"]\n" +
+	"\x05count\x18\x03 \x01(\rR\x05count\"q\n" +
 	"\fPartyCommand\x12,\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x14.game.v1.PartyActionR\x06action\x12\x1f\n" +
 	"\vcreature_id\x18\x02 \x01(\rR\n" +
-	"creatureId\"\x96\x01\n" +
+	"creatureId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"\x96\x01\n" +
 	"\fGuildCommand\x12,\n" +
 	"\x06action\x18\x01 \x01(\x0e2\x14.game.v1.GuildActionR\x06action\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -4872,7 +4888,7 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x14CHAT_CHANNEL_WHISPER\x10\x03\x12\x17\n" +
 	"\x13CHAT_CHANNEL_GLOBAL\x10\x04\x12\x16\n" +
 	"\x12CHAT_CHANNEL_PARTY\x10\x05\x12\x16\n" +
-	"\x12CHAT_CHANNEL_GUILD\x10\x06*\xfb\x01\n" +
+	"\x12CHAT_CHANNEL_GUILD\x10\x06*\x99\x02\n" +
 	"\vPartyAction\x12\x1c\n" +
 	"\x18PARTY_ACTION_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13PARTY_ACTION_INVITE\x10\x01\x12\x17\n" +
@@ -4882,7 +4898,8 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\x11PARTY_ACTION_KICK\x10\x05\x12\x1c\n" +
 	"\x18PARTY_ACTION_PASS_LEADER\x10\x06\x12\x19\n" +
 	"\x15PARTY_ACTION_SHARE_ON\x10\a\x12\x1a\n" +
-	"\x16PARTY_ACTION_SHARE_OFF\x10\b*\xd0\x03\n" +
+	"\x16PARTY_ACTION_SHARE_OFF\x10\b\x12\x1c\n" +
+	"\x18PARTY_ACTION_INVITE_NAME\x10\t*\xd0\x03\n" +
 	"\vGuildAction\x12\x1c\n" +
 	"\x18GUILD_ACTION_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13GUILD_ACTION_CREATE\x10\x01\x12\x17\n" +

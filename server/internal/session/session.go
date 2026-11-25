@@ -456,9 +456,15 @@ type World struct {
 	invites    map[inviteKey]game.Tick
 	inviteFor  game.Tick
 	partyEvery game.Tick
-	contribFor game.Tick
-	partyBuf   []*Player
-	islandBuf  []string
+	// inviteRefill and inviteBurst are party.invites_per_minute as a GCRA: one attempt
+	// every inviteRefill, up to inviteBurst ahead of now. inviteTAT is each account's
+	// theoretical arrival tick, kept while it is in the future (it outlives a logout).
+	inviteTAT    map[int64]game.Tick
+	inviteRefill game.Tick
+	inviteBurst  game.Tick
+	contribFor   game.Tick
+	partyBuf     []*Player
+	islandBuf    []string
 
 	// Guilds (T5.1, guild.go): every guild by id and by name key, members by
 	// character, the guilds that invited each character, the last guild id, and this
