@@ -6,12 +6,15 @@
 //                 (the server's state: drawn even with reduced effects), footprints,
 //                 water ripples and dust clouds, fish shadows
 //   air layer     (over the map): falling leaves, birds, butterflies, fireflies
-//   plants        the map's own plant sprites get a skew (bend) or a pixel offset (rustle)
+//   plants        the map's own plant sprites sway in the wind and bend when a creature
+//                 brushes them: each is drawn as strips that slide (wind-mesh.ts), its base
+//                 planted; one without wind data gets a skew (bend) or a pixel offset (rustle)
 //
 // Cheap on purpose (docs/07): fixed sprite pools made once, every effect capped, and with
 // reduced effects (the player's "reduced animations" or the system's reduced motion) nothing
 // is spawned, drawn or moved.
 import { Container, Sprite, Texture } from "pixi.js";
+import type { Mesh } from "pixi.js";
 import { CritterSim, MAX_CRITTERS } from "./critters.ts";
 import type { LivingWorldData, PlantRule, Surface } from "./data.ts";
 import { FootprintSim, MAX_FOOTPRINTS, stepRotation } from "./footprints.ts";
@@ -20,7 +23,19 @@ import { footstepEvents } from "./footsteps.ts";
 import { seededRandom, tileKey } from "./hash.ts";
 import { LeafSim, MAX_LEAVES } from "./leaves.ts";
 import { MAX_PUFFS, PuffSim, RUN_STEP_MS } from "./puffs.ts";
-import { idleSway, rustleOffset, SwaySim } from "./sway.ts";
+import { bendPx, rustleOffset, SwaySim } from "./sway.ts";
+import {
+  exposureOf,
+  flutterOf,
+  flutterPhase,
+  gustAt,
+  snapSteps,
+  strengthAt,
+  stripOffsets,
+  swayOf,
+} from "./wind.ts";
+import type { PlantWind } from "./wind.ts";
+import { WindMesh } from "./wind-mesh.ts";
 import { MAX_WEAR_DRAWN, TRAMPLE_SCALE, WearMap, wearSprite } from "./wear.ts";
 import type { WearDraw, WearTile } from "./wear.ts";
 
@@ -50,7 +65,9 @@ export type {
 } from "./objects.ts";
 export { gust, FootprintSim, MAX_FOOTPRINTS, PRINT_KINDS, stepRotation } from "./footprints.ts";
 export type { Footprint, PrintKind } from "./footprints.ts";
-export { SwaySim, idleSway, rustleOffset, SWAY_MS, MAX_SWAYS } from "./sway.ts";
+export { SwaySim, bendPx, rustleOffset, SWAY_MS, MAX_SWAYS } from "./sway.ts";
+export * from "./wind.ts";
+export { WindMesh } from "./wind-mesh.ts";
 export { PuffSim, MAX_PUFFS, RUN_STEP_MS } from "./puffs.ts";
 export { LeafSim, MAX_LEAVES } from "./leaves.ts";
 export { CritterSim, MAX_CRITTERS, FLEE_TILES } from "./critters.ts";
@@ -80,12 +97,25 @@ export interface LivingStage {
 /** What ground surface tile (x, y, z) has, if any (the glue reads its map and data/items). */
 export type SurfaceLookup = (x: number, y: number, z: number) => Surface | undefined;
 
-/** The part of a map sprite a plant reaction moves (a Pixi Sprite has both). */
+/**
+ * The part of a map sprite the plants move (a Pixi Sprite has it all). With its texture,
+ * anchor and parent, a plant that takes the wind is drawn by a strip mesh in the sprite's
+ * place (same parent, position and zIndex) while the sprite hides; without them (a test's
+ * stub) it gets a skew.
+ */
 export interface PlantSprite {
   x: number;
   skew: { x: number };
   /** Its scale (a Pixi Sprite's): a trampled plant is drawn flatter. Optional for tests. */
   scale?: { y: number };
+  y?: number;
+  texture?: Texture;
+  anchor?: { x: number };
+  parent?: Container | null;
+  zIndex?: number;
+  visible?: boolean;
+  tint?: number;
+  alpha?: number;
 }
 
 /**
@@ -106,8 +136,10 @@ export interface LivingWorldOptions {
   plants?: PlantSource | undefined;
   /** Reduced effects now: nothing at all. */
   reduced?: (() => boolean) | undefined;
-  /** Night now: fireflies instead of birds and butterflies. */
+  /** Night now: fireflies instead of birds and butterflies, and a calmer wind. */
   night?: (() => boolean) | undefined;
+  /** No wind on the frame's floor (a cave): plants only move when brushed. */
+  sheltered?: (() => boolean) | undefined;
   /** Seed of the leaves' generator (tests). */
   seed?: number | undefined;
 }
@@ -131,6 +163,8 @@ export interface TickView {
   height: number;
   z: number;
   self?: { x: number; y: number } | undefined;
+  /** Screen pixels per sprite pixel: the wind moves in whole screen pixels. Absent: 1. */
+  zoom?: number | undefined;
 }
 
 export interface LivingWorld {
@@ -152,6 +186,8 @@ export interface LivingWorld {
     critters: number;
     sways: number;
     plants: number;
+    /** Plants drawn as wind strips now. */
+    windMeshes: number;
   };
   destroy(): void;
 }
@@ -178,7 +214,28 @@ interface PlantEntry {
   rule: PlantRule;
   sprite: PlantSprite;
   baseX: number;
+  /** How hard the wind blows where it stands (wind.ts exposureOf); 0 without wind. */
+  exposure: number;
+  /** Its strips, when it takes the wind and its sprite can be meshed. */
+  mesh: WindMesh | undefined;
 }
+
+/** How far round a plant its exposure looks, tiles (a 5x5 window). */
+const EXPOSURE_RADIUS = 2;
+/** The wind eases into the night's strength (and back) over this long, ms. */
+const NIGHT_EASE_MS = 20000;
+/** A plant this many tiles below or beside the view still shows its canopy in it. */
+const WIND_MARGIN_TILES = 3;
+
+const canMesh = (
+  s: PlantSprite,
+): s is PlantSprite & { y: number; texture: Texture; anchor: { x: number }; parent: Container } =>
+  typeof s.y === "number" &&
+  s.texture !== undefined &&
+  s.texture.width > 0 &&
+  s.anchor !== undefined &&
+  s.parent !== undefined &&
+  s.parent !== null;
 
 /** A pool of sprites made once, shown in order each frame. */
 class Pool {
@@ -275,25 +332,167 @@ export function createLivingWorld(
   let plants: PlantEntry[] = [];
   const plantAt = new Map<number, PlantEntry>();
   let plantsVersion = -1;
-  const refreshPlants = (): void => {
+  const field = data.wind?.field;
+  /** The strips of each sprite: kept while its sprite lives, so a new chunk makes only its own. */
+  const meshes = new Map<PlantSprite, WindMesh>();
+  let meshesOn = false;
+  const around: (Surface | undefined)[] = [];
+  /** How hard the wind blows on the plant of tile (x, y): its ground and its neighbours. */
+  const exposureAt = (x: number, y: number, z: number): number => {
+    if (!field) return 0;
+    around.length = 0;
+    let trees = 0;
+    let tiles = 0;
+    for (let oy = -EXPOSURE_RADIUS; oy <= EXPOSURE_RADIUS; oy++)
+      for (let ox = -EXPOSURE_RADIUS; ox <= EXPOSURE_RADIUS; ox++) {
+        around.push(surfaceAt(x + ox, y + oy, z));
+        if (ox === 0 && oy === 0) continue;
+        tiles++;
+        const kind = plantAt.get(tileKey(x + ox, y + oy))?.rule.wind?.kind;
+        if (kind === "tree" || kind === "palm" || kind === "dead_tree") trees++;
+      }
+    return exposureOf(field, around, trees, tiles);
+  };
+  const dropMesh = (sprite: PlantSprite, mesh: WindMesh): void => {
+    mesh.destroy();
+    // The sprite may be gone with its chunk: only one still on the map shows again.
+    if (sprite.parent) sprite.visible = true;
+  };
+  /** The strips of a plant's sprite, hidden behind them; undefined when it cannot have any. */
+  const meshOf = (sprite: PlantSprite, wind: PlantWind): WindMesh | undefined => {
+    const had = meshes.get(sprite);
+    if (had) return had;
+    if (!canMesh(sprite)) return undefined;
+    const h = sprite.texture.height;
+    const mesh = new WindMesh(
+      sprite.texture,
+      sprite.anchor.x,
+      wind.pivotPx ?? Math.round(wind.pivot * h),
+      wind.topPx ?? h,
+    );
+    const view: Mesh = mesh.view;
+    view.position.set(sprite.x, sprite.y);
+    view.tint = sprite.tint ?? 0xffffff;
+    view.alpha = sprite.alpha ?? 1;
+    sprite.parent.addChild(view);
+    // After the sprite and with its order: the layer's sort is stable, so it stays in its place.
+    view.zIndex = sprite.zIndex ?? 0;
+    sprite.visible = false;
+    meshes.set(sprite, mesh);
+    return mesh;
+  };
+  /**
+   * Rebuilds the plant list when the map's sprites changed (or the strips are switched on or
+   * off): each plant's exposure, and its strips when `withMeshes`.
+   */
+  const refreshPlants = (z: number, withMeshes: boolean): void => {
     const src = options.plants;
-    if (!src || src.version() === plantsVersion) return;
+    if (!src || (src.version() === plantsVersion && withMeshes === meshesOn)) return;
     plantsVersion = src.version();
+    meshesOn = withMeshes;
     plants = [];
     plantAt.clear();
     src.forEach((x, y, id, sprite) => {
       const rule = data.plants[id];
       if (!rule) return;
-      const e = { x, y, rule, sprite, baseX: sprite.x };
+      const e: PlantEntry = { x, y, rule, sprite, baseX: sprite.x, exposure: 0, mesh: undefined };
       plants.push(e);
       plantAt.set(tileKey(x, y), e);
     });
+    const live = new Set<PlantSprite>();
+    let parent: Container | undefined;
+    for (const p of plants) {
+      const wind = p.rule.wind;
+      if (!wind) continue;
+      p.exposure = exposureAt(p.x, p.y, z);
+      if (!withMeshes) continue;
+      const fresh = !meshes.has(p.sprite);
+      p.mesh = meshOf(p.sprite, wind);
+      if (!p.mesh) continue;
+      live.add(p.sprite);
+      if (fresh) parent = p.mesh.view.parent ?? parent;
+    }
+    for (const [sprite, mesh] of meshes) {
+      if (live.has(sprite)) continue;
+      dropMesh(sprite, mesh);
+      meshes.delete(sprite);
+    }
+    // The map sorts its item layer only when it builds a chunk: put the new strips in order.
+    parent?.sortChildren();
   };
   const settlePlants = (): void => {
     for (const p of plants) {
       p.sprite.skew.x = 0;
       p.sprite.x = p.baseX;
     }
+  };
+  /** Night's calmer wind, eased: 1 by day, `field.night` at night. */
+  let windScale: number | undefined;
+  /**
+   * Moves every plant in view: the wind and the bends of the steps, on the same strips.
+   * Returns how many trees that drop leaves are in view.
+   */
+  const movePlants = (
+    now: number,
+    ms: number,
+    zoom: number,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): number => {
+    const steps = snapSteps(zoom);
+    let blowing = false;
+    if (field && !(options.sheltered?.() ?? false)) {
+      const target = (options.night?.() ?? false) ? field.night : 1;
+      if (windScale === undefined) windScale = target;
+      else {
+        const d = ms / NIGHT_EASE_MS;
+        windScale += Math.max(-d, Math.min(d, target - windScale));
+      }
+      blowing = windScale > 0;
+    }
+    let trees = 0;
+    for (const p of plants) {
+      if (p.rule.leaves && p.x >= x0 && p.y >= y0 && p.x <= x1 && p.y <= y1) trees++;
+      if (
+        p.x < x0 - WIND_MARGIN_TILES ||
+        p.y < y0 ||
+        p.x > x1 + WIND_MARGIN_TILES ||
+        p.y > y1 + WIND_MARGIN_TILES
+      )
+        continue;
+      const b = sway.bendAt(p.x, p.y, now);
+      const wind = p.rule.wind;
+      const rustle = p.rule.reaction === "rustle";
+      let top = 0;
+      let flutter = 0;
+      if (wind && field && blowing && p.exposure > 0) {
+        const strength = strengthAt(
+          field,
+          gustAt(field, p.x, p.y, now),
+          p.exposure * (windScale ?? 1),
+        );
+        top = swayOf(field, wind, p.x, p.y, now, strength);
+        flutter = flutterOf(wind, strength);
+      }
+      const mesh = p.mesh;
+      if (mesh) {
+        if (b !== 0) top += bendPx(b, mesh.reach, rustle);
+        if (
+          stripOffsets(mesh.offsets, mesh.layout, top, flutter, flutterPhase(p.x, p.y, now), steps)
+        )
+          mesh.apply(steps);
+        continue;
+      }
+      // No strips (a sprite that cannot be meshed, a plant with no wind data): the bend as a
+      // skew, or a tree's shake as a pixel offset. A positive skew.x leans a bottom-anchored
+      // sprite's top to the left: negate it so a positive bend leans right, the way a walker
+      // going east pushes it.
+      if (rustle) p.sprite.x = p.baseX + rustleOffset(b) + Math.round(top);
+      else p.sprite.skew.x = -(b + Math.atan2(top, T)) || 0;
+    }
+    return trees;
   };
 
   /** The worn tiles in view, rebuilt only when the wear or the view's tiles changed. */
@@ -340,6 +539,7 @@ export function createLivingWorld(
       if (!p.rule.trample || !p.sprite.scale) continue;
       const k = TRAMPLE_SCALE[wear.size > 0 ? wear.level(p.x, p.y, z) : 0] ?? 1;
       if (p.sprite.scale.y !== k) p.sprite.scale.y = k;
+      if (p.mesh && p.mesh.view.scale.y !== k) p.mesh.view.scale.y = k;
     }
   };
 
@@ -358,6 +558,7 @@ export function createLivingWorld(
     leaves.clear();
     critters.clear();
     settlePlants();
+    windScale = undefined;
   };
 
   return {
@@ -402,7 +603,8 @@ export function createLivingWorld(
         wasReduced = true;
         ground.visible = false;
         air.visible = false;
-        refreshPlants();
+        // No strips with reduced effects: the map's own still sprites show again.
+        refreshPlants(view.z, false);
         const [rx0, ry0, rx1, ry1] = viewTiles(view);
         drawWear(view.z, rx0, ry0, rx1, ry1);
         return;
@@ -415,20 +617,10 @@ export function createLivingWorld(
       puffs.step(ms);
       leaves.step(ms);
       sway.prune(now);
-      refreshPlants();
+      refreshPlants(view.z, true);
       const [x0, y0, x1, y1] = viewTiles(view);
-      // Plants: bends from steps, idle sway on tall ones; idle leaves from trees in view.
-      let trees = 0;
-      for (const p of plants) {
-        if (p.x < x0 || p.y < y0 || p.x > x1 || p.y > y1) continue;
-        let b = sway.bendAt(p.x, p.y, now);
-        if (p.rule.idle) b += idleSway(p.x, p.y, now);
-        // A positive skew.x leans a bottom-anchored sprite's top to the left: negate it so a
-        // positive bend leans right, the way a walker going east pushes it.
-        if (p.rule.reaction === "bend") p.sprite.skew.x = -b;
-        else p.sprite.x = p.baseX + rustleOffset(b);
-        if (p.rule.leaves) trees++;
-      }
+      // Plants: the wind and the bends from steps; idle leaves from trees in view.
+      const trees = movePlants(now, ms, view.zoom ?? 1, x0, y0, x1, y1);
       if (trees > 0 && random() < leaves.chance(trees, ms)) {
         let pick = Math.floor(random() * trees);
         for (const p of plants) {
@@ -467,10 +659,13 @@ export function createLivingWorld(
         critters: critters.critters.length,
         sways: sway.active,
         plants: plants.length,
+        windMeshes: meshes.size,
       };
     },
 
     destroy() {
+      for (const [sprite, mesh] of meshes) dropMesh(sprite, mesh);
+      meshes.clear();
       settlePlants();
       for (const p of plants) if (p.sprite.scale) p.sprite.scale.y = 1;
       wearLayer.destroy({ children: true });

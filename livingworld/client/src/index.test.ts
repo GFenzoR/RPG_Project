@@ -13,7 +13,7 @@ const data = parseLivingWorldData(
   },
   {
     plants: [
-      { item: "tall_grass", reaction: "bend", idle: true, trample: true },
+      { item: "tall_grass", reaction: "bend", trample: true },
       { item: "oak_tree", reaction: "rustle", leaves: true },
     ],
   },

@@ -4,6 +4,8 @@
 // file) parses the YAML at build time with parseLivingWorldData (and ambience.yaml with
 // parseAmbience, ambience.ts).
 import type { AmbienceData } from "./ambience.ts";
+import { isWindKind, parseSpriteWind, parseWind, parseWindSprites, resolveWind } from "./wind.ts";
+import type { PlantWind, SpriteWind, WindData, WindKind } from "./wind.ts";
 
 import { parseDayNight } from "./sky.ts";
 import type { DayNightData } from "./sky.ts";
@@ -53,12 +55,29 @@ export type PlantReaction = "bend" | "rustle";
 export interface PlantRule {
   /** bend: the sprite leans away and springs back (grass, reeds, bushes); rustle: a tree shakes. */
   reaction: PlantReaction;
-  /** It also sways gently in the wind when nobody is near. */
-  idle: boolean;
   /** Leaves fall from it now and then, and when someone brushes past. */
   leaves: boolean;
   /** On a tile worn into a path (trail wear) it lies flattened (TRAMPLE_SCALE). */
   trample: boolean;
+  /** How it sways in the wind (wind.ts); absent: it never does (`wind: none`, or no wind data). */
+  wind?: PlantWind | undefined;
+}
+
+/** What a passing creature does to a plant of a wind type when plants.yaml does not say. */
+export function defaultReaction(kind: WindKind): PlantReaction {
+  return kind === "tree" || kind === "palm" || kind === "dead_tree" || kind === "cactus"
+    ? "rustle"
+    : "bend";
+}
+
+/** The wind files and what joins them to the plants (parseLivingWorldData). */
+export interface WindSources {
+  /** data/livingworld/wind.yaml. */
+  wind: unknown;
+  /** data/livingworld/wind_sprites.yaml (written by make spritegen). */
+  sprites: unknown;
+  /** data/items: item id → its sprite path. */
+  itemSprites: Readonly<Record<string, string>>;
 }
 
 export const CRITTER_KINDS = ["bird", "butterfly", "firefly", "fish"] as const;
@@ -72,6 +91,8 @@ export interface LivingWorldData {
   ambience?: AmbienceData | undefined;
   /** data/livingworld/daynight.yaml (sky.ts); absent: no day and night (always noon). */
   dayNight?: DayNightData | undefined;
+  /** data/livingworld/wind.yaml (wind.ts); absent: no wind, nothing sways. */
+  wind?: WindData | undefined;
 }
 
 export const EMPTY_DATA: LivingWorldData = { surfaces: {}, plants: {} };
@@ -90,18 +111,32 @@ function parseTint(v: unknown): number {
  * The client's view of data/livingworld/surfaces.yaml and plants.yaml (already parsed
  * YAML). Lenient: make validate checks the files against their schemas, so anything
  * malformed here is skipped rather than thrown.
+ *
+ * With `windSources`, every plant gets its wind (wind.ts resolveWind): an item of
+ * plants.yaml by its `wind` (a type, a mapping, none) or else by its sprite, and an item
+ * that plants.yaml does not list but whose sprite has wind metadata becomes a plant of its
+ * type's defaults: a new plant sprite sways with no line written here.
  */
 export function parseLivingWorldData(
   surfaces: unknown,
   plants: unknown,
   dayNight?: unknown,
+  windSources?: WindSources,
 ): LivingWorldData {
   const out: {
     surfaces: Partial<Record<Surface, SurfaceRules>>;
     plants: Record<string, PlantRule>;
     dayNight?: DayNightData;
+    wind?: WindData;
   } = { surfaces: {}, plants: {} };
   if (dayNight !== undefined && dayNight !== null) out.dayNight = parseDayNight(dayNight);
+  const wind = windSources ? parseWind(windSources.wind) : undefined;
+  if (wind) out.wind = wind;
+  const spriteWinds = windSources ? parseWindSprites(windSources.sprites) : {};
+  const windOfSprite = (item: string): SpriteWind | undefined => {
+    const sprite = windSources?.itemSprites[item];
+    return sprite === undefined ? undefined : spriteWinds[sprite];
+  };
   const s = isObj(surfaces) && isObj(surfaces["surfaces"]) ? surfaces["surfaces"] : {};
   for (const [name, raw] of Object.entries(s)) {
     if (!isSurface(name) || !isObj(raw)) continue;
@@ -125,13 +160,40 @@ export function parseLivingWorldData(
   const list = isObj(plants) && Array.isArray(plants["plants"]) ? plants["plants"] : [];
   for (const raw of list) {
     if (!isObj(raw) || typeof raw["item"] !== "string") continue;
-    const reaction = raw["reaction"] === "rustle" ? "rustle" : "bend";
-    out.plants[raw["item"]] = {
+    const item = raw["item"];
+    const w = raw["wind"];
+    const still = w === "none";
+    const own = isWindKind(w) ? { kind: w } : parseSpriteWind(w);
+    const resolved = wind && !still ? resolveWind(wind, windOfSprite(item), own) : undefined;
+    const said = raw["reaction"];
+    // A listed item with neither a reaction nor wind (wind: none alone) is no plant at all.
+    if (said !== "bend" && said !== "rustle" && !resolved) continue;
+    const reaction: PlantReaction =
+      said === "bend" || said === "rustle" ? said : defaultReaction(resolved?.kind ?? "bush");
+    const rule: PlantRule = {
       reaction,
-      idle: raw["idle"] === true,
       leaves: raw["leaves"] === true,
       trample: raw["trample"] === true,
     };
+    if (resolved) rule.wind = resolved;
+    out.plants[item] = rule;
+  }
+  // Plants nobody listed: every item whose sprite says how it takes the wind.
+  if (wind && windSources) {
+    const listed = new Set<string>();
+    for (const raw of list)
+      if (isObj(raw) && typeof raw["item"] === "string") listed.add(raw["item"]);
+    for (const item of Object.keys(windSources.itemSprites)) {
+      if (listed.has(item)) continue;
+      const resolved = resolveWind(wind, windOfSprite(item), undefined);
+      if (!resolved) continue;
+      out.plants[item] = {
+        reaction: defaultReaction(resolved.kind),
+        leaves: false,
+        trample: false,
+        wind: resolved,
+      };
+    }
   }
   return out;
 }

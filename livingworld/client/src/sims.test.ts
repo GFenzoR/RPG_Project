@@ -7,7 +7,7 @@ import { footstepEvents } from "./footsteps.ts";
 import { seededRandom } from "./hash.ts";
 import { LEAF_FALL_MS, LEAF_REST_MS, LeafSim, MAX_LEAVES } from "./leaves.ts";
 import { MAX_PUFFS, PUFF_MS, PuffSim } from "./puffs.ts";
-import { BEND, idleSway, IDLE, MAX_SWAYS, rustleOffset, SWAY_MS, SwaySim } from "./sway.ts";
+import { BEND, bendPx, MAX_SWAYS, rustleOffset, SWAY_MS, SwaySim } from "./sway.ts";
 import {
   MAX_WEAR_DRAWN,
   MAX_WEAR_LEVEL,
@@ -49,7 +49,7 @@ describe("data", () => {
       },
       {
         plants: [
-          { item: "bush", reaction: "bend", idle: true },
+          { item: "bush", reaction: "bend" },
           { item: "oak", reaction: "rustle", leaves: true },
           { reaction: "bend" },
         ],
@@ -67,8 +67,8 @@ describe("data", () => {
     expect(d.surfaces.lava?.footprintMs).toBe(0);
     expect(Object.keys(d.surfaces)).toEqual(["sand", "lava"]);
     expect(d.plants).toEqual({
-      bush: { reaction: "bend", idle: true, leaves: false, trample: false },
-      oak: { reaction: "rustle", idle: false, leaves: true, trample: false },
+      bush: { reaction: "bend", leaves: false, trample: false },
+      oak: { reaction: "rustle", leaves: true, trample: false },
     });
     expect(parseLivingWorldData(undefined, null)).toEqual(EMPTY_DATA);
   });
@@ -182,13 +182,14 @@ describe("plants", () => {
     expect(sim.active).toBe(MAX_SWAYS);
   });
 
-  it("sway gently in the wind, deterministic, and trees shake a pixel or so", () => {
-    const v = [...Array(50).keys()].map((i) => idleSway(3, 4, i * 200));
-    expect(Math.max(...v.map(Math.abs))).toBeLessThanOrEqual(IDLE);
-    expect(Math.max(...v)).toBeGreaterThan(0);
-    expect(idleSway(3, 4, 777)).toBe(idleSway(3, 4, 777));
+  it("shake a tree a pixel or so, and turn a bend into pixels at the top", () => {
     expect(rustleOffset(BEND)).toBe(1);
     expect(rustleOffset(0)).toBe(0);
+    // A tree only shakes; a bush leans by its moving rows.
+    expect(bendPx(BEND, 60, true)).toBeCloseTo(1.4);
+    expect(bendPx(BEND, 26, false)).toBeGreaterThan(3);
+    expect(bendPx(-BEND, 26, false)).toBeCloseTo(-bendPx(BEND, 26, false));
+    expect(bendPx(0, 26, false)).toBe(0);
   });
 });
 
