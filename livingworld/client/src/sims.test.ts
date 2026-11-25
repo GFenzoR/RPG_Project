@@ -7,7 +7,7 @@ import { footstepEvents } from "./footsteps.ts";
 import { seededRandom } from "./hash.ts";
 import { LEAF_FALL_MS, LEAF_REST_MS, LeafSim, MAX_LEAVES } from "./leaves.ts";
 import { MAX_PUFFS, PUFF_MS, PuffSim } from "./puffs.ts";
-import { BEND, bendPx, MAX_SWAYS, rustleOffset, SWAY_MS, SwaySim } from "./sway.ts";
+import { BEND, bendPx, MAX_SWAYS, NEIGHBOUR, rustleOffset, SWAY_MS, SwaySim } from "./sway.ts";
 import {
   MAX_WEAR_DRAWN,
   MAX_WEAR_LEVEL,
@@ -164,6 +164,30 @@ describe("plants", () => {
     expect(sim.bendAt(10, 10, 1000 + SWAY_MS)).toBe(0);
     sim.prune(1000 + SWAY_MS);
     expect(sim.active).toBe(0);
+  });
+
+  // A bush or a tree is solid (docs/06 "Qué bloquea el paso"): nobody steps on its tile, so
+  // all it ever gets is the brush of a walker on a tile next to it.
+  it("bend when a walker brushes past a solid plant, never stepping on it", () => {
+    const sim = new SwaySim();
+    const bush = { x: 10, y: 10 };
+    // Walking east along the row below it: two tiles away it stays still.
+    sim.trigger(8, 11, 1, 0);
+    expect(sim.bendAt(bush.x, bush.y, 0)).toBe(0);
+    // Diagonally next to it, right below it and past it: each step brushes it, leaning the
+    // way the walker goes, enough to see (a pixel or more of a 32 px sprite).
+    for (const [i, x] of [9, 10, 11].entries()) {
+      const now = 400 * (i + 1);
+      sim.trigger(x, 11, 1, now);
+      expect(sim.bendAt(bush.x, bush.y, now)).toBeCloseTo(BEND * NEIGHBOUR);
+      expect(Math.tan(sim.bendAt(bush.x, bush.y, now)) * 32).toBeGreaterThan(1);
+    }
+    // A tree shakes when brushed too.
+    expect(Math.abs(rustleOffset(BEND * NEIGHBOUR))).toBeGreaterThanOrEqual(1);
+    // Walking straight past its side (north along the column next to it) pushes it away.
+    const side = new SwaySim();
+    side.trigger(11, 10, 0, 0);
+    expect(side.bendAt(bush.x, bush.y, 0)).toBeCloseTo(-BEND * NEIGHBOUR);
   });
 
   it("lean the way the walker goes, and away from it when it walks up or down", () => {

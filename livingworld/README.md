@@ -75,8 +75,10 @@ lw.destroy();
   (ninguno nuevo por huella).
 - **Plantas** (`sway.ts`): un paso dobla la planta de la casilla y, a la mitad, las 8
   vecinas, hacia donde camina (de frente o de espaldas, las de los lados hacia afuera): un
-  resorte amortiguado de `SWAY_MS` (900 ms). Tope `MAX_SWAYS` (48) plantas moviéndose por
-  pasos. En una planta con viento (casi todas) el doblez se suma al vaivén como px en la
+  resorte amortiguado de `SWAY_MS` (900 ms). Una planta sólida (arbusto, árboles:
+  `blocks_movement` en `data/items`, docs/06 "Qué bloquea el paso") nunca se pisa: solo recibe
+  el roce de quien pasa por una casilla vecina (`NEIGHBOUR`, 0,45 del doblez). Tope `MAX_SWAYS`
+  (48) plantas moviéndose por pasos. En una planta con viento (casi todas) el doblez se suma al vaivén como px en la
   punta (`bendPx`) y lo mueven las mismas tiras: nunca salta. `bend` inclina la copa;
   `rustle` (árboles) la sacude 1,4 px. Una planta sin datos de viento (`wind: none`) se
   dobla como antes: un skew del sprite, o un corrimiento de 1 px.

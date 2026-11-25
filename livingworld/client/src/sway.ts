@@ -11,7 +11,11 @@ export const SWAY_MS = 900;
 export const SWAY_PERIOD_MS = 420;
 /** The lean of a fresh bend on the stepped tile, radians of skew. */
 export const BEND = 0.28;
-/** Neighbours of the stepped tile bend this much of it. */
+/**
+ * Neighbours of the stepped tile bend this much of it. It is all a solid plant ever gets (a
+ * bush, a tree: nobody steps on their tile, docs/06 "Qué bloquea el paso"), so it has to
+ * show: a 32 px sprite leans 4 px at its top, and a tree shakes its pixel (rustleOffset).
+ */
 export const NEIGHBOUR = 0.45;
 /** How much of the rows that move a full skew would push the top: the bend is gentler. */
 export const BEND_REACH = 0.7;
