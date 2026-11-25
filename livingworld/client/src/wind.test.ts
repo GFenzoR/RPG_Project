@@ -476,8 +476,7 @@ describe("the wind over the map's sprites", () => {
         id: 1,
         from: { x: 4, y: 5, z: 7 },
         to: { x: 5, y: 5, z: 7 },
-        durationMs: 300,
-        print: "feet",
+        grounded: true,
       },
       1000,
     );
@@ -556,8 +555,7 @@ describe("the wind over the map's sprites", () => {
         id: 1,
         from: { x: 4, y: 5, z: 7 },
         to: { x: 5, y: 5, z: 7 },
-        durationMs: 300,
-        print: "feet",
+        grounded: true,
       },
       3000,
     );

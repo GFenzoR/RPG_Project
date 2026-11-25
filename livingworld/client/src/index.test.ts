@@ -18,6 +18,7 @@ const data = parseLivingWorldData(
     ],
   },
   undefined,
+  undefined,
   {
     view: { depth: 0.5 },
     slide_px: 2,

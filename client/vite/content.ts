@@ -109,11 +109,17 @@ function loadLivingWorld(root: string, items: Readonly<Record<number, ItemDef>>)
   const itemSprites: Record<string, string> = {};
   for (const item of Object.values(items)) if (item.sprite) itemSprites[item.id] = item.sprite;
   return {
-    ...parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml"), read("daynight.yaml"), {
-      wind: read("wind.yaml"),
-      sprites: read("wind_sprites.yaml"),
-      itemSprites,
-    }),
+    ...parseLivingWorldData(
+      read("surfaces.yaml"),
+      read("plants.yaml"),
+      read("daynight.yaml"),
+      {
+        wind: read("wind.yaml"),
+        sprites: read("wind_sprites.yaml"),
+        itemSprites,
+      },
+      read("gaits.yaml"),
+    ),
     ambience: parseAmbience(read("ambience.yaml")),
   };
 }
