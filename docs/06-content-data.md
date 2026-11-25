@@ -1680,8 +1680,25 @@ toca al contenido:
   `butterfly`, `firefly`, `fish`). `make validate` exige que toda superficie que usa un suelo
   esté descrita.
 - **`data/livingworld/plants.yaml`** (`livingworld-plants.schema.json`): `plants` es una
-  lista de `{ item, reaction: bend | rustle, idle?, leaves?, trample? }`; cada item una
-  vez. `trample`: sobre una casilla con desgaste de senderos se dibuja aplastada.
+  lista de `{ item, reaction?: bend | rustle, leaves?, trample?, wind? }`; cada item una
+  vez, con `reaction` o con `wind`. `trample`: sobre una casilla con desgaste de senderos
+  se dibuja aplastada. `wind`: cómo se mece (lote 20): ausente, lo que dice su sprite; un
+  tipo de planta (`tree`, `palm`, `bush`, `tall_grass`, `reed`, `flower`, `vine`,
+  `cactus`, `dead_tree`); un mapa `{ kind, pivot?, top?, stiffness?, amplitude?,
+  flutter? }`; o `none` (nunca se mece). La clave `idle` del lote 17 ya no existe.
+- **`data/livingworld/wind.yaml`** (`livingworld-wind.schema.json`): el viento. `field`:
+  `direction` (grados; 0 este, 90 sur), `speed` (casillas por segundo), `gust_tiles`,
+  `calm` (0 a 1), `exposure` (fuerza por superficie, 0 a 2), `open`, `forest` (0 a 1) y
+  `night`. `kinds`: por cada tipo de planta, `stiffness` (0 a 1), `amplitude` (px en la
+  punta, hasta 4), `flutter` (px, hasta 0,95), `period_ms` y `pivot` (parte del alto que
+  queda plantada, 0 a 0,95). Los nueve tipos son obligatorios.
+- **`data/livingworld/wind_sprites.yaml`** (`livingworld-wind_sprites.schema.json`):
+  **generado** por `make spritegen`, nunca a mano. `sprites`: por ruta de sprite, `{ kind,
+  pivot, top, stiffness?, amplitude?, flutter? }` (`pivot` y `top` en px sobre el borde de
+  abajo del sprite). `make validate` exige que **todo item que es una planta** tenga
+  metadata de viento (aquí, por su sprite, o en `plants.yaml`) o un `wind: none`
+  explícito, que un árbol declarado a mano diga su `pivot` y que cada sprite del archivo
+  lo use algún item (`livingworld/README.md` "Viento").
 - **`data/livingworld/wear.yaml`** (`livingworld-wear.schema.json`): el desgaste de
   senderos, que lee el **servidor** (`livingworld/server/trail`, docs/02 "Senderos"):
   `surfaces` (las superficies que se gastan), `player_step` y `monster_step` (puntos por

@@ -104,6 +104,31 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
+  el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
+  que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:
+  el viento"):** cada planta se dibuja en tiras que se corren px enteros de pantalla con la
+  base plantada, movidas por un campo de viento que cruza el mapa; el roce de una criatura
+  se suma sin saltos. Toda planta declara su viento en su sprite (`plantWind` en la receta
+  de spritegen, o la pista `wind` de `assets/sprites.yaml`) y `make validate` falla si
+  falta. Sin cambios de servidor ni de protocolo. Queda:
+  - **Mirarlo en movimiento** (E2E del lote y playtest del dueño): un bosque y un pueblo
+    con árboles, a zoom 2 y a zoom 1; que se lea sutil y orgánico. Si es mucho o poco, los
+    números están en `data/livingworld/wind.yaml` (`kinds.<tipo>.amplitude`, `field.calm`,
+    `field.speed`); no hace falta código.
+  - **Arreglo de paso:** las plantas del lote 17 nunca reaccionaban en el juego real (el
+    pegamento le daba al módulo el número del item y los datos van por id); ahora sí se
+    doblan al pasar. Mirar que el doblez de hierba y arbustos (hasta ~6 px en la punta) no
+    sea demasiado.
+  - **Tiempo de frame en el navegador** sobre un bosque: medido solo en Node (0,8 ms con
+    999 árboles, docs/07); falta el número real con GPU.
+  - **Sin clima:** cuando haya lluvia o tormenta, es un factor más sobre la fuerza del
+    viento (`strengthAt`). Las hojas que caen no derivan con el viento.
+  - **Estandartes y bandera** siguen con su bucle de frames; no siguen las ráfagas.
+  - **El editor de mapas** no muestra el vaivén (no monta el mundo vivo): los árboles se
+    ven quietos ahí, ya sin los frames viejos.
+  - **Plantas de selva** (palmeras, helechos, lianas): los tipos `palm`, `vine` y los demás
+    ya tienen sus valores; falta el arte. `make sway-preview` es el paso de revisión.
 - **Globos de diálogo (hecho, rama `feat/chat-bubbles`; el dueño el 2026-11-23: lo dicho en
   el canal local aparece sobre la cabeza; docs/17 UI-11):** decir, gritar, susurrar y la
   línea del NPC en su diálogo, con ajuste de línea, apilado, separación entre hablantes y

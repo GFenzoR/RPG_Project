@@ -316,7 +316,8 @@ mientras no se usan). Por frame:
 | Efecto | Tope | Costo por frame |
 |---|---|---|
 | Huellas | 64 vivas (la nueva reemplaza a la más gastada) | gasto y alfa de cada una |
-| Plantas | 48 moviéndose por pasos | skew de las plantas en vista; la lista se rearma solo cuando cambia `MapView.version` |
+| Plantas | 48 moviéndose por pasos | el doblez de las plantas en vista; la lista se rearma solo cuando cambia `MapView.version` |
+| Viento (lote 20) | solo las plantas en vista (y 3 casillas de margen); una malla de hasta 17 tiras (68 vértices) por planta, en el batch de los sprites | por planta: una ráfaga (dos ruidos), tres senos y un seno por tira; los vértices se reescriben solo cuando una tira cambia de píxel de pantalla (la mayoría de los frames, ninguna) |
 | Ondas y polvo | 24 | frame y alfa |
 | Hojas | 24 | caída y alfa |
 | Bichos | 10 | moverse; buscar hogares recorre la vista cada `SCAN_MS` (1 s), no cada frame |
@@ -333,6 +334,18 @@ del loop. Ancho de banda: docs/05 "Presupuesto de ancho de banda".
 
 Medido con los tests de simulación (`make test-livingworld`); el tiempo de frame en el
 navegador se mira en la revisión del E2E final del lote (docs/14).
+
+**Viento, el peor caso** (`livingworld/client/src/wind.test.ts`, "stays inside the frame
+budget"): una pantalla de bosque con un árbol en **cada** casilla de la vista de 31x21 y su
+margen (37x27 = 999 árboles de 64x96, 999 mallas). Medido el 2026-11-25: **0,8 ms por
+frame** en Node (el cálculo y la reescritura de vértices; el test falla sobre 2 ms, el
+mismo tope holgado de las sombras proyectadas). Un bosque real del mapa tiene entre 150 y
+300 árboles en vista. La exposición de cada planta (25 casillas de alrededor) y su malla se
+calculan una vez, al armar la lista (cuando entra o sale un chunk), no por frame; las
+mallas de los sprites que siguen en pantalla se conservan. Draw calls: ninguno más (las
+mallas van en el batch del atlas, `batchMode: "batch"`); vértices: 68 por planta en vez de
+4. Con "Animaciones reducidas" o `prefers-reduced-motion` no hay mallas ni cálculo. El
+tiempo de frame en el navegador sobre un bosque se mira en el E2E final del lote.
 
 **Ambiente posicional** (lote 18): el cálculo cuesta casi nada. La ventana de 21x21 se
 mueve sumando una fila o columna de 21 casillas por paso (un anillo guarda lo que sumó

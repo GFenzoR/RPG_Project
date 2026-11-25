@@ -20,6 +20,7 @@ pegamento, dónde viven datos, assets y protocolo, cómo agregar algo y cómo pr
 | Sprites | `assets/livingworld/sprites/` (los arma `tools/spritegen`, `recipes/living.ts`; `tools/spritepack` los empaqueta como `livingworld/<ruta>`) | arte propio |
 | Sonidos | `assets/livingworld/sounds/` (registrados en `assets/sounds.yaml` y `assets/CREDITS.md`) | los loops del ambiente en `ambience/` (`tools/soundgen`, `src/ambience.ts`); los pasos por superficie, pendientes (usan `step`) |
 | Mensajes | `proto/game/v1/livingworld.proto` (buf quiere los archivos de un paquete en su carpeta) | `TrailWear` (`ServerMessage.trail_wear` = 49 y `MapArea.wear`), `WorldClock` (`ServerMessage.world_clock` = 53) |
+| Viento (árboles, arbustos y toda planta se mecen) | `livingworld/client/src/wind.ts` (puro) y `wind-mesh.ts` (tiras de Pixi), `data/livingworld/wind.yaml` y `wind_sprites.yaml` (lo escribe `make spritegen`), `tools/spritegen/src/wind.ts` | hecho (`feat/wind-flora`, lote 20); ver "Viento" |
 | Día y noche (reloj, luz, luna, sombras proyectadas) | `livingworld/server/daynight` (reloj), `livingworld/client/src/sky.ts` (cielo), `data/livingworld/daynight.yaml` | hecho (`feat/day-night-shadows`); ver "Día y noche" |
 | Persistencia | tabla `trail_wear` (migración `server/migrations/00027_trail_wear.sql`) | una fila con el desgaste codificado |
 
@@ -41,9 +42,12 @@ lw.destroy();
   `air` va sobre el mapa (`MapView.overlay`).
 - `surfaceLookup(x, y, z)`: la superficie de la casilla (`ground.surface` de su suelo).
 - `options`: `tileSize`, `data` (de `data/livingworld/`), `texture(nombre)` (el atlas),
-  `plants` (`version()` y `forEach` sobre los sprites de items del piso: `MapView.version` y
-  `MapView.forEachItemSprite`), `reduced()` y `night()` (la noche del cielo,
-  `client/src/render/sky.ts`: luciérnagas en vez de pájaros y mariposas).
+  `plants` (`version()` y `forEach` sobre los sprites de items del piso, cada uno con el id
+  de `data/items` de su item: `MapView.version` y `MapView.forEachItemSprite`), `reduced()`,
+  `night()` (la noche del cielo, `client/src/render/sky.ts`: luciérnagas en vez de pájaros
+  y mariposas, y viento más calmo) y `sheltered()` (bajo tierra: sin viento).
+- `view` de `onTick`: además de las casillas en vista, `zoom` (px de pantalla por px de
+  sprite): el viento mueve las plantas en px enteros de pantalla.
 - `CreatureStep`: `id`, `from`, `to`, `durationMs` y `print` (`feet` humanoide, `paw` bestia,
   `big_paw` bestia grande, `none` voladora).
 
@@ -55,9 +59,13 @@ lw.destroy();
   segunda mitad de su vida. Tope `MAX_FOOTPRINTS` (64): una nueva reemplaza a la más gastada.
 - **Plantas** (`sway.ts`): un paso dobla la planta de la casilla y, a la mitad, las 8
   vecinas, hacia donde camina (de frente o de espaldas, las de los lados hacia afuera): un
-  resorte amortiguado de `SWAY_MS` (900 ms). `bend` es un skew del sprite (sin shaders);
-  `rustle` (árboles) un corrimiento de 1 px. Las `idle` se mecen solas con el viento. Tope
-  `MAX_SWAYS` (48) plantas moviéndose por pasos.
+  resorte amortiguado de `SWAY_MS` (900 ms). Tope `MAX_SWAYS` (48) plantas moviéndose por
+  pasos. En una planta con viento (casi todas) el doblez se suma al vaivén como px en la
+  punta (`bendPx`) y lo mueven las mismas tiras: nunca salta. `bend` inclina la copa;
+  `rustle` (árboles) la sacude 1,4 px. Una planta sin datos de viento (`wind: none`) se
+  dobla como antes: un skew del sprite, o un corrimiento de 1 px.
+- **Viento** (`wind.ts`, `wind-mesh.ts`): árboles, arbustos, hierba, juncos, flores y
+  enredaderas se mecen con un viento que recorre el mapa. Ver "Viento".
 - **Ondas y polvo** (`puffs.ts`): anillos que se abren al pisar agua (`ripple`) y una nube
   de polvo al correr (`dust`, paso de `RUN_STEP_MS` = 260 ms o menos). Tope `MAX_PUFFS` (24).
   Las motas de MOV-7 de cada paso (`client/src/render/particles.ts`) siguen como estaban.
@@ -178,6 +186,123 @@ el renderer del cliente dibuja:
 Sin `daynight.yaml` no hay `WorldClock` ni cielo; antes del primer `WorldClock` (o con un
 servidor viejo) el cliente dibuja el mediodía.
 
+## Viento
+
+Pedido del dueño (2026-11-24): que el mundo vivo anime también lo **grande** del mapa
+(árboles, arbustos, plantas en general), con un movimiento chico pero **orgánico**; y que
+toda planta **futura** (mapas de selva y otros) lo herede sin trabajo manual.
+
+**Cómo se mueve un sprite** (`wind-mesh.ts`). Un skew o un giro del sprite entero se ve
+falso: se mueve el tronco. Cada planta con viento se dibuja como una malla de Pixi cortada
+en **tiras horizontales**: una rígida para todo lo que está bajo el *pivot* (donde termina
+el tronco o el tallo) y hasta `MAX_STRIPS` (16) de `STRIP_PX` (2 px) o más sobre él. Cada
+tira se corre de lado, entera, lo que mueve la punta por **el cuadrado de su altura** sobre
+el pivot (`rowWeight`): la base queda plantada y la copa se mueve. Los corrimientos son
+**px enteros de pantalla** al zoom actual (`snapSteps`), así el pixel art nunca se
+desenfoca: cada tira muestra siempre sus propios texels. No se genera ninguna textura por
+frame y la malla va en el mismo batch que los sprites del mapa (`batchMode: "batch"`, un
+solo draw call). La malla ocupa el lugar del sprite del mapa (mismo padre, posición y
+`zIndex`, ordenada justo después), que queda oculto; `MapView` no sabe nada de esto. Las
+mallas se conservan mientras vive su sprite: al entrar un chunk solo se crean las suyas.
+
+**El viento es un campo, no un dado por planta** (`wind.ts`, puro). `gustAt(campo, x, y,
+ms)` es un ruido suave de la posición que **viaja** en la dirección del viento a su
+velocidad: lo que sopla en una casilla sopla `speed` casillas viento abajo un segundo
+después, así los árboles vecinos se mueven uno tras otro. Sobre esa ráfaga cada planta
+suma dos movimientos:
+- **el vaivén** (`swayOf`): una inclinación viento abajo que va y viene con la ráfaga, más
+  un balanceo a su propio período (dos senos que nunca coinciden), con fase, período y
+  tamaño propios del hash de su casilla: nunca se mueven todas juntas como un coro. De 1 a
+  2 px en la punta de un árbol, nunca más que su `amplitude`;
+- **el aleteo** (`flutterOf`, `flutterPhase`): una onda rápida (`FLUTTER_MS`, 430 ms) que
+  sube por las tiras de la copa, de menos de 1 px, más fuerte en la ráfaga.
+
+Un arbusto se mueve menos que un árbol; un cactus o un árbol seco, casi nada: `stiffness`
+hace que una planta rígida ignore la brisa y solo ceda a una ráfaga fuerte.
+
+**Dónde sopla** (`exposureOf`, calculado una vez por planta al armar la lista, no por
+frame): el promedio de `exposure` de las superficies de las 25 casillas de alrededor (así
+la costa sopla unas casillas tierra adentro): más en arena, arena mojada, agua baja, ceniza
+y nieve, normal en el pasto, la mitad sobre piedra (pueblos) y **nada sobre madera** (los
+pisos de adentro); menos dentro de un bosque (`forest`: los árboles de alrededor lo
+calman hasta un 40 %); **nada bajo tierra** (`sheltered`, las cuevas); y un 20 % menos de
+noche (`night`, con una transición de 20 s). No hay clima todavía: cuando lo haya, es un
+factor más sobre la fuerza.
+
+**Sombras:** la sombra dibujada de un árbol (`<sprite>/shadow`) **se queda quieta**. Sale
+del pie del tronco, que no se mueve, y es una mancha blanda al 32 %: 1 o 2 px de vaivén no
+se leerían y moverla costaría otra malla por árbol. Las sombras proyectadas de las
+criaturas no cambian.
+
+**Con "Animaciones reducidas"** (o `prefers-reduced-motion`) no hay mallas: vuelven los
+sprites quietos del mapa.
+
+**Datos.** `data/livingworld/wind.yaml`: `field` (`direction` en grados, `speed` en
+casillas por segundo, `gust_tiles`, `calm`, `exposure` por superficie, `open`, `forest`,
+`night`) y `kinds`, los valores por **tipo de planta** (`tree`, `palm`, `bush`,
+`tall_grass`, `reed`, `flower`, `vine`, `cactus`, `dead_tree`): `stiffness` (0 a 1),
+`amplitude` (px en la punta con ráfaga plena, hasta 4), `flutter` (px, menos de 1),
+`period_ms` y `pivot` (la parte del alto que queda plantada cuando el sprite no lo dice).
+Un árbol nuevo no necesita ningún número.
+
+**De dónde sale el viento de cada planta** (`resolveWind`), de menos a más específico:
+1. los valores de su tipo (`wind.yaml` `kinds`);
+2. lo que dice **su sprite**: `data/livingworld/wind_sprites.yaml`, un archivo **generado**
+   por `make spritegen` (nunca a mano) con `kind`, `pivot` y `top` (la fila más alta
+   dibujada), en px sobre el borde de abajo del sprite. Sale de la metadata `wind` de cada
+   receta de `tools/spritegen` y de las pistas `wind` de `assets/sprites.yaml` (sprites de
+   packs o de Gemini);
+3. lo que dice **su item** en `plants.yaml` (`wind: <tipo>`, `wind: { kind, pivot,
+   stiffness, amplitude, flutter }` o `wind: none`).
+
+Un item cuyo sprite tiene metadata se mece **aunque no esté en `plants.yaml`** (reacciona
+al paso según su tipo: los de tronco se sacuden, el resto se dobla). Los estandartes y la
+bandera no usan el viento: tienen su propio bucle de frames (docs/17 ART-7).
+
+**Nadie se olvida de una planta.** `make validate` falla si un item que es una planta no
+tiene metadata de viento ni un `wind: none` explícito. Es una planta todo item listado en
+`plants.yaml` y toda decoración cuyo id o ruta de sprite nombra una (`tree`, `bush`,
+`grass`, `reeds`, `flower`, `vine`, `fern`, `palm`, `cactus`, `bamboo`, `hedge`, `ivy`...;
+`PLANT_WORD` de `packages/content-schema/src/validate.ts`) o cuyo sprite vive en una
+carpeta `plants/`. También falla un árbol declarado a mano sin `pivot`, y un
+`wind_sprites.yaml` viejo o faltante (lo revisan además `spritegen check` y el test de
+spritegen).
+
+### Cómo agregar una planta
+1. El item en `data/items` (`kind: decoration`), `make gen-ids`, sus nombres en
+   `i18n/{es,en}/items.yaml`.
+2. Su sprite **con su viento**:
+   - **dibujada por spritegen:** la receta declara `wind: plantWind("<tipo>", { pivot })`
+     (`recipes/trees.ts`, `recipes/living.ts`; un spec del motor, `wind:` en el spec).
+     `plantWind("reed")` alcanza para lo que se dobla desde el suelo; un árbol, una
+     palmera, un cactus o un árbol seco dicen su `pivot` (px sobre el borde de abajo donde
+     termina el tronco). Solo si la planta no se parece a su tipo: `stiffness`,
+     `amplitude`, `flutter`;
+   - **de un pack o de Gemini:** el PNG en `assets/sprites/` (con su fila en
+     `assets/CREDITS.md`) y, en `tiles:` de `assets/sprites.yaml`,
+     `<sprite>: { wind: { kind: <tipo>, pivot: N } }` (el `pivot` es obligatorio;
+     `tools/gemini/import_art.py --wind <tipo> --pivot N` deja la línea escrita en
+     `import.json`).
+3. `make spritegen` (escribe `wind_sprites.yaml` y revisa el dibujo) y `make sprites`.
+4. **Mirar el vaivén:** `make sway-preview ONLY=<prefijo>` y abrir
+   `build/spritegen/sway.png` con Read (cada planta quieta y en 8 momentos, con la misma
+   matemática del cliente); `make sway-preview SCENE=forest` (o `town`) escribe cuatro
+   momentos de un trozo de mapa en el campo de viento real.
+5. Solo si hace falta: su fila en `plants.yaml` (`leaves`, `trample`, otra `reaction`, o
+   `wind: none` con el motivo en un comentario).
+6. `make validate test`.
+
+**Reglas de dibujo para que se deforme bien** (las revisa `spriteWind` de
+`tools/spritegen/src/wind.ts`; fallan `make spritegen`, `spritegen check` y el test):
+- **tronco y copa bien separados** en un árbol o una palmera: bajo el pivot, el tronco
+  mide menos del 60 % del ancho de la copa. El pivot va justo donde termina el tronco
+  visible;
+- **ningún píxel suelto:** todo lo que se mueve está unido (8 vecinos) a la base plantada.
+  Un pétalo o una semilla flotando quedaría al lado de la planta mientras se mece;
+- **margen a los lados:** las filas que se mueven dejan al menos 1 px transparente a cada
+  lado del lienzo (mejor 2 o 3: la copa de un árbol se corre hasta 2 px);
+- el pivot cae dentro del dibujo, debajo de su punta.
+
 ## Invariantes
 1. **El cliente es cosmético.** Nada de `livingworld/client` cambia reglas ni manda nada al
    servidor; el servidor no lee `surfaces.yaml` ni `plants.yaml`. Lo que es estado
@@ -188,8 +313,9 @@ servidor viejo) el cliente dibuja el mediodía.
 3. **Determinista.** Ráfagas, hogares de bichos y lados de las plantas salen de la casilla y
    del reloj; las hojas de un generador con semilla. Nunca `Math.random` ni `Date.now`.
 4. **Barato** (docs/07 "Mundo vivo"): pools de sprites hechos una vez, cada efecto con tope,
-   un frame no crea objetos para el dibujo, y la lista de plantas se rearma solo cuando cambia
-   `MapView.version`.
+   un frame no crea objetos para el dibujo, y la lista de plantas (con la exposición al
+   viento y la malla de cada una) se rearma solo cuando cambia `MapView.version`. El viento
+   solo mueve las plantas en vista y solo sube vértices cuando una tira cambió de píxel.
 5. **Efectos reducidos.** Con "Animaciones reducidas" (Opciones) o `prefers-reduced-motion`
    no se crea, dibuja ni mueve ningún efecto, y las plantas vuelven a su lugar (el desgaste,
    que es estado y no animación, se sigue viendo).
@@ -206,8 +332,13 @@ Los únicos archivos fuera de `livingworld/` que pueden importarlo:
   (casillas de `WorldState`, id y superficie de cada item, el tope liviano) y le da a
   `Game` las voces que pasa a `AudioEngine.setAmbience`
 - `client/src/render/living.ts`: monta el mundo vivo sobre el `MapView` (superficie de cada
-  casilla, sprites de plantas, texturas del atlas) y arma los eventos de sonido del paso propio
-- `client/vite/content.ts`: lee `data/livingworld/*.yaml` con `parseLivingWorldData`
+  casilla, sprites de plantas con el id de su item, texturas del atlas, si el piso está
+  bajo tierra) y arma los eventos de sonido del paso propio
+- `client/vite/content.ts`: lee `data/livingworld/*.yaml` con `parseLivingWorldData` (y le
+  da el sprite de cada item, para unir el viento de los sprites con las plantas)
+- `tools/spritegen/src/wind.ts`: la metadata de viento de los sprites de plantas
+  (`wind_sprites.yaml`), las reglas de dibujo y el preview del vaivén, con la misma
+  matemática del cliente (`@rpg/living-world/wind`, puro, sin Pixi)
 - `client/src/content-types.ts`: el tipo `LivingWorldData` de `ClientContent.livingWorld`
 - `server/internal/session/trailwear.go`: el desgaste de senderos en el game loop (pasos,
   tick, cambios a los clientes, `MapArea.wear`, la copia para guardar)
@@ -225,10 +356,11 @@ El ambiente lo usa `client/src/game.ts` a través de `client/src/audio/ambience.
 (`AmbientLoop`, la misma forma que `AmbienceVoice`) y no importa el módulo.
 
 Lo demás lo usan a través de `client/src/render/living.ts`: `client/src/render/game-canvas.ts`
-(monta, pasa pasos y frames) y `client/src/game.ts` (sonido del paso, por
+(monta, pasa pasos y frames, el zoom y si el piso es una cueva) y `client/src/game.ts` (sonido del paso, por
 `CueContext.stepEvents` de `client/src/audio/cues.ts`). El renderer compartido
 (`packages/renderer`) suma `MapView.groundOverlay`, `MapView.version` y
-`MapView.forEachItemSprite`, sin saber del mundo vivo. El desgaste que manda el servidor
+`MapView.forEachItemSprite`, sin saber del mundo vivo (la malla de una planta con viento
+la agrega el módulo al padre del sprite que `MapView` le presta). El desgaste que manda el servidor
 lo guarda `client/src/state/trail-wear.ts` (sin importar el módulo) y `game-canvas.ts` se lo
 pasa a `applyWear` cuando cambia.
 
@@ -239,7 +371,11 @@ importan el módulo.
 Además, sin importar el módulo: `server/go.mod` lo requiere con
 `replace ../livingworld/server` (y `tools/bots/go.mod` repite el `replace`, porque un
 `replace` de una dependencia no se hereda); `client/package.json` depende de
-`@rpg/living-world`; `pnpm-workspace.yaml` y `vitest.config.ts` lo listan; el Dockerfile
+`@rpg/living-world` (y `tools/spritegen/package.json`, por el preview del vaivén);
+`tools/spritepack/src/tiles.ts` acepta la pista `wind` de `assets/sprites.yaml` y repite
+la lista de tipos (`WIND_HINT_KINDS`; un test de spritegen la compara con `WIND_KINDS`),
+igual que `tools/gemini/import_art.py`; `packages/content-schema` revisa los archivos de
+viento (`checkPlantWind`); `pnpm-workspace.yaml` y `vitest.config.ts` lo listan; el Dockerfile
 del servidor copia `livingworld/server/`; la CI tiene el job `go (livingworld/server)` y
 `govulncheck`; `deploy/tests/check-go-version.sh` mira su `go.mod` (misma versión de Go que
 los demás módulos).
@@ -255,8 +391,13 @@ los demás módulos).
 que usa un suelo esté descrita.
 
 `data/livingworld/plants.yaml` (lista): `item` (de `data/items`), `reaction` (`bend` |
-`rustle`), `idle`, `leaves`, `trample` (aplastada sobre una casilla gastada). Cada item una
-sola vez.
+`rustle`; sin ella, la de su tipo de viento), `leaves`, `trample` (aplastada sobre una
+casilla gastada) y `wind` (un tipo, un mapa o `none`; sin él, lo que dice su sprite). Cada
+item una sola vez; con `reaction` o con `wind`. La clave `idle` del lote 17 ya no existe:
+la reemplaza el viento.
+
+`data/livingworld/wind.yaml` y `data/livingworld/wind_sprites.yaml` (generado): "Viento",
+arriba.
 
 `data/livingworld/ambience.yaml` (cliente, "Ambiente" abajo): `radius`, `fade_ms`,
 `voices`, `voices_lite`, `rescan_ms`, `beds` (por id: `sound`, `volume`, `floors`, `full`,
@@ -279,10 +420,12 @@ la superficie de un suelo y la reacción de una planta en la paleta.
 - **Una superficie que deja huellas** (p. ej. nieve en una isla nueva): el suelo con
   `surface: snow` en `data/items`; su fila en `surfaces.yaml` (`footprints`, `tint`, `sound`).
   Sin código.
-- **Una planta que se mueve:** el item en `data/items/plants.yaml` (o el que ya exista),
-  `make gen-ids`, sus nombres en `i18n/{es,en}/items.yaml`, su receta en
-  `tools/spritegen/src/recipes/living.ts` (`livingworld/plants/<id>`), `make spritegen
-  ONLY=livingworld/` y `make sprites`; su fila en `plants.yaml`.
+- **Una planta** (se mece con el viento y reacciona al paso): "Cómo agregar una planta",
+  en "Viento". Su sprite declara el viento; `make validate` no deja olvidarlo.
+- **Un tipo de planta nuevo** (p. ej. `mushroom`): su nombre en `WIND_KINDS` (`wind.ts`),
+  en `WIND_HINT_KINDS` (`tools/spritepack/src/tiles.ts`), en `WIND_KINDS` de
+  `tools/gemini/import_art.py` y en los dos esquemas (`livingworld-wind` y
+  `livingworld-wind_sprites`), y sus valores en `kinds` de `wind.yaml`.
 - **Un sonido de paso:** el archivo en `assets/livingworld/sounds/`, su fila en
   `assets/CREDITS.md` (o una receta de soundgen), el sonido en `sounds:` de
   `assets/sounds.yaml` y el evento `step.self.<sound>: <id>` en `events:`.
@@ -310,6 +453,19 @@ la superficie de un suelo y la reacción de una planta en la paleta.
   blanca: el cliente la tiñe) en `recipes/living.ts`.
 
 ## Cómo probar
+- Viento: `livingworld/client/src/wind.test.ts` (el campo: determinista, coherente entre
+  vecinas, viaja en la dirección del viento a su velocidad; la exposición por superficie,
+  bosque e interior; el vaivén por tipo y su tope; el desplazamiento: cero en la base, crece
+  con el cuadrado de la altura, en px enteros de pantalla; el aleteo de menos de 1 px; los
+  datos por tipo y su unión con sprites e items; la malla sobre sprites reales de Pixi, el
+  roce de una criatura sin saltos, "Animaciones reducidas", cuevas e interiores, los
+  chunks que entran y salen; y el presupuesto de un frame con 999 árboles),
+  `tools/spritegen/src/wind.test.ts` (toda receta de planta declara su viento, las reglas
+  de dibujo, el archivo generado al día, las pistas de `sprites.yaml`, el preview),
+  `packages/content-schema/src/validate.test.ts` (ninguna planta sin viento),
+  `tools/spritepack` (la pista `wind`), `tools/gemini/test_import_art.py` (`--wind`),
+  `client/vite/content.test.ts` (los datos reales) y `client/src/render/living.test.ts`
+  (cada sprite con el id de su item). A ojo: `make sway-preview`.
 - Día y noche: `livingworld/server/daynight/clock_test.go` (ciclo, fases, luna, época del
   reloj inyectado, `/time`, ritmo, sincronía), `livingworld/client/src/sky.test.ts` (sol,
   tinte, piso de luminancia, lámparas, luna, transformación de la sombra),
@@ -628,6 +784,11 @@ determinista):
 - Día y noche: las sombras de árboles y casas no giran con el sol (solo se desvanecen);
   una sombra no se aleja de una fogata cercana; no hay hora en el HUD (docs/14).
 - Plantas nuevas sin colocar en los mapas.
+- Viento: no hay clima (lluvia, tormenta) que cambie su fuerza ni su dirección; las hojas
+  que caen no derivan con él; estandartes y bandera siguen con su bucle de frames, sin
+  seguir las ráfagas; una planta con frames propios (`<sprite>/frame_<n>`) y viento
+  mostraría solo su primer frame en la malla (hoy no hay ninguna); el editor de mapas no
+  muestra el vaivén.
 - Ambiente: los loops son de soundgen; probar Gemini (el Chrome del dueño no estaba
   abierto el 2026-11-24) y que el dueño los escuche; una cascada y una fogata suelta
   necesitan su item; las paredes no tapan el sonido de un emisor.

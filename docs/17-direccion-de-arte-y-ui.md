@@ -440,8 +440,7 @@ dibujan lo mismo; nada cambia en el mapa ni en el servidor):
   | Antorcha, fogata, fragua | 3–4 | 100–140 | tile |
   | Bandera, ropa colgada | 3–4 | 150–180 | tile |
   | Fuente, cascada | 4 | 120–160 | world |
-  | Copa de árbol (viento) | 2–3 | 600–900 | tile |
-  | Pasto alto, juncos | 2 | 700 | tile |
+  | Copa de árbol, arbusto, pasto alto, juncos (viento) | ninguno | — | el viento del mundo vivo los mece (abajo, "Mundo vivo: el viento"); ya no llevan frames |
   | Teletransporte | 6–8 | 100 | world |
   | Veta de mineral | 1 destello cada 3–5 s | 80 | random |
 
@@ -495,6 +494,51 @@ mismo campo. Lo tienen el cajón de carga, el barril y la mesa (8 px; los dos ú
 del kit de props del lote 12): el libro de la herrera del archivo de Cinderstead está sobre una
 mesa y se dibuja 8 px más arriba.
 
+### Mundo vivo: el viento (hecho, 2026-11-25, rama `feat/wind-flora`, lote 20)
+Pedido del dueño (2026-11-24): que también se mueva lo grande del mapa (árboles, arbustos,
+plantas en general), poco pero **orgánico**, y que toda planta futura (selva y demás) lo
+herede sola. El contrato está en `livingworld/README.md` "Viento"; aquí, la dirección de
+arte.
+
+- **La base plantada, la copa se mueve.** Un skew o un giro del sprite entero se ve falso
+  (se mueve el tronco). El sprite se corta en tiras horizontales que se corren de lado por
+  el cuadrado de su altura sobre el *pivot* (donde termina el tronco): el tronco no se
+  mueve nunca.
+- **Poco:** 1 a 2 px en la punta de un árbol (vaivén lento, de unos 3 s) más un aleteo
+  rápido de la copa de menos de 1 px. Un arbusto, la mitad; hierba y juncos se doblan
+  desde el suelo; un cactus o un árbol seco casi no se mueven. Los números por tipo están
+  en `data/livingworld/wind.yaml`.
+- **Píxeles enteros de pantalla.** Cada tira se corre un número entero de px de pantalla al
+  zoom actual: el pixel art no se desenfoca ni tiembla. Es el recurso clásico del pixel art
+  hecho a mano (correr filas), no un estirado.
+- **Ráfagas que cruzan el mapa.** El viento es un campo que viaja: los árboles de un bosque
+  se inclinan uno tras otro, cada uno con su fase y su tamaño. Nunca todos a la vez.
+- **Según el lugar:** más en la costa y el desierto, menos dentro de un bosque y sobre la
+  piedra de un pueblo, nada adentro (pisos de madera) ni en cuevas, un poco menos de noche.
+- **Las sombras dibujadas de los árboles quedan quietas** (salen del pie del tronco, que no
+  se mueve; a 1 o 2 px y al 32 % no se leería).
+- **Estandartes y bandera** siguen con su bucle de frames de ART-7 (una onda que recorre
+  la tela): ya se mueven bien y no son plantas.
+
+**Reglas para dibujar una planta** (propia, de un pack o de Gemini), para que se deforme
+bien; las revisa `make spritegen` (`tools/spritegen/src/wind.ts`):
+1. **Tronco y copa bien separados:** el tronco visible mide menos del 60 % del ancho de
+   la copa, y el pivot va justo donde termina. Una palmera: tronco largo, pivot bajo.
+2. **Ningún píxel suelto:** hojas, pétalos, frutos y semillas unidos a la planta (aunque
+   sea por un tallo de 1 px). Lo suelto quedaría flotando al lado mientras se mece.
+3. **Margen a los lados:** 2 o 3 px transparentes a cada lado de la copa (1 como mínimo).
+4. **La copa lee bien corrida 2 px:** nada de detalles que dependan de una columna exacta
+   contra el tronco (una rama que entra a la copa se corta en escalón: que entre poco).
+5. Toda planta declara su **tipo** (`tree`, `palm`, `bush`, `tall_grass`, `reed`,
+   `flower`, `vine`, `cactus`, `dead_tree`) y, si tiene tronco, su **pivot**. Después,
+   `make sway-preview` y mirar `build/spritegen/sway.png` con Read: debe leerse sutil y
+   orgánico, nunca de goma. `make validate` no deja pasar una planta sin viento.
+
+Revisado el 2026-11-25 con `make sway-preview` (cada planta en 8 momentos) y `make
+sway-preview SCENE=forest` y `SCENE=town` (cuatro momentos de un bosque y de una plaza con
+árboles, a zoom 2): los troncos quietos, las copas a 1 o 2 px de su lugar, cada árbol en
+su fase, ninguna silueta rota. Falta mirarlo en movimiento en el juego (E2E del lote).
+
 ### Mundo vivo (hecho, 2026-11-23, rama `feat/living-ground`, lote 17)
 Pedido del dueño: "el entorno reacciona a los jugadores que pasan, para que el mundo se
 sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
@@ -506,9 +550,9 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
   del suelo: se leen sin contorno. Se desvanecen en la segunda mitad de su vida; en la arena
   el viento las borra antes, en ráfagas que recorren el mapa.
 - **Plantas que reaccionan:** hierba, hierba alta, flores, juncos, arbustos y jardineras se
-  doblan hacia donde va quien pasa y vuelven con un resorte corto (900 ms); las altas se
-  mecen solas con el viento. Sin shaders: un skew del sprite con el pie fijo. Los árboles
-  se sacuden 1 px y sueltan alguna hoja (también de vez en cuando, solos).
+  doblan hacia donde va quien pasa y vuelven con un resorte corto (900 ms). Los árboles
+  se sacuden 1 px y sueltan alguna hoja (también de vez en cuando, solos). Desde el lote
+  20 el doblez se suma al viento sobre las mismas tiras del sprite (abajo).
 - **Agua y polvo:** anillos achatados que se abren en el agua baja; una nube de polvo al
   correr (paso de 260 ms o menos) por tierra, arena o ceniza. Las motas de MOV-7 siguen.
 - **Bichos:** pájaros y mariposas por el pasto que huyen cuando el jugador se acerca,

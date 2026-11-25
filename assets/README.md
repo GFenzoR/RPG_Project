@@ -242,7 +242,8 @@ Lo que los nombres no dicen va en la sección `tiles` de `sprites.yaml`:
 ```yaml
 tiles:
   ground/water_shallow: { ms: 240, sync: world }   # ms por frame y sincronía
-  decor/oak_tree: { anchor: bc, ms: 800, sync: tile }   # centrado en su casilla
+  decor/oak_tree: { anchor: bc, particles: pollen }   # centrado en su casilla
+  plants/jungle_palm: { anchor: bc, wind: { kind: palm, pivot: 30 } }   # planta de un pack: su viento ("Plantas y viento")
   decor/wall_torch: { ms: 110, sync: tile, light: 3 }   # da luz en cuevas (radio en casillas)
   doors/forge_gate: { joins_walls: true }   # los muros de al lado lo cuentan como muro
   ground/lava: { ms: 280, sync: world, particles: embers }   # partículas de ambiente
@@ -278,6 +279,36 @@ de un sprite animado lleva sus propios frames, tantos como el sprite (si no, err
 `make sprites`). Todo sprite de `borders/` (que no sea una de esas partes) lleva `flat`: el
 renderer lo dibuja con los suelos, bajo las sombras, los items y las criaturas.
 
+## Plantas y viento (lote 20; `livingworld/README.md` "Viento")
+Árboles, arbustos, hierba, juncos, flores y enredaderas se mecen con el viento del mundo
+vivo: el cliente corta el sprite en tiras horizontales y las corre de lado, con la base
+plantada. No hay frames de viento que dibujar. Para eso **todo sprite de planta lleva su
+metadata de viento**, y `make validate` falla si a un item que es una planta le falta
+(o no dice `wind: none` en `data/livingworld/plants.yaml`).
+
+| De dónde viene el sprite | Dónde se declara |
+|---|---|
+| `tools/spritegen` (receta o spec) | `wind: plantWind("<tipo>", { pivot })` en la receta |
+| Un pack, Gemini o hecho a mano (`assets/sprites/<ruta>.png`, o una entrada de `sprites:`) | `tiles:` de `sprites.yaml`: `<ruta>: { wind: { kind: <tipo>, pivot: N } }` (`pivot` obligatorio; opcionales `stiffness`, `amplitude`, `flutter`) |
+
+Tipos: `tree`, `palm`, `bush`, `tall_grass`, `reed`, `flower`, `vine`, `cactus`,
+`dead_tree` (sus valores, en `data/livingworld/wind.yaml`). `pivot`: dónde termina el
+tronco o el tallo, en px sobre el borde de abajo del sprite; nada se mueve debajo.
+`make spritegen` junta las dos fuentes en `data/livingworld/wind_sprites.yaml` (generado:
+no se edita) y el cliente lo lee solo.
+
+Cómo dibujar (o elegir) una planta para que se deforme bien; `make spritegen` lo revisa en
+todo sprite que tenga su PNG en `assets/`:
+- **tronco y copa bien separados**: el tronco visible, menos del 60 % del ancho de la
+  copa; el pivot justo donde termina;
+- **ningún píxel suelto**: todo unido a la planta (un pétalo flotando quedaría al lado
+  mientras se mece);
+- **margen a los lados**: 2 o 3 px transparentes a cada lado de la copa (1 como mínimo);
+- sin sombra pintada en el sprite: la sombra va aparte (`<sprite>/shadow`) y queda quieta.
+
+Después, `make sway-preview ONLY=<prefijo>` y mirar `build/spritegen/sway.png` con Read.
+Al importar de Gemini: `import_art.py ... --layer object --wind <tipo> --pivot N`.
+
 ## Arte propio (spritegen)
 Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada
 sprite píxel a píxel (`tools/spritegen/src/recipes/`). Son obra propia (CC0, ver
@@ -297,7 +328,8 @@ reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tar
 - Objetos más altos que una casilla (carteles, la fragua) pueden medir 64x64 o 32x64: el
   renderer los ancla en la esquina inferior derecha de su casilla y crecen hacia arriba y a
   la izquierda. Los árboles (`recipes/trees.ts`, 64x96) van centrados en su
-  casilla (`anchor: bc`), con la copa en 3/4, sombra proyectada y 4 frames de viento.
+  casilla (`anchor: bc`), con la copa en 3/4, sombra proyectada y su metadata de viento
+  (sin frames: el cliente mece la copa, "Plantas y viento").
   Items de inventario: 32x32 centrados con fondo transparente.
 - Muros (`recipes/walls.ts`): 16 piezas de 32x64 por material, la tapa levantada 32 px
   sobre la cara (ver "Arte del mapa" arriba y docs/17 ART-3).

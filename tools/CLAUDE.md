@@ -283,7 +283,7 @@ commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
 de recetas en código: `src/recipes/{terrain,ground,walls,trees,props,portals,items,creatures,effects,ui}.ts`
 (`ground.ts`: suelos con sus looks y detalles sueltos y el agua y la lava animadas;
 `variety.ts`: cómo un look conserva el anillo del principal y redibuja el corazón, docs/17 ART-4; `walls.ts`: las 16 piezas de
-cada muro y las puertas metidas en él; `trees.ts`: árboles y arbusto con viento y sombra;
+cada muro y las puertas metidas en él; `trees.ts`: árboles y arbusto con su sombra y su metadata de viento;
 `props.ts`: fragua, fogón, antorcha, estandarte, brasero y fuente animados; `portals.ts`:
 escaleras de mano, agujeros, puntos de soga y teletransportes; arte del mapa en
 `assets/README.md`, "Arte del mapa"), con la paleta de
@@ -321,6 +321,31 @@ pergamino y el cofre de recompensa (`specs/lore.ts`, docs/02 "Libros y cofres"),
 de props de pueblo (`specs/town.ts`, docs/17 "Kit de props de pueblo": barril, mesa,
 banco, estante, cama, farol, pozo, sacos, red de pesca, jardinera, puesto de mercado y
 mástil con bandera), y desde el 2026-11-19 el humanoide (`specs/humanoid/`, abajo).
+
+**Plantas y viento (regla, dueño 2026-11-24).** Toda receta o spec de una planta (árbol,
+palmera, arbusto, hierba, junco, flor, enredadera, cactus, árbol seco) **declara su
+metadata de viento**: `wind: plantWind("<tipo>", { pivot })` (`src/wind.ts`). El tipo da
+los valores por defecto (`data/livingworld/wind.yaml` `kinds`); `pivot` es dónde termina
+el tronco o el tallo, en px sobre el borde de abajo del sprite (obligatorio en `tree`,
+`palm`, `cactus` y `dead_tree`; en los demás sale del dibujo); `stiffness`, `amplitude` y
+`flutter` solo si la planta no se parece a su tipo. El cliente la mece sin más código: no
+se dibujan frames de viento (los `frame_<n>` de los árboles salieron en el lote 20). El
+flujo es automático: `make spritegen` escribe `data/livingworld/wind_sprites.yaml`
+(generado, nunca a mano; entero aunque se use `ONLY=`), con el `pivot` y la fila más alta
+del dibujo (`top`), y **revisa el dibujo**: tronco y copa separados (el tronco bajo el
+pivot, menos del 60 % del ancho de la copa), ningún píxel suelto (todo unido a la base),
+al menos 1 px libre a cada lado de las filas que se mueven. `spritegen check` y
+`src/wind.test.ts` fallan si el archivo está viejo o un dibujo no cumple, y `make
+validate` falla si un item que es una planta no tiene viento ni `wind: none`
+(`livingworld/README.md` "Cómo agregar una planta"). Un sprite de planta que no dibuja
+spritegen (pack, Gemini) lleva la misma metadata en `tiles:` de `assets/sprites.yaml`:
+`<sprite>: { wind: { kind: palm, pivot: 30 } }` (`pivot` obligatorio; `import_art.py
+--wind palm --pivot 30` deja la línea en `import.json` y avisa si un objeto con nombre de
+planta se importa sin `--wind`). **Mirar siempre el vaivén:** `make sway-preview
+[ONLY=<prefijo>]` escribe `build/spritegen/sway.png` (cada planta quieta y en 8 momentos,
+con la matemática del cliente, a zoom 2) y `make sway-preview SCENE=forest|town` cuatro
+momentos de un trozo de mapa (`sway.<n>.png`); se revisan con Read: sutil y orgánico,
+nunca de goma.
 
 ## spritegen: el motor
 `tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su

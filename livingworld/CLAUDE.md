@@ -22,6 +22,11 @@ La fuente única es `livingworld/README.md`: léela antes de tocar nada.
   sobre una criatura o un item suelto; el botín se tira una vez por rotura; su estado es
   transitorio (no se guarda). Ninguno que pida herramienta, empujable o compuerta es el
   único camino de una quest.
+- Viento (`client/src/wind.ts` puro, `wind-mesh.ts`): un campo que viaja por el mapa, nunca
+  azar por planta; la base del sprite plantada y la copa en tiras que se corren px enteros
+  de pantalla; sin texturas por frame. Toda planta declara su viento en su sprite (receta de
+  spritegen o pista de `assets/sprites.yaml`) o dice `wind: none`: `make validate` falla si
+  no. `data/livingworld/wind_sprites.yaml` es generado (`make spritegen`): nunca a mano.
 - Contenido en `data/livingworld/*.yaml` (un esquema `livingworld-<nombre>.schema.json` por
   archivo), sprites en `assets/livingworld/`, mensajes en `proto/game/v1/livingworld.proto`.
 
@@ -32,6 +37,7 @@ cd livingworld/server && go test ./...      solo el módulo Go
 make lint                                   incluye la frontera
 make validate                               data/livingworld y ground.surface
 make spritegen ONLY=livingworld/ && make sprites
+make sway-preview [ONLY=decor/] [SCENE=forest|town]   las plantas meciéndose, para Read
 ```
 
 **Nunca:** importar `server/internal` o `client/`; agregar un import del paquete fuera de la
