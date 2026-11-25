@@ -191,9 +191,9 @@ el punto 5:
     personaje nuevo también tenga en curso).
   - **Riesgos menores anotados en la revisión:** la pista es fija por personaje y paso, así
     que con varios personajes de la misma cuenta se podría triangular el objetivo (riesgo
-    bajo: es una quest, no un secreto). El upsert de `character_explored` reemplaza los
-    bits (`SET bits = EXCLUDED.bits`): es correcto porque la FIFO del Saver escribe los
-    snapshots de un personaje en orden; si eso cambiara, hacer un OR en SQL. El minimapa
+    bajo: es una quest, no un secreto). El upsert de `character_explored` hace un OR de
+    los bits en SQL (revisión final del lote 19): un snapshot viejo escrito después de uno
+    nuevo no borra nada, aunque la FIFO del Saver ya los escribe en orden. El minimapa
     colorea con el mapa vivo del servidor (`world.Map`), así que una puerta lejana ya
     explorada se ve abierta o cerrada como está ahora; los objetos del mundo vivo, los
     items tirados y los muebles de casa no están en ese mapa y no se ven (solo la marca

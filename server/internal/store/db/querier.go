@@ -278,12 +278,12 @@ type Querier interface {
 	RetireCosmetics(ctx context.Context, ids []string) error
 	// Approve or reject a pending submission. No row: it is not pending (or does not exist).
 	ReviewSubmission(ctx context.Context, arg ReviewSubmissionParams) (ReviewSubmissionRow, error)
-	// A snapshot upserts the sectors that gained bits during the login: a newer copy of a
-	// sector is a superset of the saved one, so it replaces it.
-	// INVARIANT: the snapshots of one character are written in the order they were taken
-	// (the persistence queue is FIFO per character and a retry takes the newest one). An
-	// older snapshot written after a newer one would drop explored bits: if that order ever
-	// stops holding, this must OR the bits instead of replacing them.
+	// A snapshot upserts the sectors that gained bits during the login. Explored bits are
+	// only ever set, so a sector already saved keeps its bits and gains the new ones (a
+	// bitwise OR, byte by byte: bits is always 128 bytes, migration 00028). The snapshots of
+	// one character are written in the order they were taken (the persistence queue is FIFO
+	// per character), so the new copy is normally a superset; the OR keeps the map whole even
+	// if an older snapshot were ever written after a newer one.
 	SaveCharacterExplored(ctx context.Context, arg SaveCharacterExploredParams) error
 	SaveCharacterQuestState(ctx context.Context, arg SaveCharacterQuestStateParams) error
 	// Upserts every skill of a snapshot in one statement (parallel arrays).

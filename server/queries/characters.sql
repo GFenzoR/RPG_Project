@@ -136,13 +136,16 @@ WHERE character_id = sqlc.arg(character_id)
 ORDER BY z, sx, sy;
 
 -- name: SaveCharacterExplored :exec
--- A snapshot upserts the sectors that gained bits during the login: a newer copy of a
--- sector is a superset of the saved one, so it replaces it.
--- INVARIANT: the snapshots of one character are written in the order they were taken
--- (the persistence queue is FIFO per character and a retry takes the newest one). An
--- older snapshot written after a newer one would drop explored bits: if that order ever
--- stops holding, this must OR the bits instead of replacing them.
-INSERT INTO character_explored (character_id, z, sx, sy, bits)
+-- A snapshot upserts the sectors that gained bits during the login. Explored bits are
+-- only ever set, so a sector already saved keeps its bits and gains the new ones (a
+-- bitwise OR, byte by byte: bits is always 128 bytes, migration 00028). The snapshots of
+-- one character are written in the order they were taken (the persistence queue is FIFO
+-- per character), so the new copy is normally a superset; the OR keeps the map whole even
+-- if an older snapshot were ever written after a newer one.
+INSERT INTO character_explored AS e (character_id, z, sx, sy, bits)
 SELECT sqlc.arg(character_id)::bigint, unnest(sqlc.arg(zs)::smallint[]), unnest(sqlc.arg(sxs)::smallint[]),
        unnest(sqlc.arg(sys)::smallint[]), unnest(sqlc.arg(bits)::bytea[])
-ON CONFLICT (character_id, z, sx, sy) DO UPDATE SET bits = EXCLUDED.bits;
+ON CONFLICT (character_id, z, sx, sy) DO UPDATE SET bits = (
+    SELECT string_agg(set_byte(decode('00', 'hex'), 0, get_byte(e.bits, i) | get_byte(EXCLUDED.bits, i)), ''::bytea ORDER BY i)
+    FROM generate_series(0, 127) AS i
+);
