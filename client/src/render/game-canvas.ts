@@ -343,6 +343,7 @@ export interface GameCanvasOptions {
    * Interface). Asked every frame; without it, it does.
    */
   bubbles?(): boolean;
+  /**
    * docs/17 UI-3: how big the names are (Options → Interface), asked at each frame; without
    * it, DEFAULT_NAME_SIZE.
    */

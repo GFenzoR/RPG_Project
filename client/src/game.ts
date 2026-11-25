@@ -397,6 +397,7 @@ export interface GameOptions {
    * Interface), read every frame. Without it, it does.
    */
   chatBubbles?(): boolean;
+  /**
    * How big the names over creatures are (Options → Interface, docs/17 UI-3), read at each
    * frame. Without it, DEFAULT_NAME_SIZE.
    */

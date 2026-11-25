@@ -26,12 +26,14 @@ const render = (nameSize: NameSize, onNameSize: (v: NameSize) => void = () => {}
     textScale: 1,
     shake: true,
     chatOpacity: 50,
+    bubbles: true,
     nameSize,
     onNameSize,
     onUiScale: () => {},
     onTextScale: () => {},
     onShake: () => {},
     onChatOpacity: () => {},
+    onBubbles: () => {},
   });
 
 const select = (tree: unknown): Node => {
