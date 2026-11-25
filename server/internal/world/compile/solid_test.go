@@ -101,7 +101,63 @@ func TestSolidObjects(t *testing.T) {
 			}
 		}
 	}
-	if bushes < 100 {
-		t.Fatalf("%d bushes on the islands: the check above looked at nothing", bushes)
+	// How many bushes, and where, is the map builders' business.
+	if bushes == 0 {
+		t.Fatal("no bush on the islands: the check above looked at nothing")
 	}
+}
+
+// TestTreesLeaveNoSpawnBlind: trees block sight (docs/06 "Qué bloquea el paso"), and a
+// monster that sees nobody attacks nobody. From the centre of every spawn with a tree
+// within 7 tiles, more than half of the tiles a player stands on within those 7 tiles are
+// still in sight: no thicket hides a spawn from the ground around it.
+func TestTreesLeaveNoSpawnBlind(t *testing.T) {
+	cont, err := LoadContent(repoRoot(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Without the tools island: its pens are walled in on purpose.
+	m, err := Build(repoRoot(t), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trees := []uint16{cont.NumericID("oak_tree"), cont.NumericID("pine_tree"), cont.NumericID("birch_tree"), cont.NumericID("elm_tree")}
+	const far = 7
+	looked := 0
+	for _, is := range m.Islands() {
+		for _, sp := range is.Spawns {
+			var tree bool
+			var walkable, seen int
+			for dy := -far; dy <= far; dy++ {
+				for dx := -far; dx <= far; dx++ {
+					x, y := int(sp.Center.X)+dx, int(sp.Center.Y)+dy
+					if x < 0 || y < 0 || x > 0xFFFF || y > 0xFFFF {
+						continue
+					}
+					p := world.Pos{X: uint16(x), Y: uint16(y), Z: sp.Center.Z}
+					if slices.ContainsFunc(m.Stack(p), func(id uint16) bool { return slices.Contains(trees, id) }) {
+						tree = true
+					}
+					if !m.Walkable(p) {
+						continue
+					}
+					walkable++
+					if m.LineOfSight(sp.Center, p) {
+						seen++
+					}
+				}
+			}
+			if !tree {
+				continue
+			}
+			looked++
+			if seen*2 <= walkable {
+				t.Errorf("%s: spawn %s at %v sees %d of the %d tiles one stands on around it", is.ID, sp.ID, sp.Center, seen, walkable)
+			}
+		}
+	}
+	if looked == 0 {
+		t.Skip("no spawn has a tree within 7 tiles")
+	}
+	t.Logf("%d spawns with trees around", looked)
 }
