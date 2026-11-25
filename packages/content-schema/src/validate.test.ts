@@ -149,6 +149,38 @@ describe("validator diagnostics", () => {
     ]);
   });
 
+  it("asks it of any fixed object, of one or of many, and needs data/solid_families.yaml", () => {
+    const named = (): (string[] | undefined)[] =>
+      messages(root)
+        .filter((m) => m.includes("solid family"))
+        .map((m) => /"(\w+)" is of the solid family "(\w+)"/.exec(m)?.slice(1, 3))
+        .sort();
+    // Not only a decoration: a fixed crate one searches (kind: container) stands there too.
+    edit(
+      "data/items/decoration.yaml",
+      "  kind: decoration\n  sprite: decor/bush\n  name: item.bush.name\n  pickupable: false\n  blocks_movement: true\n",
+      "  kind: container\n  sprite: decor/bush\n  name: item.bush.name\n  pickupable: false\n",
+    );
+    expect(named()).toEqual([["bush", "bush"]]);
+    // One or many: the family "reed" has reeds, "bushes" has bush and "sacks" has a sack.
+    edit("data/solid_families.yaml", "  - bush\n", "  - bushes\n  - reed\n");
+    edit("data/items/decoration.yaml", "- id: bush\n", "- id: sack_of_bush\n");
+    expect(named()).toEqual([
+      ["reeds", "reed"],
+      ["sack_of_bush", "sacks"],
+    ]);
+    edit("data/items/decoration.yaml", "- id: sack_of_bush\n", "- id: old_bush\n");
+    expect(named()).toEqual([
+      ["old_bush", "bushes"],
+      ["reeds", "reed"],
+    ]);
+    // Without the file nothing would be asked: it is required.
+    rmSync(file("data/solid_families.yaml"));
+    expect(messages(root)).toContainEqual(
+      expect.stringMatching(/^error data\/solid_families\.yaml.*required file is missing/),
+    );
+  });
+
   it('checks each vocation\'s start_kit (docs/02 "Equipo inicial")', () => {
     const kitErrors = (): string[] =>
       messages(root).filter((m) => m.startsWith("error") && m.includes("vocations.yaml"));

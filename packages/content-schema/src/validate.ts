@@ -379,7 +379,7 @@ class Validator {
 
     for (const src of this.loadDir(dataDir, "news", "news", known)) this.checkNews(src);
 
-    const solid = single("solid_families.yaml", "solid_families", false);
+    const solid = single("solid_families.yaml", "solid_families", true);
     if (solid) this.checkSolidFamilies(solid);
 
     this.loadLivingWorld(dataDir, known);
@@ -1140,28 +1140,30 @@ class Validator {
   }
 
   /**
-   * Doors and keys (docs/02 "Puertas con llave", same rules as content.CheckDoors in Go):
-   * a door pairs with another door that points back, the closed one blocks movement and the
-   * open one does not, neither can be picked up, only the closed one is locked, every lock
-   * has a key, every key can be picked up (a player carries it) and no door is a key.
-   * Unknown pairs are checkRefs' to report. Where doors stand is map-format's.
-   */
-  /**
-   * data/solid_families.yaml (docs/06 "Qué bloquea el paso"): a map object (kind:
-   * decoration, pickupable: false) whose id has the word of a solid family (the id split
-   * at "_") writes blocks_movement, true or false, so that a new bush or crate is never
-   * walkable because nobody thought of it. The border pieces (sprite borders/...) are the
-   * fringe of a ground named after it (border_rock_n would be no rock): never asked.
+   * data/solid_families.yaml (docs/06 "Qué bloquea el paso"): a map object (pickupable:
+   * false, of any kind but a ground, which one walks on, and a wall, which blocks unless it
+   * says otherwise) whose id has the word of a solid family (the id split at "_", one or
+   * many: stacked_crates has "crate", a vine has "vines") writes blocks_movement, true or
+   * false, so that a new bush or crate is never walkable because nobody thought of it.
+   * The border pieces (sprite borders/...) are the fringe of a ground named after it
+   * (border_rock_n would be no rock): never asked.
    */
   private checkSolidFamilies(solid: SourceFile): void {
     const families = new Set(
       isObj(solid.data) ? asList(solid.data["families"]).filter((f) => typeof f === "string") : [],
     );
+    // The family of a word of an id, said in the singular or in the plural.
+    const familyOf = (word: string): string | undefined =>
+      [word, word.replace(/s$/, ""), word.replace(/es$/, ""), `${word}s`, `${word}es`].find((w) =>
+        families.has(w),
+      );
     for (const { item, src, path } of this.items) {
-      if (item["kind"] !== "decoration" || item["pickupable"] !== false) continue;
+      if (item["pickupable"] !== false) continue;
+      if (item["kind"] === "ground" || item["kind"] === "wall") continue;
       if (typeof item["blocks_movement"] === "boolean") continue;
       if (String(item["sprite"]).startsWith("borders/")) continue;
-      const family = (idOf(item) ?? "").split("_").find((w) => families.has(w));
+      let family: string | undefined;
+      for (const word of (idOf(item) ?? "").split("_")) if ((family = familyOf(word))) break;
       if (family !== undefined)
         this.error(
           src,
@@ -1171,6 +1173,13 @@ class Validator {
     }
   }
 
+  /**
+   * Doors and keys (docs/02 "Puertas con llave", same rules as content.CheckDoors in Go):
+   * a door pairs with another door that points back, the closed one blocks movement and the
+   * open one does not, neither can be picked up, only the closed one is locked, every lock
+   * has a key, every key can be picked up (a player carries it) and no door is a key.
+   * Unknown pairs are checkRefs' to report. Where doors stand is map-format's.
+   */
   private checkDoors(): void {
     const byId = new Map<string, Obj>();
     const keys = new Set<string>();
