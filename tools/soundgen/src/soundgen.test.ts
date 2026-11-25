@@ -15,6 +15,17 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { AMBIENCE_PATHS, LOOP_S, PEAK, TARGET_RMS, XF_S, seamless } from "./ambience.ts";
 import { assetFile, BUDGET, checkBudget, GENERATED, manifestFiles, render } from "./index.ts";
+import {
+  renderStep,
+  STEP_LOUDNESS,
+  STEP_MAX_S,
+  STEP_MIN_S,
+  STEP_PATHS,
+  STEP_PEAK,
+  STEP_SOUNDS,
+  STEP_TAKES,
+  stepLoudness,
+} from "./steps.ts";
 import { RATE, encodeWav, note, rng } from "./synth.ts";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -52,10 +63,11 @@ describe("generated sounds", () => {
       expect(hash(render(g)), g.path).toBe(hash(a));
       let peak = 0;
       for (const v of a) peak = Math.max(peak, Math.abs(v));
-      expect(peak, g.path).toBeGreaterThan(0.5);
+      // A footstep is levelled by loudness, not by peak (steps.ts): a swish peaks low.
+      expect(peak, g.path).toBeGreaterThan(g.kind === "step" ? 0.2 : 0.5);
       expect(peak, g.path).toBeLessThanOrEqual(1);
       const sec = a.length / RATE;
-      if (g.kind === "sfx") expect(sec, g.path).toBeLessThan(2);
+      if (g.kind === "sfx" || g.kind === "step") expect(sec, g.path).toBeLessThan(2);
       else expect(sec, g.path).toBeGreaterThanOrEqual(15);
     }
   }, 30_000); // renders every sound twice: ~3 s locally, more on a busy runner
@@ -112,6 +124,65 @@ describe("generated sounds", () => {
       expect(Math.abs((a[0] ?? 0) - (a[a.length - 1] ?? 0)), path).toBeLessThanOrEqual(p99);
     }
   }, 60_000);
+
+  it("footsteps are one short footfall each, equally loud, with no click at either end", () => {
+    expect(STEP_PATHS).toHaveLength(STEP_SOUNDS.length * STEP_TAKES);
+    const takes = new Set<string>();
+    for (const path of STEP_PATHS) {
+      const g = { path, kind: "step" as const };
+      expect(assetFile(g), path).toMatch(/^livingworld\/sounds\/steps\/[a-z_]+_\d\.ogg$/);
+      const a = renderStep(path);
+      const sec = a.length / RATE;
+      expect(sec, path).toBeGreaterThanOrEqual(STEP_MIN_S);
+      expect(sec, path).toBeLessThanOrEqual(STEP_MAX_S);
+      let peak = 0;
+      for (const v of a) peak = Math.max(peak, Math.abs(v));
+      // The same loudness, and under the ceiling (clipping would break the levelling).
+      expect(stepLoudness(a), path).toBeCloseTo(STEP_LOUDNESS, 5);
+      expect(peak, path).toBeLessThanOrEqual(STEP_PEAK);
+      // Starts and ends at silence, and the cut left no dead tail: the last 30 ms still
+      // hold some of the sound.
+      expect(Math.abs(a[0] ?? 0), path).toBeLessThan(0.001);
+      expect(Math.abs(a[a.length - 1] ?? 0), path).toBeLessThan(0.001);
+      let tail = 0;
+      for (let i = a.length - Math.round(0.03 * RATE); i < a.length; i++) {
+        tail = Math.max(tail, Math.abs(a[i] ?? 0));
+      }
+      expect(tail, path).toBeGreaterThan(peak * 0.005);
+      takes.add(hash(a));
+    }
+    // Every take is its own sound.
+    expect(takes.size).toBe(STEP_PATHS.length);
+    expect(() => renderStep("livingworld/steps/lava_1")).toThrow(/unknown step sound/);
+  });
+
+  it("every surface sound of the living world has its footsteps in sounds.yaml", () => {
+    const raw = parse(readFileSync(join(root, "assets", "sounds.yaml"), "utf8")) as {
+      sounds: Record<string, { file: string; channel: string; volume?: number }>;
+      events: Record<string, string | string[]>;
+    };
+    const surfaces = parse(
+      readFileSync(join(root, "data", "livingworld", "surfaces.yaml"), "utf8"),
+    ) as { surfaces: Record<string, { sound?: string }> };
+    // What the client asks for: step.self.<sound> (livingworld/client/src/footsteps.ts).
+    const asked = new Set(Object.values(surfaces.surfaces).flatMap((s) => s.sound ?? []));
+    expect([...asked].sort()).toEqual([...STEP_SOUNDS].sort());
+    const fallback = raw.sounds[String(raw.events["step.self"])];
+    expect(fallback?.volume).toBeLessThanOrEqual(0.15);
+    const volume = raw.sounds["step_grass_1"]?.volume;
+    expect(volume).toBeLessThanOrEqual(0.15);
+    for (const sound of STEP_SOUNDS) {
+      const ids = raw.events[`step.self.${sound}`];
+      expect(Array.isArray(ids) ? ids.length : 0, sound).toBe(STEP_TAKES);
+      for (const [i, id] of (ids as string[]).entries()) {
+        const def = raw.sounds[id];
+        expect(def?.file, id).toBe(`livingworld/sounds/steps/${sound}_${i + 1}.ogg`);
+        expect(def?.channel, id).toBe("sfx");
+        // Levelled in the files: one quiet volume for all of them.
+        expect(def?.volume, id).toBe(volume);
+      }
+    }
+  });
 
   it("seamless folds the tail over the head with equal power", () => {
     // A ramp rendered past the loop: the head starts as the tail's continuation.

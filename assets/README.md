@@ -15,6 +15,7 @@
 | `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, ambiente por isla, y la música: las pools de temas de cada lugar (islas, cuevas, título, jefes), las medidas de cada tema y los tiempos del director | Sí |
 | `sounds/{sfx,ui,music,ambient}/*.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`) | Sí |
 | `livingworld/sounds/ambience/*.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`, `src/ambience.ts`): el ambiente posicional del mundo vivo | Sí |
+| `livingworld/sounds/steps/<sonido>_<n>.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`, `src/steps.ts`): una pisada por superficie (pasto, pasto alto, tierra, arena, arena mojada, ceniza, piedra, madera, nieve, barro, agua baja), tres tomas de cada una, todas a la misma sonoridad | Sí |
 | `sounds/music/gemini/<lugar>_<toma>.ogg` | Música elegida por el dueño entre las tomas de Gemini ("Generado con IA" en `CREDITS.md`), temas enteros en estéreo escritos por `make music-gemini` | Sí |
 | `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, las versiones extra de las cuevas, con fuente, título y medidas (puntos de entrada) | Sí (lo escribe `make music-gemini`) |
 

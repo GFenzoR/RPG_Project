@@ -3407,7 +3407,7 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
 | `effect.gather.<tool.use>`, `effect.gather` | `Effect` 5, con la herramienta usada | minería, tala, pesca |
 | `effect.gather_miss` | `Effect` 6 | fallo |
 | `message.<clave>`, `message.<clave>.<oficio>` | mensaje de sistema (`craft.done` con el oficio de la estación abierta) | level up, muerte, viaje, herrería, cocina, monedas, rechazo |
-| `step.self` | `CreatureMove` propio | paso |
+| `step.self.<sound>`, `step.self` | `CreatureMove` propio, con el `sound` de la superficie pisada (`data/livingworld/surfaces.yaml`) | pisada de esa superficie (una de tres tomas), o el paso genérico |
 | `ui.dialog_open` | `DialogOpen` | campana suave |
 | `ui.click` | click en cualquier botón del DOM | click |
 

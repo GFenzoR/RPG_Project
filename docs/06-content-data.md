@@ -1879,7 +1879,12 @@ music:           # el director de música (client/src/audio/director.ts)
 Pasos por superficie (mundo vivo): cada pisada del jugador propio (cada pie que la
 animación apoya, `data/livingworld/gaits.yaml`) prueba `step.self.<sound>` (el `sound` de
 la superficie bajo ese pie en `data/livingworld/surfaces.yaml`) antes de `step.self`; un evento sin fila
-suena como `step.self`. Hoy no hay sonidos propios por superficie (docs/14).
+suena como `step.self`.
+Cada `sound` (`grass`, `tall_grass`, `dirt`, `sand`, `wet_sand`, `ash`,
+`stone`, `wood`, `snow`, `mud`, `water`) tiene tres tomas (`step_<sound>_<1-3>`, recetas de
+`tools/soundgen/src/steps.ts`) y su evento lista las tres: suena una al azar. Todas salen a
+la misma sonoridad y llevan el mismo volumen bajo (0,15; el `step` de reserva, 0,12): el
+paso queda de fondo.
 
 ### Música de una quest importante (`music` en `data/quests/<id>.yaml`)
 Una quest importante puede tener música propia en un lugar: mientras el jugador está en uno

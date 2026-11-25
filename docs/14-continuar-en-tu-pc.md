@@ -505,10 +505,14 @@ el punto 5:
       en `creatures` de `gaits.yaml`.
     - **Sin sprite en el atlas** (el bloque de color) una criatura no deja pisadas ni
       suena su paso.
-  - **Sonidos de paso propios por superficie:** sin ffmpeg en la máquina no se pudieron
-    generar. Los eventos `step.self.<sound>` ya se piden y caen en `step`; falta la receta
-    de soundgen (o un pack con licencia) en `assets/livingworld/sounds/`, su fila en
-    `sounds.yaml` y en `CREDITS.md`.
+  - **Sonidos de paso propios por superficie (hecho el 2026-11-25, rama
+    `feat/step-sounds`):** once superficies con tres tomas cada una, recetas de
+    `tools/soundgen/src/steps.ts` en `assets/livingworld/sounds/steps/`, niveladas a la
+    misma sonoridad y a volumen 0,15 (el `step` de reserva bajó de 0,25 a 0,12). Sin ffmpeg
+    en el PATH se encodaron con el de `imageio-ffmpeg` (el de `tools/gemini`). Queda: que el
+    dueño las escuche (el nivel se ajusta con `volume` en `sounds.yaml`); y en el cliente,
+    no repetir la misma toma dos pasos seguidos y variar un poco el tono (hoy la toma sale
+    al azar entre las tres).
   - **Día y noche (hecho, rama `feat/day-night-shadows`):** reloj del servidor, luz,
     lámparas, luna y sombras proyectadas (`livingworld/README.md` "Día y noche"). Queda:
     - **Sombras de objetos altos que giren con el sol:** árboles, pilares y casas tienen

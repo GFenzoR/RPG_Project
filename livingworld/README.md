@@ -99,7 +99,8 @@ lw.destroy();
   `MAX_CRITTERS` (10).
 - **Pasos con sonido** (`footsteps.ts`): cada pisada del jugador propio pide
   `step.self.<sound>` (el de la superficie bajo ese pie) y después `step.self`; suena el
-  primero que `assets/sounds.yaml` mapea. Suena también con "Animaciones reducidas" (un
+  primero que `assets/sounds.yaml` mapea. Cada `sound` de `surfaces.yaml` tiene tres tomas
+  propias (`tools/soundgen/src/steps.ts`), bajas y a la misma sonoridad. Suena también con "Animaciones reducidas" (un
   sonido no es una animación). Sin `gaits.yaml` vuelve a sonar con el paso del servidor.
 
 ### Huellas que coinciden con los pasos (rama `feat/footprint-sync`; el dueño, 2026-11-24)
@@ -521,9 +522,11 @@ la superficie de un suelo y la reacción de una planta en la paleta.
   `make gen-ids`, sus nombres en `i18n/{es,en}/items.yaml`, su receta en
   `tools/spritegen/src/recipes/living.ts` (`livingworld/plants/<id>`), `make spritegen
   ONLY=livingworld/` y `make sprites`; su fila en `plants.yaml`.
-- **Un sonido de paso:** el archivo en `assets/livingworld/sounds/`, su fila en
-  `assets/CREDITS.md` (o una receta de soundgen), el sonido en `sounds:` de
-  `assets/sounds.yaml` y el evento `step.self.<sound>: <id>` en `events:`.
+- **Un sonido de paso:** su receta en `RECIPES` de `tools/soundgen/src/steps.ts` (salen
+  tres tomas, `assets/livingworld/sounds/steps/<sound>_<n>.ogg`, con `make sounds
+  ONLY=livingworld/steps/<sound>_<n>`; o un archivo de un pack con su fila en
+  `assets/CREDITS.md`), los sonidos en `sounds:` de `assets/sounds.yaml` y el evento
+  `step.self.<sound>: [<ids>]` en `events:` (suena uno al azar).
 - **Un emisor de sonido** (p. ej. una cascada o un molino): el item en el mapa y su fila
   en `emitters` de `ambience.yaml` (`sound`, `volume`, `radius`). Sin código. Un sonido
   nuevo: su receta en `tools/soundgen/src/ambience.ts` (`livingworld/ambience/<nombre>`,

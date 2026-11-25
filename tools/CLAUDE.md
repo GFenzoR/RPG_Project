@@ -274,7 +274,8 @@ cambia `tools/gemini/`, `tools/spritegen/src/palette.ts` (la paleta que lee `imp
 ## soundgen
 `tools/soundgen` (T3.7) genera los efectos, la música y el ambiente propios de
 `assets/sounds/`. Es un sintetizador determinista en TS (`synth.ts`) con las recetas en
-`sfx.ts` y `music.ts`, y encoda a Ogg Opus con ffmpeg. Uso: `make sounds` (o
+`sfx.ts`, `music.ts`, `ambience.ts` (el ambiente del mundo vivo) y `steps.ts` (las pisadas
+por superficie, niveladas por sonoridad), y encoda a Ogg Opus con ffmpeg. Uso: `make sounds` (o
 `ONLY=sfx/hit`). `cli.ts check` solo revisa el presupuesto de tamaño. Los `.ogg` se
 commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
 
