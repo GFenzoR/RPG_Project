@@ -126,14 +126,13 @@ function cloud(img: Image, r: number, size: number): void {
 
 const FX: RecipeBook = {
   "livingworld/fx/footprint_feet": fx((img) => foot(img, 14, 12)),
-  "livingworld/fx/footprint_paw": fx((img) => {
-    paw(img, 15, 11, 1);
-    paw(img, 17, 17, 1);
-  }),
-  "livingworld/fx/footprint_big_paw": fx((img) => {
-    paw(img, 14, 9, 1.6);
-    paw(img, 18, 18, 1.6);
-  }),
+  // One mark per foot (the client drops one at each footfall, gait.ts), in the middle.
+  "livingworld/fx/footprint_paw": fx((img) => paw(img, 16, 14, 1)),
+  "livingworld/fx/footprint_big_paw": fx((img) => paw(img, 16, 13, 1.6)),
+  // The tip of a leg of a spider, a crab or a beetle.
+  "livingworld/fx/footprint_dot": fx((img) => disc(img, 16, 16, 1, 1, LIGHT)),
+  // A stretch of the furrow a dragged body leaves, pointing up (north).
+  "livingworld/fx/footprint_trail": fx((img) => disc(img, 16, 16, 1.6, 4.2, LIGHT)),
   ...Object.fromEntries(
     [3, 6, 9, 12].map((r, i) => [`livingworld/fx/ripple_${i}`, fx((img) => ring(img, r))]),
   ),

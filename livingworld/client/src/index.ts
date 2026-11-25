@@ -4,7 +4,9 @@
 //
 //   ground layer  (over the grounds, under shadows, items and creatures): trail wear
 //                 (the server's state: drawn even with reduced effects), footprints,
-//                 water ripples and dust clouds, fish shadows
+//                 water ripples and dust clouds, fish shadows. Footprints, ripples, dust
+//                 and the step's sound come at each footfall of the walk cycle drawn
+//                 (gait.ts), not at each tile step
 //   air layer     (over the map): falling leaves, birds, butterflies, fireflies
 //   plants        the map's own plant sprites sway in the wind and bend when a creature
 //                 brushes them: each is drawn as strips that slide (wind-mesh.ts), its base
@@ -17,9 +19,10 @@ import { Container, Sprite, Texture } from "pixi.js";
 import type { Mesh } from "pixi.js";
 import { CritterSim, MAX_CRITTERS } from "./critters.ts";
 import type { LivingWorldData, PlantRule, Surface } from "./data.ts";
-import { FootprintSim, MAX_FOOTPRINTS, stepRotation } from "./footprints.ts";
-import type { PrintKind } from "./footprints.ts";
+import { FootprintSim, MAX_FOOTPRINTS } from "./footprints.ts";
 import { footstepEvents } from "./footsteps.ts";
+import { FootfallTracker } from "./gait.ts";
+import type { Footfall, WalkSample } from "./gait.ts";
 import { seededRandom, tileKey } from "./hash.ts";
 import { LeafSim, MAX_LEAVES } from "./leaves.ts";
 import { MAX_PUFFS, PuffSim, RUN_STEP_MS } from "./puffs.ts";
@@ -84,6 +87,16 @@ export {
 } from "./wear.ts";
 export type { WearDraw, WearTile } from "./wear.ts";
 export { footstepEvents, STEP_EVENT } from "./footsteps.ts";
+export {
+  BODY_KINDS,
+  FootfallTracker,
+  footOffset,
+  FRESH_START,
+  gaitOf,
+  newWalkSample,
+  parseGaits,
+} from "./gait.ts";
+export type { BodyKind, Footfall, Gait, GaitContact, GaitData, WalkSample } from "./gait.ts";
 export { hash01, seededRandom } from "./hash.ts";
 
 /** The containers the client gives it, both in world space (one unit = one sprite pixel). */
@@ -142,17 +155,21 @@ export interface LivingWorldOptions {
   sheltered?: (() => boolean) | undefined;
   /** Seed of the leaves' generator (tests). */
   seed?: number | undefined;
+  /**
+   * A foot of a creature in view touched the ground (gait.ts), reduced effects or not:
+   * `events` are the sound events of a step on that ground, most specific first
+   * (footsteps.ts; the client plays the own player's). Both are reused: read them here.
+   */
+  onFootfall?: ((fall: Footfall, events: readonly string[]) => void) | undefined;
 }
 
-/** One step of a creature in view, as the client starts drawing it. */
+/** One tile step of a creature in view, as the client starts drawing it (plants react). */
 export interface CreatureStep {
   id: number;
   from: { x: number; y: number; z: number };
   to: { x: number; y: number; z: number };
-  /** How long the step takes, ms (a run is RUN_STEP_MS or less). */
-  durationMs: number;
-  /** Which marks its feet leave; "none" for a flier. */
-  print: PrintKind | "none";
+  /** It walks on the ground: a flier brushes no plant. */
+  grounded: boolean;
 }
 
 /** The frame: the tiles in view (fractional), the floor, and where the own player is. */
@@ -169,6 +186,14 @@ export interface TickView {
 
 export interface LivingWorld {
   onCreatureStep(step: CreatureStep, now: number): void;
+  /**
+   * A creature in view as it is drawn this frame (every creature, every frame, walking or
+   * not): where its walk cycle is and where its feet are. Each foot that touched the ground
+   * since its last frame leaves its print, ripple or dust there and calls onFootfall.
+   */
+  onCreatureWalk(sample: WalkSample): void;
+  /** A creature left the view. */
+  forgetCreature(id: number): void;
   onTick(now: number, view: TickView): void;
   /**
    * Trail wear from the server (livingworld/server through the client's glue): each tile's
@@ -326,8 +351,17 @@ export function createLivingWorld(
   const leaves = new LeafSim(random);
   const critters = new CritterSim(T);
   const wear = new WearMap();
-  /** Which foot is next, by creature (left, right, left...). */
-  const foot = new Map<number, number>();
+  const footfalls = new FootfallTracker(data.gaits?.viewDepth ?? 1);
+  /** The sound events of a step on each surface, made once (no list per footfall). */
+  const stepEvents = new Map<Surface | undefined, readonly string[]>();
+  const eventsOn = (s: Surface | undefined): readonly string[] => {
+    let e = stepEvents.get(s);
+    if (!e) {
+      e = footstepEvents(s, data);
+      stepEvents.set(s, e);
+    }
+    return e;
+  };
 
   let plants: PlantEntry[] = [];
   const plantAt = new Map<number, PlantEntry>();
@@ -551,6 +585,21 @@ export function createLivingWorld(
   let wasReduced = false;
   const reduced = (): boolean => options.reduced?.() ?? false;
 
+  /** A foot on the ground: its mark by the surface under it, and the client's beat. */
+  const onFootfall = (f: Footfall): void => {
+    const s = surfaceAt(Math.floor(f.x / T), Math.floor(f.y / T), f.z);
+    const rules = s ? data.surfaces[s] : undefined;
+    // A drawing gliding over a correction is not where its feet walk: no marks.
+    if (s && rules && !f.sliding && !reduced()) {
+      const g = f.gait;
+      if (rules.footprintMs > 0) prints.add(f.x, f.y, f.rot, g.print, s, rules, g.scale, g.depth);
+      if (rules.ripple) puffs.add("ripple", f.x, f.y, 0xffffff);
+      if (rules.dust && f.stepMs > 0 && f.stepMs <= RUN_STEP_MS)
+        puffs.add("dust", f.x, f.y, rules.tint);
+    }
+    options.onFootfall?.(f, eventsOn(s));
+  };
+
   const clearAll = (): void => {
     prints.clear();
     sway.clear();
@@ -565,9 +614,8 @@ export function createLivingWorld(
     onCreatureStep(step, now) {
       if (reduced()) return;
       const dx = Math.sign(step.to.x - step.from.x);
-      const dy = Math.sign(step.to.y - step.from.y);
       // Plants on and round the tile it steps onto react, if it walks (a flier brushes none).
-      if (step.print !== "none") {
+      if (step.grounded) {
         sway.trigger(step.to.x, step.to.y, dx, now);
         // Brushing past a tree may shake a leaf loose.
         for (let oy = -1; oy <= 1; oy++)
@@ -576,28 +624,20 @@ export function createLivingWorld(
             if (p?.rule.leaves && random() < 0.5) leaves.drop((p.x + 0.5) * T, (p.y + 1) * T);
           }
       }
-      const s = surfaceAt(step.from.x, step.from.y, step.from.z);
-      const rules = s ? data.surfaces[s] : undefined;
-      if (!s || !rules || step.print === "none") return;
-      const cx = (step.from.x + 0.5) * T;
-      const cy = (step.from.y + 0.6) * T;
-      if (rules.footprintMs > 0) {
-        const rot = stepRotation(dx, dy);
-        const side = (foot.get(step.id) ?? 0) === 0 ? -1 : 1;
-        if (foot.size > 256) foot.clear();
-        foot.set(step.id, side < 0 ? 1 : 0);
-        // A humanoid's feet alternate either side of its line; paws sit on it.
-        const off = step.print === "feet" ? 3 * side : 0;
-        prints.add(cx + Math.cos(rot) * off, cy + Math.sin(rot) * off, rot, step.print, s, rules);
-      }
-      if (rules.ripple) puffs.add("ripple", cx, cy, 0xffffff);
-      if (rules.dust && step.durationMs > 0 && step.durationMs <= RUN_STEP_MS)
-        puffs.add("dust", cx, cy + 2, rules.tint);
+    },
+
+    onCreatureWalk(sample) {
+      footfalls.sample(sample, onFootfall);
+    },
+
+    forgetCreature(id) {
+      footfalls.forget(id);
     },
 
     onTick(now, view) {
       const ms = last === undefined ? 0 : Math.min(MAX_FRAME_MS, Math.max(0, now - last));
       last = now;
+      footfalls.tick();
       if (reduced()) {
         if (!wasReduced) clearAll();
         wasReduced = true;
@@ -680,6 +720,7 @@ export function createLivingWorld(
     for (const p of prints.prints) {
       const s = printPool.next(`footprint_${p.kind}`, 2);
       if (!s) break;
+      if (p.scale !== 1) s.scale.set(s.scale.x * p.scale, s.scale.y * p.scale);
       s.position.set(Math.round(p.x), Math.round(p.y));
       s.rotation = p.rot;
       s.tint = p.tint;

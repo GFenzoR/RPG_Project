@@ -1,8 +1,10 @@
-// Footprints (livingworld/README.md): a creature stepping off sand, snow, mud, wet sand or
-// ash leaves an oriented mark that fades. A footprint "wears" one ms per ms; on a windy
-// surface (sand) the wind adds wear in gusts, deterministic from the mark's position and the
-// clock. At most MAX_FOOTPRINTS exist: a new one replaces the most worn (docs/07).
+// Footprints (livingworld/README.md): each foot a creature plants on sand, snow, mud, wet
+// sand or ash (gait.ts: the footfalls of its walk cycle) leaves an oriented mark that
+// fades. A footprint "wears" one ms per ms; on a windy surface (sand) the wind adds wear in
+// gusts, deterministic from the mark's position and the clock. At most MAX_FOOTPRINTS
+// exist: a new one replaces the most worn (docs/07).
 import type { Surface, SurfaceRules } from "./data.ts";
+import type { PrintKind } from "./gait.ts";
 import { hash01 } from "./hash.ts";
 
 /** docs/07: footprints alive at once. */
@@ -10,9 +12,8 @@ export const MAX_FOOTPRINTS = 64;
 /** The last part of a footprint's life it fades over (a fraction of its life). */
 export const FADE_FROM = 0.5;
 
-/** Whose feet: a humanoid's, a small beast's paws, a big beast's paws. */
-export type PrintKind = "feet" | "paw" | "big_paw";
-export const PRINT_KINDS: readonly PrintKind[] = ["feet", "paw", "big_paw"];
+export { PRINT_KINDS, stepRotation } from "./gait.ts";
+export type { PrintKind } from "./gait.ts";
 
 export interface Footprint {
   /** Sprite pixels, world space: the mark's centre. */
@@ -28,6 +29,9 @@ export interface Footprint {
   life: number;
   /** Extra wear per ms in a full gust (SurfaceRules.wind). */
   wind: number;
+  /** Its size (Gait.scale) and its opacity while fresh (Gait.depth). */
+  scale: number;
+  depth: number;
 }
 
 /**
@@ -41,18 +45,15 @@ export function gust(x: number, y: number, now: number): number {
   return wave * wave * wave;
 }
 
-/** The rotation of a step from (dx, dy) (tile deltas, -1..1): 0 north, clockwise. */
-export function stepRotation(dx: number, dy: number): number {
-  if (dx === 0 && dy === 0) return 0;
-  return Math.atan2(dx, -dy);
-}
-
 export class FootprintSim {
   readonly prints: Footprint[] = [];
 
   get count(): number {
     return this.prints.length;
   }
+
+  /** Footprints that wore away, kept to be written over (docs/07: none made per step). */
+  private readonly free: Footprint[] = [];
 
   /** A footprint at (x, y); if the cap is reached, it takes the place of the most worn. */
   add(
@@ -62,34 +63,48 @@ export class FootprintSim {
     kind: PrintKind,
     surface: Surface,
     rules: SurfaceRules,
+    scale = 1,
+    depth = 1,
   ): void {
     if (rules.footprintMs <= 0) return;
-    const p: Footprint = {
-      x,
-      y,
-      rot,
-      kind,
-      surface,
-      tint: rules.tint,
-      wear: 0,
-      life: rules.footprintMs,
-      wind: rules.wind,
-    };
+    let p: Footprint | undefined;
     if (this.prints.length < MAX_FOOTPRINTS) {
+      p = this.free.pop() ?? {
+        x: 0,
+        y: 0,
+        rot: 0,
+        kind,
+        surface,
+        tint: 0,
+        wear: 0,
+        life: 1,
+        wind: 0,
+        scale: 1,
+        depth: 1,
+      };
       this.prints.push(p);
-      return;
-    }
-    let worst = 0;
-    let worstT = -1;
-    for (let i = 0; i < this.prints.length; i++) {
-      const q = this.prints[i] as Footprint;
-      const t = q.wear / q.life;
-      if (t > worstT) {
-        worstT = t;
-        worst = i;
+    } else {
+      let worstT = -1;
+      for (const q of this.prints) {
+        const t = q.wear / q.life;
+        if (t > worstT) {
+          worstT = t;
+          p = q;
+        }
       }
     }
-    this.prints[worst] = p;
+    if (!p) return;
+    p.x = x;
+    p.y = y;
+    p.rot = rot;
+    p.kind = kind;
+    p.surface = surface;
+    p.tint = rules.tint;
+    p.wear = 0;
+    p.life = rules.footprintMs;
+    p.wind = rules.wind;
+    p.scale = scale;
+    p.depth = depth;
   }
 
   /** Wears every footprint `ms` at clock `now`; the gone ones are dropped. */
@@ -98,18 +113,20 @@ export class FootprintSim {
     for (const p of this.prints) {
       p.wear += ms * (1 + (p.wind > 0 ? p.wind * gust(p.x, p.y, now) : 0));
       if (p.wear < p.life) this.prints[w++] = p;
+      else this.free.push(p);
     }
     this.prints.length = w;
   }
 
-  /** How visible footprint p is: 1 while fresh, fading to 0 over its last part. */
+  /** How visible footprint p is: its depth while fresh, fading to 0 over its last part. */
   static alpha(p: Footprint): number {
     const t = p.wear / p.life;
-    if (t <= FADE_FROM) return 1;
-    return Math.max(0, 1 - (t - FADE_FROM) / (1 - FADE_FROM));
+    if (t <= FADE_FROM) return p.depth;
+    return p.depth * Math.max(0, 1 - (t - FADE_FROM) / (1 - FADE_FROM));
   }
 
   clear(): void {
+    for (const p of this.prints) this.free.push(p);
     this.prints.length = 0;
   }
 }

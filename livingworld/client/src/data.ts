@@ -7,6 +7,8 @@ import type { AmbienceData } from "./ambience.ts";
 import { isWindKind, parseSpriteWind, parseWind, parseWindSprites, resolveWind } from "./wind.ts";
 import type { PlantWind, SpriteWind, WindData, WindKind } from "./wind.ts";
 
+import { parseGaits } from "./gait.ts";
+import type { GaitData } from "./gait.ts";
 import { parseDayNight } from "./sky.ts";
 import type { DayNightData } from "./sky.ts";
 
@@ -93,6 +95,8 @@ export interface LivingWorldData {
   dayNight?: DayNightData | undefined;
   /** data/livingworld/wind.yaml (wind.ts); absent: no wind, nothing sways. */
   wind?: WindData | undefined;
+  /** data/livingworld/gaits.yaml (gait.ts); absent: no footfalls (no prints, no step beat). */
+  gaits?: GaitData | undefined;
 }
 
 export const EMPTY_DATA: LivingWorldData = { surfaces: {}, plants: {} };
@@ -108,8 +112,8 @@ function parseTint(v: unknown): number {
 }
 
 /**
- * The client's view of data/livingworld/surfaces.yaml and plants.yaml (already parsed
- * YAML). Lenient: make validate checks the files against their schemas, so anything
+ * The client's view of data/livingworld/surfaces.yaml, plants.yaml, daynight.yaml and
+ * gaits.yaml (already parsed YAML). Lenient: make validate checks the files against their schemas, so anything
  * malformed here is skipped rather than thrown.
  *
  * With `windSources`, every plant gets its wind (wind.ts resolveWind): an item of
@@ -122,13 +126,17 @@ export function parseLivingWorldData(
   plants: unknown,
   dayNight?: unknown,
   windSources?: WindSources,
+  gaits?: unknown,
 ): LivingWorldData {
   const out: {
     surfaces: Partial<Record<Surface, SurfaceRules>>;
     plants: Record<string, PlantRule>;
     dayNight?: DayNightData;
     wind?: WindData;
+    gaits?: GaitData;
   } = { surfaces: {}, plants: {} };
+  const g = parseGaits(gaits);
+  if (g) out.gaits = g;
   if (dayNight !== undefined && dayNight !== null) out.dayNight = parseDayNight(dayNight);
   const wind = windSources ? parseWind(windSources.wind) : undefined;
   if (wind) out.wind = wind;
