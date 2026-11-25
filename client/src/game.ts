@@ -36,7 +36,7 @@ import { itemContext, pressAnswer } from "./input/mouse.ts";
 import type { PressAnswer } from "./input/mouse.ts";
 import { loadControls } from "./state/controls.ts";
 import { motionReduced } from "./state/ui-prefs.ts";
-import { stepSoundEvents } from "./render/living.ts";
+import { footfallSounds, stepSoundEvents } from "./render/living.ts";
 import type { ControlsMode } from "./state/controls.ts";
 import { equipSlot, groundCard, itemCard } from "./state/item-card.ts";
 import type { ItemCardView, Viewer } from "./state/item-card.ts";
@@ -65,7 +65,7 @@ import type { NameSize } from "./render/label-style.ts";
 import type { ViewTiles } from "./state/view.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
-import type { GameCanvas, LabelsShown, SkyHook } from "./render/game-canvas.ts";
+import type { FootfallHook, GameCanvas, LabelsShown, SkyHook } from "./render/game-canvas.ts";
 import { locationInit, menuItem, splitCount, splittable, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
@@ -354,6 +354,8 @@ export interface ClientTestHooks {
    * colour, lamps, moon, and how many cast shadow sprites the frame drew.
    */
   sky(): SkyHook | undefined;
+  /** The footprints on the ground and the own player's last footfalls (GameCanvas.footfalls). */
+  footfalls(): FootfallHook;
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
   npcs(): { id: number; contentId: string; x: number; y: number; z: number }[];
   /** T5.6: monsters the client knows, as [id, contentId, x, y, z] (to tap one). */
@@ -483,6 +485,8 @@ export class Game {
   private toolAt: { use: string; pos: Pos } | undefined;
   /** The surface sound of an own step (living world, render/living.ts); made once. */
   private stepEvents: ((to: Pos) => string[]) | undefined;
+  /** The own step sounds at each footfall the canvas draws, not at the server's step. */
+  private readonly footfalls: boolean;
   /** performance.now() of the last look at which loops should play (frame, LOOPS_EVERY_MS). */
   private loopsAt = Number.NEGATIVE_INFINITY;
   /** The positional ambience over the map (audio/ambience.ts) and its last step. */
@@ -539,6 +543,7 @@ export class Game {
     this.zoomPref = loadZoom(opts.storage);
     this.world = new WorldState(opts.content);
     this.stepEvents = stepSoundEvents(this.world, opts.content);
+    this.footfalls = footfallSounds(opts.content);
     this.ambience = mountAmbience(this.world, opts.content);
     this.steer = new Steering({
       portals: opts.content.portals,
@@ -2003,7 +2008,13 @@ export class Game {
     const craft = station
       ? this.opts.content.recipes.find((r) => r.station === station.itemId)?.craft
       : undefined;
-    return { selfId: this.world.selfId, tool: this.toolAt, craft, stepEvents: this.stepEvents };
+    return {
+      selfId: this.world.selfId,
+      tool: this.toolAt,
+      craft,
+      stepEvents: this.stepEvents,
+      footfalls: this.footfalls,
+    };
   }
 
   /** Plays a batch's cues around the player and keeps the zone's loops. */
@@ -2107,6 +2118,10 @@ export class Game {
       t: this.opts.t,
       frame: (now) => this.frame(now),
       playSound: (id, at) => this.opts.audio?.playId(id, at, this.world.self?.pos),
+      // The own step's sound, on the footfall of the walk drawn (render/living.ts).
+      footstep: (events) => {
+        this.opts.audio?.play(events);
+      },
       clickTile: (x, y, z) => {
         // A picked item (the menu's "Move", docs/17 UI-6) goes where the mouse clicks.
         if (this.picker.picked) this.placePicked({ kind: "pos", pos: { x, y, z } });
@@ -2239,6 +2254,7 @@ export class Game {
       poses: () => canvas.poses(),
       bubbles: () => canvas.bubbles(),
       sky: () => canvas.sky(),
+      footfalls: () => canvas.footfalls(),
       npcs: () =>
         [...world.creatures.values()]
           .filter((c) => c.kind === CreatureKind.NPC)

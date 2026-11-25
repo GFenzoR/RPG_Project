@@ -12,6 +12,7 @@ import {
   ownSlideMaxTiles,
   slideBetween,
   slideLeft,
+  slideSize,
   stalls,
   stepChoices,
   towardDirection,
@@ -101,6 +102,12 @@ describe("slides", () => {
     expect(slideLeft(s, 100 + SLIDE_MS / 2)?.x).toBeCloseTo(0.125);
     expect(slideLeft(s, 100 + SLIDE_MS)).toBeUndefined();
     expect(slideLeft(undefined, 0)).toBeUndefined();
+    // How far it still is from its end (the footprints skip a drawing that glides).
+    expect(slideSize(s, 100)).toBe(0.5);
+    expect(slideSize(s, 100 + SLIDE_MS / 2)).toBeCloseTo(0.125);
+    expect(slideSize(s, 100 + SLIDE_MS)).toBe(0);
+    expect(slideSize(undefined, 0)).toBe(0);
+    expect(slideSize({ x: -0.1, y: 0.3, start: 0 }, 0)).toBe(0.3);
   });
 
   it("let the own creature glide back over all the steps it predicts, and one more", () => {

@@ -72,6 +72,12 @@ describe("cuesOf", () => {
     expect(cuesOf(move(8), ctx)).toEqual([]);
   });
 
+  it("an own step has no cue when the canvas sounds it at each footfall (living world)", () => {
+    const step = msg({ case: "creatureMove", value: { id: 7, from: at, to: at, durationMs: 200 } });
+    expect(cuesOf(step, { ...ctx, footfalls: true })).toEqual([]);
+    expect(cuesOf(step, { ...ctx, footfalls: false })).toEqual([{ events: ["step.self"] }]);
+  });
+
   it("an own step sounds like the surface it lands on, then like any step (living world)", () => {
     const to = { x: 4, y: 5, z: 7 };
     const step = msg({ case: "creatureMove", value: { id: 7, from: at, to, durationMs: 200 } });

@@ -27,7 +27,6 @@ import type { AttackKind, Direction } from "@rpg/protocol";
 import {
   Atlas,
   DEATH_FADE_MS,
-  FEET_LINE,
   DEATH_MS,
   DecoratedSource,
   HOUSE_DOOR_FRAME,
@@ -54,7 +53,9 @@ import {
   tilePixels,
   tileToScreen,
   VANISH_MS,
+  walkCyclesPerStep,
 } from "@rpg/renderer";
+import { slideSize } from "../state/motion.ts";
 import type {
   AnimState,
   AtlasIcon,
@@ -75,7 +76,8 @@ import type { Dressed } from "./look.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
-import { mountLivingWorld, printOf } from "./living.ts";
+import { bodyKindOf, creatureGait, kicksUp, mountLivingWorld, newWalkSample } from "./living.ts";
+import type { Gait } from "./living.ts";
 import { CastShadows } from "./cast-shadows.ts";
 import { NIGHT_PLAYER_LIGHT, SkyView, dimmed, litSurface } from "./sky.ts";
 import type { ParticleView } from "./particles.ts";
@@ -214,6 +216,18 @@ export interface LabelsShown {
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
 
+/** What the E2E hook `footfalls()` tells (GameCanvas.footfalls). */
+export interface FootfallHook {
+  footprints: number;
+  /** How many feet of the own player touched the ground since the canvas was made. */
+  total: number;
+  /** The last of them (at most OWN_FOOTFALLS), oldest first. */
+  own: { side: number; x: number; y: number }[];
+}
+
+/** How many of the own player's footfalls the E2E hook keeps. */
+const OWN_FOOTFALLS = 16;
+
 /** What the E2E hook `sky()` tells (GameCanvas.sky). */
 export interface SkyHook {
   phase: string;
@@ -274,6 +288,12 @@ export interface GameCanvas {
    * many cast shadow sprites the frame drew; undefined underground or without a day and night.
    */
   sky(): SkyHook | undefined;
+  /**
+   * E2E: the footfalls of the walks drawn (livingworld/README.md "Huellas"): the footprints
+   * on the ground now, and the last feet of the own player that touched the ground, oldest
+   * first (the side, and where: sprite pixels of the map).
+   */
+  footfalls(): FootfallHook;
   /** E2E: the facing creature `id` was last drawn in, and whether its figure has eight. */
   drawnFacing(id: number): { facing: string; eight: boolean } | undefined;
   /** The <canvas> element (drop target for items dragged onto the map). */
@@ -312,6 +332,11 @@ export interface GameCanvasOptions {
   lookTile(x: number, y: number, z: number): void;
   /** Plays a sound of assets/sounds.yaml by id at a tile (the living world's objects). */
   playSound?(id: string, at: { x: number; y: number; z: number }): void;
+  /**
+   * A foot of the own player touched the ground in the walk drawn (render/living.ts):
+   * the sound events of a step there, most specific first. The list is reused.
+   */
+  footstep?(events: readonly string[]): void;
   /**
    * docs/17 UI-6: the tile's menu with its item's card (a right click in the menu controls,
    * Shift+right click in both), at page coordinates (cx, cy).
@@ -445,6 +470,8 @@ interface CreatureSprite {
    * (T0.5; T5.7: the equipped outfit cosmetic, else citizen). Undefined = the coloured block.
    */
   figure: CreatureBody | undefined;
+  /** How it walks (render/living.ts creatureGait): where its feet leave their marks. */
+  gait: Gait | undefined;
   /**
    * CreatureState.lookRev the sprites were built with: the cosmetics (T5.7), the body or
    * the visible equipment changed since, and they are built again.
@@ -613,7 +640,27 @@ export async function createGameCanvas(
     () => sky.night(),
     // No wind underground (livingworld/README.md "Viento").
     () => isDark(world.self?.pos.z ?? 0),
+    // A foot on the ground (livingworld gait.ts): the ground's motes (MOV-7) fly from
+    // under it, and the own player's is the step's sound.
+    (fall, events) => {
+      if (kicksUp(fall)) kickUp(fall.x, fall.y, fall.z);
+      if (!fall.self) return;
+      opts.footstep?.(events);
+      // A ring of the last ones, written over (nothing made per footfall).
+      const slot = ownFalls[ownFallCount++ % OWN_FOOTFALLS];
+      if (slot) {
+        slot.side = fall.side;
+        slot.x = fall.x;
+        slot.y = fall.y;
+      }
+    },
   );
+  const ownFalls = Array.from({ length: OWN_FOOTFALLS }, () => ({ side: 0, x: 0, y: 0 }));
+  let ownFallCount = 0;
+  /** The creature drawn, as the living world reads its walk (reused: docs/07). */
+  const walkSample = newWalkSample();
+  /** A drawing gliding over a correction further than this (sprite px) leaves no prints. */
+  const slidePx = content.livingWorld?.gaits?.slidePx ?? 0;
   // The creatures' cast shadows (render/cast-shadows.ts): over the ground and the living
   // world's footprints, under the items and the creatures; off with reduced motion and
   // underground (no sun there: the contact ellipse stays).
@@ -880,24 +927,32 @@ export async function createGameCanvas(
   };
   // Steps (docs/17 MOV-7): what a step kicks up on each ground, by ground item, from the
   // `steps` of its sprite in atlas.json `tiles` (assets/sprites.yaml): a puff of dust, a
-  // ripple. Particles of render/particles.ts, at the feet of the tile the step leaves.
+  // ripple. Particles of render/particles.ts, under the foot that touches the ground at
+  // (px, py) sprite pixels (the living world's footfall, render/living.ts).
   const stepKinds = new Map<number, StepKind | null>();
-  const kickUp = (at: Pos): void => {
-    const ground = world.tile(at.x, at.y, at.z)?.[0];
+  const kickUp = (px: number, py: number, z: number): void => {
+    const ground = world.tile(Math.floor(px / T), Math.floor(py / T), z)?.[0];
     if (ground === undefined) return;
     let kind = stepKinds.get(ground);
     if (kind === undefined) {
       kind = stepKindOf(ground, content.items, atlas.index.tiles) ?? null;
       stepKinds.set(ground, kind);
     }
-    if (kind) particles.kick(kind, (at.x + 0.5) * T, (at.y + 1) * T - FEET_LINE);
+    if (kind) particles.kick(kind, px, py);
   };
-  /** Draws a creature's body for `now` (its step, facing and what happened to it). */
+  /**
+   * Draws a creature's body for `now` (its step, facing and what happened to it). Its
+   * tile's top-left is drawn at (bx, by) sprite pixels on the ground (not raised on a
+   * table): the living world follows its feet from there.
+   */
   const animateBody = (
     figure: CreatureBody,
     st: AnimState,
     c: CreatureState,
     now: number,
+    gait: Gait | undefined,
+    bx: number,
+    by: number,
   ): boolean => {
     const w = world.activeWalk(c, now);
     const moving = w && now >= w.start && now < w.start + w.duration ? w : undefined;
@@ -914,18 +969,32 @@ export async function createGameCanvas(
     const stepBefore = st.walkStart;
     animate(st, figure.clips.meta, animInput, pose);
     figure.draw(pose, dirIndex(animInput.dir));
-    // MOV-7: a step starting now kicks up what the ground it leaves gives (a flier none).
+    if (living) {
+      // The walk cycle drawn and where the feet are: each foot that touches the ground
+      // leaves its print, kicks up the ground (MOV-7) and, the own player's, sounds.
+      const meta = figure.clips.meta;
+      const w = walkSample;
+      w.id = c.id;
+      w.x = bx + figure.feetX;
+      w.y = by + figure.feetY;
+      w.z = c.pos.z;
+      w.phase = pose.walk;
+      w.frames = meta?.actions.walk?.frames ?? 0;
+      w.dx = animInput.moveDx;
+      w.dy = animInput.moveDy;
+      w.cyclePx =
+        (T * Math.hypot(animInput.moveDx, animInput.moveDy)) / walkCyclesPerStep(meta, animInput);
+      w.gait = gait;
+      w.sliding = slideSize(c.slide, now) * T > slidePx;
+      w.self = c.id === world.selfId;
+      w.stepMs = animInput.walkMs;
+      living.onCreatureWalk(w);
+    }
+    // A step starting now: the plants of the tile it enters bend (a flier brushes none).
     if (moving && st.walkStart !== stepBefore) {
       const flying = figure.clips.meta?.flying === true;
-      if (!flying) kickUp(moving.from);
       living?.onCreatureStep(
-        {
-          id: c.id,
-          from: moving.from,
-          to: moving.to,
-          durationMs: moving.duration,
-          print: printOf(c.look !== undefined, flying, figure.lift),
-        },
+        { id: c.id, from: moving.from, to: moving.to, grounded: !flying },
         now,
       );
       if (!flying) livingObjects.onStep(moving.from, moving.to, now);
@@ -1100,6 +1169,17 @@ export async function createGameCanvas(
         skull,
         drawnSkull: Skull.UNSPECIFIED,
         figure,
+        gait: figure
+          ? creatureGait(
+              content,
+              isPlayer ? undefined : c.contentId,
+              bodyKindOf(
+                isPlayer || c.look !== undefined,
+                figure.clips.meta?.flying === true,
+                figure.lift,
+              ),
+            )
+          : undefined,
         drawnLook: lk,
         held: doll && person ? { weapon: person.dressed.worn.weapon?.shape } : undefined,
         bar,
@@ -1181,6 +1261,7 @@ export async function createGameCanvas(
     const s = sprites.get(id);
     const state = animStates.get(id);
     animStates.delete(id);
+    living?.forgetCreature(id);
     const dir = lastSeen.get(id);
     lastSeen.delete(id);
     if (!s || !s.figure || !state || style === "drop" || dir === undefined) {
@@ -1349,7 +1430,15 @@ export async function createGameCanvas(
       const see = c.id === world.selfId && world.invisible ? 0.4 : 1;
       if (s.figure) {
         s.figure.opacity = see;
-        animateBody(s.figure, stateOf(c.id, now), c, now);
+        animateBody(
+          s.figure,
+          stateOf(c.id, now),
+          c,
+          now,
+          s.gait,
+          s.body.x,
+          devicePixels(p.y, T, scale),
+        );
         if (casting) s.figure.castShadow(castShadows, s.body.x, s.body.y);
       }
       s.body.alpha = s.figure ? 1 : see;
@@ -1430,7 +1519,11 @@ export async function createGameCanvas(
     drawSpeech(now);
     // Gone without a departure of its own (another floor, a new map view): it just goes.
     for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now, "drop");
-    for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
+    for (const id of animStates.keys())
+      if (!seen.has(id)) {
+        animStates.delete(id);
+        living?.forgetCreature(id);
+      }
     // The bodies falling or shimmering away cast their shadow too, until they fade below
     // half (CreatureBody.castShadow): it does not vanish the moment a creature dies.
     drawGhosts(now, casting);
@@ -1842,6 +1935,15 @@ export async function createGameCanvas(
     },
     bubbles() {
       return speech.shown();
+    },
+    footfalls() {
+      const n = Math.min(ownFallCount, OWN_FOOTFALLS);
+      const own = [];
+      for (let i = ownFallCount - n; i < ownFallCount; i++) {
+        const f = ownFalls[i % OWN_FOOTFALLS];
+        if (f) own.push({ ...f });
+      }
+      return { footprints: living?.stats().footprints ?? 0, total: ownFallCount, own };
     },
     sky() {
       const s = sky.current;

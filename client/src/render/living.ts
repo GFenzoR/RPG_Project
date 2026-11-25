@@ -1,15 +1,20 @@
 // Glue to the living world (livingworld/README.md): the one place in the game client that
 // mounts @rpg/living-world. It turns the client's map and content into what the module asks
 // for (a surface lookup, the map's plant sprites, atlas textures) and the canvas's creatures
-// into steps. Every effect itself lives in livingworld/client.
+// into steps and into the walk cycle drawn each frame (their footfalls: footprints, dust,
+// ripples and the own step's sound). Every effect itself lives in livingworld/client.
 import {
   createLivingObjects,
   createLivingWorld,
   footstepEvents,
+  gaitOf,
   groundSurfaces,
+  newWalkSample,
 } from "@rpg/living-world";
 import type {
-  CreatureStep,
+  BodyKind,
+  Footfall,
+  Gait,
   LivingEvent,
   LivingEventKind,
   LivingObjects,
@@ -25,7 +30,8 @@ import type { ClientContent, ItemDef } from "../content-types.ts";
 import { mapItemId } from "../state/corpse-art.ts";
 import type { Pos } from "../state/geometry.ts";
 
-export type { LivingObjects, LivingWorld } from "@rpg/living-world";
+export type { Footfall, Gait, LivingObjects, LivingWorld, WalkSample } from "@rpg/living-world";
+export { newWalkSample };
 
 /** The part of the world state the living world reads: the ground of a tile. */
 export interface TileReader {
@@ -69,6 +75,7 @@ export function mountLivingWorld(
   reduced: () => boolean,
   night: () => boolean = () => false,
   sheltered: () => boolean = () => false,
+  onFootfall?: (fall: Footfall, events: readonly string[]) => void,
 ): LivingWorld | undefined {
   const data = content.livingWorld;
   if (!data) return undefined;
@@ -85,6 +92,7 @@ export function mountLivingWorld(
       night,
       // Underground: no wind (the canvas knows the dark floors).
       sheltered,
+      onFootfall,
     },
   );
 }
@@ -115,17 +123,48 @@ export function plantSource<S>(
 }
 
 /**
- * Which marks a creature's feet leave: a humanoid (a look) its feet, a beast paws, big
- * ones for a body whose drawing rises more than BIG_BEAST_PX over its tile; a flier none.
+ * The kind of body a creature has, for its gait (data/livingworld/gaits.yaml `defaults`):
+ * a person (a player, or a creature with a look) is a humanoid; a flier flies; the rest
+ * are beasts, big ones when the drawing rises more than BIG_BEAST_PX over its tile.
  */
-export function printOf(hasLook: boolean, flying: boolean, lift: number): CreatureStep["print"] {
-  if (flying) return "none";
-  if (hasLook) return "feet";
-  return lift > BIG_BEAST_PX ? "big_paw" : "paw";
+export function bodyKindOf(humanoid: boolean, flying: boolean, lift: number): BodyKind {
+  if (flying) return "flying";
+  if (humanoid) return "humanoid";
+  return lift > BIG_BEAST_PX ? "big_beast" : "beast";
 }
 
 /** A beast whose drawing rises more than this (sprite px, CreatureBody.lift) is big. */
 export const BIG_BEAST_PX = 40;
+
+/**
+ * How a creature walks (livingworld gait.ts): its own gait by content id (a monster's or
+ * an NPC's), else its body kind's. Undefined: its feet leave no footfalls (a flier, or a
+ * build without data/livingworld/gaits.yaml).
+ */
+export function creatureGait(
+  content: ClientContent,
+  contentId: string | undefined,
+  body: BodyKind,
+): Gait | undefined {
+  return gaitOf(content.livingWorld?.gaits, contentId, body);
+}
+
+/**
+ * Whether the own step's sound comes from the canvas, at each footfall of the walk drawn
+ * (GameCanvasOptions.footstep), and not from the server's CreatureMove (audio/cues.ts).
+ */
+export function footfallSounds(content: ClientContent): boolean {
+  return content.livingWorld?.gaits !== undefined;
+}
+
+/**
+ * Which footfalls kick up the ground's motes (docs/17 MOV-7, render/particles.ts): every
+ * one of a body on two feet, every other one of a body on more (a spider would raise a
+ * cloud).
+ */
+export function kicksUp(fall: Footfall): boolean {
+  return !fall.sliding && (fall.gait.contacts.length <= 2 || fall.contact % 2 === 0);
+}
 
 // Map objects that break, move or open (data/livingworld/objects.yaml).
 

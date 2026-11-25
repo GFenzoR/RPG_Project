@@ -106,6 +106,13 @@ export class CreatureBody {
   private readonly shadow: Graphics | undefined;
   private readonly baseX: number;
   private readonly baseY: number;
+  /**
+   * Where its feet are on its tile (sprite pixels from the tile's top-left): the middle of
+   * the drawing across, the lowest row of its walk frames down. The living world drops
+   * the footprints from there (render/living.ts).
+   */
+  readonly feetX: number;
+  readonly feetY: number;
   /** Empty rows under the feet in the textures (bc sprites): the cast shadow turns there. */
   private readonly foot: number;
   private tint: number;
@@ -151,6 +158,8 @@ export class CreatureBody {
     this.baseX = bc ? tile / 2 : tile - w / 2;
     this.foot = bc ? (meta?.foot ?? 0) : 0;
     this.baseY = bc ? tile - FEET_LINE + this.foot : tile;
+    this.feetX = this.baseX;
+    this.feetY = this.baseY - this.foot;
     this.lift = headLift(meta, { w, h }, tile, FEET_LINE);
     if (meta?.shadow === "ellipse") {
       this.shadow = new Graphics(shadowShape());
