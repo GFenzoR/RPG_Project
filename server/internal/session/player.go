@@ -873,13 +873,19 @@ func (w *World) Clients() []Client {
 // player there walks (searchFrom), even on a tile nobody may stand on now: a door shut
 // since the logout (in its open doorway) puts the player beside it, on its outside if the
 // door is locked, on either side if it is not; a house door, in its house or on the
-// street of its exit. Only a tile of no area with no rule of its own (a wall, no tile:
-// the map changed) sends the character to its temple.
+// street of its exit. A tile something low came to fill since the logout (a bush made
+// solid: it stops feet, not eyes) puts the player beside it (besideSolid), on the island
+// where it logged out. Only another tile of no area with no rule of its own (a wall, no
+// tile: the map changed) sends the character to its temple.
 func (w *World) placement(c Character) world.Pos {
 	temple := w.temple(c.Town)
 	want := temple
-	if c.HasPos && w.searchFrom(c.Pos).n > 0 {
-		want = c.Pos
+	if c.HasPos {
+		if w.searchFrom(c.Pos).n > 0 {
+			want = c.Pos
+		} else if p, ok := w.besideSolid(c.Pos); ok {
+			return p
+		}
 	}
 	if p, ok := w.freeNear(want, 3); ok {
 		return p
@@ -893,6 +899,29 @@ func (w *World) placement(c Character) world.Pos {
 		return temple
 	}
 	return want // crowded: share the tile rather than refuse the login
+}
+
+// besideSolid returns the free walkable tile closest to p (by rings, as freeNear) for a
+// character saved on p when p is a tile of the map that a low object fills now: it blocks
+// movement and not sight (a bush, a boulder, a barrel, water too; a wall, a closed gate or a tree
+// block both and never were ground), outside every house and with no door. The search
+// lands only in the street areas next to p that are no room behind a locked door: whoever
+// stood on p walked there from one of them, and a room needs its key.
+func (w *World) besideSolid(p world.Pos) (world.Pos, bool) {
+	_, flags, ok := w.m.Tile(p)
+	if !ok || flags&(world.BlockFlags|world.FlagHouse) != world.FlagBlocksMovement || w.doors[p] != nil {
+		return world.Pos{}, false
+	}
+	var from searchFrom
+	for e := world.North; e <= world.NorthWest; e++ {
+		if q, ok := p.Step(e); ok && w.roomOf[q] == 0 {
+			from.add(w.areaOf(q))
+		}
+	}
+	if from.n == 0 {
+		return world.Pos{}, false
+	}
+	return w.searchRingsIn(from, p, 3, world.FlagBlocksMovement|world.FlagPortalStep|world.FlagHouse, w.free)
 }
 
 // lockedDoor reports whether a locked door stands on p (door.go), open or closed.
