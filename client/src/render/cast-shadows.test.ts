@@ -28,7 +28,7 @@ const clips = (foot = 0): ClipSet<Texture> => {
     shadow: "ellipse",
     actions: { walk: { frames: 2, ms: 0, perTile: 1, dirs: DIRS } },
   };
-  return { meta, frames: { walk }, still: walk[2]?.[0] };
+  return { meta, frames: { walk }, still: walk[2]?.[0], eight: false };
 };
 /** A fade filter that needs no WebGL. */
 const fakeFade = (): AlphaFilter => ({ alpha: 1, destroy() {} }) as unknown as AlphaFilter;
