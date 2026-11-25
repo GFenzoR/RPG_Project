@@ -1205,6 +1205,19 @@ func TestSandboxTrades(t *testing.T) {
 		{at3(2052, 2097, 7), at3(2051, 2095, 7)}, {at3(2052, 2098, 7), at3(2050, 2098, 7)},
 		{at3(2054, 2098, 7), at3(2054, 2100, 7)}, {at3(2052, 2098, 7), at3(2052, 2101, 7)}}
 	s.gather(cl, p, "pickaxe", veins, "iron_ore", 8)
+	// The stone that came with the ore stays at the quarry: with the start kit, the tools
+	// and the ore, a newcomer's 45 kg have no room for it and the logs too.
+	for range 20 {
+		n := s.w.CountItem(p, "rough_stone")
+		if n == 0 {
+			break
+		}
+		win := s.packWindow(cl, p)
+		s.send(cl, moveItem(inContainer(win, s.packIndex(p, "rough_stone")), s.num("rough_stone"), 0, onTile(p.Pos()), uint32(n)))
+	}
+	if n := s.w.CountItem(p, "rough_stone"); n != 0 {
+		t.Fatalf("%d rough_stone still carried", n)
+	}
 	s.gather(cl, p, "felling_axe", birches, "birch_log", 5)
 	s.gather(cl, p, "fishing_rod", shoals, "raw_fish", 2)
 

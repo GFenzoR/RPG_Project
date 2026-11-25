@@ -192,10 +192,10 @@ describe("validator diagnostics", () => {
     const heavy = (): string[] =>
       messages(root).filter((m) => m.startsWith("error") && m.includes("the kit weighs"));
     expect(heavy()).toEqual([]);
-    // The druid carries 380 kg; at 5 kg it cannot hold its own kit and backpack.
+    // The druid carries 41 kg; at 5 kg it cannot hold its own kit and backpack.
     edit(
       "data/vocations.yaml",
-      "start: { health: 140, mana: 75, capacity: 380000, speed: 205 }\n  per_level: { health: 6, mana: 27,",
+      "start: { health: 140, mana: 75, capacity: 41000, speed: 205 }\n  per_level: { health: 6, mana: 27,",
       "start: { health: 140, mana: 75, capacity: 5000, speed: 205 }\n  per_level: { health: 6, mana: 27,",
     );
     const errs = heavy();
