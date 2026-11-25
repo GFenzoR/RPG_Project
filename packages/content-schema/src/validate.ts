@@ -1145,8 +1145,11 @@ class Validator {
    * says otherwise) whose id has the word of a solid family (the id split at "_", one or
    * many: stacked_crates has "crate", a vine has "vines") writes blocks_movement, true or
    * false, so that a new bush or crate is never walkable because nobody thought of it.
-   * The border pieces (sprite borders/...) are the fringe of a ground named after it
-   * (border_rock_n would be no rock): never asked.
+   * A decoration of such a family (kind: decoration: nobody wears it or stacks it) that
+   * writes neither pickupable nor blocks_movement is asked for both: left out, pickupable means yes (Go:
+   * Item.CanPickUp), so a hedge written with neither would be walkable and carried away,
+   * the very oversight this is for. The border pieces (sprite borders/...) are the fringe
+   * of a ground named after it (border_rock_n would be no rock): never asked.
    */
   private checkSolidFamilies(solid: SourceFile): void {
     const families = new Set(
@@ -1158,13 +1161,23 @@ class Validator {
         families.has(w),
       );
     for (const { item, src, path } of this.items) {
-      if (item["pickupable"] !== false) continue;
+      const unsaid =
+        item["kind"] === "decoration" &&
+        typeof item["pickupable"] !== "boolean" &&
+        typeof item["blocks_movement"] !== "boolean";
+      if (item["pickupable"] !== false && !unsaid) continue;
       if (item["kind"] === "ground" || item["kind"] === "wall") continue;
-      if (typeof item["blocks_movement"] === "boolean") continue;
       if (String(item["sprite"]).startsWith("borders/")) continue;
       let family: string | undefined;
       for (const word of (idOf(item) ?? "").split("_")) if ((family = familyOf(word))) break;
-      if (family !== undefined)
+      if (family === undefined) continue;
+      if (unsaid)
+        this.error(
+          src,
+          path,
+          `"${String(item["id"])}" is of the solid family "${family}" (data/solid_families.yaml): say pickupable: false if it stands on the map (and blocks_movement), or pickupable: true if a player carries it`,
+        );
+      else if (typeof item["blocks_movement"] !== "boolean")
         this.error(
           src,
           path,

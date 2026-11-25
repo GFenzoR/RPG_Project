@@ -174,6 +174,24 @@ describe("validator diagnostics", () => {
       ["old_bush", "bushes"],
       ["reeds", "reed"],
     ]);
+    // A decoration that says neither (a new hedge with pickupable forgotten too) would be
+    // walkable and carried away: it is asked whether it is picked up. What says it is
+    // carried (pickupable: true) is no obstacle.
+    edit(
+      "data/items/decoration.yaml",
+      "- id: old_bush\n  kind: container\n  sprite: decor/bush\n  name: item.bush.name\n  pickupable: false\n",
+      "- id: old_bush\n  kind: decoration\n  sprite: decor/bush\n  name: item.bush.name\n",
+    );
+    expect(messages(root).filter((m) => m.includes("solid family"))).toEqual([
+      expect.stringMatching(/"old_bush" is of the solid family "bushes".*say pickupable: false/),
+      expect.stringMatching(/"reeds" is of the solid family "reed".*blocks_movement/),
+    ]);
+    edit(
+      "data/items/decoration.yaml",
+      "  name: item.bush.name\n",
+      "  name: item.bush.name\n  pickupable: true\n",
+    );
+    expect(named()).toEqual([["reeds", "reed"]]);
     // Without the file nothing would be asked: it is required.
     rmSync(file("data/solid_families.yaml"));
     expect(messages(root)).toContainEqual(
