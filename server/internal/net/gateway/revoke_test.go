@@ -23,7 +23,7 @@ func TestSignOutEverywhereRefusesLoginPastItsRedeem(t *testing.T) {
 	s.accounts.mu.Unlock()
 	s.token("a", 7)
 	c := s.dial()
-	if err := c.send(hello("a", "0.1.0")); err != nil {
+	if err := c.send(hello("a", DefaultMinClientVersion)); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool { return s.accounts.calls.Load() == 1 }) // the redeem started

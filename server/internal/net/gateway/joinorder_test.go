@@ -67,7 +67,7 @@ func TestLeaveWaitsForJoin(t *testing.T) {
 	})
 	s.token("good", 7)
 	c := s.dial()
-	if err := c.send(hello("good", "0.1.0")); err != nil {
+	if err := c.send(hello("good", DefaultMinClientVersion)); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool { held, _ := hold.state(); return held == 1 })

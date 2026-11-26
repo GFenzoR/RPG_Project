@@ -86,7 +86,8 @@ Detalles (T1.4, `server/internal/net/gateway`):
   otro: lo retoma ("Entrar dos veces").
 - **Versión:** `client_version` es `MAJOR.MINOR.PATCH` (se ignora un sufijo `-dev` o
   `+build`). Se acepta si tiene la misma versión mayor que la mínima del servidor
-  (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
+  (`-min-client-version`, por defecto `0.2.0`: el primer cliente que lee `Welcome.options`,
+  "Opciones guardadas") y no es más vieja. La versión se revisa
   antes del token, así un cliente viejo no gasta su token.
 - **Welcome** va en el primer `ServerBatch` seguido de `FullMapView`, `PlayerStats`,
   `Inventory` (equipo guardado, T1.8), `PlayerSkills` (todas las skills de

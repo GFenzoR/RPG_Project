@@ -1,6 +1,6 @@
 {
   "name": "@rpg/client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Game client (Vite + PixiJS + Preact): login, character selection and the world view (T1.5).",
