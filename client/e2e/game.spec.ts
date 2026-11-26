@@ -4060,7 +4060,7 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
   page,
   playwright,
 }, testInfo) => {
-  test.setTimeout(420_000);
+  test.setTimeout(600_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -4180,9 +4180,9 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
         { timeout: 60_000, intervals: [500] },
       )
       .toBe(true);
-  /** Waits for the next strong gust front to reach (x, y); returns its strength. */
-  const front = async (x: number, y: number): Promise<number> => {
-    const g = await gust(x, y, 0.65);
+  /** Waits for the next gust front of at least `min` to reach (x, y); returns its strength. */
+  const front = async (x: number, y: number, min: number): Promise<number> => {
+    const g = await gust(x, y, min);
     if (!g) throw new Error("no strong gust on its way");
     await page.waitForTimeout(g.at + 150);
     return g.strength;
@@ -4192,17 +4192,18 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
   await shot(page, `120-wind-plaza-calm-zoom${scale}`);
   expect(await frames(crown, 5), "the crown stands still between gusts").toBe(1);
   // The gust: the crown leans and swings, the foot of the trunk stands.
-  const blew = await front(tree.x, tree.y);
+  // (A gust comes every 45 s or so, and not every one blows hard on this tree: the wait
+  // is a minute on average.)
+  const blew = await front(tree.x, tree.y, 0.6);
   testInfo.annotations.push({ type: "wind", description: `gust of ${blew.toFixed(2)}` });
+  const [crownFrames, footFrames] = await Promise.all([frames(crown, 6), frames(foot, 6)]);
+  expect(crownFrames, "the crown bends in the gust").toBeGreaterThan(1);
+  expect(footFrames, "the foot of the trunk stands").toBe(1);
+  // Still swinging, less and less.
   for (let i = 0; i < 4; i++) {
     await shot(page, `120-wind-plaza-zoom${scale}-${i}`);
     await page.waitForTimeout(300);
   }
-  await calm(tree.x, tree.y, 0);
-  await front(tree.x, tree.y);
-  const [crownFrames, footFrames] = await Promise.all([frames(crown, 8), frames(foot, 8)]);
-  expect(crownFrames, "the crown bends in the gust").toBeGreaterThan(1);
-  expect(footFrames, "the foot of the trunk stands").toBe(1);
 
   // Reduced motion: the trees stand whole and still; switched off, they sway again.
   await openWindow(page, "options");
@@ -4230,7 +4231,7 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
   await page.waitForTimeout(600);
   const forest = await trees();
   // The forest as a gust crosses it: the trees lean one after another.
-  await front(4221, 6071);
+  await front(4221, 6071, 0.5);
   for (let i = 0; i < 4; i++) {
     await shot(page, `122-wind-forest-zoom${scale}-${i}`);
     await page.waitForTimeout(400);

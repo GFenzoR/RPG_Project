@@ -602,7 +602,7 @@ describe("validator diagnostics", () => {
       "  mud: { prints: { tread: 0.6 },",
       "  mud: { footprints: 40000,",
     );
-    edit("data/livingworld/surfaces.yaml", "prints: { wind: 0.4,", "prints: { wind: -1,");
+    edit("data/livingworld/surfaces.yaml", "prints: { wind: 1.4,", "prints: { wind: -1,");
     edit("data/livingworld/surfaces.yaml", "  volume: 0.7", "  volume: 7");
     edit("data/livingworld/surfaces.yaml", "  lava: {}", "  lava: {}\n  marsh: {}");
     appendFileSync(
