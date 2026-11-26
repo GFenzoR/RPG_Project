@@ -10,7 +10,14 @@ import {
   stackLabel,
   wrapRole,
 } from "./labels.ts";
-import { MIN_NAME_PX, SHRINK_MIN, labelFontPx, linePitch, subFontPx } from "./label-style.ts";
+import {
+  NAME_MIN_PX,
+  SHRINK_MIN,
+  labelFontPx,
+  linePitch,
+  minNamePx,
+  subFontPx,
+} from "./label-style.ts";
 import type { LabelBox, MeasureLine } from "./labels.ts";
 import { stackBubbles } from "./bubbles.ts";
 
@@ -110,19 +117,44 @@ describe("fitName", () => {
     expect(fitName(name, 15, 190, mono)).toEqual({ text: name, fontPx: 14 });
   });
 
-  it("never cuts a name, nor adds an ellipsis: it shrinks as far as it takes", () => {
-    const name = "Sir Bartholomew the Long of the Far Shore";
-    const out = fitName(name, 15, 150, mono);
+  it("keeps a name of the longest length allowed above SHRINK_MIN when every label shows", () => {
+    // 16 characters (CREATURE_NAME_MAX_CHARS) in a room of MAX_WIDTH_FULL sizes: 120 px at
+    // 15 px, 180 of room.
+    const name = "Abcdefgh Ijklmno";
+    expect([...name]).toHaveLength(16);
+    const out = fitName(name, 15, labelMaxWidth(64, 15), mono, minNamePx(1));
     expect(out.text).toBe(name);
-    expect(out.text).not.toContain("…");
-    expect(out.fontPx).toBeLessThan(Math.ceil(15 * SHRINK_MIN));
-    expect(out.fontPx).toBeGreaterThanOrEqual(MIN_NAME_PX);
-    expect(mono(out.text, out.fontPx)).toBeLessThanOrEqual(150);
+    expect(out.fontPx).toBeGreaterThanOrEqual(Math.ceil(15 * SHRINK_MIN));
   });
 
-  it("never goes under the smallest size, still whole", () => {
-    const out = fitName("Casia Hollín de los Registros", 15, 10, mono);
-    expect(out).toEqual({ text: "Casia Hollín de los Registros", fontPx: MIN_NAME_PX });
+  it("never cuts a name, nor adds an ellipsis: an older, longer one shrinks as far as it takes", () => {
+    // 41 characters, which no limit ever allowed: under SHRINK_MIN, over the floor.
+    const name = "Sir Bartholomew the Long of the Far Shore";
+    const out = fitName(name, 15, 190, mono, 6);
+    expect(out.text).toBe(name);
+    expect(out.text).not.toContain("…");
+    expect(out.fontPx).toBe(9);
+    expect(out.fontPx).toBeLessThan(Math.ceil(15 * SHRINK_MIN));
+    expect(mono(out.text, out.fontPx)).toBeLessThanOrEqual(190);
+  });
+
+  it("never goes under the smallest size, still whole and then wider than its room", () => {
+    const name = "Casia Hollín de los Registros";
+    expect(fitName(name, 15, 10, mono, 9)).toEqual({ text: name, fontPx: 9 });
+    // The default floor is the CSS one; a name already under it is not made bigger.
+    expect(fitName(name, 15, 10, mono)).toEqual({ text: name, fontPx: NAME_MIN_PX });
+    expect(fitName(name, 7, 10, mono, 9)).toEqual({ text: name, fontPx: 7 });
+  });
+
+  it("the smallest size is the same to the eye on a dense screen", () => {
+    // 6 device px, the floor before, were 3 CSS px at devicePixelRatio 2.
+    expect(minNamePx(1)).toBe(NAME_MIN_PX);
+    expect(minNamePx(1.5)).toBe(Math.round(NAME_MIN_PX * 1.5));
+    expect(minNamePx(2)).toBe(NAME_MIN_PX * 2);
+    expect(minNamePx(Number.NaN)).toBe(NAME_MIN_PX);
+    expect(NAME_MIN_PX).toBeGreaterThanOrEqual(9);
+    const name = "W".repeat(40);
+    expect(fitName(name, 24, 60, mono, minNamePx(2)).fontPx).toBe(18);
   });
 });
 

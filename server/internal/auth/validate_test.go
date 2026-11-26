@@ -133,16 +133,33 @@ func TestNameBoundMatchesTheLabel(t *testing.T) {
 			t.Errorf("%s = %d, the server's limit is %d: they must be equal", name, got, want)
 		}
 	}
-	// The hints players read say the same number.
+	// The texts players read say the same number: the refusal writes it out (error texts
+	// take no parameters) and the form's hint takes it as {max}. A line that is missing
+	// or renamed fails too, instead of passing unseen.
 	for _, lang := range []string{"es", "en"} {
 		yml, err := os.ReadFile("../../../i18n/" + lang + "/client.yaml")
 		if err != nil {
 			t.Fatal(err)
 		}
+		limit := regexp.MustCompile(`\b` + strconv.Itoa(MaxNameLen) + `\b`)
+		var refusal, hint bool
 		for _, line := range strings.Split(string(yml), "\n") {
-			if strings.HasPrefix(line, "error.invalid_name:") && !strings.Contains(line, strconv.Itoa(MaxNameLen)) {
-				t.Errorf("%s error.invalid_name does not mention %d: %s", lang, MaxNameLen, line)
+			switch {
+			case strings.HasPrefix(line, "error.invalid_name:"):
+				refusal = true
+				if nums := regexp.MustCompile(`\d+`).FindAllString(line, -1); len(nums) != 2 ||
+					nums[0] != strconv.Itoa(MinNameLen) || !limit.MatchString(line) {
+					t.Errorf("%s error.invalid_name must say %d to %d: %s", lang, MinNameLen, MaxNameLen, line)
+				}
+			case strings.HasPrefix(line, "client.characters.name_hint:"):
+				hint = true
+				if !strings.Contains(line, "{max}") {
+					t.Errorf("%s client.characters.name_hint must take {max}: %s", lang, line)
+				}
 			}
+		}
+		if !refusal || !hint {
+			t.Errorf("%s client.yaml: error.invalid_name found %v, client.characters.name_hint found %v", lang, refusal, hint)
 		}
 	}
 	long := strings.Repeat("a", MaxNameLen+1)

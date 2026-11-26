@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/pkg/bot"
@@ -28,15 +30,15 @@ func TestValidateCount(t *testing.T) {
 }
 
 func TestNamesAreUniqueAndValid(t *testing.T) {
-	valid := regexp.MustCompile(`^Duo[a-z]{2,3} [A-Z][a-z]{1,11}$`)
-	for _, prefix := range []string{"load", "ci", "tunnel", "stress", "abcdefghijkl"} {
+	valid := regexp.MustCompile(`^Duo[a-z]{2,3} [A-Z][a-z]{1,9}$`)
+	for _, prefix := range []string{"load", "ci", "tunnel", "stress", "abcdefghi"} {
 		if err := checkPrefix(prefix, maxBots); err != nil {
 			t.Fatalf("checkPrefix(%q): %v", prefix, err)
 		}
 		seen := map[string]bool{}
 		for i := range maxBots {
 			n := name(prefix, i)
-			if seen[n] || !valid.MatchString(n) || len(n) > 20 {
+			if seen[n] || !valid.MatchString(n) || len(n) > maxNameLen {
 				t.Fatalf("name(%q, %d) = %q", prefix, i, n)
 			}
 			seen[n] = true
@@ -52,19 +54,24 @@ func TestCheckPrefixRejects(t *testing.T) {
 		prefix string
 		n      int
 	}{
-		{"dev", 1},           // "Duoaa Dev": a reserved word
-		{"mine", 10},         // bot 3 is "Duoad Mine": "duoadmine" contains "admin"
-		{"load100", 1},       // digits: "load100" and "load300" would fold into "Load"
-		{"load300", 1},       //
-		{"Load", 1},          // not lowercase
-		{"a", 1},             // too short
-		{"abcdefghijklm", 1}, // too long
+		{"dev", 1},          // "Duoaa Dev": a reserved word
+		{"mine", 10},        // bot 3 is "Duoad Mine": "duoadmine" contains "admin"
+		{"load100", 1},      // digits: "load100" and "load300" would fold into "Load"
+		{"load300", 1},      //
+		{"Load", 1},         // not lowercase
+		{"a", 1},            // too short
+		{"abcdefghijk", 1},  // too long: "Duoaa Abcdefghijk" is 17 letters
+		{"abcdefghij", 677}, // bot 676 is "Duobaa Abcdefghij": 17 letters
 		{"lo-ad", 1},
 		{"", 1},
 	} {
 		if err := checkPrefix(tc.prefix, tc.n); err == nil {
 			t.Errorf("checkPrefix(%q, %d) accepted", tc.prefix, tc.n)
 		}
+	}
+	// Ten letters fit while the first word has five ("Duozz Abcdefghij" is 16).
+	if err := checkPrefix("abcdefghij", 676); err != nil {
+		t.Errorf("checkPrefix(abcdefghij, 676): %v", err)
 	}
 	// "mine" is fine for the first 3 bots (the clash is at bot 3).
 	if err := checkPrefix("mine", 3); err != nil {
@@ -122,5 +129,20 @@ const serverCharsPerAccount = 2
 func TestPerAccountFitsServerCap(t *testing.T) {
 	if perAccount < 1 || perAccount > serverCharsPerAccount {
 		t.Fatalf("perAccount = %d, want 1..%d", perAccount, serverCharsPerAccount)
+	}
+}
+
+// maxNameLen is a copy of the server's auth.MaxNameLen (another module): the two stay equal.
+func TestMaxNameLenIsTheServers(t *testing.T) {
+	raw, err := os.ReadFile("../../../../server/internal/auth/validate.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`MaxNameLen\s+= (\d+)`).FindSubmatch(raw)
+	if m == nil {
+		t.Fatal("auth.MaxNameLen not found")
+	}
+	if got, _ := strconv.Atoi(string(m[1])); got != maxNameLen {
+		t.Errorf("auth.MaxNameLen = %d, maxNameLen = %d", got, maxNameLen)
 	}
 }

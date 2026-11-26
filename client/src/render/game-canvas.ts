@@ -129,6 +129,7 @@ import {
   LABEL_ROLE_COLOR,
   LABEL_SUB_WEIGHT,
   labelFontPx,
+  minNamePx,
   labelScale,
   labelStroke,
   linePitch,
@@ -842,6 +843,7 @@ export async function createGameCanvas(
   // rasterised at the size they show (render/label-style.ts labelFontPx).
   let nameScale = 1;
   let namePx = 12;
+  let nameMinPx = minNamePx(1);
   let subPx = 10;
   let labelMax = 144;
   // Line widths, measured with a 2D context of the names' font (kept: a name is measured
@@ -1383,7 +1385,7 @@ export async function createGameCanvas(
       s.fitRole = what;
       s.fitPx = namePx;
       s.fitMax = labelMax;
-      const fit = fitName(name, namePx, labelMax, measureName);
+      const fit = fitName(name, namePx, labelMax, measureName, nameMinPx);
       sizeLine(s.label, fit.fontPx);
       if (s.label.text !== fit.text) s.label.text = fit.text;
       const wrapped = wrapRole(what, subPx, labelMax, measureSub);
@@ -1653,6 +1655,7 @@ export async function createGameCanvas(
     const dpr = window.devicePixelRatio || 1;
     nameScale = labelScale(scale, nameSize);
     namePx = labelFontPx(scale, dpr, nameSize);
+    nameMinPx = minNamePx(dpr);
     subPx = subFontPx(namePx, dpr);
     labelMax = labelMaxWidth(T * scale, namePx);
     const mark = markScale(namePx);

@@ -177,7 +177,10 @@ describe("the kill steps of data/quests", () => {
           const text = (texts[String(step["description"])] ?? "").toLowerCase();
           expect(name, kill.monster).not.toBe("");
           // Each word of the name, less its last letter (plurals: "cenizo" in "cenizos").
-          for (const word of name.toLowerCase().split(" ").filter((w) => w.length > 3))
+          for (const word of name
+            .toLowerCase()
+            .split(" ")
+            .filter((w) => w.length > 3))
             expect(text, `${String(step["description"])} (${lang}) names "${name}"`).toContain(
               [...word].slice(0, -1).join(""),
             );

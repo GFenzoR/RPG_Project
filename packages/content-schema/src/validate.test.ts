@@ -1522,6 +1522,65 @@ describe("validator diagnostics", () => {
     ]);
   });
 
+  it('wants every creature name whole on one line: 16 characters at most and no ellipsis (docs/06 "Nombres")', () => {
+    const names = (): string[] =>
+      messages(root).filter((m) => /longer than \d+ characters|has an ellipsis/.test(m));
+    expect(names()).toEqual([]);
+    // A monster's name one letter over the limit, in one language.
+    edit(
+      "i18n/es/monsters.yaml",
+      'monster.wolf.name: "lobo"',
+      'monster.wolf.name: "lobo gris del monte"',
+    );
+    // One cut by hand to fit, with either kind of ellipsis.
+    edit(
+      "i18n/en/monsters.yaml",
+      'monster.bilge_rat.name: "bilge rat"',
+      'monster.bilge_rat.name: "bilge r…"',
+    );
+    edit(
+      "i18n/es/monsters.yaml",
+      'monster.bilge_rat.name: "rata de sentina"',
+      'monster.bilge_rat.name: "rata de sent..."',
+    );
+    // An NPC's name and its role, cut by hand too.
+    edit(
+      "i18n/es/npcs.yaml",
+      'npc.puerto_armorer.name: "Bastian Roe"',
+      'npc.puerto_armorer.name: "Bastian R…"',
+    );
+    edit(
+      "i18n/en/npcs.yaml",
+      'npc.puerto_armorer.role: "Armorer"',
+      'npc.puerto_armorer.role: "Armor..."',
+    );
+    const got = names();
+    expect(got).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /^error data\/monsters\/wolf\.yaml.*"lobo gris del monte" \(monster\.wolf\.name, es\) is longer than 16 characters/,
+        ),
+        expect.stringMatching(/bilge_rat\.yaml.*\(monster\.bilge_rat\.name, en\) has an ellipsis/),
+        expect.stringMatching(/bilge_rat\.yaml.*\(monster\.bilge_rat\.name, es\) has an ellipsis/),
+        expect.stringMatching(
+          /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.name, es\) has an ellipsis/,
+        ),
+        expect.stringMatching(
+          /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.role, en\) has an ellipsis/,
+        ),
+      ]),
+    );
+    expect(got).toHaveLength(5);
+    // Exactly at the limit is fine.
+    cpSync(join(REPO, "i18n"), join(root, "i18n"), { recursive: true });
+    edit(
+      "i18n/es/monsters.yaml",
+      'monster.wolf.name: "lobo"',
+      'monster.wolf.name: "lobo gris de mar"',
+    );
+    expect(names()).toEqual([]);
+  });
+
   it("only lets NPCs placed on dev_only islands use dev-only actions (train_skill, restore_mana) or be dev_only", () => {
     const devErrors = (): string[] =>
       messages(root).filter((m) => m.startsWith("error") && m.includes("dev-only"));
