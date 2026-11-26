@@ -687,17 +687,22 @@ describe("validator diagnostics", () => {
       "wind: { kind: dead_tree, pivot: 5 } }",
     );
     expect(wind()).toEqual([]);
-    // Schema: an unknown type, a flutter of a pixel or more, a plant with nothing to say.
+    // Schema: an unknown type, a drift of a pixel or more, a plant with nothing to say.
     edit(
       "data/livingworld/plants.yaml",
       "{ item: reeds, reaction: bend }",
       "{ item: reeds, wind: kite }",
     );
     edit("data/livingworld/plants.yaml", "{ item: cut_bush, wind: none }", "{ item: cut_bush }");
-    edit("data/livingworld/wind.yaml", "flutter: 0.7,", "flutter: 1.0,");
+    edit("data/livingworld/wind.yaml", "amplitude: 3.0, drift: 0,", "amplitude: 3.0, drift: 1.0,");
+    // Gusts so close that the plants would never stand still between them.
+    edit("data/livingworld/wind.yaml", "every_s: 45", "every_s: 20");
     out = messages(root).filter((m) => m.startsWith("error"));
     expect(out.some((m) => m.includes("plants.yaml") && m.includes("wind"))).toBe(true);
-    expect(out.some((m) => m.includes("wind.yaml") && m.includes("flutter"))).toBe(true);
+    expect(out.some((m) => m.includes("wind.yaml") && m.includes("drift"))).toBe(true);
+    expect(
+      out.some((m) => m.includes("wind.yaml") && m.includes("the calm between two gusts")),
+    ).toBe(true);
     expect(out.filter((m) => m.includes("plants.yaml")).length).toBeGreaterThanOrEqual(2);
     // Without the generated file every plant sprite is undeclared: say how to make it.
     rmSync(file("data/livingworld/wind_sprites.yaml"));

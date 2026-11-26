@@ -8,8 +8,8 @@
 //                 and the step's sound come at each footfall of the walk cycle drawn
 //                 (gait.ts), not at each tile step
 //   air layer     (over the map): falling leaves, birds, butterflies, fireflies
-//   plants        the map's own plant sprites sway in the wind and bend when a creature
-//                 brushes them: each is drawn as strips that slide (wind-mesh.ts), its base
+//   plants        the map's own plant sprites stand still, bend when a gust of wind passes
+//                 over them (wind.ts) and when a creature brushes them: each is drawn as strips that slide (wind-mesh.ts), its base
 //                 planted; one without wind data gets a skew (bend) or a pixel offset (rustle)
 //
 // Cheap on purpose (docs/07): fixed sprite pools made once, every effect capped, and with
@@ -31,15 +31,13 @@ import { MAX_PUFFS, PuffSim, RUN_STEP_MS } from "./puffs.ts";
 import { bendPx, rustleOffset, SwaySim } from "./sway.ts";
 import {
   exposureOf,
-  flutterOf,
-  flutterPhase,
-  gustAt,
+  gustActive,
+  nextGust,
   snapSteps,
-  strengthAt,
   stripOffsets,
-  swayOf,
+  swayAt,
 } from "./wind.ts";
-import type { PlantWind } from "./wind.ts";
+import type { GustFront, PlantWind } from "./wind.ts";
 import { WindMesh } from "./wind-mesh.ts";
 import { MAX_WEAR_DRAWN, TRAMPLE_SCALE, WearMap, wearSprite } from "./wear.ts";
 import type { WearDraw, WearTile } from "./wear.ts";
@@ -184,6 +182,11 @@ export interface LivingWorldOptions {
   reduced?: (() => boolean) | undefined;
   /** Night now: fireflies instead of birds and butterflies, and a calmer wind. */
   night?: (() => boolean) | undefined;
+  /**
+   * The clock of the wind's gusts, ms: one every client shares (the server's), so they all
+   * see the same gust cross the map at the same moment. Absent: the frame's own clock.
+   */
+  windClock?: (() => number) | undefined;
   /** No wind on the frame's floor (a cave): plants only move when brushed. */
   sheltered?: (() => boolean) | undefined;
   /** Seed of the leaves' generator (tests). */
@@ -248,6 +251,11 @@ export interface LivingWorld {
   windStrips(sprite: PlantSprite): WindMesh | undefined;
   /** Changes whenever a sprite gets its strips or loses them. */
   windVersion(): number;
+  /**
+   * The next gust front to reach tile (x, y) blowing at least `min` there: in how many ms
+   * and how hard (wind.ts nextGust). Undefined without wind data. Tests and the E2E.
+   */
+  nextGust(x: number, y: number, now: number, min?: number): GustFront | undefined;
   /** The footprints on the ground now (tests and the E2E hook: read, never keep). */
   footprints(): readonly Footprint[];
   /** Counts for tests and the debug overlay. */
@@ -515,8 +523,9 @@ export function createLivingWorld(
   };
   /** Night's calmer wind, eased: 1 by day, `field.night` at night. */
   let windScale: number | undefined;
+  const windNow = (now: number): number => options.windClock?.() ?? now;
   /**
-   * Moves every plant in view: the wind and the bends of the steps, on the same strips.
+   * Moves every plant in view: the gust and the bends of the steps, on the same strips.
    * Returns how many trees that drop leaves are in view.
    */
   const movePlants = (
@@ -539,6 +548,9 @@ export function createLivingWorld(
       }
       blowing = windScale > 0;
     }
+    // The calm between two gusts, most of the time: no plant is asked anything.
+    const wnow = windNow(now);
+    const gusting = blowing && field !== undefined && gustActive(field, wnow);
     let trees = 0;
     for (const p of plants) {
       if (p.rule.leaves && p.x >= x0 && p.y >= y0 && p.x <= x1 && p.y <= y1) trees++;
@@ -553,23 +565,12 @@ export function createLivingWorld(
       const wind = p.rule.wind;
       const rustle = p.rule.reaction === "rustle";
       let top = 0;
-      let flutter = 0;
-      if (wind && field && blowing && p.exposure > 0) {
-        const strength = strengthAt(
-          field,
-          gustAt(field, p.x, p.y, now),
-          p.exposure * (windScale ?? 1),
-        );
-        top = swayOf(field, wind, p.x, p.y, now, strength);
-        flutter = flutterOf(wind, strength);
-      }
+      if (wind && field && blowing && p.exposure > 0 && (gusting || wind.drift > 0))
+        top = swayAt(field, wind, p.x, p.y, wnow, p.exposure * (windScale ?? 1));
       const mesh = p.mesh;
       if (mesh) {
         if (b !== 0) top += bendPx(b, mesh.reach, rustle);
-        if (
-          stripOffsets(mesh.offsets, mesh.layout, top, flutter, flutterPhase(p.x, p.y, now), steps)
-        )
-          mesh.apply(steps);
+        if (stripOffsets(mesh.offsets, mesh.layout, top, steps)) mesh.apply(steps);
         continue;
       }
       // No strips (a sprite that cannot be meshed, a plant with no wind data): the bend as a
@@ -752,7 +753,12 @@ export function createLivingWorld(
       const trees = movePlants(now, ms, view.zoom ?? 1, x0, y0, x1, y1);
       // The same wind erases the footprints (footprints.ts): none underground, calmer at
       // night, as the plants have it this frame.
-      prints.step(ms, now, (options.sheltered?.() ?? false) ? 0 : (windScale ?? 1));
+      prints.step(
+        ms,
+        now,
+        (options.sheltered?.() ?? false) ? 0 : (windScale ?? 1),
+        windNow(now),
+      );
       if (trees > 0 && random() < leaves.chance(trees, ms)) {
         let pick = Math.floor(random() * trees);
         for (const p of plants) {
@@ -786,6 +792,12 @@ export function createLivingWorld(
       return meshes.get(sprite);
     },
 
+    nextGust(x, y, now, min) {
+      if (!field) return undefined;
+      const wnow = windNow(now);
+      const g = nextGust(field, x, y, wnow, min);
+      return g && { at: g.at - wnow, strength: g.strength };
+    },
     windVersion() {
       return meshesVersion;
     },

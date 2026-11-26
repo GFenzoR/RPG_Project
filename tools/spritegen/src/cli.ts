@@ -100,9 +100,11 @@ if (command === "corpses") {
       console.error(`sway --scene is one of ${Object.keys(SWAY_SCENES).join(", ")}`);
       process.exit(2);
     }
-    for (let n = 0; n < 4; n++) {
+    // The calm before the gust, the front crossing the scene, the lean, the swings.
+    const moments = [-1500, 400, 1300, 2600];
+    for (const [n, ms] of moments.entries()) {
       const file = out.replace(/\.png$/, `.${n}.png`);
-      writeFileSync(file, swayScenePng(root, values.only, scene, 20000 + n * 350));
+      writeFileSync(file, swayScenePng(root, values.only, scene, ms));
       console.log(`spritegen: sway scene ${scene} -> ${file}`);
     }
   } else {

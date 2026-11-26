@@ -2,20 +2,23 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rpg-project.local/schemas/livingworld-wind.schema.json",
   "title": "Living world wind (data/livingworld/wind.yaml)",
-  "description": "The wind field and how each type of plant takes it (livingworld/README.md, Viento). Cosmetic: the server never reads it.",
+  "description": "The wind: where it blows, the gusts that cross the map every so often and how each type of plant takes them (livingworld/README.md, Viento). Cosmetic: the server never reads it.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["field", "kinds"],
+  "required": ["field", "gusts", "kinds"],
   "properties": {
     "field": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["direction", "speed", "gust_tiles", "calm"],
+      "required": ["direction", "speed"],
       "properties": {
         "direction": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
-        "speed": { "type": "number", "minimum": 0, "maximum": 20 },
-        "gust_tiles": { "type": "number", "minimum": 2, "maximum": 64 },
-        "calm": { "type": "number", "minimum": 0, "maximum": 1 },
+        "speed": {
+          "description": "How fast a gust front travels, tiles per second.",
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 40
+        },
         "exposure": {
           "type": "object",
           "propertyNames": { "$ref": "common.schema.json#/$defs/surface" },
@@ -24,6 +27,54 @@
         "open": { "type": "number", "minimum": 0, "maximum": 2 },
         "forest": { "type": "number", "minimum": 0, "maximum": 1 },
         "night": { "type": "number", "minimum": 0, "maximum": 2 }
+      }
+    },
+    "gusts": {
+      "description": "A gust every so often, at random but the same for every client; between two gusts nothing moves. make validate also checks that the numbers leave a real calm.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "every_s",
+        "jitter",
+        "strength",
+        "spread",
+        "travel_tiles",
+        "rise_ms",
+        "hold_ms",
+        "swings"
+      ],
+      "properties": {
+        "every_s": {
+          "description": "One gust per slot of this many seconds: the mean time between two gusts.",
+          "type": "number",
+          "minimum": 5,
+          "maximum": 3600
+        },
+        "jitter": {
+          "description": "Where in its slot a gust starts, share of the slot (0: a metronome).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.95
+        },
+        "strength": {
+          "description": "[weakest, strongest] gust.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "number", "minimum": 0, "maximum": 1.5 }
+        },
+        "spread": {
+          "description": "How far a gust's direction strays from field.direction, degrees either way.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 180
+        },
+        "travel_tiles": { "type": "number", "minimum": 8, "maximum": 512 },
+        "rise_ms": { "type": "integer", "minimum": 50, "maximum": 5000 },
+        "hold_ms": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "swings": { "type": "number", "minimum": 0, "maximum": 6 },
+        "drift_ms": { "type": "integer", "minimum": 1000, "maximum": 120000 },
+        "seed": { "type": "integer", "minimum": 0, "maximum": 1000000000 }
       }
     },
     "kinds": {
@@ -58,7 +109,7 @@
     "kind": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["stiffness", "amplitude", "flutter", "period_ms", "pivot"],
+      "required": ["stiffness", "amplitude", "drift", "period_ms", "pivot"],
       "properties": {
         "stiffness": { "type": "number", "minimum": 0, "maximum": 1 },
         "amplitude": {
@@ -67,8 +118,8 @@
           "minimum": 0,
           "maximum": 4
         },
-        "flutter": {
-          "description": "Sprite px, always under one.",
+        "drift": {
+          "description": "Sprite px at the top in the calm between gusts, always under one; 0: stock-still.",
           "type": "number",
           "minimum": 0,
           "maximum": 0.95

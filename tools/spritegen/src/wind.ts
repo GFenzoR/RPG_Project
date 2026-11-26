@@ -8,22 +8,20 @@
 // data/livingworld/wind_sprites.yaml (make spritegen). A plant sprite no recipe draws (a
 // pack's, Gemini's) says the same with a `wind` hint in the tiles section of
 // assets/sprites.yaml. The client reads the file: a new plant sways with no code and no
-// hand-written wind data. `swaySheet` draws a plant swaying over a few frames with the
-// client's own maths, to look at before it ships.
+// hand-written wind data. `swaySheet` draws a plant taking a gust over a few frames with
+// the client's own maths, to look at before it ships.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   exposureOf,
-  flutterOf,
-  flutterPhase,
-  gustAt,
+  gustLean,
+  nextGust,
   parseWind,
   resolveWind,
   snapSteps,
-  strengthAt,
   stripLayout,
   stripOffsets,
-  swayOf,
+  swayAt,
   WIND_KINDS,
 } from "@rpg/living-world/wind";
 import type { SpriteWind, WindData, WindKind } from "@rpg/living-world/wind";
@@ -54,10 +52,9 @@ export interface WindMeta {
    * which suits grass, reeds and flowers; a tree, a palm, a cactus or a dead tree must say.
    */
   pivot?: number;
-  /** Only for a plant unlike its kind: its own stiffness, amplitude (px) or flutter (px). */
+  /** Only for a plant unlike its kind: its own stiffness or amplitude (px). */
   stiffness?: number;
   amplitude?: number;
-  flutter?: number;
 }
 
 /** The kinds with a trunk: their recipe must say where it ends. */
@@ -227,7 +224,6 @@ export function spriteWind(
   const wind: SpriteWind = { kind: meta.kind, pivot, top };
   if (meta.stiffness !== undefined) wind.stiffness = meta.stiffness;
   if (meta.amplitude !== undefined) wind.amplitude = meta.amplitude;
-  if (meta.flutter !== undefined) wind.flutter = meta.flutter;
   return { wind, problems };
 }
 
@@ -287,8 +283,8 @@ export function windSprites(
         sprites[path] = got.wind;
         for (const p of got.problems) problems.push(`${path}: ${p}`);
       } else {
-        const { kind, pivot, stiffness, amplitude, flutter } = hint;
-        sprites[path] = { kind, pivot, stiffness, amplitude, flutter };
+        const { kind, pivot, stiffness, amplitude } = hint;
+        sprites[path] = { kind, pivot, stiffness, amplitude };
       }
     }
   }
@@ -310,7 +306,7 @@ export function windSpritesYaml(sprites: Readonly<Record<string, SpriteWind>>): 
   for (const path of paths) {
     const w = sprites[path] as SpriteWind;
     const fields = [`kind: ${w.kind}`];
-    for (const key of ["pivot", "top", "stiffness", "amplitude", "flutter"] as const)
+    for (const key of ["pivot", "top", "stiffness", "amplitude"] as const)
       if (w[key] !== undefined) fields.push(`${key}: ${String(w[key])}`);
     lines.push(`  ${path}: { ${fields.join(", ")} }`);
   }
@@ -371,16 +367,17 @@ export function swayFrame(
 }
 
 /**
- * A sheet to look at with Read: each plant sprite of `paths` in a row, swaying over `frames`
- * moments `stepMs` apart, in a steady strong wind on open ground, at zoom `zoom` (2: what
- * the game shows). The first cell of a row is the still sprite. The motion is the client's
- * own (wind.ts): what the sheet shows is what the game draws.
+ * A sheet to look at with Read: each plant sprite of `paths` in a row, taking one gust of
+ * full strength on open ground over `frames` moments `stepMs` apart (it leans, holds, swings
+ * and stands still), at zoom `zoom` (2: what the game shows). The first cell of a row is the
+ * still sprite, as it stands between two gusts. The motion is the client's own (wind.ts):
+ * what the sheet shows is what the game draws.
  */
 export function swaySheet(
   root: string,
   entries: readonly { path: string; image: Image; wind: SpriteWind }[],
-  frames = 8,
-  stepMs = 450,
+  frames = 10,
+  stepMs = 400,
   zoom = 2,
 ): Image {
   const data = windData(root);
@@ -400,16 +397,9 @@ export function swaySheet(
     const x = 12 + row * 5;
     const y = 9 + row * 3;
     for (let f = 0; f < frames; f++) {
-      const ms = 4000 + f * stepMs;
-      const strength = strengthAt(data.field, Math.max(0.6, gustAt(data.field, x, y, ms)), 1);
-      stripOffsets(
-        offsets,
-        layout,
-        swayOf(data.field, w, x, y, ms, strength),
-        flutterOf(w, strength),
-        flutterPhase(x, y, ms),
-        steps,
-      );
+      // From the middle of the rise on: the lean, the swings and the end of them.
+      const tau = data.field.riseMs / 2 + f * stepMs;
+      stripOffsets(offsets, layout, gustLean(data.field, w, x, y, tau, 1), steps);
       cells.push(swayFrame(image, offsets, layout.edges, steps));
     }
     return { path, cells };
@@ -449,10 +439,11 @@ export type SwayScene = keyof typeof SWAY_SCENES;
 
 /**
  * One moment of a patch of map with plants on it, as the game shows it at zoom 2: the real
- * wind field over the tiles (gusts travelling across, each plant with its own phase), the
- * exposure of the scene's ground and the shelter of the trees round each plant. Render a
- * few moments (`ms` a few hundred apart) and compare them with Read: neighbours must move
- * one after another, never all together and never like rubber.
+ * gusts over the tiles, the exposure of the scene's ground and the shelter of the trees
+ * round each plant. `ms` counts from the moment the next strong gust front reaches the
+ * middle of the scene (negative: before it, when nothing moves). Render a few moments and
+ * compare them with Read: still before the front, then the plants lean one after another
+ * as it crosses, never all together and never like rubber.
  */
 export function swayScene(
   root: string,
@@ -468,6 +459,9 @@ export function swayScene(
   const steps = snapSteps(zoom);
   const T = 32;
   const marginTop = 3;
+  const gust = nextGust(data.field, cols / 2, rows / 2, 0, 0.7);
+  if (!gust) throw new Error(`spritegen: no strong gust in ${WIND_FILE}`);
+  const at = gust.at + ms;
   const out = createImage(cols * T * steps, (rows + marginTop) * T * steps);
   fillRect(out, 0, 0, out.width, out.height, GRASS_TINT);
   // Which plant stands on each tile (a seeded pick: the same scene every time).
@@ -493,15 +487,7 @@ export function swayScene(
       const h = e.image.height;
       const layout = stripLayout(h, w.pivotPx ?? Math.round(w.pivot * h), w.topPx ?? h);
       const offsets = new Int16Array(layout.count);
-      const strength = strengthAt(data.field, gustAt(data.field, x, y, ms), exposure);
-      stripOffsets(
-        offsets,
-        layout,
-        swayOf(data.field, w, x, y, ms, strength),
-        flutterOf(w, strength),
-        flutterPhase(x, y, ms),
-        steps,
-      );
+      stripOffsets(offsets, layout, swayAt(data.field, w, x, y, at, exposure), steps);
       const cell = swayFrame(e.image, offsets, layout.edges, steps);
       // Bottom centre on its tile, like the renderer's anchor bc.
       composite(
