@@ -63,3 +63,38 @@ func TestProgressLose(t *testing.T) {
 		t.Errorf("base: %+v", p)
 	}
 }
+
+func TestNoviceNotice(t *testing.T) {
+	cases := []struct {
+		name     string
+		from, to int
+		want     NoviceNotice
+	}{
+		{"before the last level", 5, 6, NoticeNone},
+		{"one before the last", 6, 7, NoticeNone},
+		{"reaches the last", 7, 8, NoticeLastLevel},
+		{"jumps to the last", 3, 8, NoticeLastLevel},
+		{"leaves protection", 8, 9, NoticeEnded},
+		{"jumps over the last", 7, 10, NoticeEnded},
+		{"already out", 9, 10, NoticeNone},
+		{"no gain", 8, 8, NoticeNone},
+	}
+	for _, c := range cases {
+		if got := NoviceNoticeFor(testDeath, c.from, c.to); got != c.want {
+			t.Errorf("%s: NoviceNoticeFor(%d, %d) = %d, want %d", c.name, c.from, c.to, got, c.want)
+		}
+	}
+	// The level comes from the data, never a literal.
+	d := testDeath
+	d.NoviceMaxLevel = 3
+	if NoviceNoticeFor(d, 2, 3) != NoticeLastLevel || NoviceNoticeFor(d, 3, 4) != NoticeEnded {
+		t.Error("boundaries do not follow novice_max_level")
+	}
+	d.NoviceMaxLevel = 0
+	if NoviceNoticeFor(d, 1, 2) != NoticeNone || IsNovice(d, 1) {
+		t.Error("novice_max_level 0 means no protection")
+	}
+	if !IsNovice(testDeath, 8) || IsNovice(testDeath, 9) {
+		t.Error("IsNovice boundary")
+	}
+}

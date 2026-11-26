@@ -123,6 +123,13 @@ el punto 5:
   comprueban, porque el mismo suelo es plaza al aire libre (marcarlo `building` da 1124
   errores en cuatro islas); un suelo de interior propio los cubriría.
   los cubriría.
+- **Aviso de la protección de novato (hecho, rama `feat/novice-notice`; el dueño el
+  2026-11-26: murió varias veces sin perder la mochila y creyó que era un fallo, "que te lo
+  digan al principio"; docs/02 "Muerte"):** el tutorial lo dice al abrir la mochila, la
+  ventana de muerte y el registro dicen que se aplicó y hasta qué nivel, y al llegar al
+  último nivel protegido y al pasarlo hay un aviso de qué se pierde desde entonces y de las
+  bendiciones. El nivel sale de `death.novice_max_level`. Falta mirar en el e2e la ventana
+  de muerte de un novato y el paso de la mochila del tutorial (el texto es más largo).
 - **Viento por ráfagas (hecho, rama `feat/wind-gusts`; el dueño el 2026-11-26, después de
   jugar los lotes 19 y 20: "el movimiento que le agregaste a las plantas es demasiado,
   pareciera que tienen vida o que se están como quemando; tiene que ser un movimiento

@@ -14,6 +14,9 @@ import (
 const (
 	// msgDied: "You died", with "experience" (lost, number) and "blessings" (consumed).
 	msgDied = "death.died"
+	// msgDiedNovice follows msgDied when the novice protection applied: "level" is
+	// death.novice_max_level, where the protection ends.
+	msgDiedNovice = "death.novice"
 	// msgNotOwner: another player's corpse is still reserved for its owner.
 	msgNotOwner = "death.corpse_not_owner"
 )
@@ -49,6 +52,10 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	}
 	blessings := w.Blessings(p)
 	pen := skills.DeathPenalty(d, blessings, p.level)
+	noviceUntil := 0 // the level the novice protection reaches, if it applied to this death
+	if skills.IsNovice(d, p.level) {
+		noviceUntil = d.NoviceMaxLevel
+	}
 	// T5.2: a murderer or an outlaw drops more, whatever its blessings.
 	pen.EquipmentDropPct, pen.BackpackDropPct = w.deathDrop(ctx.Now, p, pen.EquipmentDropPct, pen.BackpackDropPct)
 
@@ -127,7 +134,11 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerSkills{PlayerSkills: &pb.PlayerSkills{Skills: w.skillList(p)}}})
 	died := systemMsg(msgDied,
 		&pb.TextParam{Name: "experience", Value: &pb.TextParam_Number{Number: lostXP}},
-		&pb.TextParam{Name: "blessings", Value: &pb.TextParam_Number{Number: int64(blessings)}})
+		&pb.TextParam{Name: "blessings", Value: &pb.TextParam_Number{Number: int64(blessings)}},
+		&pb.TextParam{Name: "novice_until", Value: &pb.TextParam_Number{Number: int64(noviceUntil)}})
+	if noviceUntil > 0 {
+		p.emit(systemMsg(msgDiedNovice, &pb.TextParam{Name: "level", Value: &pb.TextParam_Number{Number: int64(noviceUntil)}}))
+	}
 	p.emit(died)
 	w.diedLinkDeadNotice(p, died)
 	w.deathSave(ctx, p)

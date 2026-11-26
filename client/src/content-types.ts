@@ -449,6 +449,11 @@ export interface ClientContent {
    * enforces it. Optional so test fixtures can leave it out.
    */
   guild?: { foundCost: number; foundMinLevel: number; nameMax: number; motdMax: number };
+  /**
+   * balance.yaml death.novice_max_level: the last level of the novice protection, for the
+   * tutorial's line about it (docs/02 "Muerte"). Optional so fixtures can leave it out.
+   */
+  death?: { noviceMaxLevel: number };
   /** Sounds, event mapping and loops (assets/sounds.yaml, T3.7). */
   sounds: SoundManifest;
   /** The music areas of important quests (data/quests `music`; optional in fixtures). */

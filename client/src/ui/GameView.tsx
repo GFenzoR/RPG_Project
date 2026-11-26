@@ -634,6 +634,11 @@ export function GameView(props: GameViewProps): JSX.Element {
               ? t("client.death.blessings", { blessings: death.blessings })
               : t("client.death.no_blessings")}
           </p>
+          {death.noviceUntil > 0 && (
+            <p data-testid="death-novice">
+              {t("client.death.novice", { level: death.noviceUntil })}
+            </p>
+          )}
           <p>{t("client.death.temple")}</p>
           <button type="button" onClick={() => setDeathSeen(death.at)}>
             {t("client.death.ok")}
@@ -694,7 +699,13 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && <GuildInvitations t={t} game={game} ui={ui} />}
       {props.entered && <PresenceCheck t={t} game={game} ui={ui} />}
       {props.entered && (
-        <TutorialPanel t={t} game={game} ui={ui} covered={windowed && tutorialCovered(win.state)} />
+        <TutorialPanel
+          t={t}
+          game={game}
+          ui={ui}
+          content={props.content}
+          covered={windowed && tutorialCovered(win.state)}
+        />
       )}
     </>
   );

@@ -1,6 +1,7 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { Game, GameUi } from "../game.ts";
+import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
 
 /**
@@ -22,6 +23,8 @@ export function TutorialPanel(props: {
    * moves.
    */
   covered?: boolean | undefined;
+  /** For balance.yaml death.novice_max_level, named by the backpack step's text. */
+  content?: Pick<ClientContent, "death"> | undefined;
 }): JSX.Element | null {
   const { t } = props;
   const s = props.ui.tutorial;
@@ -83,7 +86,7 @@ export function TutorialPanel(props: {
           ×
         </button>
       </header>
-      <p>{t(s.text, { count: s.count })}</p>
+      <p>{t(s.text, { count: s.count, novice: props.content?.death?.noviceMaxLevel ?? 0 })}</p>
       {s.count > 1 && (
         <p class="progress" data-testid="tutorial-progress">
           {t("client.tutorial.progress", { progress: s.progress, count: s.count })}

@@ -2,6 +2,7 @@ package session_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
@@ -355,5 +356,71 @@ func TestDeathByMonsterRespawnsAtTemple(t *testing.T) {
 	}
 	if !died {
 		t.Error("no death.died message")
+	}
+}
+
+// The novice protection is told on the death (docs/02 "Muerte"): a level within
+// novice_max_level gets death.novice and the level in death.died's novice_until; one past it
+// gets neither.
+func TestDeathNoviceNotice(t *testing.T) {
+	max := testBalance().Death.NoviceMaxLevel
+	for _, c := range []struct {
+		level int
+		told  bool
+	}{{max, true}, {max + 1, false}} {
+		h := deathHarness(t)
+		cl, p := h.geared("Hero", c.level, 0)
+		cl.take()
+		h.kill(p)
+		var novice bool
+		var until int64
+		for _, m := range find(cl.take(), (*pb.ServerMessage).GetChatMessage) {
+			switch l := m.GetLocalized(); l.GetKey() {
+			case "death.novice":
+				novice = true
+			case "death.died":
+				for _, prm := range l.GetParams() {
+					if prm.GetName() == "novice_until" {
+						until = prm.GetNumber()
+					}
+				}
+			}
+		}
+		if novice != c.told || (until != 0) != c.told || c.told && until != int64(max) {
+			t.Errorf("level %d: death.novice %v, novice_until %d", c.level, novice, until)
+		}
+	}
+}
+
+// Reaching the last protected level and leaving it each give one warning, with the level
+// read from the balance.
+func TestNoviceLevelNotices(t *testing.T) {
+	max := testBalance().Death.NoviceMaxLevel
+	h := deathHarness(t)
+	cl, p := h.geared("Hero", max-1, 0)
+	keys := func() []string {
+		var out []string
+		for _, m := range find(cl.take(), (*pb.ServerMessage).GetChatMessage) {
+			if k := m.GetLocalized().GetKey(); strings.HasPrefix(k, "progress.novice") {
+				out = append(out, k)
+			}
+		}
+		return out
+	}
+	cl.take()
+	h.sim.Command(gameFunc(func() { h.w.SetLevelForTest(p, max) }))
+	h.sim.Step()
+	if got := keys(); len(got) != 1 || got[0] != "progress.novice_last" {
+		t.Errorf("reaching level %d: %v", max, got)
+	}
+	h.sim.Command(gameFunc(func() { h.w.SetLevelForTest(p, max+1) }))
+	h.sim.Step()
+	if got := keys(); len(got) != 1 || got[0] != "progress.novice_ended" {
+		t.Errorf("leaving at level %d: %v", max+1, got)
+	}
+	h.sim.Command(gameFunc(func() { h.w.SetLevelForTest(p, max+2) }))
+	h.sim.Step()
+	if got := keys(); len(got) != 0 {
+		t.Errorf("past the protection: %v", got)
 	}
 }

@@ -355,6 +355,8 @@ export interface DeathState {
   experience: number;
   /** Blessings that softened the death (and were consumed). */
   blessings: number;
+  /** The level the novice protection reached when it applied to this death, else 0. */
+  noviceUntil: number;
   at: number;
 }
 
@@ -1147,7 +1149,12 @@ export class WorldState implements TileSource {
             const p = params.find((x) => x.name === name);
             return p?.value.case === "number" ? Number(p.value.value) : 0;
           };
-          this.death = { experience: num("experience"), blessings: num("blessings"), at: now };
+          this.death = {
+            experience: num("experience"),
+            blessings: num("blessings"),
+            noviceUntil: num("novice_until"),
+            at: now,
+          };
           this.target = undefined;
         }
         this.log.push({ key, params: m.body.value.params, at: now });

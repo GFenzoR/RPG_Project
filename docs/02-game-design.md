@@ -1951,6 +1951,16 @@ Valores iniciales (balance.yaml):
   (`session/death.go` `playerCorpse`; la ventana del cuerpo muestra todos sus lugares).
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
+  **Se avisa al jugador** (el dueño el 2026-11-26: murió varias veces sin perder la mochila y
+  creyó que era un fallo; "que te lo digan al principio"). El nivel sale siempre de
+  `death.novice_max_level`, nunca un literal: (1) el tutorial (`tutorial.step.open_backpack`,
+  parámetro `{novice}` desde el contenido del cliente) lo dice al principio; (2) cada muerte
+  protegida envía `death.novice` antes de `death.died` y pone `novice_until` en `death.died`,
+  con lo que la ventana de muerte dice hasta qué nivel dura; (3) al subir al último nivel
+  protegido llega `progress.novice_last` y al pasarlo `progress.novice_ended`, con lo que se
+  pierde desde entonces y que las bendiciones (desde el nivel siguiente) lo reducen
+  (`skills.NoviceNoticeFor`; un salto que se salta el último nivel avisa solo del fin). La
+  regla no cambió; sin cambios de proto (son mensajes localizados con parámetros).
 - El cuerpo (`creature_remains`, contenedor, "cuerpo de <jugador>": `ItemMods.body_of`,
   ver "Restos") queda `corpse_ms` en el suelo con lo que cayó;
   durante `corpse_owner_only_ms` solo el dueño puede sacar, usar o meter algo en él (otros

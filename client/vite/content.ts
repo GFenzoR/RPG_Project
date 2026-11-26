@@ -213,6 +213,7 @@ export function loadClientContent(root: string): ClientContent {
   const num = (v: unknown, def: number): number => (typeof v === "number" ? v : def);
   const chat = isObj(balance) && isObj(balance["chat"]) ? balance["chat"] : {};
   const guild = isObj(balance) && isObj(balance["guild"]) ? balance["guild"] : {};
+  const death = isObj(balance) && isObj(balance["death"]) ? balance["death"] : {};
   const xp = isObj(balance) && isObj(balance["experience"]) ? balance["experience"] : {};
   const curve = isObj(xp["curve"]) ? xp["curve"] : {};
   const i18n: Record<string, Record<string, string>> = {};
@@ -367,6 +368,7 @@ export function loadClientContent(root: string): ClientContent {
     ...(forge ? { forge } : {}),
     movement: loadMovement(balance),
     chat: { maxLength: num(chat["max_length"], 255) },
+    death: { noviceMaxLevel: num(death["novice_max_level"], 0) },
     experience: {
       a: num(curve["a"], 0),
       b: num(curve["b"], 0),
