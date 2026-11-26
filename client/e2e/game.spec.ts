@@ -2569,6 +2569,9 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   const musicFrom = (): Promise<number[]> =>
     page.evaluate(() => (window as unknown as { __musicFrom: number[] }).__musicFrom);
   const history = (): Promise<string[]> => page.evaluate(() => window.__rpgAudio?.history() ?? []);
+  // The steps played: each ground has its own (step_stone_2, step_grass_1), "step" the rest.
+  const steps = (played: string[]): string[] => played.filter((id) => /^step(_|$)/.test(id));
+  const stepCount = async (): Promise<number> => steps(await history()).length;
 
   const { email, password } = await newGuardian(playwright, "Hark");
   await page.goto("/play/?lang=es");
@@ -2623,8 +2626,8 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
     await stepKey(page, "ArrowRight");
     await arrived(page, start.x + 1, start.y);
     const played = await expect
-      .poll(history, { timeout: 2000 })
-      .toContain("step")
+      .poll(stepCount, { timeout: 2000 })
+      .toBeGreaterThan(0)
       .then(
         () => true,
         () => false,
@@ -2633,7 +2636,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
     await stepKey(page, "ArrowLeft");
     await arrived(page, start.x, start.y);
   }
-  expect(await history()).toContain("step");
+  expect(await stepCount()).toBeGreaterThan(0);
   expect(await starts()).toBeGreaterThanOrEqual(2); // the ambience and a step
 
   // Options (the toolbar's gear, docs/17 UI-5): lower the music, mute the effects.
@@ -2659,7 +2662,7 @@ test("T3.7: sound starts after the first gesture, follows the island, and volume
   const before = (await history()).length;
   await stepKey(page, "ArrowLeft");
   await arrived(page, start.x, start.y);
-  expect((await history()).slice(before)).not.toContain("step");
+  expect(steps((await history()).slice(before))).toEqual([]);
   // Buttons sound on the interface channel, which is not muted. "Entrar" and "Jugar" may
   // have been dropped while the file loaded (see above); after the options clicks it is
   // cached, so one more button click plays.
