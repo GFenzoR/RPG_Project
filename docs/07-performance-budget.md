@@ -410,9 +410,12 @@ vista.
 - **Draw calls y fps en el navegador:** el test E2E del viento (`client/e2e/game.spec.ts`,
   "wind: crowns sway…") mide el bosque más denso (51 árboles en vista de Ivernel) con
   todas las sombras puestas, anota cuántos objetos proyectan y cuántas sombras se mecen, y
-  exige menos de 50 draw calls por frame. **Los números del navegador con sombras quedan
-  por anotar aquí tras el E2E final del lote** (esta rama no corre el E2E; docs/14). Antes
-  de las sombras de objetos el mismo test daba el frame dentro del presupuesto.
+  exige menos de 50 draw calls por frame. **Medido en el E2E final del lote 20b** (PC del
+  dueño, 2026-11-26, Chromium headless a 1280x800, zoom 2x, dos corridas completas de
+  `make e2e`): 51 árboles en vista, 75 objetos que proyectan 75 sombras, 68 de ellas
+  meciéndose con su copa: **60,2 y 60,4 fps y 6,0 draw calls por frame** (tope 50). Las
+  sombras van en el batch del atlas: no suman draw calls sobre los 6 a 7 del bosque sin
+  ellas, y no hizo falta degradar nada.
 - **Si no entrara:** degradar por distancia o tamaño (no proyectar lo que mide menos de
   una casilla lejos del jugador) y anotar los números; nunca quitar objetos en silencio.
   Hoy no se degrada nada.

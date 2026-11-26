@@ -1133,25 +1133,29 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
     },
     { x0: runs.east.x, y0: runs.east.y },
   );
-  if (shore) {
-    await tp(shore.x, shore.y);
-    await standing();
-    await page.keyboard.down("ArrowRight");
-    await expect
-      .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
-        timeout: 15_000,
-      })
-      .toBeGreaterThanOrEqual(shore.x + 2);
-    await page.keyboard.up("ArrowRight");
-    const wetEnd = await standing();
-    const wetPrints = async (): Promise<number> =>
-      ((await falls())?.prints ?? []).filter((p) => p.surface === "wet_sand" && p.wear < 0.5)
-        .length;
-    // A wave may already be on its way: the shot is right after the walk.
-    await around("99m-wet-sand-before-wave", wetEnd.x - 1, wetEnd.y);
-    // A wave every 7.7 s; one that reaches the first tile from the water comes soon.
-    await expect.poll(wetPrints, { timeout: 60_000, intervals: [250] }).toBe(0);
-    await around("99n-wet-sand-after-wave", wetEnd.x - 1, wetEnd.y);
-  } else console.log("no run of wet sand by the water near the beach");
+  // The beach has one (three tiles of wet sand with the sea south of them, west of the
+  // dock): without it this half of the test would pass without having looked.
+  if (!shore) throw new Error("no run of wet sand by the water near the beach");
+  await tp(shore.x, shore.y);
+  await standing();
+  await page.keyboard.down("ArrowRight");
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+      timeout: 15_000,
+    })
+    .toBeGreaterThanOrEqual(shore.x + 2);
+  await page.keyboard.up("ArrowRight");
+  const wetEnd = await standing();
+  const wetPrints = async (): Promise<number> =>
+    ((await falls())?.prints ?? []).filter((p) => p.surface === "wet_sand" && p.wear < 0.5).length;
+  // The walk was on wet sand: its footfalls sounded like it, and printed.
+  const wetFalls = ((await falls())?.own ?? []).filter((f) => /wet_sand/.test(String(f.sound)));
+  expect(wetFalls.length).toBeGreaterThanOrEqual(2);
+  console.log(`wet sand: ${wetFalls.length} footfalls, ${await wetPrints()} prints after the walk`);
+  // A wave may already be on its way: the shot is right after the walk.
+  await around("99m-wet-sand-before-wave", wetEnd.x - 1, wetEnd.y);
+  // A wave every 7.7 s; one that reaches the first tile from the water comes soon.
+  await expect.poll(wetPrints, { timeout: 60_000, intervals: [250] }).toBe(0);
+  await around("99n-wet-sand-after-wave", wetEnd.x - 1, wetEnd.y);
   expect(errors).toEqual([]);
 });

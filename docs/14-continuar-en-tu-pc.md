@@ -517,9 +517,14 @@ el punto 5:
     - **Huellas que borra el viento o la ola (hecho, misma rama; el dueño: "en la arena
       no debiesen borrarse después de un rato necesariamente; es según el viento o según
       las olas"):** sin tiempo de vida; `livingworld/README.md` "Huellas: qué las borra".
-      Queda mirarlo en el juego (capturas `99k` a `99n` del E2E "sandbox footprints": el
-      rastro antes y después de una ráfaga, y en la arena mojada antes y después de una
-      ola) y afinar a gusto `prints.wind` de cada superficie, `prints.still` y `waves`
+      La playa de Thimblewick no tenía arena mojada y la mitad de la ola del E2E se
+      saltaba sin avisar: en el cierre del lote 20b se pintaron tres casillas junto al
+      agua (2082–2084, 2130) y el test ahora la exige (pisadas con sonido de arena mojada,
+      huellas, y ninguna tras la ola). En el resto del mundo solo hay arena mojada junto
+      al agua en las charcas de Selvaine: si las olas deben verse en las playas, hay que
+      pintarles su franja. Queda mirarlo en el juego (capturas `99k` a `99n` del E2E
+      "sandbox footprints": el rastro antes y después de una ráfaga, y en la arena mojada
+      antes y después de una ola; la huella sobre arena mojada se ve poco) y afinar a gusto `prints.wind` de cada superficie, `prints.still` y `waves`
       (`surfaces.yaml`). No hay lluvia (gancho `FootprintSim.rain`), la ola no se dibuja
       subiendo por la arena, y la marca de los dos pies es el mismo sprite.
     - **Descalzo o con botas:** la misma marca (no era barato: pide leer el calzado
