@@ -26,8 +26,8 @@ type AccountOptions interface {
 	SaveAccountOptions(ctx context.Context, accountID int64, doc []byte, now time.Time) error
 }
 
-// DefaultOptionsRateLimit: PUT /api/account/options per account. The client saves at
-// most once every few seconds while the player changes options.
+// DefaultOptionsRateLimit limits POST /api/account/options per account. The client saves
+// at most once every few seconds while the player changes options.
 var DefaultOptionsRateLimit = RateLimit{Burst: 20, Every: 3 * time.Second}
 
 func (a *api) optionsRoutes(mux *http.ServeMux) {
@@ -35,7 +35,7 @@ func (a *api) optionsRoutes(mux *http.ServeMux) {
 		return
 	}
 	mux.HandleFunc("GET /api/account/options", a.authed(shortDBRoute(a.getOptions)))
-	mux.HandleFunc("PUT /api/account/options", a.authed(a.optionsLimited(shortDBRoute(a.putOptions))))
+	mux.HandleFunc("POST /api/account/options", a.authed(a.optionsLimited(shortDBRoute(a.saveOptions))))
 }
 
 func (a *api) optionsLimited(next authedFunc) authedFunc {
@@ -70,10 +70,10 @@ func (a *api) getOptions(w http.ResponseWriter, r *http.Request, accountID int64
 	writeJSON(w, http.StatusOK, optionsJSON{Options: doc})
 }
 
-// putOptions replaces the account's document with the one in the body. Like decode
+// saveOptions replaces the account's document with the one in the body. Like decode
 // (Content-Type application/json: no cross-site form can send it), with the document's
 // own size limit and schema.
-func (a *api) putOptions(w http.ResponseWriter, r *http.Request, accountID int64) {
+func (a *api) saveOptions(w http.ResponseWriter, r *http.Request, accountID int64) {
 	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mt != "application/json" {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type")

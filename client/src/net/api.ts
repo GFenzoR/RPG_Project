@@ -255,7 +255,7 @@ export const accountApi = {
   /** The account's interface options document (docs/05 "Opciones de la cuenta"). */
   options: (): Promise<OptionsDoc> =>
     call<{ options: OptionsDoc }>("GET", "/api/account/options").then((r) => r.options),
-  saveOptions: (doc: OptionsDoc): Promise<void> => call("PUT", "/api/account/options", doc),
+  saveOptions: (doc: OptionsDoc): Promise<void> => call("POST", "/api/account/options", doc),
 };
 
 /** OAuth login and linked identities (T2.1, docs/05 "OAuth"). */

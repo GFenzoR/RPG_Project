@@ -6,7 +6,7 @@
 // - "character": a game option of the character, kept by the game server (the Welcome
 //   gives it back, docs/05 "Opciones guardadas");
 // - "account": an interface option, kept in the account's options document on the server
-//   (GET/PUT /api/account/options, docs/05 "Opciones de la cuenta") so it follows the
+//   (GET/POST /api/account/options, docs/05 "Opciones de la cuenta") so it follows the
 //   player to another browser or device;
 // - "device-class": the same document, but one value per kind of screen ("desktop" or
 //   "touch"): pixels, zoom and the on-screen pad do not carry from a monitor to a phone;

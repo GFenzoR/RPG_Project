@@ -3800,8 +3800,9 @@ Cuentan como un golpe aunque la condición no prenda: marca, bloqueo, defensa pr
 crédito de muerte; los golpes de una condición de daño son del lanzador.
 
 ### Modo seguro
-Interruptor del cliente, **activado por defecto** (cada login empieza así hasta que el
-cliente diga otra cosa). Con él no se puede atacar a un jugador si sería injustificado, y
+Interruptor del jugador, **activado por defecto**. Desde el 2026-11-26 se guarda por
+personaje, como la postura de combate y "perseguir" ("Opciones guardadas" de docs/05):
+vuelve como quedó en el siguiente login, tras un relogueo y después de morir. Con él no se puede atacar a un jugador si sería injustificado, y
 los hechizos de área no lo alcanzan. Sin él, el área golpea a todo jugador atacable del
 círculo (salvo grupo y gremio) y marca como un ataque directo. El área nunca alcanza a un
 jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.

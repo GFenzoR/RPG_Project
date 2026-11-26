@@ -525,6 +525,16 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   (origen distinto de `auto` y `placeholder`); si no, las formas de antes (`drawSkull`,
   colores de `state/pvp.ts` `skullColor`). La lista de batalla ya no deshabilita a los
   jugadores: un click = `SetTarget` (el servidor decide); también click derecho en el canvas.
+- **Opciones guardadas (2026-11-26, docs/05 "Opciones guardadas" y "Opciones de la
+  cuenta"):** toda opción o interruptor nuevo se declara en `OPTIONS` de
+  `state/saved-options.ts` con dónde se guarda (`character`, `account`, `device-class` o
+  `session` con su motivo); `saved-options.test.ts` falla si aparece una clave `rpg.*` de
+  `localStorage` o un mensaje `Set*` sin declarar. Lo que guarda una opción toma su
+  storage de `optionStorage()` (`state/option-storage.ts`), nunca `window.localStorage`
+  directo: así el cambio llega a la cuenta (`OptionsSync`, 2 s después del último). Una
+  opción de interfaz nueva necesita además su campo en `server/internal/accountopts`. La
+  postura, perseguir y el modo seguro vienen de `Welcome.options` (`GameUi.fightStance`,
+  `chase`, `safeMode`): el cliente ya no manda el modo seguro tras el `Welcome`.
 - Modo seguro: `Game.safeMode`/`setSafeMode` (`localStorage` `rpg.safeMode`, activado por
   defecto, `state/pvp.ts`); se manda tras el `Welcome` solo si está apagado (el servidor
   empieza activado). Interruptor `data-testid="safe-mode"` en "Modo de combate".

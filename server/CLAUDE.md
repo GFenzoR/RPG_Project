@@ -551,6 +551,15 @@ server/
   errores propios (`store.ErrNameTaken`...); los servicios dependen de interfaces para
   poder testearse sin Postgres (ver `internal/auth/authtest`).
 
+- **Opciones guardadas** (docs/05 "Opciones guardadas" y "Opciones de la cuenta"): las de
+  juego de un personaje son `session.GameOptions` (`session/options.go`): el loop es su
+  dueño, viajan en `Snapshot.Options` y `Character.Options` (también en `state` y en el
+  relogueo desde `unsaved`) y salen en `Welcome.options`; una nueva necesita su columna
+  `characters.opt_*`, su validación en el mensaje que la cambia y su entrada en `OPTIONS`
+  del cliente. Las de interfaz son el documento de `internal/accountopts` (esquema cerrado:
+  un campo nuevo se valida ahí y se declara en `OPTIONS`; el test del cliente compara los
+  dos) por `httpapi/options.go`; nunca guardes los bytes del cliente, solo `Canonical()`.
+
 - **Minimapa** (`session/minimap.go`, `explore`, docs/02 y docs/05 "Minimapa"): lo explorado
   es `Player.explored` (`explore.Map`, bits por sector de 32x32, solo crecen), cargado con
   `Character.Explored` (y `ExploredUnsaved` de un relogueo rápido) y guardado en el snapshot

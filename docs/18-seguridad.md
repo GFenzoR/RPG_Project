@@ -82,6 +82,20 @@ personaje).
 - Límites por IP (IPv6 por /64) en las rutas de auth; logins fallidos por (email, IP) y por
   email, con reserva y devolución si la contraseña no era la incorrecta; por cuenta en
   tienda, subida y bajada de mapas; por dirección y cuenta en los emails.
+- **Opciones de la cuenta** (`GET`/`POST /api/account/options`, 2026-11-26; docs/05
+  "Opciones de la cuenta"): es entrada no confiable que el servidor guarda y devuelve.
+  Controles: sesión obligatoria y la cuenta sale de la sesión, nunca del pedido (sin acceso
+  entre cuentas); `Content-Type: application/json` (CSRF por formulario) y cookie
+  `SameSite` como el resto; esquema cerrado en `accountopts` (claves desconocidas
+  rechazadas en todo nivel, enums, rangos, listas y mapas acotados, 16 KiB), sin texto
+  libre: toda cadena es un enum, un id `[a-z0-9_.-]` o un nombre de personaje (letras,
+  espacios, `'`, `-`), así que nada de él puede ser marcado; se guarda la forma canónica que
+  arma el servidor, no los bytes recibidos, y la tabla repite el tope de tamaño; se sirve
+  como `application/json` con `no-store`; límite propio de guardados por cuenta. El cliente
+  vuelve a validar cada valor antes de escribirlo en `localStorage` y nunca lo interpreta
+  como HTML (Preact escribe texto; nada de `innerHTML`). Tests: `accountopts_test.go`
+  (rechazos, estabilidad, fuzz), `httpapi/options_test.go` (auth, otra cuenta, CSRF,
+  tamaño, rate limit), `store/options_integration_test.go`.
 - Detrás de Caddy solo se confía en el **último** `X-Forwarded-For`, que Caddy reescribe.
 - SQL solo por sqlc o strings estáticos; `statement_timeout` de 10 s. `/metrics` en su
   propio listener interno; sin pprof ni handlers de debug; sin CORS (mismo origen).

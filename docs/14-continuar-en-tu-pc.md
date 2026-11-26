@@ -183,6 +183,54 @@ el punto 5:
   máximo a 14 o 15; (2) confirmar los nombres en español que quedaron genéricos:
   "murciélago", "escarabajo", "saqueador", "contrabandista", "custodio" (el jefe del
   capítulo 3) y "dragoncillo".
+
+- **Opciones guardadas (hecho, rama `feat/saved-options`; el dueño el 2026-11-25/26: "las
+  selecciones de los personajes se deben guardar, por ejemplo las opciones de batalla" y
+  "todas las opciones que selecciona el jugador se deben guardar"):** las opciones de juego
+  se guardan por personaje en el servidor y las de interfaz en un documento por cuenta
+  (docs/05 "Opciones guardadas" y "Opciones de la cuenta", docs/18). La auditoría:
+
+  | Opción | Dónde vivía | Dónde se guarda ahora |
+  |---|---|---|
+  | Postura de combate (ofensiva, equilibrada, defensiva) | memoria del servidor y estado de la pantalla: se perdía en cada login | personaje (`characters.opt_stance`), vuelve en `Welcome.options` |
+  | Perseguir al objetivo | igual | personaje (`characters.opt_chase`) |
+  | Modo seguro (PvP) | `localStorage` `rpg.safeMode`, reenviado tras cada `Welcome` | personaje (`characters.opt_safe`); `rpg.safeMode` queda solo como valor hasta que llega el `Welcome` |
+  | Aspecto del personaje | personaje (`characters.look_*`, lote 13) | sin cambios |
+  | Idioma | `rpg.lang` | cuenta (`lang`) |
+  | Volumen y silencio por canal | `rpg.audio` | cuenta (`audio`) |
+  | Controles (menú o clásico) | `rpg.controls` | cuenta (`controls`) |
+  | Animaciones reducidas | `rpg.motion` | cuenta (`reduced_motion`) |
+  | Escala de la interfaz, tamaño del texto | `rpg.ui-scale`, `rpg.text-scale` | cuenta (`ui_scale`, `text_scale`) |
+  | Sacudida de cámara, globos de chat | `rpg.shake`, `rpg.chat-bubbles` | cuenta (`camera_shake`, `chat_bubbles`) |
+  | Tamaño de los nombres | `rpg.name-size` | cuenta (`name_size`) |
+  | Opacidad del chat | `rpg.chat-opacity` | cuenta (`chat_opacity`) |
+  | Barra de hechizos F1–F12 (por vocación) | `rpg.hotkeys.<vocación>` | cuenta (`hotkeys`) |
+  | Misión seguida (por personaje) | `rpg.track` | cuenta (`track`) |
+  | Pad táctil | `rpg.touchPad` | por clase de dispositivo, `desktop` o `touch` (`devices.<clase>.touch_pad`) |
+  | Zoom del mapa | `rpg.zoom` | por clase de dispositivo (`zoom`) |
+  | Minimapa (abierto, escala) | `rpg.minimap` | por clase de dispositivo (`minimap`) |
+  | Ventanas (abiertas, lugar, tamaño, plegadas, orden) | `rpg.windows` | por clase de dispositivo (`windows`) |
+  | Objetivo de ataque | memoria del servidor | no se guarda: no es una preferencia |
+  | Canal y pestaña del chat | estado de la pantalla | no se guarda: sigue a la conversación; cada login empieza en el local |
+  | Experiencia compartida del grupo | el grupo, en memoria del servidor | no se guarda: es del grupo, que termina cuando sus miembros salen |
+  | Último email del login | `rpg.lastEmail` | solo en el navegador: existe antes de saber la cuenta |
+  | Nota "quedaste en combate" | `rpg.stayedInFight` | solo en el navegador: no es una opción |
+
+  No existe auto-loot ni otra opción de juego por personaje todavía; cuando se sume una,
+  va en `session.GameOptions`, `characters.opt_*` y `Welcome.options`. El registro es
+  `OPTIONS` de `client/src/state/saved-options.ts`: `saved-options.test.ts` falla si aparece
+  una clave `rpg.*` de `localStorage` o un mensaje `Set*` del protocolo sin declarar, o un
+  campo del documento que el esquema del servidor no tiene (y al revés). Queda:
+  - **La migración 00029** puede chocar de número con otra rama del lote: si pasa, se
+    renumera la que entre después (`migrations/embed_test.go` lo detecta).
+  - **Un jugador que tenía el modo seguro apagado** en su navegador lo encuentra activado
+    la primera vez (el servidor no sabía de esa elección): lo apaga una vez y queda.
+  - **Dos dispositivos abiertos a la vez** con la misma cuenta: gana el último que guarda
+    el documento entero. Si molesta, la salida es mezclar por campo en el servidor.
+  - **El idioma elegido en el sitio público** (otra página) no cuenta como "elegido antes
+    de entrar": al entrar al juego gana el guardado en la cuenta.
+  - **Probarlo a mano en dos navegadores** (o navegador y app de escritorio): cambiar
+    postura, volumen, ventanas y hotkeys en uno y entrar en el otro.
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:

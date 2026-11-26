@@ -61,7 +61,7 @@
 2. Cliente → HTTP GET /api/characters                  → lista de personajes
 3. Cliente → HTTP POST /api/play {character_id}        → session_token (vive 60 s)
 4. Cliente abre WS y envía Hello {session_token, client_version, locale}
-5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height, attack_events} + FullMapView + Stats + Inventory + Skills + QuestLog
+5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height, attack_events, options} + FullMapView + Stats + Inventory + Skills + QuestLog
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
@@ -155,6 +155,8 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level, look?}], max_characters}` (2026-11-23: `look` es el aspecto guardado, `{sex, body, skin, hair, hair_color, beard}`, ausente mientras el juego no le eligió uno; `max_characters` es el tope por cuenta, con el que la pantalla de personajes deshabilita "Crear personaje nuevo") |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
+| `GET /api/account/options` | token | — | `200 {options}`: las opciones de interfaz de la cuenta ("Opciones de la cuenta", abajo); `{"v":1}` si nunca guardó |
+| `POST /api/account/options` | token | el documento | `204`; `400 bad_request` (no pasa el esquema), `413 too_large` (más de 16 KiB), `415`, `429` |
 | `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde (el ping se guarda 1 s contado desde que termina, y los pedidos que llegan durante un ping esperan ese mismo resultado: muchos pedidos cuestan un ping por segundo aunque la base esté lenta) |
 | `GET /api/status` | — | — | `200 {online, players, version}` (T4.3, público) |
 | `GET /api/highscores?category=&vocation=&page=` | — | — | `200 {category, vocation, page, page_size, has_more, entries: [{rank, name, vocation, value}]}` (T4.3, público) |
@@ -175,6 +177,62 @@ Un servidor sin `data/looks.yaml` ignora el `look` (crea el personaje sin aspect
 guardado). Si el contenido del cliente sí trae `lookOptions`, la pantalla de creación
 muestra los selectores pero lo elegido se pierde: es una configuración inconsistente
 (servidor y cliente deben usar el mismo `data/`), no un caso que el juego cubra.
+
+### Opciones de la cuenta (`httpapi/options.go`, `server/internal/accountopts`)
+Pedido del dueño del 2026-11-26: "todas las opciones que selecciona el jugador se deben
+guardar". Las opciones de **interfaz** viven en un documento JSON por cuenta (tabla
+`account_options`, migración 00029), así siguen al jugador a otro navegador o dispositivo.
+Las opciones de **juego** de cada personaje van por el protocolo del juego ("Opciones
+guardadas", más abajo). La tabla de qué se guarda dónde está en
+`14-continuar-en-tu-pc.md` ("Opciones guardadas").
+
+- `GET` devuelve el documento de la cuenta de la sesión; `POST` lo reemplaza entero. No hay
+  id de cuenta en el pedido: sale de la sesión (`authed`), nunca del cliente. Es `POST` y no
+  `PUT` porque el puente de la app de escritorio solo deja pasar `GET` y `POST`.
+- **Esquema cerrado, versión 1** (`accountopts.Doc`): una clave desconocida en cualquier
+  nivel, un tipo equivocado, un valor fuera de su enum o rango, datos después del
+  documento o más de 16 KiB (`accountopts.MaxBytes`) lo rechazan entero. No hay texto
+  libre: cada cadena es un enum, un id (`[a-z0-9_.-]`, hasta 64) o un nombre de personaje
+  (letras, espacios, `'` y `-`, hasta 32).
+
+  | Campo | Valor |
+  |---|---|
+  | `v` | `1` (obligatorio) |
+  | `lang` | código de idioma (`es`, `en`) |
+  | `audio` | `{volume: {master, music, sfx, ui, ambient}, muted: {…}}`, volúmenes 0..1 |
+  | `controls` | `menu` \| `classic` |
+  | `reduced_motion`, `camera_shake`, `chat_bubbles` | booleanos |
+  | `ui_scale`, `text_scale` | 0,5..2 |
+  | `name_size` | `normal` \| `large` |
+  | `chat_opacity` | entero 0..100 |
+  | `hotkeys` | `{<vocación>: [hasta 12 ids de hechizo o null]}`, hasta 16 vocaciones |
+  | `track` | `{<personaje>: <id de quest>}`, hasta 32 |
+  | `devices` | `{desktop?, touch?}`, cada uno `{touch_pad, zoom (1..32), minimap {open, scale}, windows}` |
+
+  `windows` es el formato v3 de `client/src/ui/windows.ts` (`{v: 3, z, win, others}`, hasta
+  64 ventanas por mapa, cada lugar `{open?, collapsed?, x?, y?, w?, h?}` con enteros de
+  ±100000).
+- **Por clase de dispositivo** (decisión de este lote): lo que solo tiene sentido en un tipo
+  de pantalla (lugares y tamaños de ventanas en píxeles, zoom del mapa, minimapa, pad
+  táctil) se guarda una vez para `desktop` (puntero fino) y otra para `touch` (teléfono o
+  tablet, puntero grueso). Lo demás es de la cuenta.
+- **Lo guardado nunca son los bytes del cliente:** el servidor decodifica, valida y vuelve a
+  codificar en forma canónica (`Doc.Canonical`); la tabla además limita el tamaño. Un
+  documento guardado que el servidor ya no acepta se lee como vacío.
+- **Límites:** sesión obligatoria; `Content-Type: application/json` (frena formularios
+  cross-site, como el resto de la API); 20 guardados de ráfaga y uno cada 3 s por cuenta
+  (`DefaultOptionsRateLimit`, `429` con `Retry-After`), aparte del límite por cuenta de
+  `authed`.
+- **Cliente** (`client/src/state/saved-options.ts`, `option-storage.ts`): `localStorage`
+  sigue siendo el caché que lee cada pantalla, y lo único que hay antes del login. Al
+  entrar a la lista de personajes: **el servidor gana y lo local rellena lo que al servidor
+  le falta** (los mapas se mezclan clave por clave; un layout de ventanas es un solo valor),
+  y si el resultado difiere de lo guardado, se manda. Una excepción: lo que el jugador
+  eligió en esa misma página antes de entrar (el idioma o el volumen en la pantalla de
+  login) es su elección más nueva y gana. Después, cada cambio se manda 2 s después del
+  último (`SAVE_DELAY_MS`), conservando las secciones de las otras clases de dispositivo.
+  Al salir de la cuenta deja de mandar. Dos dispositivos abiertos a la vez: gana el último
+  que guarda (documento entero), aceptado así.
 
 `POST /api/auth/register` acepta además `lang` (idioma del email de verificación). El
 cliente solo lo manda si `GET /api/auth/config` dice `email: true`: los servidores
@@ -791,7 +849,19 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
 - `SetFightMode{stance, chase}`: `stance` ofensivo/equilibrado/defensivo multiplica el
   golpe máximo y la defensa del escudo (`combat.modes` de `balance.yaml`); `UNSPECIFIED`
   se ignora. Por defecto equilibrado y sin perseguir. Con `chase` el jugador da un paso
-  hacia su objetivo cuando no está pegado a él y no tiene pasos en cola.
+  hacia su objetivo cuando no está pegado a él y no tiene pasos en cola. El servidor los
+  guarda por personaje ("Opciones guardadas").
+- **Opciones guardadas** (`session/options.go`, migración 00029, pedido del dueño del
+  2026-11-26): la postura, perseguir y el modo seguro (`SetSafeMode`) son del personaje y
+  el servidor es su dueño. El loop los cambia con esos dos mensajes (un `stance` fuera del
+  enum no cambia nada), van en cada snapshot (`characters.opt_stance`, `opt_chase`,
+  `opt_safe`, por el camino de guardado de siempre: nada de base de datos en el loop) y
+  vuelven en el siguiente login, en un relogueo rápido (del snapshot sin confirmar) y en un
+  login que reemplaza a otro (del jugador en memoria). Morir no los toca.
+  `Welcome.options` (`GameOptions{stance, chase, safe_mode}`) le dice al cliente los
+  vigentes: el cliente los muestra y **no los vuelve a mandar** al entrar. Un personaje de
+  antes de la migración tiene los de siempre (equilibrado, sin perseguir, modo seguro
+  activado); una fila con una postura inválida pelea equilibrada.
 - Ronda: con el objetivo a una casilla (también en diagonal) el jugador golpea cada
   `combat.attack_interval_ms` (2000 ms). Fórmulas en `server/internal/combat` (doc 02).
   Sin arma golpea con los puños (`combat.fist_attack`, con su skill `fist`); con arma,
@@ -1422,8 +1492,9 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
 
 ### PvP (T5.2, `server/internal/session/pvp.go` y `guildwar.go`)
 Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
-- **`SetSafeMode{enabled}`** (cliente → servidor): el modo seguro. Cada login empieza con
-  él activado; el cliente lo manda tras el `Welcome` si el jugador lo apagó, y cada vez
+- **`SetSafeMode{enabled}`** (cliente → servidor): el modo seguro. Activado por defecto;
+  desde el 2026-11-26 el servidor lo guarda por personaje y el `Welcome` dice el vigente
+  ("Opciones guardadas", en "Combate cuerpo a cuerpo"), así que el cliente lo manda solo cada vez
   que cambia el interruptor. Responde `pvp.safe_on` / `pvp.safe_off`.
 - **Atacar a un jugador:** el mismo `SetTarget`. El servidor valida en cada ronda (zonas,
   niveles, staff, modo seguro); si deja de valer, suelta el objetivo y manda el motivo.
