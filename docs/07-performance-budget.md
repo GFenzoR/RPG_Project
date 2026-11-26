@@ -411,9 +411,9 @@ vista.
   "wind: crowns sway…") mide el bosque más denso (51 árboles en vista de Ivernel) con
   todas las sombras puestas, anota cuántos objetos proyectan y cuántas sombras se mecen, y
   exige menos de 50 draw calls por frame. **Medido en el E2E final del lote 20b** (PC del
-  dueño, 2026-11-26, Chromium headless a 1280x800, zoom 2x, dos corridas completas de
+  dueño, 2026-11-26, Chromium headless a 1280x800, zoom 2x, tres corridas completas de
   `make e2e`): 51 árboles en vista, 75 objetos que proyectan 75 sombras, 68 de ellas
-  meciéndose con su copa: **60,2 y 60,4 fps y 6,0 draw calls por frame** (tope 50). Las
+  meciéndose con su copa: **60,1 a 60,4 fps y 6,0 draw calls por frame** (tope 50). Las
   sombras van en el batch del atlas: no suman draw calls sobre los 6 a 7 del bosque sin
   ellas, y no hizo falta degradar nada.
 - **Si no entrara:** degradar por distancia o tamaño (no proyectar lo que mide menos de

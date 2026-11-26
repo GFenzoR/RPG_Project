@@ -553,15 +553,27 @@ el punto 5:
       sombra proyectada y va en la línea real de los pies (`stance` de `atlas.json`); bajo
       techo y bajo tierra no hay sombras del sol; "Animaciones reducidas" las conserva,
       quietas (era la decisión pendiente de abajo: el dueño pidió conservarlas). Queda:
-      - **Mirar las capturas del E2E final** (esta rama no lo corrió): `99a` a `99g` y
-        `99d2` en la plaza de Thimblewick, y `124` a `127` en el bosque de Ivernel. Qué
-        mirar: cada objeto con **una** sombra del lado contrario al sol, ningún personaje
-        con elipse al sol, los pies tocando su sombra, la sombra de un muro continua, y
-        nada de sol dentro del templo.
-      - **Anotar en docs/07 los fps y draw calls del navegador** que imprime el test del
-        viento ("wind and shadows: N trees…") con las sombras puestas; el tope del test
-        es 50 draw calls. Si no entrara: degradar por distancia o tamaño, nunca en
-        silencio.
+      - **Capturas del E2E final miradas (cierre del lote 20b, 2026-11-26):** `99a` a
+        `99g` y `99d2` en la plaza de Thimblewick y `124` a `127` en el bosque de
+        Ivernel. Una sombra por objeto del lado contrario al sol, larga a la mañana y a la
+        tarde, corta al mediodía, tenue con luna; ningún personaje ni criatura con elipse
+        al sol, y los pies tocan su sombra (también el espinoso y el lobo). El test del
+        bosque sacaba `124` a `127` con el personaje muerto en el templo (los espinosos lo
+        mataban a mitad de camino y el test pasaba igual): ahora entra con nivel 200 y
+        el test exige que termine de pie en el bosque. Números en docs/07: 60 fps y 6
+        draw calls. Dos cosas que se ven mal y quedan:
+        - **Sol dentro de un edificio visto de lejos:** una habitación cuyo muro más
+          lejano queda fuera de la ventana del servidor (a 12 filas o más, o 17 columnas)
+          cuenta como aire libre "hasta ver su último muro" (`indoorTiles`), así que desde
+          la plaza de Thimblewick (2095,2095) el piso del templo muestra la sombra de sus
+          muros y la del vano (`99d`, `99d2`), y desaparecen al dar un paso al norte
+          (comprobado con capturas desde 2095, 2094, 2093 y 2092). Arreglo posible: una
+          zona `indoor` en el mapa, o recordar los muros ya vistos.
+        - **La sombra de un muro fino arranca separada de él:** la sombra de bloque sale
+          del borde de la casilla, y el dibujo de un muro vertical ocupa solo el medio
+          (20 de 64 px a 2x): quedan unos 11 px de sprite de pasto al sol entre el muro
+          y su sombra (`99d2`, al este del templo). Arreglo: que el bloque use el ancho
+          del dibujo de la pieza y no la casilla.
       - **"Bajo techo" es una heurística** (los mapas no tienen techos): casillas
         encerradas por muros, con vanos de hasta 3 casillas, hasta 400 casillas. Un
         edificio con un vano más ancho o un patio chico amurallado se leen mal (uno con
