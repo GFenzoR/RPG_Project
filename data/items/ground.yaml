@@ -1,4 +1,4 @@
-# Basic grounds: ground.speed is the terrain cost in % (100 = normal), ground.surface what it is made of (livingworld/README.md), ground.floor: building marks a room floor whose sides the map validator wants closed by walls or doors (docs/03).
+# Basic grounds: ground.speed is the terrain cost in % (100 = normal), ground.surface what it is made of (livingworld/README.md), ground.floor: building marks a room floor whose sides the map validator wants closed by walls, doors or a doorway (docs/03).
 - id: grass
   kind: ground
   sprite: ground/grass
@@ -57,7 +57,7 @@
   kind: ground
   sprite: ground/dock_planks
   name: item.dock_planks.name
-  ground: { walkable: true, speed: 100, surface: wood, floor: open }
+  ground: { walkable: true, speed: 100, surface: wood }
 
 - id: wooden_floor
   kind: ground

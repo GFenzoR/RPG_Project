@@ -13,11 +13,10 @@ export interface ItemInfo {
   /** Ground items: whether creatures can stand on it. */
   walkable?: boolean;
   /**
-   * Ground items: `building` marks the floor of a room, `open` a porch, doorstep, pier or
-   * stall floor that may meet outdoor ground (ground.floor, docs/03 "Pisos de
-   * edificio"): the map validator wants its sides closed by walls or doors.
+   * Ground items: `building` marks the floor of a room (ground.floor, docs/03 "Pisos de
+   * edificio"): the map validator wants its sides closed by walls, doors or a doorway.
    */
-  floor?: "building" | "open";
+  floor?: "building";
   blocksMovement: boolean;
   /**
    * A door (a `door` block, docs/02 "Puertas con llave"): it opens in the game, so the
@@ -250,7 +249,7 @@ export function loadContent(root: string): ContentIndex {
       const g = raw["ground"];
       if (isObj(g)) {
         info.walkable = g["walkable"] === true;
-        if (g["floor"] === "building" || g["floor"] === "open") info.floor = g["floor"];
+        if (g["floor"] === "building") info.floor = "building";
       }
       const portal = raw["portal"];
       if (isObj(portal) && typeof portal["kind"] === "string") {

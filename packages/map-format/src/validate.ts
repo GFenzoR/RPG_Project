@@ -588,7 +588,7 @@ class WorldValidator {
       const file = c ? chunkFile(dir, c) : `${dir}/island.yaml`;
       this.err(
         file,
-        ["ground"],
+        c ? ["ground", l.pos.y - c.cy * CHUNK_SIZE] : [],
         `building floor at ${formatPos(l.pos)} opens to ${l.facing} on its ${l.side} side with no wall or door: pull the floor in or extend the wall (docs/03 "Pisos de edificio")`,
         l.pos,
       );

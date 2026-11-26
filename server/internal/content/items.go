@@ -171,8 +171,6 @@ type Ground struct {
 	Walkable bool `yaml:"walkable"`
 	// Surface is what it is made of (grass, sand...; the living world's trail wear).
 	Surface string `yaml:"surface"`
-	// Floor is "building" for the floor of a room, "open" for a porch (map validation only: docs/03).
-	Floor string `yaml:"floor"`
 }
 
 // ByNumeric indexes items by their numeric id.
