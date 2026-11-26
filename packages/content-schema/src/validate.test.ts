@@ -1526,7 +1526,7 @@ describe("validator diagnostics", () => {
     const names = (): string[] =>
       messages(root).filter((m) => /longer than \d+ characters|has an ellipsis/.test(m));
     expect(names()).toEqual([]);
-    // A monster's name one letter over the limit, in one language.
+    // A monster's name over the limit (19 characters), in one language.
     edit(
       "i18n/es/monsters.yaml",
       'monster.wolf.name: "lobo"',
@@ -1579,6 +1579,19 @@ describe("validator diagnostics", () => {
       'monster.wolf.name: "lobo gris de mar"',
     );
     expect(names()).toEqual([]);
+    // One letter over the limit is not: the border itself.
+    edit(
+      "i18n/es/monsters.yaml",
+      'monster.wolf.name: "lobo gris de mar"',
+      'monster.wolf.name: "lobo gris del mar"',
+    );
+    expect("lobo gris de mar").toHaveLength(16);
+    expect("lobo gris del mar").toHaveLength(17);
+    expect(names()).toEqual([
+      expect.stringMatching(
+        /wolf\.yaml.*"lobo gris del mar" \(monster\.wolf\.name, es\) is longer than 16 characters/,
+      ),
+    ]);
   });
 
   it("only lets NPCs placed on dev_only islands use dev-only actions (train_skill, restore_mana) or be dev_only", () => {

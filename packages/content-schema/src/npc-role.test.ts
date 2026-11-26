@@ -188,4 +188,30 @@ describe("the kill steps of data/quests", () => {
     }
     expect(kills).toBeGreaterThanOrEqual(10);
   });
+
+  // "cinder lizard" dropped a "salamander scale", and the quest that sends the player after
+  // it spoke of "the salamanders" in the same line: a monster whose loot is named after it
+  // keeps that word in its own name. The ids are English, so the rule is checked there.
+  it("keep the word a monster shares with its own loot (English)", () => {
+    const monsterDir = join(REPO, "data", "monsters");
+    const monsters = catalog("en", "monsters.yaml");
+    const items = catalog("en", "items.yaml");
+    let shared = 0;
+    for (const f of readdirSync(monsterDir).filter((n) => n.endsWith(".yaml"))) {
+      const m = parseYaml(readFileSync(join(monsterDir, f), "utf8")) as {
+        id: string;
+        loot?: { item?: string }[];
+      };
+      const name = monsters[`monster.${m.id}.name`] ?? "";
+      for (const drop of m.loot ?? []) {
+        const itemName = items[`item.${drop.item ?? ""}.name`] ?? "";
+        for (const word of m.id.split("_").filter((w) => w.length > 3)) {
+          if (!(drop.item ?? "").split("_").includes(word) || !itemName.includes(word)) continue;
+          shared++;
+          expect(name, `${m.id} drops "${itemName}"`).toContain(word);
+        }
+      }
+    }
+    expect(shared).toBeGreaterThanOrEqual(3);
+  });
 });
