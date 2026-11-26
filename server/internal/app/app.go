@@ -195,6 +195,8 @@ func New(cfg Config) (*App, error) {
 	a.Auth = authSvc
 	// The ranking reads Postgres; fake stores of tests may not implement it.
 	highscores, _ := cfg.Store.(httpapi.Highscores)
+	// The accounts' interface options too (migration 00029).
+	accountOptions, _ := cfg.Store.(httpapi.AccountOptions)
 	// The map submission portal (T4.5) also lives in Postgres only.
 	submissions, _ := cfg.Store.(httpapi.MapSubmissions)
 	// The public guild pages too (T5.1).
@@ -250,7 +252,8 @@ func New(cfg Config) (*App, error) {
 		MapSubmitLimits: cfg.MapSubmitLimits,
 		MapPRWorker:     cfg.MapPRWorker,
 
-		Shop: shop,
+		Shop:    shop,
+		Options: accountOptions,
 	})
 	if err != nil {
 		return nil, err

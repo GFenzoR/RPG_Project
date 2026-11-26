@@ -117,6 +117,12 @@ type Config struct {
 
 	// Shop is the cosmetic shop (T5.7, shop.go). Nil: its routes answer 404.
 	Shop *Shop
+
+	// Options stores the accounts' interface options (options.go). Nil: its routes
+	// answer 404.
+	Options AccountOptions
+	// OptionsRateLimit: saves of the options per account; DefaultOptionsRateLimit.
+	OptionsRateLimit RateLimit
 }
 
 // Accounts is the account service the API calls. *auth.Service implements it; tests
@@ -200,6 +206,7 @@ type api struct {
 	deviceLimiter   *limiter // failed logins per known-device cookie
 	accountLimiter  *limiter // authed requests per account
 	writeLimiter    *limiter // play and character creation per account
+	optionsLimiter  *limiter // saves of the interface options per account
 	netLimiter      *limiter // rateLimited routes per network
 	netHashing      *inflight
 	deviceKey       [32]byte
@@ -236,6 +243,7 @@ func newAPI(cfg Config) (*api, error) {
 	cfg.TokenRateLimit = orDefault(cfg.TokenRateLimit, DefaultTokenRateLimit)
 	cfg.AccountRateLimit = orDefault(cfg.AccountRateLimit, DefaultAccountRateLimit)
 	cfg.AccountWriteRateLimit = orDefault(cfg.AccountWriteRateLimit, DefaultAccountWriteRateLimit)
+	cfg.OptionsRateLimit = orDefault(cfg.OptionsRateLimit, DefaultOptionsRateLimit)
 	cfg.AuthNetRateLimit = orDefault(cfg.AuthNetRateLimit, DefaultAuthNetRateLimit)
 	cfg.TokenNetRateLimit = orDefault(cfg.TokenNetRateLimit, DefaultTokenNetRateLimit)
 	cfg.DeviceLoginRateLimit = orDefault(cfg.DeviceLoginRateLimit, DefaultDeviceLoginRateLimit)
@@ -310,6 +318,7 @@ func newAPI(cfg Config) (*api, error) {
 		{&a.tokenLimiter, cfg.TokenRateLimit, failOpen},
 		{&a.accountLimiter, cfg.AccountRateLimit, failOpen},
 		{&a.writeLimiter, cfg.AccountWriteRateLimit, failOpen},
+		{&a.optionsLimiter, cfg.OptionsRateLimit, failOpen},
 		{&a.netLimiter, cfg.AuthNetRateLimit, failClosed},
 		{&a.tokenNetLimiter, cfg.TokenNetRateLimit, failClosed},
 		// Keys are valid cookies only (signed after a correct password).
@@ -354,6 +363,7 @@ func (a *api) routes() *http.ServeMux {
 		a.mapRoutes(mux)
 	}
 	a.shopRoutes(mux)
+	a.optionsRoutes(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})
