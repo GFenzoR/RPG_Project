@@ -55,6 +55,17 @@ export function contactShare(castAlpha: number): number {
   return castAlpha >= CONTACT_GONE ? 0 : 1 - castAlpha / CONTACT_GONE;
 }
 
+/**
+ * How much of its contact ellipse a creature shows under everything that may give it a cast
+ * shadow (owner, 2026-11-26): none while the sun, the moon or a lamp casts one (`sunAlpha`,
+ * `lightAlpha`: the opacity its shadow is drawn with, 0 for none); and where nothing does,
+ * only `unlit` of it (data/livingworld/shadows.yaml `unlit_contact`): much fainter than a
+ * cast shadow, enough for the feet to touch the ground.
+ */
+export function contactOf(sunAlpha: number, lightAlpha: number, unlit: number): number {
+  return unlit * Math.min(contactShare(sunAlpha), contactShare(lightAlpha));
+}
+
 /** What a creature body hands its shadow: one call per drawn layer. */
 export interface ShadowSink {
   /**
@@ -120,6 +131,8 @@ export class CastShadows implements ShadowSink {
   private scaleY = 0;
   private readonly fade: AlphaFilter;
   private readonly lean = { skewX: 0, scaleY: 0 };
+  /** Opacity of the parts that follow inside the layer (aim). */
+  private strength = 1;
   /** Sprites made since the layer was created (a test reads it). */
   made = 0;
   /** The map objects' shadows, when mounted: the layer shows while they do. */
@@ -148,8 +161,20 @@ export class CastShadows implements ShadowSink {
     }
     this.skewX = pose.skewX;
     this.scaleY = pose.scaleY;
+    this.strength = 1;
     this.fade.alpha = pose.alpha;
     return true;
+  }
+
+  /**
+   * The transform of the parts that follow, and their strength inside the layer (0..1): the
+   * shadows of lamps and fires (render/light-shadows.ts), where each caster has its own
+   * direction and fades with the distance to its light. The sun and the moon never call it.
+   */
+  aim(skewX: number, scaleY: number, strength = 1): void {
+    this.skewX = skewX;
+    this.scaleY = scaleY;
+    this.strength = strength;
   }
 
   part(
@@ -175,6 +200,7 @@ export class CastShadows implements ShadowSink {
     this.used++;
     if (s.texture !== tex) s.texture = tex;
     s.visible = true;
+    if (s.alpha !== this.strength) s.alpha = this.strength;
     const anchorY = feetAnchor(foot, tex.height);
     if (s.anchor.y !== anchorY) s.anchor.y = anchorY;
     s.position.set(x, y);

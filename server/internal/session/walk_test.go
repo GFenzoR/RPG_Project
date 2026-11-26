@@ -2,9 +2,14 @@ package session_test
 
 import (
 	"math"
+	"slices"
+	"strconv"
 	"testing"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/content"
+	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/session"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
@@ -116,49 +121,173 @@ func TestStepDuration(t *testing.T) {
 		ground uint16
 		diag   bool
 		speed  int
-		ticks  int
+		ms     int64
 	}{
-		{worldtest.Grass, false, 200, 10}, // 500 ms
-		{worldtest.Grass, true, 200, 14},  // 10 ticks × √2 = 14.14 → 700 ms
-		{worldtest.Mud, false, 200, 20},   // 1000 ms
-		{worldtest.Road, false, 200, 5},   // 250 ms
-		{worldtest.Grass, false, 205, 10}, // 487.8 ms, rounded up to 500
-		{worldtest.Grass, true, 205, 14},  // from the 10 straight ticks, not 689.8 ms rounded up
-		{worldtest.Road, true, 200, 7},    // 5 × √2 = 7.07
-		{worldtest.Mud, true, 200, 28},    // 20 × √2 = 28.28
-		{worldtest.Grass, false, 30000, 1},
-		{worldtest.Grass, true, 30000, 2}, // a one-tick straight step: never a one-tick diagonal
-		{worldtest.Road, true, 1000, 2},   // 50 ms straight
-		{worldtest.Road, true, 999, 3},    // 2 ticks × √2 = 2.83
+		{worldtest.Grass, false, 200, 500},
+		{worldtest.Grass, true, 200, 707}, // 500 × √2
+		{worldtest.Mud, false, 200, 1000},
+		{worldtest.Road, false, 200, 250},
+		{worldtest.Grass, false, 205, 488}, // 487.8 ms: to the millisecond, not to the tick
+		{worldtest.Grass, true, 205, 690},
+		{worldtest.Road, true, 200, 354},
+		{worldtest.Mud, true, 200, 1414},
+		{worldtest.Grass, false, 30000, 50}, // never under one tick
+		{worldtest.Grass, true, 30000, 71},
+		{worldtest.Road, true, 1000, 71},
+		{worldtest.Road, true, 999, 72}, // 51 ms straight
 	}
 	for _, c := range cases {
-		if got := h.w.StepTicks(c.ground, c.speed, c.diag); int(got) != c.ticks {
-			t.Errorf("StepTicks(%d, %d, %v) = %d, want %d", c.ground, c.speed, c.diag, got, c.ticks)
+		if got := h.w.StepMs(c.ground, c.speed, c.diag); got != c.ms {
+			t.Errorf("StepMs(%d, %d, %v) = %d, want %d", c.ground, c.speed, c.diag, got, c.ms)
 		}
 	}
 }
 
 // TestDiagonalSameSpeed: with diagonal_cost √2 a diagonal step covers its √2 tiles at the
-// speed of a straight one (docs/02 "Movimiento"), within half a tick, at every terrain
-// and speed, and is never shorter than the straight step. Where the straight step is one
-// tick, the diagonal is two: it never covers more distance per tick than a straight one.
+// speed of a straight one (docs/02 "Movimiento"), to the millisecond, at every terrain
+// and speed, and is never shorter than the straight step.
 func TestDiagonalSameSpeed(t *testing.T) {
 	h := newHarness(t, worldtest.Map(t, 0, 0, 7, "...m="))
 	for _, ground := range []uint16{worldtest.Grass, worldtest.Mud, worldtest.Road} {
 		for speed := 50; speed <= 3000; speed += 7 {
-			straight := float64(h.w.StepTicks(ground, speed, false))
-			diag := float64(h.w.StepTicks(ground, speed, true))
-			if straight == 1 {
-				if diag != 2 {
-					t.Fatalf("ground %d speed %d: one straight tick, diagonal %v, want 2", ground, speed, diag)
-				}
-				continue
-			}
-			if diag < straight || math.Abs(diag-straight*math.Sqrt2) > 0.5 {
-				t.Fatalf("ground %d speed %d: straight %v ticks, diagonal %v, want %.2f ±0.5",
-					ground, speed, straight, diag, straight*math.Sqrt2)
+			straight := float64(h.w.StepMs(ground, speed, false))
+			diag := float64(h.w.StepMs(ground, speed, true))
+			if diag < straight || math.Abs(diag-straight*1.414) > 0.5 {
+				t.Fatalf("ground %d speed %d: straight %v ms, diagonal %v, want %.2f ±0.5",
+					ground, speed, straight, diag, straight*1.414)
 			}
 		}
+	}
+}
+
+// ownerPace is the walk of a level 1 player of the repo's data (data/balance.yaml
+// base_step_ms 891, data/vocations.yaml speed 205): 435 ms a tile, not a whole number of
+// ticks.
+func ownerPace(cfg *session.Config) {
+	cfg.Balance.Movement.BaseStepMs = 891
+	vs := content.Vocations{}
+	for id, v := range cfg.Vocations {
+		v.Start.Speed = 205
+		vs[id] = v
+	}
+	cfg.Vocations = vs
+}
+
+// TestFourDirectionsOnePace: a walk north, east, south or west costs the same, step by
+// step and tick by tick (owner, 2026-11-26: "up and down feels faster than sideways"; the
+// server never told them apart, and this pins it). Each step is 435 ms for its client;
+// the loop waits whole ticks and carries what is left to the next step, so ten tiles take
+// 4350 ms, less than one tick short, not ten steps rounded up to 450 ms. A diagonal is
+// 435 × √2 = 615 ms the same way.
+func TestFourDirectionsOnePace(t *testing.T) {
+	run := func(d pb.Direction, n int) (ticks []uint64, ms []uint32) {
+		h := newHarness(t, worldtest.Open(t, 0, 0, 40, 40), ownerPace)
+		cl, _ := h.join("Mira", at(20, 20))
+		cl.take()
+		cl.batches = nil
+		steps := make([]pb.Direction, n)
+		for i := range steps {
+			steps[i] = d
+		}
+		h.input(cl, walkPath(steps...))
+		var first uint64
+		for range 200 {
+			h.sim.Step()
+			for _, b := range cl.batches {
+				for _, e := range b.GetEvents() {
+					if m := e.GetCreatureMove(); m != nil {
+						if len(ticks) == 0 {
+							first = b.GetTick()
+						}
+						ticks, ms = append(ticks, b.GetTick()-first), append(ms, m.GetDurationMs())
+					}
+				}
+			}
+			cl.batches = nil
+		}
+		return ticks, ms
+	}
+	const n = 10
+	east, eastMs := run(E, n)
+	if len(east) != n {
+		t.Fatalf("%d steps east, want %d", len(east), n)
+	}
+	for i, at := range east {
+		// Step i starts when the i before it are over: i × 435 ms, in whole ticks.
+		if want := uint64(i * 435 / 50); at != want || eastMs[i] != 435 {
+			t.Fatalf("east: step %d at tick %d for %d ms, want tick %d for 435 ms (%v)", i, at, eastMs[i], want, east)
+		}
+	}
+	for _, c := range []struct {
+		name string
+		dir  pb.Direction
+	}{{"north", N}, {"south", S}, {"west", W}} {
+		ticks, ms := run(c.dir, n)
+		if !slices.Equal(ticks, east) || !slices.Equal(ms, eastMs) {
+			t.Errorf("%s: steps at ticks %v for %v ms, east at %v for %v", c.name, ticks, ms, east, eastMs)
+		}
+	}
+	diag, diagMs := run(SE, n)
+	if len(diag) != n {
+		t.Fatalf("%d steps south-east, want %d", len(diag), n)
+	}
+	for i, at := range diag {
+		if want := uint64(i * 615 / 50); at != want || diagMs[i] != 615 {
+			t.Fatalf("south-east: step %d at tick %d for %d ms, want tick %d for 615 ms", i, at, diagMs[i], want)
+		}
+	}
+}
+
+// TestPaceOwesNoMoreThanATick: whatever a step lasts, a walk of n steps takes n times
+// that, less than one tick short and never longer; a step after a stop owes nothing.
+func TestPaceOwesNoMoreThanATick(t *testing.T) {
+	for ms := int64(50); ms <= 1500; ms += 7 {
+		var total int64
+		for i, n := range session.PaceTicks(ms, 40) {
+			if n < 1 {
+				t.Fatalf("%d ms: step %d waits %d ticks", ms, i, n)
+			}
+			total += int64(n) * 50
+			if want := int64(i+1) * ms; total > want || want-total >= 50 {
+				t.Fatalf("%d ms: %d steps took %d ms, want %d less under a tick", ms, i+1, total, want)
+			}
+		}
+	}
+	// 435 ms: 8, 9, 9, 8, 9 ticks; after a stop, from 8 again.
+	if got := session.PaceTicks(435, 5); !slices.Equal(got, []game.Tick{8, 9, 9, 8, 9}) {
+		t.Errorf("435 ms: %v", got)
+	}
+	if a, b := session.PaceAfterStop(435); a != 8 || b != 8 {
+		t.Errorf("435 ms after a stop: %d then %d ticks, want 8 and 8", a, b)
+	}
+}
+
+// TestSpeedGrowsWithLevel: a player's speed is its vocation's with
+// movement.speed_per_level_pct per level over the first (docs/02 "Movimiento"), from its
+// first tick in the world and at every level it gains.
+func TestSpeedGrowsWithLevel(t *testing.T) {
+	h := newHarness(t, worldtest.Open(t, 0, 0, 16, 16), func(cfg *session.Config) {
+		cfg.Balance.Movement.SpeedPerLevelPct = 0.2
+	})
+	speed := func(level int) uint32 {
+		nextChar++
+		cl, _ := h.joinChar(session.Character{ID: nextChar, AccountID: nextChar, Name: "L" + strconv.Itoa(level),
+			Vocation: "guardian", Level: level, Health: 145, Mana: 20})
+		st := find(cl.take(), (*pb.ServerMessage).GetPlayerStats)
+		if len(st) == 0 {
+			t.Fatalf("level %d: no stats", level)
+		}
+		return st[0].GetSpeed()
+	}
+	// The test vocation: 200 + 2 a level; then 0.2 % of that a level.
+	if got := speed(1); got != 200 {
+		t.Errorf("level 1: speed %d, want the vocation's 200", got)
+	}
+	if got := speed(2); got != 202 { // 202 × 1.002 = 202.4
+		t.Errorf("level 2: speed %d, want 202", got)
+	}
+	if got := speed(51); got != 330 { // 300 × 1.1
+		t.Errorf("level 51: speed %d, want 330", got)
 	}
 }
 
@@ -176,9 +305,9 @@ func TestDiagonalAndTerrain(t *testing.T) {
 	if len(ms) != 3 || p.Pos() != pos(3, 1) {
 		t.Fatalf("moves %v, at %v", ms, p.Pos())
 	}
-	// Diagonal onto mud: 1000*200/200 = 20 ticks straight, × √2 = 28 ticks (1400 ms); then
-	// two straight steps on mud.
-	if ms[0].GetDurationMs() != 1400 || ms[1].GetDurationMs() != 1000 || ms[2].GetDurationMs() != 1000 {
+	// Diagonal onto mud: 1000*200/200 = 1000 ms straight, × √2 = 1414 ms; then two
+	// straight steps on mud.
+	if ms[0].GetDurationMs() != 1414 || ms[1].GetDurationMs() != 1000 || ms[2].GetDurationMs() != 1000 {
 		t.Fatalf("durations %d %d %d", ms[0].GetDurationMs(), ms[1].GetDurationMs(), ms[2].GetDurationMs())
 	}
 }

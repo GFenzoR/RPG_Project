@@ -182,6 +182,11 @@ export class CreatureBody {
    * before draw(); 1 for a body drawn outside the map (no sun there).
    */
   contact = 1;
+  /**
+   * What the ellipse shows where nothing casts a shadow (cast-shadows.ts contactOf `unlit`):
+   * a body fading away casts none and falls back to this.
+   */
+  contactRest = 1;
   private tint: number;
   /** Paper doll: one sprite per layer, in `layers` order; empty for a one-sprite body. */
   private readonly sprites: Sprite[] = [];
@@ -300,7 +305,7 @@ export class CreatureBody {
     this.stacked = d;
   }
 
-  /** The alpha the body was last drawn with: its see-through copies follow it. */
+  /** The alpha the body was last drawn with. */
   get alpha(): number {
     return this.drawnAlpha;
   }
@@ -328,6 +333,12 @@ export class CreatureBody {
   /** The row its feet stand on facing `dir`, sprite px from its tile's top edge. */
   groundY(dir: number): number {
     return this.baseY - this.footingOf(dir).foot;
+  }
+
+  /** Where its feet stand now (the facing drawn): its container's px, and how wide. */
+  stand(): { x: number; y: number; width: number } {
+    const f = this.footingOf(this.drawnDir);
+    return { x: this.baseX + f.cx * this.drawnFlip, y: this.baseY - f.foot, width: f.width };
   }
 
   /** The contact ellipse under the feet of the facing drawn, as wide as they stand. */
@@ -363,7 +374,7 @@ export class CreatureBody {
     if (sh) {
       // Never with a cast shadow (contact 0): nothing is even drawn then. A body under
       // half opacity casts none (castShadow), so it keeps its ellipse.
-      const contact = alpha < CAST_MIN_ALPHA ? 1 : this.contact;
+      const contact = alpha < CAST_MIN_ALPHA ? this.contactRest : this.contact;
       const show = contact > 0;
       if (sh.visible !== show) sh.visible = show;
       if (show) {
@@ -371,6 +382,11 @@ export class CreatureBody {
         sh.alpha = alpha * contact;
       }
     }
+  }
+
+  /** The opacity the contact ellipse is drawn with now, of its full strength (0: hidden). */
+  get contactAlpha(): number {
+    return this.shadow?.visible === true ? this.shadow.alpha : 0;
   }
 
   /** Whether the contact ellipse is drawn now (tests, the E2E hook). */

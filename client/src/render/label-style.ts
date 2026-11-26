@@ -117,10 +117,23 @@ const NAME_PX: Readonly<Record<NameSize, { base: number; step: number }>> = {
 /** The lines under the name are this much of it, and never under SUB_MIN_PX CSS px. */
 export const SUB_RATIO = 0.8;
 const SUB_MIN_PX = 9;
-/** A long name shrinks to this much of its size before it is cut (render/labels.ts). */
+/** The role line shrinks to this much of its size before it takes more lines (render/labels.ts). */
 export const SHRINK_MIN = 0.82;
+/**
+ * The smallest a name is ever drawn, CSS px (the floor of the lines under it too): a name is
+ * never cut, it shrinks to here at most and, still too wide, shows wider than its room.
+ */
+export const NAME_MIN_PX = SUB_MIN_PX;
 
 const density = (dpr: number): number => (Number.isFinite(dpr) && dpr > 0 ? dpr : 1);
+
+/**
+ * NAME_MIN_PX in device pixels on a screen of `dpr`: the same size to the eye at 100 % and
+ * at 200 % (6 device px, the floor before, were 3 CSS px on a dense screen).
+ */
+export function minNamePx(dpr: number): number {
+  return Math.round(NAME_MIN_PX * density(dpr));
+}
 
 /**
  * Font size of the names in device pixels, at map scale `zoom` (whole device pixels per

@@ -1,12 +1,13 @@
 // Creature labels (docs/17 UI-3 "Nombres"), pure and unit-tested: what each line says and
 // how big, and where the blocks go when they crowd.
 //
-// Lines. A player or a monster has one line, its name. A long name first shrinks a little
-// (fitName, down to SHRINK_MIN of its size) and is cut with an ellipsis only past the hard
-// width. An NPC has two: its name and, under it, smaller and paler, what it does
-// ("Tilde Varga" / "Provisiones": the role text of data/npcs, @rpg/content-schema
-// npcRoleKey). Neither is ever cut: the name shrinks, the role wraps onto a second line
-// by its words (wrapRole); make validate keeps both short enough for that.
+// Lines. A player or a monster has one line, its name. A name always shows whole on that
+// line, never cut and never with an ellipsis (owner, 2026-11-26): one too wide for its room
+// is drawn smaller (fitName), and names are bounded in length so that it is a little
+// smaller (CREATURE_NAME_MAX_CHARS). An NPC has two lines: its name and, under it, smaller
+// and paler, what it does ("Tilde Varga" / "Provisiones": the role text of data/npcs,
+// @rpg/content-schema npcRoleKey). Neither is ever cut: the name shrinks, the role wraps
+// onto a second line by its words (wrapRole); make validate keeps both short enough.
 //
 // Crowding (T5.6). At zoom 1 a tile is 32 px and a name is wider than that, so the names,
 // guild lines and skulls of creatures side by side overlap. The rule, in priority order
@@ -15,7 +16,7 @@
 // line); if it still overlaps, only the ones next to the player stay (on top), the rest
 // hide. What counts is how big the labels are next to a tile: every label shows untouched
 // only when a name is at most a quarter of a tile tall (labelsFull).
-import { SHRINK_MIN, linePitch } from "./label-style.ts";
+import { NAME_MIN_PX, SHRINK_MIN, linePitch } from "./label-style.ts";
 
 /** A tile is at least this many name heights tall when every label shows untouched. */
 export const LABEL_FULL_TILE = 4;
@@ -45,28 +46,28 @@ export interface FittedLine {
 }
 
 /**
- * A name on one line of at most `maxWidth`: as it is when it fits; else smaller, down to
- * SHRINK_MIN of `fontPx`; and only when that is still too wide, cut with an ellipsis at
- * the smallest size. With `cut` false (an NPC) it is never cut: it keeps the smallest size.
+ * A name on ONE line, always whole (never cut, never an ellipsis): as it is when it fits in
+ * `maxWidth`, else the largest size at which it does, down to `minPx` (label-style
+ * minNamePx: the smallest size that still reads). A name still too wide there keeps that
+ * size and shows wider than `maxWidth`: placeLabels works with the width it really has.
+ *
+ * With every label showing (labelsFull) the longest name allowed (CREATURE_NAME_MAX_CHARS)
+ * fits at SHRINK_MIN of `fontPx` or more. Crowded (zoom 1) the room is tighter: the names of
+ * the game still fit, a player's name of the widest letters reaches `minPx`, and so does a
+ * name made under the older limit of 20.
  */
 export function fitName(
   name: string,
   fontPx: number,
   maxWidth: number,
   measure: MeasureLine,
-  cut = true,
+  minPx: number = NAME_MIN_PX,
 ): FittedLine {
   if (measure(name, fontPx) <= maxWidth) return { text: name, fontPx };
-  const min = Math.max(1, Math.ceil(fontPx * SHRINK_MIN));
-  for (let px = fontPx - 1; px >= min; px--)
+  const floor = Math.max(1, Math.min(fontPx, Math.round(minPx)));
+  for (let px = fontPx - 1; px > floor; px--)
     if (measure(name, px) <= maxWidth) return { text: name, fontPx: px };
-  if (!cut) return { text: name, fontPx: min };
-  const chars = [...name];
-  for (let n = chars.length - 1; n >= 1; n--) {
-    const text = `${chars.slice(0, n).join("").trimEnd()}…`;
-    if (measure(text, min) <= maxWidth) return { text, fontPx: min };
-  }
-  return { text: `${chars[0] ?? ""}…`, fontPx: min };
+  return { text: name, fontPx: floor };
 }
 
 export interface WrappedRole {

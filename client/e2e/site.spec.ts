@@ -7,6 +7,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { psql } from "./psql.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -22,7 +23,7 @@ function randomLetters(n: number): string {
 
 const email = `site-${Date.now()}-${randomLetters(6)}@example.com`;
 const password = "e2e-password-1";
-const name = `Champion ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+const name = characterName("Champion");
 
 /** No horizontal scroll: nothing is wider than the viewport. */
 async function fitsWidth(page: Page): Promise<void> {

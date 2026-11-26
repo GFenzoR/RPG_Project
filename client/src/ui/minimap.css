@@ -115,7 +115,7 @@
 .minimap-floor {
   fill: var(--ui-gold-300);
   font-family: var(--ui-font);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   paint-order: stroke;
   stroke: var(--ui-void);

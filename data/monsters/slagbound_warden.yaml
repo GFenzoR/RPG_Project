@@ -16,7 +16,7 @@ attacks:
   # Slag slam: it pounds the floor and burns every tile around it.
   - { type: melee, element: fire, min: 25, max: 55, interval_ms: 2000, chance: 0.3, area: { shape: circle, radius: 1 },
       condition: { id: burning, chance: 0.5, ticks: 5, damage: 8 } }
-  # Below 60 % it calls two cinder salamanders out of the forge's lava (two at most).
+  # Below 60 % it calls two ember salamanders out of the forge's lava (two at most).
   - { type: summon, interval_ms: 60000, below_hp_pct: 60, summon: { monster: cinder_salamander, count: 2, max_alive: 2 } }
 phases:
   # Enraged below 30 %: faster on its feet and with its blows.
@@ -30,5 +30,5 @@ loot:
   - { item: radiant_temper_stone, chance: 0.3 } # the forge
   - { item: warding_amber, chance: 0.25 } # the forge's protection
 tags: [construct, boss, cave, volcan]
-notes: Chapter 3 boss (ch3_warden), alone in the ancient forge at the bottom of the mine, level 40 in a small group, 44 alone with healing. Always drops the forge seal; long respawn on the map. Its slam burns whoever stands next to it, below 60 % it calls two cinder salamanders (no experience, no loot; they go when it dies) and below 30 % it is enraged.
+notes: Chapter 3 boss (ch3_warden), alone in the ancient forge at the bottom of the mine, level 40 in a small group, 44 alone with healing. Always drops the forge seal; long respawn on the map. Its slam burns whoever stands next to it, below 60 % it calls two ember salamanders (no experience, no loot; they go when it dies) and below 30 % it is enraged.
 corpse: remains_slag

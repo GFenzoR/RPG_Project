@@ -14,6 +14,7 @@ import {
   HUMANOID_PER_TILE,
   HUMANOID_PER_TILE_DIAG,
   HUMANOID_PER_TILE_NS,
+  HUMANOID_PER_TILE_NS_HOLD,
   WALK_FRAMES,
 } from "../../../tools/spritegen/src/engine/specs/humanoid/index.ts";
 import { PROJECTION } from "../../../tools/spritegen/src/engine/style.ts";
@@ -77,6 +78,17 @@ describe("the biped gait against the engine humanoid's feet", () => {
       const len = Math.hypot(dx, dy);
       const perFrame = (32 * len) / per;
       const cyclePx = perFrame * WALK_FRAMES;
+      // One cadence in every direction (specs/humanoid HUMANOID_PER_TILE_NS): facing north
+      // or south, and on a diagonal, the planted foot slides forward under the body by what
+      // the cadence that would hold it differs, per frame. The print lies in the middle of
+      // that slide: the foot starts up to two frames of it behind and ends as far ahead.
+      const hold =
+        dx !== 0 && dy !== 0
+          ? Math.hypot(HUMANOID_PER_TILE, HUMANOID_PER_TILE_NS_HOLD)
+          : dy !== 0
+            ? HUMANOID_PER_TILE_NS_HOLD
+            : HUMANOID_PER_TILE;
+      const near = 2.5 + 2 * Math.abs(perFrame - (32 * len) / hold);
       const print = { x: 0, y: 0 };
       for (const [foot, side] of FEET) {
         const contact = BIPED.contacts.find((c) => c.side === side);
@@ -95,9 +107,10 @@ describe("the biped gait against the engine humanoid's feet", () => {
           const moved = (k + 0.5) * perFrame;
           const gx = s.x - s.width / 2 + (dx / len) * moved;
           const gy = s.y - line + (dy / len) * moved;
-          // Frame by frame the sole stays on the print (the stride rule holds it there).
-          expect(Math.abs(gx - print.x), `${dir} ${foot} frame ${k} x`).toBeLessThanOrEqual(2.5);
-          expect(Math.abs(gy - print.y), `${dir} ${foot} frame ${k} y`).toBeLessThanOrEqual(2.5);
+          // Frame by frame the sole stays by the print (east and west the stride rule holds
+          // it there, within 2.5 px).
+          expect(Math.abs(gx - print.x), `${dir} ${foot} frame ${k} x`).toBeLessThanOrEqual(near);
+          expect(Math.abs(gy - print.y), `${dir} ${foot} frame ${k} y`).toBeLessThanOrEqual(near);
           mx += gx / planted;
           my += gy / planted;
         }

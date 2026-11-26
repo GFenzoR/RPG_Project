@@ -8,6 +8,8 @@
 // Env: DESKTOP_BIN (app binary), SERVER (game server, the app gets it as RPG_SERVER_URL),
 // DRIVER (tauri-driver URL, default http://127.0.0.1:4444).
 import { mkdirSync, writeFileSync } from "node:fs";
+// The one helper every E2E takes its character names from (client/vite/e2e-names.test.ts).
+import { characterName } from "../../../client/e2e/names.ts";
 
 const bin = process.env["DESKTOP_BIN"] ?? "apps/desktop/src-tauri/target/debug/rpg-desktop";
 const server = process.env["SERVER"] ?? "http://127.0.0.1:18090";
@@ -49,7 +51,7 @@ async function main(): Promise<void> {
   // Account and character through the HTTP API, like the client E2E.
   const email = `desktop-${Date.now()}-${letters(5)}@example.com`;
   const password = "desktop-password-1";
-  const name = `Desk ${letters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Desk");
   await api("/api/auth/register", { email, password });
   const { token } = (await api("/api/auth/login", { email, password, token_in_body: true })) as {
     token: string;

@@ -426,7 +426,12 @@ func account(prefix string, g int) (email, password string) {
 // validPrefix is what -prefix accepts: the second word of every name and the start of
 // every email. Letters only, so prefixes cannot fold into the same names ("load100" and
 // "load300" would both be "Load").
-var validPrefix = regexp.MustCompile(`^[a-z]{2,12}$`)
+var validPrefix = regexp.MustCompile(`^[a-z]{2,10}$`)
+
+// maxNameLen is the longest character name the server takes (auth.MaxNameLen, which
+// tools/bots cannot import). TestMaxNameLenIsTheServers parses the server's source and
+// keeps the two equal.
+const maxNameLen = 16
 
 // name returns bot i's character name: "Duo" plus i in base 26 ("Duoaa", "Duoab", ...
 // "Duoba"), then the prefix as a second word ("Duoaa Load"), so runs with different
@@ -475,14 +480,18 @@ func reservedName(name string) bool {
 	return false
 }
 
-// checkPrefix rejects a prefix that is not 2-12 lowercase letters or that gives one of
-// the first n bots a name the server refuses ("dev"; "mine" gives "Duoad Mine", which
-// contains "admin").
+// checkPrefix rejects a prefix that is not 2-10 lowercase letters or that gives one of
+// the first n bots a name the server refuses: a reserved one ("dev"; "mine" gives "Duoad
+// Mine", which contains "admin") or one longer than maxNameLen (10 letters fit up to 676
+// bots: bot 676 is "Duobaa", a letter more).
 func checkPrefix(prefix string, n int) error {
 	if !validPrefix.MatchString(prefix) {
-		return fmt.Errorf("prefix must be 2-12 lowercase letters (a-z), got %q", prefix)
+		return fmt.Errorf("prefix must be 2-10 lowercase letters (a-z), got %q", prefix)
 	}
 	for i := range n {
+		if nm := name(prefix, i); len(nm) > maxNameLen {
+			return fmt.Errorf("prefix %q gives bot %d the name %q, longer than the %d letters the server takes: use a shorter prefix", prefix, i, nm, maxNameLen)
+		}
 		if nm := name(prefix, i); reservedName(nm) {
 			return fmt.Errorf("prefix %q gives bot %d the name %q, which the server reserves for staff", prefix, i, nm)
 		}

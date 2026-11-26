@@ -602,7 +602,7 @@ describe("validator diagnostics", () => {
       "  mud: { prints: { tread: 0.6 },",
       "  mud: { footprints: 40000,",
     );
-    edit("data/livingworld/surfaces.yaml", "prints: { wind: 0.4,", "prints: { wind: -1,");
+    edit("data/livingworld/surfaces.yaml", "prints: { wind: 1.4,", "prints: { wind: -1,");
     edit("data/livingworld/surfaces.yaml", "  volume: 0.7", "  volume: 7");
     edit("data/livingworld/surfaces.yaml", "  lava: {}", "  lava: {}\n  marsh: {}");
     appendFileSync(
@@ -687,17 +687,22 @@ describe("validator diagnostics", () => {
       "wind: { kind: dead_tree, pivot: 5 } }",
     );
     expect(wind()).toEqual([]);
-    // Schema: an unknown type, a flutter of a pixel or more, a plant with nothing to say.
+    // Schema: an unknown type, a drift of a pixel or more, a plant with nothing to say.
     edit(
       "data/livingworld/plants.yaml",
       "{ item: reeds, reaction: bend }",
       "{ item: reeds, wind: kite }",
     );
     edit("data/livingworld/plants.yaml", "{ item: cut_bush, wind: none }", "{ item: cut_bush }");
-    edit("data/livingworld/wind.yaml", "flutter: 0.7,", "flutter: 1.0,");
+    edit("data/livingworld/wind.yaml", "amplitude: 3.0, drift: 0,", "amplitude: 3.0, drift: 1.0,");
+    // Gusts so close that the plants would never stand still between them.
+    edit("data/livingworld/wind.yaml", "every_s: 45", "every_s: 20");
     out = messages(root).filter((m) => m.startsWith("error"));
     expect(out.some((m) => m.includes("plants.yaml") && m.includes("wind"))).toBe(true);
-    expect(out.some((m) => m.includes("wind.yaml") && m.includes("flutter"))).toBe(true);
+    expect(out.some((m) => m.includes("wind.yaml") && m.includes("drift"))).toBe(true);
+    expect(
+      out.some((m) => m.includes("wind.yaml") && m.includes("the calm between two gusts")),
+    ).toBe(true);
     expect(out.filter((m) => m.includes("plants.yaml")).length).toBeGreaterThanOrEqual(2);
     // Without the generated file every plant sprite is undeclared: say how to make it.
     rmSync(file("data/livingworld/wind_sprites.yaml"));
@@ -1510,7 +1515,82 @@ describe("validator diagnostics", () => {
       expect.stringMatching(
         /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.role, es\) is longer than 28/,
       ),
+      expect.stringMatching(
+        /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.name, en\) is longer than 16/,
+      ),
       expect.stringMatching(/puerto_armorer\.yaml.*\(npc\.puerto_armorer\.name, en\) says what/),
+    ]);
+  });
+
+  it('wants every creature name whole on one line: 16 characters at most and no ellipsis (docs/06 "Nombres")', () => {
+    const names = (): string[] =>
+      messages(root).filter((m) => /longer than \d+ characters|has an ellipsis/.test(m));
+    expect(names()).toEqual([]);
+    // A monster's name over the limit (19 characters), in one language.
+    edit(
+      "i18n/es/monsters.yaml",
+      'monster.wolf.name: "lobo"',
+      'monster.wolf.name: "lobo gris del monte"',
+    );
+    // One cut by hand to fit, with either kind of ellipsis.
+    edit(
+      "i18n/en/monsters.yaml",
+      'monster.bilge_rat.name: "bilge rat"',
+      'monster.bilge_rat.name: "bilge r…"',
+    );
+    edit(
+      "i18n/es/monsters.yaml",
+      'monster.bilge_rat.name: "rata de sentina"',
+      'monster.bilge_rat.name: "rata de sent..."',
+    );
+    // An NPC's name and its role, cut by hand too.
+    edit(
+      "i18n/es/npcs.yaml",
+      'npc.puerto_armorer.name: "Bastian Roe"',
+      'npc.puerto_armorer.name: "Bastian R…"',
+    );
+    edit(
+      "i18n/en/npcs.yaml",
+      'npc.puerto_armorer.role: "Armorer"',
+      'npc.puerto_armorer.role: "Armor..."',
+    );
+    const got = names();
+    expect(got).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          /^error data\/monsters\/wolf\.yaml.*"lobo gris del monte" \(monster\.wolf\.name, es\) is longer than 16 characters/,
+        ),
+        expect.stringMatching(/bilge_rat\.yaml.*\(monster\.bilge_rat\.name, en\) has an ellipsis/),
+        expect.stringMatching(/bilge_rat\.yaml.*\(monster\.bilge_rat\.name, es\) has an ellipsis/),
+        expect.stringMatching(
+          /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.name, es\) has an ellipsis/,
+        ),
+        expect.stringMatching(
+          /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.role, en\) has an ellipsis/,
+        ),
+      ]),
+    );
+    expect(got).toHaveLength(5);
+    // Exactly at the limit is fine.
+    cpSync(join(REPO, "i18n"), join(root, "i18n"), { recursive: true });
+    edit(
+      "i18n/es/monsters.yaml",
+      'monster.wolf.name: "lobo"',
+      'monster.wolf.name: "lobo gris de mar"',
+    );
+    expect(names()).toEqual([]);
+    // One letter over the limit is not: the border itself.
+    edit(
+      "i18n/es/monsters.yaml",
+      'monster.wolf.name: "lobo gris de mar"',
+      'monster.wolf.name: "lobo gris del mar"',
+    );
+    expect("lobo gris de mar").toHaveLength(16);
+    expect("lobo gris del mar").toHaveLength(17);
+    expect(names()).toEqual([
+      expect.stringMatching(
+        /wolf\.yaml.*"lobo gris del mar" \(monster\.wolf\.name, es\) is longer than 16 characters/,
+      ),
     ]);
   });
 

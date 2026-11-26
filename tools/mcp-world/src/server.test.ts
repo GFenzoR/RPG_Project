@@ -196,7 +196,7 @@ describe("read tools", () => {
     ).toBe(49);
     const crab = json("content_search", { text: "cangrejo", kind: "monster" });
     expect(crab).toMatchObject({
-      results: [{ kind: "monster", id: "tide_crab", names: { es: "cangrejo de marea" } }],
+      results: [{ kind: "monster", id: "tide_crab", names: { es: "cangrejo marino" } }],
     });
     const grounds = json("content_search", { kind: "item", item_kind: "ground", limit: 200 }) as {
       results: { id: string; walkable: boolean }[];

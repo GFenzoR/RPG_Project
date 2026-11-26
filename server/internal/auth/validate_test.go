@@ -2,6 +2,9 @@ package auth
 
 import (
 	"errors"
+	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -51,38 +54,38 @@ func TestValidPassword(t *testing.T) {
 
 func TestValidCharacterName(t *testing.T) {
 	cases := map[string]bool{
-		"Mira":                  true,
-		"Old Tom":               true,
-		"Ana Del Mar":           true,
-		"Al":                    false, // too short
-		"mira":                  false, // lowercase first letter
-		"MIRA":                  false,
-		"Mi  Ra":                false, // double space
-		" Mira":                 false,
-		"Mira ":                 false,
-		"Ana De La Mar":         false, // 4 words
-		"Mira1":                 false,
-		"Ñandú":                 false, // ASCII only
-		"Mira O":                false, // one-letter word
-		"Gm Mira":               false, // reserved whole word
-		"Mira Admin":            false,
-		"Admin Bob":             false,
-		"Gamemaster Bob":        false, // reserved substrings
-		"Game Master Bob":       false, // spaces do not hide them
-		"Soporte":               false,
-		"Support Team":          false,
-		"Staff":                 false,
-		"Moderador":             false,
-		"Moderator Ann":         false,
-		"Sistema":               false,
-		"The System":            false,
-		"Tutor Ana":             false,
-		"Cm Lia":                false,
-		"Gmork":                 true, // "gm" only as a whole word
-		"Godric":                true, // "god" only as a whole word
-		"Modesto":               true,
-		"Abcdefghijklmnopqrstu": false, // 21 chars
-		"Abcdefghijklmnopqrst":  true,  // 20 chars
+		"Mira":              true,
+		"Old Tom":           true,
+		"Ana Del Mar":       true,
+		"Al":                false, // too short
+		"mira":              false, // lowercase first letter
+		"MIRA":              false,
+		"Mi  Ra":            false, // double space
+		" Mira":             false,
+		"Mira ":             false,
+		"Ana De La Mar":     false, // 4 words
+		"Mira1":             false,
+		"Ñandú":             false, // ASCII only
+		"Mira O":            false, // one-letter word
+		"Gm Mira":           false, // reserved whole word
+		"Mira Admin":        false,
+		"Admin Bob":         false,
+		"Gamemaster Bob":    false, // reserved substrings
+		"Game Master Bob":   false, // spaces do not hide them
+		"Soporte":           false,
+		"Support Team":      false,
+		"Staff":             false,
+		"Moderador":         false,
+		"Moderator Ann":     false,
+		"Sistema":           false,
+		"The System":        false,
+		"Tutor Ana":         false,
+		"Cm Lia":            false,
+		"Gmork":             true, // "gm" only as a whole word
+		"Godric":            true, // "god" only as a whole word
+		"Modesto":           true,
+		"Abcdefghijklmnopq": false, // 17 chars
+		"Abcdefghijklmnop":  true,  // 16 chars
 	}
 	for name, want := range cases {
 		if got := ValidCharacterName(name); got != want {
@@ -107,5 +110,83 @@ func TestValidCharacterName(t *testing.T) {
 		if got := CharacterNameError(name); !errors.Is(got, want) || (want == nil) != (got == nil) {
 			t.Errorf("CharacterNameError(%q) = %v, want %v", name, got, want)
 		}
+	}
+}
+
+// TestNameBoundMatchesTheLabel keeps the character-name limit equal to the one the client's
+// labels and make validate use for every creature name (CREATURE_NAME_MAX_CHARS in
+// packages/content-schema/src/npc-role.ts): a name always shows whole on one line.
+func TestNameBoundMatchesTheLabel(t *testing.T) {
+	raw, err := os.ReadFile("../../../packages/content-schema/src/npc-role.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]int{
+		"CREATURE_NAME_MAX_CHARS": MaxNameLen,
+		"KNOWN_NAME_MAX_CHARS":    MaxKnownNameLen,
+	} {
+		m := regexp.MustCompile(name + ` = (\d+);`).FindSubmatch(raw)
+		if m == nil {
+			t.Fatalf("%s not found in npc-role.ts", name)
+		}
+		if got, _ := strconv.Atoi(string(m[1])); got != want {
+			t.Errorf("%s = %d, the server's limit is %d: they must be equal", name, got, want)
+		}
+	}
+	// The texts players read say the same number: the refusal writes it out (error texts
+	// take no parameters) and the form's hint takes it as {max}. A line that is missing
+	// or renamed fails too, instead of passing unseen.
+	for _, lang := range []string{"es", "en"} {
+		yml, err := os.ReadFile("../../../i18n/" + lang + "/client.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		limit := regexp.MustCompile(`\b` + strconv.Itoa(MaxNameLen) + `\b`)
+		var refusal, hint bool
+		for _, line := range strings.Split(string(yml), "\n") {
+			switch {
+			case strings.HasPrefix(line, "error.invalid_name:"):
+				refusal = true
+				if nums := regexp.MustCompile(`\d+`).FindAllString(line, -1); len(nums) != 2 ||
+					nums[0] != strconv.Itoa(MinNameLen) || !limit.MatchString(line) {
+					t.Errorf("%s error.invalid_name must say %d to %d: %s", lang, MinNameLen, MaxNameLen, line)
+				}
+			case strings.HasPrefix(line, "client.characters.name_hint:"):
+				hint = true
+				if !strings.Contains(line, "{max}") {
+					t.Errorf("%s client.characters.name_hint must take {max}: %s", lang, line)
+				}
+			}
+		}
+		if !refusal || !hint {
+			t.Errorf("%s client.yaml: error.invalid_name found %v, client.characters.name_hint found %v", lang, refusal, hint)
+		}
+	}
+	long := strings.Repeat("a", MaxNameLen+1)
+	if ValidCharacterName(strings.ToUpper(long[:1]) + long[1:]) {
+		t.Errorf("a %d-letter name must be refused", MaxNameLen+1)
+	}
+}
+
+// A name that looks a character up may be as long as names once were: the characters made
+// under the limit of 20 keep theirs.
+func TestKnownCharacterName(t *testing.T) {
+	cases := map[string]bool{
+		"Mira":                  true,
+		"Abcdefghijklmnop":      true,  // 16
+		"Abcdefghijklmnopq":     true,  // 17: refused for a new character
+		"Abcdefghijklmnopqrst":  true,  // 20
+		"Abcdefghijklmnopqrstu": false, // 21
+		"Al":                    false,
+		"mira":                  false,
+		"Admin Bob":             false,
+	}
+	for name, want := range cases {
+		if got := KnownCharacterName(name); got != want {
+			t.Errorf("KnownCharacterName(%q) = %v, want %v", name, got, want)
+		}
+	}
+	if ValidCharacterName("Abcdefghijklmnopq") {
+		t.Error("a 17-letter name must not make a character")
 	}
 }

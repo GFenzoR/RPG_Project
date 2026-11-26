@@ -10,6 +10,7 @@ import {
   admitSpeech,
   bubbleAlpha,
   bubbleLife,
+  bubbleMetrics,
   bubbleStyle,
   stackBubbles,
   wrapBubble,
@@ -179,5 +180,26 @@ describe("stackBubbles", () => {
     const at = stackBubbles([box(1, 100, 10, { distance: 0 }), box(2, 100, 10)], 0);
     expect(at.get(1)).toBe(20);
     expect(at.get(2)).toBe(20);
+  });
+});
+
+describe("bubbleMetrics", () => {
+  it("draws the text 13 CSS px, two more than before, at every pixel density", () => {
+    expect(bubbleMetrics(1).fontPx).toBe(13);
+    expect(bubbleMetrics(1.25).fontPx).toBe(16);
+    expect(bubbleMetrics(1.5).fontPx).toBe(20);
+    expect(bubbleMetrics(2).fontPx).toBe(26);
+  });
+  it("scales the line, padding and wrap width with the font, whole pixels", () => {
+    const a = bubbleMetrics(1);
+    const b = bubbleMetrics(2);
+    expect(b.width).toBe(a.width * 2);
+    expect(b.padX).toBe(a.padX * 2);
+    for (const v of Object.values(bubbleMetrics(1.25))) expect(Number.isInteger(v)).toBe(true);
+    expect(a.lineH).toBeGreaterThan(a.fontPx);
+  });
+  it("falls back to 1x on a bad density", () => {
+    expect(bubbleMetrics(0)).toEqual(bubbleMetrics(1));
+    expect(bubbleMetrics(Number.NaN)).toEqual(bubbleMetrics(1));
   });
 });

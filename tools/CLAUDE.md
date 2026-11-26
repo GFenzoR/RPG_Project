@@ -155,6 +155,8 @@ copian a mano después de mirarlos, y ningún tema entra sin que el dueño lo ha
 - **Herramientas:** "Crear música", "Crear imagen", "Crear video", "Canvas" y "Deep
   Research", en "Cargas y herramientas", son `<gem-menu-item role=menuitemcheckbox>`, no
   botones (`gemini_web.CLICK_TOOL_JS`).
+- **"Más herramientas" (2026-11-26):** el menú deja "Crear música" un nivel más abajo, en
+  "Más herramientas"; `choose_tool` entra ahí si no la ve en el primero (`MORE_TOOLS`).
 - **Imagen (verificado el 2026-11-18, diez pedidos):** `image` elige "Crear imagen" en
   Hydrogen y la hoja llega en ~30 s, una sola imagen de 1024x572 a 765x1024 (el formato lo
   elige Gemini); ninguno topó con la cuota. Ni los trece de la segunda tanda (ese mismo día,
@@ -349,8 +351,8 @@ palmera, arbusto, hierba, junco, flor, enredadera, cactus, árbol seco) **declar
 metadata de viento**: `wind: plantWind("<tipo>", { pivot })` (`src/wind.ts`). El tipo da
 los valores por defecto (`data/livingworld/wind.yaml` `kinds`); `pivot` es dónde termina
 el tronco o el tallo, en px sobre el borde de abajo del sprite (obligatorio en `tree`,
-`palm`, `cactus` y `dead_tree`; en los demás sale del dibujo); `stiffness`, `amplitude` y
-`flutter` solo si la planta no se parece a su tipo. El cliente la mece sin más código: no
+`palm`, `cactus` y `dead_tree`; en los demás sale del dibujo); `stiffness` y `amplitude`
+solo si la planta no se parece a su tipo. El cliente la dobla cuando pasa una ráfaga, sin más código: no
 se dibujan frames de viento (los `frame_<n>` de los árboles salieron en el lote 20). El
 flujo es automático: `make spritegen` escribe `data/livingworld/wind_sprites.yaml`
 (generado, nunca a mano; entero aunque se use `ONLY=`), con el `pivot` y la fila más alta
@@ -364,9 +366,10 @@ spritegen (pack, Gemini) lleva la misma metadata en `tiles:` de `assets/sprites.
 `<sprite>: { wind: { kind: palm, pivot: 30 } }` (`pivot` obligatorio; `import_art.py
 --wind palm --pivot 30` deja la línea en `import.json` y avisa si un objeto con nombre de
 planta se importa sin `--wind`). **Mirar siempre el vaivén:** `make sway-preview
-[ONLY=<prefijo>]` escribe `build/spritegen/sway.png` (cada planta quieta y en 8 momentos,
-con la matemática del cliente, a zoom 2) y `make sway-preview SCENE=forest|town` cuatro
-momentos de un trozo de mapa (`sway.<n>.png`); se revisan con Read: sutil y orgánico,
+[ONLY=<prefijo>]` escribe `build/spritegen/sway.png` (cada planta quieta y en 10 momentos
+de una ráfaga plena: se inclina, se balancea y queda quieta; con la matemática del
+cliente, a zoom 2) y `make sway-preview SCENE=forest|town` cuatro momentos de un trozo de
+mapa alrededor de un frente de ráfaga (`sway.<n>.png`; el primero, 1,5 s antes: todo quieto); se revisan con Read: sutil y orgánico,
 nunca de goma.
 
 ## spritegen: el motor
@@ -470,14 +473,15 @@ torso por cuerpo, piernas, pies, escudos y armas; un arma gira su empuñadura po
 `Grip`). `index.ts` da un spec por capa (`HUMANOID_LAYERS`): el cuerpo, y cada capa con
 `layer: { draw, occlude }` (`renderSpec` proyecta las partes de `occlude` sin pintarlas: el
 cuerpo tapa lo que está detrás; el borde de la capa contra él lleva el pliegue), `perTile` y
-`perTileNS` (frames de caminar por casilla, de la zancada) y `trim`. `compose.ts` apila las
+(frames de caminar por casilla, de la zancada; sin `perTileNS` desde el 2026-11-26: un solo
+ritmo en todas las direcciones, docs/17 "La regla de la zancada") y `trim`. `compose.ts` apila las
 capas teñidas como el cliente (`LAYER_ORDER` de `packages/renderer/src/look.ts`), para las
 hojas y los tests; `previews.ts` arma los quietos de los atuendos y los retratos de los NPCs
 (lee los YAML de `data/` del repo, o de `--root`: `recipesAt(root)` de `recipes/index.ts`,
 que usan `build`, `check` y `preview`); `review.ts`, las hojas. Las puertas de figura se aplican al cuerpo; una capa
 pasa solo las de imagen (paleta, alfa, tramado salvo en piezas finas, borde), y
 `humanoid.test.ts` juzga la figura compuesta (proporciones, el pie apoyado contra el
-`perTile` del cliente en las ocho direcciones (`HUMANOID_DIRS`; en diagonal, hypot(perTile, perTileNS)), el lugar de cada arma y escudo en la pila
+`perTile` del cliente en las ocho direcciones (`HUMANOID_DIRS`; en diagonal, perTile × √2; al norte, al sur y en diagonal el pie patina lo que dice docs/17 y no más), el lugar de cada arma y escudo en la pila
 contra el modelo dibujado como una sola figura, `measureHeld`, varios aspectos de pie sobre
 la fila del suelo y `data/looks.yaml` igual a las capas). Un arma o un escudo nuevo entra solo
 en esa medida: si su lugar en `LAYER_ORDER` deja de ser el mejor (más de un 10 %), falla. Una forma

@@ -1,14 +1,13 @@
-// Where each creature is drawn this frame (docs/17 ART-2), for two things a tile cannot tell:
-// - clicks: a humanoid of 64x64 rises over the tile above its own, and a click on its head
-//   must pick it. The boxes of the drawn creatures are tried first, from the last drawn (the
-//   one in front) to the first, and only then the tile under the pointer. A tile with
-//   something of its own to use (a door, an item, a ladder) keeps its click: no head
-//   rising into it from the tile below takes it (what the cursor's hint says, MOV-7);
-// - hidden creatures: a tall figure in front can cover most of a creature on the tile behind
-//   it (a wolf right north of a player). That one is drawn again over the map, see-through
-//   (a silhouette, like the own player behind a wall, ART-3), so it can still be seen. A
-//   body falling dead or shimmering away (not in the boxes: it is no longer a creature to
-//   click) asks covered() for its own box.
+// Where each creature is drawn this frame (docs/17 ART-2), for what a tile cannot tell:
+// clicks. A humanoid of 64x64 rises over the tile above its own, and a click on its head
+// must pick it. The boxes of the drawn creatures are tried first, from the last drawn (the
+// one in front) to the first, and only then the tile under the pointer. A tile with
+// something of its own to use (a door, an item, a ladder) keeps its click: no head
+// rising into it from the tile below takes it (what the cursor's hint says, MOV-7).
+// A creature behind another one is just covered by it, as far as the drawings overlap:
+// until 2026-11-26 it was drawn again over the one in front, pale and see-through, and
+// two characters standing one behind the other both changed colour (the owner: "eso no
+// debería pasar"). Nothing is drawn over a creature for another creature's sake.
 // A box is the creature's tile column (one tile wide) from the bottom of its tile up to the
 // top of its drawing, at its drawn (interpolated, raised) position, in tiles. Pure, and a
 // frame reuses the same box objects.
@@ -23,9 +22,6 @@ export interface DrawnBox {
   /** Draw order (MapView entityZIndex): a larger one is drawn over a smaller one. */
   order: number;
 }
-
-/** A creature counts as hidden when a creature drawn after it covers this share of its box. */
-export const HIDDEN_SHARE = 0.25;
 
 /** The boxes of one frame: reset, then add one per drawn creature. */
 export class DrawnBoxes {
@@ -84,32 +80,4 @@ export class DrawnBoxes {
     }
     return best;
   }
-
-  /**
-   * Calls fn for every creature that a creature drawn after it covers by HIDDEN_SHARE of its
-   * box or more.
-   */
-  forEachHidden(fn: (box: DrawnBox) => void): void {
-    for (let i = 0; i < this.count; i++) {
-      const a = this.list[i] as DrawnBox;
-      if (this.covered(a)) fn(a);
-    }
-  }
-
-  /** Whether a creature drawn after box `a` covers HIDDEN_SHARE of it or more. */
-  covered(a: DrawnBox): boolean {
-    for (let j = 0; j < this.count; j++) {
-      const b = this.list[j] as DrawnBox;
-      if (b !== a && b.order > a.order && coveredShare(a, b) >= HIDDEN_SHARE) return true;
-    }
-    return false;
-  }
-}
-
-/** The share (0..1) of box a that box b covers. */
-export function coveredShare(a: DrawnBox, b: DrawnBox): number {
-  const w = Math.min(a.x, b.x) + 1 - Math.max(a.x, b.x);
-  const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-  if (w <= 0 || h <= 0) return 0;
-  return (w * h) / (a.bottom - a.top);
 }

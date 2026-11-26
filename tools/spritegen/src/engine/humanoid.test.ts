@@ -24,6 +24,7 @@ import {
   HUMANOID_LAYERS,
   HUMANOID_PER_TILE,
   HUMANOID_PER_TILE_NS,
+  HUMANOID_PER_TILE_NS_HOLD,
   HUMANOID_PER_TILE_DIAG,
   HUMANOID_DIRS,
   SHAPES,
@@ -164,12 +165,18 @@ describe("engine humanoid: proportions (the owner, 2026-11-19)", () => {
 });
 
 describe("engine humanoid: the stride rule (the planted foot holds)", () => {
-  it("derives the frames per tile from the stride: a cycle per tile, longer facing north or south", () => {
+  it("derives the frames per tile from the stride: a cycle per tile, in every facing", () => {
     expect(HUMANOID_PER_TILE).toBe(walkPerTile(WALK_FRAMES, STRIDE));
     expect(HUMANOID_PER_TILE).toBe(8);
-    expect(HUMANOID_PER_TILE_NS).toBeCloseTo(HUMANOID_PER_TILE / PROJECTION.depth, 1);
-    // A diagonal step: a tile across and a tile down, by distance (packages/renderer anim.ts).
-    expect(HUMANOID_PER_TILE_DIAG).toBeCloseTo(Math.hypot(8, HUMANOID_PER_TILE_NS), 5);
+    // One cadence (owner, 2026-11-26): walking north or south plays the cycle of walking
+    // east or west, not the 1.73 cycles per tile that held the foot there, and no layer's
+    // sprites.yaml entry carries a per_tile_ns.
+    expect(HUMANOID_PER_TILE_NS).toBe(HUMANOID_PER_TILE);
+    expect(HUMANOID_PER_TILE_NS_HOLD).toBeCloseTo(HUMANOID_PER_TILE / PROJECTION.depth, 1);
+    for (const l of HUMANOID_LAYERS) expect(l.spec.perTileNS, l.sprite).toBeUndefined();
+    // A diagonal step: a tile across and a tile down, by distance (packages/renderer
+    // anim.ts): √2 cycles in a step √2 as long, the same footfalls per second.
+    expect(HUMANOID_PER_TILE_DIAG).toBeCloseTo(8 * Math.SQRT2, 5);
   });
 
   it("draws every layer in eight facings, the diagonals along the map diagonal", () => {
@@ -189,7 +196,12 @@ describe("engine humanoid: the stride rule (the planted foot holds)", () => {
 
   // The client draws walk frame floor((steps + t) * perTile) % frames while it slides the
   // sprite 32 px per tile (packages/renderer anim.ts): between two frames the sprite moves
-  // 32 / perTile px. The planted foot (its lowest rows, alone) must move back as much.
+  // 32 / perTile px. The planted foot (its lowest rows, alone) must move back as much: it
+  // does walking east or west. Facing north or south the foot is drawn moving 0.58 as far
+  // (the 3/4 depth) and the cadence is the east's (one cadence in every direction), so it
+  // slides what the cadence that would hold it (HUMANOID_PER_TILE_NS_HOLD) differs by, and
+  // no more: 1.7 px a frame, 5.1 px over the three frames between its four planted ones
+  // (0.8 and 2.5 px on a diagonal).
   const spec = bodyOf("sturdy");
   const contact = (foot: string, dir: Dir, frame: number): { x: number; y: number } => {
     const img = partsAlone(spec, [foot], dir, "walk", frame);
@@ -211,7 +223,7 @@ describe("engine humanoid: the stride rule (the planted foot holds)", () => {
     ["foot_l", [4, 5, 6, 7]],
   ];
   for (const dir of HUMANOID_DIRS)
-    it(`facing ${dir}: within 1 px of its ground point while the body passes`, () => {
+    it(`facing ${dir}: the planted foot stays by its ground point while the body passes`, () => {
       // The way the sprite slides on screen, and the frames a tile of that takes.
       const sx = dir.includes("e") ? 1 : dir.includes("w") ? -1 : 0;
       const sy = dir.includes("s") ? 1 : dir.includes("n") ? -1 : 0;
@@ -222,6 +234,14 @@ describe("engine humanoid: the stride rule (the planted foot holds)", () => {
             ? HUMANOID_PER_TILE_NS
             : HUMANOID_PER_TILE;
       const step = 32 / per;
+      const hold =
+        sx !== 0 && sy !== 0
+          ? Math.hypot(HUMANOID_PER_TILE, HUMANOID_PER_TILE_NS_HOLD)
+          : sy !== 0
+            ? HUMANOID_PER_TILE_NS_HOLD
+            : HUMANOID_PER_TILE;
+      const slide = 1 + 3 * Math.abs(step - 32 / hold);
+      if (sy === 0) expect(slide).toBe(1); // east and west: the foot holds
       for (const [foot, frames] of planted) {
         // Where it stands on the map: the sprite has moved f frames the way it faces.
         const ground = frames.map((f) => {
@@ -230,8 +250,10 @@ describe("engine humanoid: the stride rule (the planted foot holds)", () => {
         });
         const first = ground[0] ?? { x: 0, y: 0 };
         for (const g of ground) {
-          if (sx !== 0) expect(Math.abs(g.x - first.x), `${dir} ${foot} x`).toBeLessThanOrEqual(1);
-          if (sy !== 0) expect(Math.abs(g.y - first.y), `${dir} ${foot} y`).toBeLessThanOrEqual(1);
+          if (sx !== 0)
+            expect(Math.abs(g.x - first.x), `${dir} ${foot} x`).toBeLessThanOrEqual(slide);
+          if (sy !== 0)
+            expect(Math.abs(g.y - first.y), `${dir} ${foot} y`).toBeLessThanOrEqual(slide);
         }
       }
     });

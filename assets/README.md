@@ -216,16 +216,18 @@ por cuerpo: `worn/torso_<forma>_<cuerpo>`), con frames `<acción>_<dir>_<n>` de 
 tono neutro que el cliente tiñe (`data/looks.yaml`, docs/06 "Looks"). Cada capa tiene su
 entrada de `animations` con pistas de frames de archivos:
 ```yaml
-  humans/body_sturdy: { anchor: bc, shadow: ellipse, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { ... } }
-  worn/weapon_sword: { anchor: bc, shadow: none, trim: true, per_tile: 8, per_tile_ns: 13.86, ms: { ... } }
+  humans/body_sturdy: { anchor: bc, shadow: ellipse, trim: true, per_tile: 8, ms: { ... } }
+  worn/weapon_sword: { anchor: bc, shadow: none, trim: true, per_tile: 8, ms: { ... } }
 ```
 - `shadow: none` en las capas: la sombra de contacto es la del cuerpo.
 - `trim: true`: cada frame va al atlas recortado a su caja opaca (`trimmed`,
   `spriteSourceSize` y `sourceSize` en el JSON de la página; PixiJS lo ubica como el frame
   entero); un frame vacío queda de 1x1. Son 3612 frames: enteros serían 3,5 páginas, así
   ocupan 0,15 (docs/07).
-- `per_tile` y `per_tile_ns`: frames de caminar por casilla (`perTile` y `perTileNS` del
-  clip) al este y al oeste, y al norte y al sur (la regla de la zancada de docs/17).
+- `per_tile`: frames de caminar por casilla (`perTile` del clip), los mismos en todas las
+  direcciones: un solo ritmo de pasos (docs/17 "La regla de la zancada"). `per_tile_ns`
+  (`perTileNS`) sigue existiendo para un arte que necesite otro ritmo al norte y al sur; los
+  humanoides del motor ya no lo llevan (2026-11-26).
 - `spritegen check` exige que estas pistas sean las del rig. `data/looks.yaml` nombra cada
   capa (spritepack la cuenta como usada por `data/`).
 - `sprites/outfits/<atuendo>/<dir>_0.png` y `sprites/npcs/<npc>.png` son quietos compuestos
@@ -492,8 +494,8 @@ Arte, de la hoja al sprite:
    (`<sprite>/<acción>_<dir>_<n>.png`), `make sprites STRICT=1`, y `credit.py`.
 
 **Criaturas animadas de una sola hoja** (así se hicieron las catorce del 2026-11-18: lobo,
-rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
-espinoso, y en la segunda tanda reptante hueco, escarabajo de mena y los cinco del Volcán;
+rata de sentina, cangrejo marino, murciélago, araña de musgo, sapo de ciénaga y
+espinoso, y en la segunda tanda reptante hueco, escarabajo y los cinco del Volcán;
 prompts en `assets/prompts/sprites/creatures/`):
 - **El prompt** describe la criatura con nuestros datos (`data/monsters`, su nombre de
   `i18n/`, sus `tags`, `notes`, botín y resistencias: un lobo gris de la costa, una araña

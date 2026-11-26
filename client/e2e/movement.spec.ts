@@ -11,6 +11,7 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { faceKey } from "./keys.ts";
 import { serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -38,8 +39,11 @@ const DIAGONALS = [
 ] as const;
 type Tile = { x: number; y: number; z: number };
 
-/** The shortest step at level 1: speed 205 on the fastest ground (100), in whole ticks. */
-const MIN_STEP_MS = 500;
+/**
+ * The shortest step at level 1: speed 205 on the fastest ground (100) with base_step_ms
+ * 891 (data/balance.yaml), to the millisecond.
+ */
+const MIN_STEP_MS = 435;
 /** client/src/state/motion.ts STEP_LEAD_MS: the next step is decided this long before. */
 const STEP_LEAD_MS = 50;
 
@@ -79,7 +83,7 @@ async function addLatency(page: Page, oneWayMs = 75, jitterMs = 40): Promise<voi
 async function enter(page: Page, request: APIRequestContext, tag: string): Promise<void> {
   const email = `e2e-${tag}-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Fluido ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Fluido");
   expect((await request.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
   );
@@ -314,7 +318,7 @@ test("a held arrow key walks tile after tile without stopping between them", asy
   // Facing another way, the key would turn first and walk 80 ms later (docs/17 MOV-2).
   await faceKey(page, dir.key);
 
-  // Hold the key 2 s (4 or 5 steps of 500 ms at level 1), then let go. The screenshot is
+  // Hold the key 2 s (4 or 5 steps of 435 ms at level 1), then let go. The screenshot is
   // taken after letting go, on the last step: taken while the key is held, a slow capture
   // (software WebGL in the CI) would hold it longer and walk more.
   const t0 = await now(page);
@@ -489,7 +493,8 @@ test("two arrows walk the diagonal at the straight speed, the person turned to i
     `held ${d.keys.join("+")}: ${n} diagonal steps in ${Math.round(held)} ms, straight ${straight} ms, diagonal ${diagonal} ms`,
   );
   expect(straight).toBeGreaterThan(50);
-  expect(diagonal).toBe(Math.round((straight / 50) * Math.SQRT2) * 50);
+  // step-time.ts stepMs: × diagonal_cost in thousandths (1.414), to the millisecond.
+  expect(diagonal).toBe(Math.floor((straight * 1414 + 500) / 1000));
   expect(n).toBeLessThanOrEqual(Math.floor(held / (MIN_STEP_MS * 1.4)) + 1);
   // And a floor: the server paces the steps, one starting as the last ends, so the keys
   // held for HELD_MS start a step for every diagonal step's time that fits (300 ms of

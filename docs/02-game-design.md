@@ -83,9 +83,60 @@ el doble click o Ctrl+click derecho.
   recorre √2 casillas en √2 veces el tiempo, así la velocidad en pantalla y el ritmo de
   los pasos son los mismos en las 8 direcciones (pedido del dueño, 2026-11-23; antes era
   ×1.5 como en Tibia clásico y la diagonal se sentía más lenta). El A* del servidor y del
-  cliente pesan la diagonal igual. Redondeo a ticks en `05-network-protocol.md` "Caminar".
-- Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
-  nivel y con condiciones (haste, paralyze; ver "Condiciones" en Combate).
+  cliente pesan la diagonal igual. Norte, sur, este y oeste cuestan lo mismo: ni el
+  servidor ni el cliente distinguen un eje del otro (ver "Velocidad" abajo).
+- Duración de un paso = `base_step_ms × terreno / velocidad`, en milisegundos (el detalle
+  en `05-network-protocol.md` "Caminar"). La velocidad crece con el nivel y con
+  condiciones (haste, paralyze; ver "Condiciones" en Combate).
+- **Velocidad (pedido del dueño, 2026-11-26).**
+  - **+15 % para todos:** `base_step_ms` pasó de 1000 a 891 (×1,122 en ms). Es el número
+    por el que caminan todas las criaturas: jugadores, monstruos y NPCs. Un jugador de
+    nivel 1 (velocidad 205) tardaba 500 ms por casilla y tarda 435 (500 / 1,15). El 15 %
+    justo vale para esa velocidad: antes cada paso se redondeaba hacia arriba a ticks de
+    50 ms (488 ms eran 500) y ya no ("Pasos al milisegundo", abajo), así que cada criatura
+    ganó entre 12 % y 21 % según cuánto le tocaba de redondeo (el lobo, de 550 a 469 ms).
+    Perseguir y huir se deciden por los puntos de velocidad, que no cambiaron para los
+    monstruos y solo subieron para los jugadores (el punto siguiente): quien escapaba de
+    un monstruo lo sigue haciendo. Lo que cambió es por cuánto, unos ms por casilla según
+    el redondeo que tenía cada uno.
+  - **+0,2 % por nivel, sumado a lo que ya había:** la velocidad de un jugador es la de
+    su vocación en ese nivel (`start.speed` + `per_level.speed` × (nivel − 1): 205 + 3 por
+    nivel, como antes) × (100 + `movement.speed_per_level_pct` × (nivel − 1)) / 100,
+    redondeada al punto con la mitad hacia arriba (`content.Movement.LevelSpeed`, en
+    enteros como el temporizador de pasos). Nivel 1 = la base. Un punto es lo mínimo que
+    se gana: el 0,2 % solo no llega a un punto hasta el nivel 3 (205,4 en el 2), pero con
+    los 3 puntos de la vocación cada nivel camina más rápido que el anterior.
+
+    | Nivel | Antes (puntos, ms por casilla) | Ahora (puntos, ms por casilla) |
+    |---|---|---|
+    | 1 | 205, 500 | 205, 435 |
+    | 16 | 250, 400 | 258, 346 |
+    | 50 | 352, 300 | 387, 231 |
+    | 100 | 502, 200 | 601, 149 |
+
+    **Ningún nivel camina más lento que antes**, ni en puntos ni en ms
+    (`TestRepoMovementSpeed`). **Sin tope** propio: el límite es el tick, un paso nunca
+    dura menos de 50 ms, y se llega cerca del nivel 300 (antes, cerca del 600); si un día
+    molesta, se agrega un tope en `balance.yaml`. La primera versión de la rama
+    reemplazaba los 3 puntos por el 0,2 % y dejaba al nivel 50 en 396 ms, más lento que
+    los 300 de antes; la revisión lo cambió a sumar porque el pedido era acelerar. Si el
+    dueño prefiere que el nivel pese menos, se baja `per_level.speed` en
+    `data/vocations.yaml`. El equipo (`speed`, "+N de velocidad") y las condiciones se
+    suman encima como siempre.
+  - **Pasos al milisegundo:** antes un paso se redondeaba hacia arriba a ticks de 50 ms,
+    y por eso unos pocos puntos de velocidad no cambiaban nada (de 205 a 222 puntos se
+    caminaba igual, y con 223 de golpe un 11 % más rápido). Ahora el paso dura lo que da
+    la fórmula y el servidor reparte los ticks entre los pasos de una caminata
+    (`05-network-protocol.md` "Caminar"): cada punto de velocidad cuenta, y el 0,2 % por
+    nivel se nota de a poco.
+  - **Arriba y abajo igual que a los costados:** medido, el paso dura lo mismo en los
+    cuatro sentidos en el servidor (`TestFourDirectionsOnePace`) y el cliente lo dibuja a
+    los mismos px por segundo (`world.test.ts`; las casillas son cuadradas y la cámara usa
+    una sola escala). Lo que se veía más rápido era la animación: mirando al norte o al
+    sur las piernas daban 1,73 ciclos por casilla contra 1 al este (docs/17 "La regla de la
+    zancada"). Ahora es un ciclo por casilla en todas las direcciones.
+  - Ningún texto del juego muestra la velocidad (ver "Unidades"), así que no hubo nada
+    que cambiar en la interfaz.
 - **Click para caminar** (máx. 100 casillas): el cliente arma el camino con A* sobre las
   casillas que conoce (rodea criaturas, muros, escaleras, agujeros y teletransportes salvo
   el destino) y lo camina paso a paso como una tecla mantenida: cada paso sale como `Walk`
@@ -535,7 +586,8 @@ hechizo se lance, `TestVocationCareers` (`server/internal/sim/balance_vocations_
 - Curva cúbica propia, ajustable: `xp(nivel) = a·n³ + b·n² + c·n` con coeficientes en
   balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h
   (`experience.pace` en balance.yaml; la detección de bots lo usa como ritmo esperado).
-- Al subir de nivel: +HP, +MP, +capacidad, +velocidad según vocación.
+- Al subir de nivel: +HP, +MP, +capacidad y +velocidad según vocación, y sobre esa
+  velocidad +0,2 % por nivel (`movement.speed_per_level_pct`, "Movimiento").
 
 ## Skills que suben con el uso
 Cada skill tiene nivel y progreso (%). Sube **solo al usarla**, y cada nivel cuesta
@@ -567,7 +619,7 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
   o hechizos (hasta T1.9) cuentan como que no responden.
 - Nivel: el que corresponde a la XP total por la curva, hasta `experience.max_level`. Al
   subir, máximos de vida/maná, capacidad y velocidad pasan a los de la vocación en ese
-  nivel, y la vida y el maná actuales suben lo mismo que subió el máximo.
+  nivel (la velocidad, con el +0,2 % por nivel de "Movimiento"), y la vida y el maná actuales suben lo mismo que subió el máximo.
 - Regeneración: cada `regen.interval_ms` (evento del scheduler por jugador) recupera
   `regen.health` y `regen.mana` sin pasar del máximo. **Comida** (auditoría de contenido
   m2, 2026-11): con la condición `well_fed` cada tick recupera
@@ -784,7 +836,7 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   - **Apilado:** `refresh` = queda el mayor tiempo (o golpes) y el daño mayor; `add` = se
     suman hasta el máximo. Una sola instancia por condición y criatura.
   - **Velocidad:** `velocidad = base × (100 + Σ speed_pct) / 100` (mínimo 1). Cambia
-    `StepTicks` desde el paso siguiente; los clientes animan con la `duration_ms` del
+    `StepMs` desde el paso siguiente; los clientes animan con la `duration_ms` del
     servidor.
   - **Skill:** `keen_eye` sube la skill de distancia que usan los ataques y los hechizos
     (`per_skill`), no la que se entrena ni la del panel. Es la mejora de puntería del
@@ -812,7 +864,7 @@ umbrales en `01-architecture.md`, "Detección de bots"):
     monstruo, o con PvP a un jugador, a 4 casillas), `shroud` (arcanista,
     invisibilidad). `ember_ring` puede dejar ardiendo y `arc_bolt` y `tempest_ring`
     electrizado. Comer da `well_fed` (el `food_ms` de la comida). La araña
-    de musgo (escupitajo) y el escarabajo de mena (mordida) envenenan al hacer daño.
+    de musgo (escupitajo) y el escarabajo (mordida) envenenan al hacer daño.
   - **Pendiente:** campos en el suelo (fuego o veneno) que apliquen condiciones al pisarlos
     (necesitan items con duración, disparar al entrar a la casilla y su render); items
     de cura (antídoto); que un jugador vea invisibles.
@@ -889,17 +941,17 @@ capacidades o botín, regenerarla):
 | 1 | gaviota ladrona | 0,5 kg | 23,4 kg (druida) | miles de muertes |
 | 5 | lobo | 21,3 kg | 23,6 kg (druida) | 67 muertes |
 | 10 | ciervo de zarza | 22,9 kg | 27,1 kg (druida y montaraz) | 71 |
-| 10 | escarabajo de mena | 20,8 kg | 27,1 kg (druida y montaraz) | 78 |
+| 10 | escarabajo | 20,8 kg | 27,1 kg (druida y montaraz) | 78 |
 | 15 | minero ahogado | 23,5 kg | 24,8 kg (montaraz) | 63 |
 | 25 | reptante hueco | 30,8 kg | 32,8 kg (montaraz) | 64 |
-| 30 | sabueso de ceniza | 25,2 kg | 29,4 kg (montaraz) | 70 |
-| 50 | dragoncillo de ascua | 17,6 kg | 38,3 kg (montaraz) | 131 |
+| 30 | sabueso cenizo | 25,2 kg | 29,4 kg (montaraz) | 70 |
+| 50 | dragoncillo | 17,6 kg | 38,3 kg (montaraz) | 131 |
 
 El más justo desde el nivel 15 es el montaraz de ballesta (coraza, escudo, ballesta y 100
 virotes); antes, los magos, por sus 20 brebajes de maná (7 kg).
 
 **Los que sueltan material a kilos no entran** (`heavyHaul` en el test): el espinoso
-(troncos de olmo de 3,5 kg y corazón de espino), el minero de obsidiana (mineral de ascua, picos) y
+(troncos de olmo de 3,5 kg y corazón de espino), el minero renegado (mineral de ascua, picos) y
 el gólem de escoria (mineral de ascua y núcleos de 4 kg). Nadie carga 60 muertes de eso:
 el cazador elige qué levanta o vuelve antes. El test les exige que entren al menos
 **15 muertes** (unos 8 minutos), y falla si alguno ya entra entero (para sacarlo de la
@@ -908,11 +960,11 @@ lista). Es una decisión de balance pendiente del dueño (docs/14):
 | Nivel | Monstruo | Botín de 60 muertes con suerte | Se llena tras (el más justo) |
 |---|---|---|---|
 | 20 | espinoso | 100,3 kg | 17 muertes (montaraz) |
-| 35 | minero de obsidiana | 46,3 kg | 43 (montaraz; el guardián sí carga las 60) |
+| 35 | minero renegado | 46,3 kg | 43 (montaraz; el guardián sí carga las 60) |
 | 40–45 | gólem de escoria | 112,5 kg | 20–22 (montaraz) |
 
-Para que entrara se tocó el botín: el escarabajo de mena suelta mineral de hierro con 20 %
-(antes 35 %), el jabalí carne con 35 % (antes 50 %) y el sabueso de ceniza su piel con
+Para que entrara se tocó el botín: el escarabajo suelta mineral de hierro con 20 %
+(antes 35 %), el jabalí carne con 35 % (antes 50 %) y el sabueso cenizo su piel con
 18 % (antes 22 %); el cobre pesa 3 g (lo que más se junta: ~1900 monedas en una cacería
 de sabuesos). Y, al sumar las herramientas y cubrir todos los niveles (revisión del
 2026-11-24), los magos pasaron a 40 y 41 kg con +0,7 kg por nivel (antes 36 y 37 kg con
@@ -1189,7 +1241,7 @@ tabla, `catalog.test.ts` y este doc cambian juntos.
 - **Volcán:** Bram Tizón vende y forja la banda 4 de acero de ascua (el escudo, que antes
   solo se forjaba, ahora también se vende); el templo, la varita de obsidiana, la vara de
   escarcha negra, la túnica de ceniza y el amuleto de brasa. El anillo de obsidiana es
-  botín raro de mineros de obsidiana y gólems de escoria, y la recompensa de `smith_ring`.
+  botín raro de mineros renegados y gólems de escoria, y la recompensa de `smith_ring`.
 - **Botín de antes:** el saqueador suelta el alfanje, la cabilla (en lugar del garrote de
   deriva) y la gorra; el contrabandista, las calzas de ciervo y su ballesta; el
   dragoncillo, el sable de ascua; el minero, el yelmo, la varita y la vara.
@@ -1225,7 +1277,7 @@ nivel y con esa vocación; un tercero, que cada arma entra al kit en el nivel qu
 después. Ningún objetivo documentado cambió:
 - **Guardián:** Puerto, nivel 8 en 1,10 h y 15 en 3,32 h (antes 3,46); Bosque, 15→20 en
   2,30 h y 20→25 en 3,13 h; Volcán, 25→30 en 3,92 h, 30→40 en 10,13 h y 40→50 en 15,30 h;
-  el custodio, 65 s y 149 % de la vida. El más justo es el minero de obsidiana al nivel 35:
+  el custodio, 65 s y 149 % de la vida. El más justo es el minero renegado al nivel 35:
   10,2 % de la vida (el piso es 10 %).
 - **Carreras del 1 al 50:** el guardián en 34,4 h (antes 34,6) y 39,4 h sin brebajes de
   maná; magos y montaraces siguen entre 0,5 y 1,5 veces el guardián en cada tramo, con niveles
@@ -1351,7 +1403,7 @@ son otras ramas del lote: el refinado vive en los datos de cada instancia (`refi
   visten a cada cazador con su kit con atributos tirados por pelea (la media sobre las
   peleas). Para que las metas de las islas sigan valiendo, el bestiario de Puerto pega uno
   a tres puntos más de máximo (rata de sentina y gaviota ladrona 9, lobo 19, murciélago 18,
-  jabalí 20, araña de musgo 16, saqueador 25, escarabajo de mena 28) y el espinoso y el
+  jabalí 20, araña de musgo 16, saqueador 25, escarabajo 28) y el espinoso y el
   reptante hueco del Bosque dan un poco menos de experiencia (204 y 248).
 - **Cliente:** la ficha (tooltip y menú) muestra el atributo traducido, con su valor, bajo
   las stats y en su color (`--ui-item-attribute`); la de un equipable sin atributo (una
@@ -1451,8 +1503,8 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
   - **piedra de temple menor** (items de nivel 1–9; 10 cobre), **mayor** (10–49; 150) y
     **radiante** (50+; 600): las venden los herreros (el armero de Puerto y la curtidora de
     Ivernel la menor y la mayor; el herrero de Cinderstead las tres) y caen de algunos monstruos (la
-    menor, de saqueadores, mineros ahogados y escarabajos de mena; la mayor, de reptantes
-    huecos, contrabandistas, excavadores de obsidiana y gólems de escoria; la radiante, del
+    menor, de saqueadores, mineros ahogados y escarabajos; la mayor, de reptantes
+    huecos, contrabandistas, mineros renegados y gólems de escoria; la radiante, del
     custodio de la forja, 30 %, mientras no haya islas de esas bandas). Ningún NPC las compra:
     no hay vuelta de compra y venta.
   - **ámbar de resguardo** (3000 de valor de referencia): **ningún NPC lo vende ni lo da**
@@ -1595,12 +1647,12 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     su `attack_interval_mult` cada intervalo de ataque. Entrar en una fase muestra el
     efecto de condición sobre el monstruo; curado por encima (o al rendirse) la fase
     termina.
-  - **Contenido** (pedido del dueño, auditoría 2026-11-18): el dragoncillo de ascua escupe
-    fuego en un rayo de 4; el custodio de escoria golpea el suelo (círculo de 1 alrededor,
-    fuego, deja ardiendo), bajo el 60 % llama a dos salamandras de brasa (como mucho dos,
+  - **Contenido** (pedido del dueño, auditoría 2026-11-18): el dragoncillo escupe
+    fuego en un rayo de 4; el custodio golpea el suelo (círculo de 1 alrededor,
+    fuego, deja ardiendo), bajo el 60 % llama a dos salamandras ígneas (como mucho dos,
     una ronda por minuto) y bajo el 30 % se enfurece (×1,3 velocidad, ×0,75 intervalos);
     el gólem de escoria y el espinoso estallan alrededor (círculo de 1) y la esquirla del
-    minero de obsidiana revienta sobre su objetivo y sus vecinos (círculo de 1 en el
+    minero renegado revienta sobre su objetivo y sus vecinos (círculo de 1 en el
     objetivo). Un grupo pegado sufre las áreas: conviene abrirse. **Ojo (para el dueño):**
     el estallido del gólem y del espinoso reemplazó su hechizo a distancia (`range: 3`):
     ahora su alcance es 1, así que un montaraz o un mago que les pega desde lejos ya no
@@ -1754,7 +1806,7 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     pierde su parte. Lo acota el bloqueo de logout en combate (nadie sale en medio de la
     pelea para borrar el recuerdo); aceptado así.
   - **Por tipo** (`data/monsters`): el lobo es persistente (0,85, tope 22, 6 s sin verte,
-    insiste bajo 40 %), el sabueso de ceniza (0,8, tope 20) y el murciélago (0,7, tope
+    insiste bajo 40 %), el sabueso cenizo (0,8, tope 20) y el murciélago (0,7, tope
     18) también; el jabalí 0,6 e insiste bajo 35 %; los humanos 0,6 y se rinden bajo
     30 %; la rata (0,4) y el ciervo (0,3) se rinden bajo 50 % y la gaviota (0,2) bajo
     60 %; los lentos (salamandra, sapo, escarabajo, gólem, espinoso, cangrejo, minero
@@ -2711,7 +2763,7 @@ a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
    guarda una raíz de piedra tallada con las marcas del imperio, tibia: la llave que lleva
    al Capítulo 3 (la forja antigua).
 - **Bestiario del Bosque** (nivel objetivo de `TestBosqueBalance`): ciervo de zarza (11,
-  pasivo, huye), sapo de ciénaga (13, escupe veneno a distancia), contrabandista del cofre
+  pasivo, huye), sapo de ciénaga (13, escupe veneno a distancia), contrabandista
   (16, cuchillos a distancia), espinoso (20, estallido de espinas alrededor, débil al fuego) y reptante
   hueco (24, cueva, mordida venenosa, ve invisibles). Con la banda 3 del catálogo un
   guardián pasa de 15 a 20 en ~2,3 h y de 20 a 25 en ~3,1 h.
@@ -2727,10 +2779,10 @@ entrega en Ivernel a quien tiene el flag, una a la vez y hasta abrir la puerta d
 (si se pierde, se pide otra). Casia y el herrero piden la raíz encima; sin ella, Casia
 manda a buscarla a Ivernel. Tres quests encadenadas, todo en datos (`data/quests/ch3_*.yaml`,
 `data/npcs/volcan_*.yaml`):
-1. `ch3_embers` (nivel 30): matar 10 sabuesos de ceniza, juntar 6 escamas de salamandra,
+1. `ch3_embers` (nivel 30): matar 10 sabuesos cenizos, juntar 6 escamas de salamandra,
    entregarlas a Casia y mostrarle la raíz a Bram Tizón, el herrero, que reconoce la marca
    de la forja antigua. 14 000 XP y 800 monedas.
-2. `ch3_gate` (nivel 35): matar 10 mineros de obsidiana, conseguir un plano de galería
+2. `ch3_gate` (nivel 35): matar 10 mineros renegados, conseguir un plano de galería
    (botín de los mineros), entregarlo a Casia, bajar hasta la antesala de la puerta
    sellada, en lo más hondo de la mina (un paso `reach`: llegar a 4 casillas del eco lo
    cumple, "Diario de misiones y tareas"), y mostrarle la raíz al eco de la forja, que le
@@ -2738,7 +2790,7 @@ manda a buscarla a Ivernel. Tres quests encadenadas, todo en datos (`data/quests
    puerta. Casia da la pista del camino en los dos últimos pasos. 22 000 XP y 1100 monedas. Quien terminó
    `ch3_gate` y no tiene la llave (la perdió, o terminó antes de que existiera) le pide
    otra al eco, una a la vez.
-3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio de escoria (jefe, sale solo
+3. `ch3_warden` (nivel 40, la da el eco): derrotar al custodio (jefe, sale solo
    en la forja antigua, detrás de la puerta sellada: se entra abriéndola con la llave de
    ascua, ver "Puertas con llave"; en grupo desde el 40, solo desde el 44 y curándose),
    y llevarle a Casia el sello de la forja.
@@ -2757,11 +2809,11 @@ manda a buscarla a Ivernel. Tres quests encadenadas, todo en datos (`data/quests
    otro lo mata en ese plazo, el sello también es de ellos
    (`TestQuestDropRememberedWhenTheWardenGivesUp`); pasada la memoria o regenerado a vida
    llena, solo de los que le hagan daño después.
-- **Bestiario de Karvask** (nivel objetivo de `TestVolcanBalance`): sabueso de
-  ceniza (27, velocidad 300: no se le escapa, no huye), salamandra de brasa (31, escupe brasa a distancia y deja
-  ardiendo, inmune al fuego), minero de obsidiana (35, mina, lanza esquirlas que revientan sobre su objetivo y sus vecinos), gólem de
-  escoria (41, mucha armadura, inmune al fuego, estalla alrededor) y dragoncillo de ascua (50, cráter,
-  aliento de fuego en un rayo de 4 que deja ardiendo). Jefe: custodio de escoria (44, 1800
+- **Bestiario de Karvask** (nivel objetivo de `TestVolcanBalance`): sabueso
+  cenizo (27, velocidad 300: no se le escapa, no huye), salamandra ígnea (31, escupe brasa a distancia y deja
+  ardiendo, inmune al fuego), minero renegado (35, mina, lanza esquirlas que revientan sobre su objetivo y sus vecinos), gólem de
+  escoria (41, mucha armadura, inmune al fuego, estalla alrededor) y dragoncillo (50, cráter,
+  aliento de fuego en un rayo de 4 que deja ardiendo). Jefe: custodio (44, 1800
   de vida, golpe de escoria alrededor, dos salamandras bajo el 60 %, furia bajo el 30 %;
   pelea de 30–90 s que pide curarse o ir en grupo; "Monstruos", "Habilidades"). El fuego
   es la norma: todos resisten fuego y
@@ -2888,9 +2940,9 @@ al "bote sin bandera" del Capítulo 2, y quien no lo vio no entendería el encar
 | Puerto | 10 | `foreman_ore` "Hierro de las vetas viejas" | Doran Pike, el capataz | 5 minerales de hierro, entregarlos | 1200 XP, un pico |
 | Bosque | 22–25 | `ferryman_jetty` "Luces en la costa este" (con `ch2_roots` completada) | Tavin Rema, el barquero | llegar al embarcadero de los contrabandistas (`reach`), matar 12 reptantes huecos en la cueva de al lado, contárselo | 7000 XP, 700 monedas |
 | Bosque | 25–28 | `tanner_chitin` "Cuero de quitina" | Gisla, la curtidora | 8 quitinas de reptante, 4 corazones de espino, entregarlos juntos | 9000 XP, un amuleto de asta, 750 monedas |
-| Volcán | 30–33 | `captain_fenders` "Defensas que no arden" | Nerea Vado, la capitana | matar 10 salamandras de brasa, 5 pieles de sabueso de ceniza, entregarlas | 13 000 XP, 900 monedas |
+| Volcán | 30–33 | `captain_fenders` "Defensas que no arden" | Nerea Vado, la capitana | matar 10 salamandras ígneas, 5 pieles de sabueso cenizo, entregarlas | 13 000 XP, 900 monedas |
 | Volcán | 42–45 | `smith_ring` "El anillo de obsidiana" | Bram Tizón, el herrero | 5 núcleos de escoria, entregarlos, pedirle a Madre Oriela una brasa de la Llama Quieta (`flag_equals`: su opción pone el flag), volver por el anillo | 25 000 XP, un anillo de obsidiana, 1500 monedas |
-| Volcán | 45–48 | `flame_crater` "La llama del cráter" | Madre Oriela, la sacerdotisa | llegar a la orilla del lago de lava del cráter (`reach`), matar 6 dragoncillos de ascua: **termina en esa muerte** | 28 000 XP, un amuleto de brasa, 1800 monedas |
+| Volcán | 45–48 | `flame_crater` "La llama del cráter" | Madre Oriela, la sacerdotisa | llegar a la orilla del lago de lava del cráter (`reach`), matar 6 dragoncillos: **termina en esa muerte** | 28 000 XP, un amuleto de brasa, 1800 monedas |
 
 Con la línea principal, la secuencia queda: 15 `ch2_roots`, 20 `ch2_coffer`, 22 y 25 las
 del Bosque, 30 `ch3_embers` y `captain_fenders`, 35 `ch3_gate`, 40 `ch3_warden`, 42 y 45
@@ -2952,12 +3004,12 @@ volver cada día a un coto. Dos NPCs nuevos las dan, cada uno con tres:
 
 | Tarea | La da | Desde el nivel | Presa | XP | Oro | Una hora de esa caza (simulada) | Parte de la hora |
 |---|---|---|---|---|---|---|---|
-| `bounty_smugglers` | Fenn | 15 | 25 contrabandistas del cofre | 4500 | 1200 | 22 216 XP, 6068 de botín (nivel 16) | 20,3 % y 19,8 % |
+| `bounty_smugglers` | Fenn | 15 | 25 contrabandistas | 4500 | 1200 | 22 216 XP, 6068 de botín (nivel 16) | 20,3 % y 19,8 % |
 | `bounty_thornlings` | Fenn | 18 | 25 espinosos | 5000 | 1000 | 25 358 XP, 5169 (nivel 20) | 19,7 % y 19,3 % |
 | `bounty_crawlers` | Fenn | 22 | 30 reptantes huecos | 6200 | 1450 | 30 976 XP, 7351 (nivel 24) | 20,0 % y 19,7 % |
-| `bounty_hounds` | Orso | 26 | 30 sabuesos de ceniza | 6700 | 1150 | 33 632 XP, 5786 (nivel 27) | 19,9 % y 19,9 % |
+| `bounty_hounds` | Orso | 26 | 30 sabuesos cenizos | 6700 | 1150 | 33 632 XP, 5786 (nivel 27) | 19,9 % y 19,9 % |
 | `bounty_golems` | Orso | 39 | 20 gólems de escoria | 9100 | 2650 | 45 736 XP, 13 396 (nivel 41) | 19,9 % y 19,8 % |
-| `bounty_wyrmlings` | Orso | 48 | 8 dragoncillos de ascua | 10 400 | 3600 | 52 336 XP, 18 193 (nivel 50) | 19,9 % y 19,8 % |
+| `bounty_wyrmlings` | Orso | 48 | 8 dragoncillos | 10 400 | 3600 | 52 336 XP, 18 193 (nivel 50) | 19,9 % y 19,8 % |
 
 - **Turnos:** cada una se toma en el tablón o en el libro (la opción de la presa, con
   `quest_state` `available` y su nivel), se cumple con las muertes (el diario las cuenta)
@@ -3075,8 +3127,8 @@ cooperativa de placas); nombres, lugares, textos, números y recompensas son pro
 | `ms_morvund_embers` "Las cuatro ascuas de Morvund" | Volcán (cámara al norte de la galería oeste de la mina, piso 8) | 35 | 4 personas, **una de cada vocación**, cada una con la **llave de ascua** (`ch3_gate`) | el eco de la forja (`volcan_forge_echo`) | guardián 3647,5755; arcanista 3657,5755; montaraz 3647,5761; druida 3657,5761 | 19 000 XP, la **llave de Morvund**, un yelmo de acero de ascua, 1300 monedas; cofre: 10 de plata, 3 piedras de temple mayores, 3 brebajes de vida y de maná concentrados. Título "Mano de las Cuatro Ascuas" |
 
 - **La galería de Morvund** (la recompensa de acceso): un coto de caza chico (21x13) detrás
-  de una puerta con llave (`morvund_gate`) en la pared oeste de la cámara, con mineros de
-  obsidiana y gólems de escoria. Solo entra quien lleva la llave de Morvund (no se
+  de una puerta con llave (`morvund_gate`) en la pared oeste de la cámara, con mineros
+  renegados y gólems de escoria. Solo entra quien lleva la llave de Morvund (no se
   comercia); quien la pierde le pide otra al eco. Como toda puerta con llave, abierta deja
   pasar a cualquiera y desde adentro se abre sin llave.
 - **Economía:** cada hito paga como una quest secundaria de su nivel (10–15 % de la
@@ -3800,8 +3852,9 @@ Cuentan como un golpe aunque la condición no prenda: marca, bloqueo, defensa pr
 crédito de muerte; los golpes de una condición de daño son del lanzador.
 
 ### Modo seguro
-Interruptor del cliente, **activado por defecto** (cada login empieza así hasta que el
-cliente diga otra cosa). Con él no se puede atacar a un jugador si sería injustificado, y
+Interruptor del jugador, **activado por defecto**. Desde el 2026-11-26 se guarda por
+personaje, como la postura de combate y "perseguir" ("Opciones guardadas" de docs/05):
+vuelve como quedó en el siguiente login, tras un relogueo y después de morir. Con él no se puede atacar a un jugador si sería injustificado, y
 los hechizos de área no lo alcanzan. Sin él, el área golpea a todo jugador atacable del
 círculo (salvo grupo y gremio) y marca como un ataque directo. El área nunca alcanza a un
 jugador que el lanzador no ve (invisible): ni daño, ni marca, ni pista.

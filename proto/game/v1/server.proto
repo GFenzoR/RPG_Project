@@ -140,6 +140,18 @@ message Welcome {
   // (CreatureDisappear.reason), docs/05 "Quién ataca y por qué sale una criatura". false =
   // a server from before them: the client works both out from what it sees.
   bool attack_events = 7;
+  // The character's saved game options, the ones in force from this moment (docs/05
+  // "Opciones guardadas"): the client shows them and does not send them again. Unset = a
+  // server from before they were saved (balanced, not chasing, safe mode on).
+  GameOptions options = 8;
+}
+
+// GameOptions are the game options a character keeps between logins: the server saves
+// what SetFightMode and SetSafeMode last set and gives it back in the Welcome.
+message GameOptions {
+  FightStance stance = 1;
+  bool chase = 2;
+  bool safe_mode = 3;
 }
 
 // ---- map --------------------------------------------------------------------

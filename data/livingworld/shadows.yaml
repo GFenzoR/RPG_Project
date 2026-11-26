@@ -19,6 +19,28 @@
 #   kinds      the item's kind
 # Only objects that stand on the map cast by family or by kind (pickupable: false, and
 # walls): a sword or a coin dropped on the ground lies flat. Anything else casts none.
+#
+# lights: the shadows lamps, torches and fires cast (owner, 2026-11-26): under a roof, in a
+# cave and by a lamp at night a shadow follows the nearest lights, not the sun. Which items
+# give light and how far is the `light` of their sprite (assets/sprites.yaml `tiles`, the
+# radius of the glow in tiles); here, how their shadows look:
+#   reach           a light casts shadows this many times its glow's radius away
+#   alpha           opacity of those shadows (the sun's is sun_shadow of daynight.yaml)
+#   min_length      length at the light's foot, in heights of the caster
+#   max_length      length at the edge of the reach
+#   fade            the last share of the reach over which the shadow fades away
+#   breathe         how much they breathe with the flame, share of alpha (0: still)
+#   unlit_contact   where nothing casts a shadow at all (no sun, no moon, no light), what
+#                   is left of the round contact shadow under the feet: much fainter
+lights:
+  reach: 1.6
+  alpha: 0.34
+  min_length: 0.35
+  max_length: 1.3
+  fade: 0.35
+  breathe: 0.06
+  unlit_contact: 0.4
+
 kinds:
   wall: block
   decoration: silhouette

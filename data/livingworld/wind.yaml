@@ -1,12 +1,12 @@
-# The wind of the living world (livingworld/README.md "Viento"): trees, bushes and every
-# other plant of the map sway with it. Cosmetic: the server never reads it.
+# The wind of the living world (livingworld/README.md "Viento"). Trees, bushes and every
+# other plant of the map stand STILL; every so often a gust crosses the map and each plant
+# bends as its front passes: it eases into a lean, holds it, swings a couple of times and
+# stands still again. Cosmetic: the server never reads it.
 #
-# field: gusts are a smooth pattern that travels over the map, so neighbouring trees move
-# one after another.
-#   direction   where the gusts travel to, degrees (0 east, 90 south)
-#   speed       how fast they travel, tiles per second
-#   gust_tiles  the length of a gust along the wind, tiles
-#   calm        share of the strength that blows between gusts
+# field: where the wind blows from and where it gets in.
+#   direction   where the gusts travel to, degrees (0 east, 90 south); each gust strays
+#               from it by up to gusts.spread
+#   speed       how fast a gust front travels, tiles per second
 #   exposure    strength by ground surface (data/items ground.surface) round a plant:
 #               coasts and deserts blow harder, a floor indoors not at all
 #   open        strength over a surface that is not listed
@@ -15,9 +15,7 @@
 # Underground (caves) there is no wind at all.
 field:
   direction: 20
-  speed: 2.4
-  gust_tiles: 9
-  calm: 0.22
+  speed: 8
   exposure:
     sand: 1.3
     wet_sand: 1.45
@@ -32,23 +30,53 @@ field:
     wood: 0.0
     lava: 0.8
   open: 1.0
-  forest: 0.4
+  forest: 0.25
   night: 0.8
+
+# gusts: when a gust comes and what it does. All of it random, and the same for every
+# client: gust number k of the shared clock gets its moment, strength and direction from k
+# and the seed.
+#   every_s       one gust per slot of this many seconds: the mean time between two gusts
+#   jitter        where in its slot a gust starts, share of the slot: 0 is a metronome,
+#                 0.3 puts two gusts between 0.7 and 1.3 slots apart
+#   strength      [weakest, strongest] gust (1: a plant's full amplitude in the open)
+#   spread        how far a gust's direction strays from field.direction, degrees either way
+#   travel_tiles  how far a front travels before it dies (two or three screens)
+#   rise_ms       a plant eases into its lean over this long
+#   hold_ms       ... and holds it this long, while the gust blows over it
+#   swings        how many swings it takes to stand still again, each smaller than the last
+#   drift_ms      one slow drift of a plant in the calm (only kinds with a drift)
+#   seed          another seed, another sequence of gusts
+# make validate keeps the calm real: the slots must leave at least 10 s in which nothing
+# moves between the last swing of a gust and the next front, anywhere on the map.
+gusts:
+  every_s: 45
+  jitter: 0.3
+  strength: [0.6, 1.0]
+  spread: 25
+  travel_tiles: 64
+  rise_ms: 450
+  hold_ms: 1100
+  swings: 2
+  drift_ms: 9000
+  seed: 1
 
 # kinds: the defaults of each plant type. A sprite says its type and where its trunk ends
 # (tools/spritegen, data/livingworld/wind_sprites.yaml); plants.yaml may override a plant.
 #   stiffness  0 limp .. 1 rigid: a stiff plant gives only to a strong gust
-#   amplitude  how far its top moves in a full gust, sprite px
-#   flutter    the fast shimmer of its canopy rows, sprite px (under 1)
-#   period_ms  one swing of the main sway
+#   amplitude  how far its top leans in a full gust, sprite px
+#   drift      how far its top drifts in the calm between gusts, sprite px (under 1).
+#              0: it stands stock-still (the owner, 2026-11-26: a plant that always moves
+#              "looks alive, or on fire"). Never for small ground plants: it reads as shimmer
+#   period_ms  one swing after a gust
 #   pivot      where it starts to move when the sprite does not say, share of its height
 kinds:
-  tree: { stiffness: 0.45, amplitude: 2.0, flutter: 0.7, period_ms: 3400, pivot: 0.3 }
-  palm: { stiffness: 0.3, amplitude: 3.0, flutter: 0.8, period_ms: 3000, pivot: 0.1 }
-  bush: { stiffness: 0.35, amplitude: 1.0, flutter: 0.6, period_ms: 2200, pivot: 0.15 }
-  tall_grass: { stiffness: 0.1, amplitude: 2.0, flutter: 0.5, period_ms: 1500, pivot: 0.05 }
-  reed: { stiffness: 0.2, amplitude: 2.0, flutter: 0.3, period_ms: 1900, pivot: 0.05 }
-  flower: { stiffness: 0.15, amplitude: 1.5, flutter: 0.4, period_ms: 1600, pivot: 0.05 }
-  vine: { stiffness: 0.3, amplitude: 1.0, flutter: 0.5, period_ms: 2400, pivot: 0.1 }
-  cactus: { stiffness: 0.9, amplitude: 0.5, flutter: 0.0, period_ms: 2600, pivot: 0.3 }
-  dead_tree: { stiffness: 0.8, amplitude: 0.6, flutter: 0.0, period_ms: 2800, pivot: 0.4 }
+  tree: { stiffness: 0.35, amplitude: 3.0, drift: 0, period_ms: 2200, pivot: 0.3 }
+  palm: { stiffness: 0.3, amplitude: 4.0, drift: 0, period_ms: 2000, pivot: 0.1 }
+  bush: { stiffness: 0.35, amplitude: 1.5, drift: 0, period_ms: 1400, pivot: 0.15 }
+  tall_grass: { stiffness: 0.1, amplitude: 2.5, drift: 0, period_ms: 900, pivot: 0.05 }
+  reed: { stiffness: 0.2, amplitude: 2.5, drift: 0, period_ms: 1100, pivot: 0.05 }
+  flower: { stiffness: 0.15, amplitude: 2.0, drift: 0, period_ms: 1000, pivot: 0.05 }
+  vine: { stiffness: 0.3, amplitude: 1.5, drift: 0, period_ms: 1400, pivot: 0.1 }
+  cactus: { stiffness: 0.9, amplitude: 0.5, drift: 0, period_ms: 1600, pivot: 0.3 }
+  dead_tree: { stiffness: 0.8, amplitude: 0.8, drift: 0, period_ms: 1600, pivot: 0.4 }

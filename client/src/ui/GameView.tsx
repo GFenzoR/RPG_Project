@@ -78,6 +78,7 @@ import {
 } from "./window-dom.ts";
 import type { NameSize } from "../render/label-style.ts";
 import type { DragEnv, PageBox, WatchedRef } from "./window-dom.ts";
+import { fitTextRef } from "./fit-text.ts";
 import {
   WINDOWS_STORAGE_KEY,
   WINDOW_KEYS,
@@ -151,6 +152,8 @@ export function emptyGameUi(): GameUi {
   return {
     battle: [],
     safeMode: true,
+    fightStance: FightStance.BALANCED,
+    chase: false,
     target: undefined,
     stats: undefined,
     skills: [],
@@ -215,10 +218,10 @@ export function GameView(props: GameViewProps): JSX.Element {
   // The death screen stays until the player closes it.
   const [deathSeen, setDeathSeen] = useState<number | undefined>(undefined);
   const death = ui.death && ui.death.at !== deathSeen ? ui.death : undefined;
-  const [stance, setStance] = useState(FightStance.BALANCED);
+  // The server keeps both per character: the Game publishes the ones in force.
+  const { fightStance: stance, chase } = ui;
   // T4.1: the player being reported from the battle list (the reason form is open).
   const [reporting, setReporting] = useState<{ id: number; name: string } | undefined>(undefined);
-  const [chase, setChase] = useState(false);
   // T5.6: small screens. The layout follows the window; the side panel becomes tabs (or a
   // drawer over the map) and the server messages float over the map.
   const layout = useLayout();
@@ -511,7 +514,6 @@ export function GameView(props: GameViewProps): JSX.Element {
           value={stance}
           onChange={(e) => {
             const s = Number(e.currentTarget.value) as FightStance;
-            setStance(s);
             game?.setFightMode(s, chase);
           }}
         >
@@ -528,7 +530,6 @@ export function GameView(props: GameViewProps): JSX.Element {
           checked={chase}
           onChange={(e) => {
             const c = e.currentTarget.checked;
-            setChase(c);
             game?.setFightMode(stance, c);
           }}
         />
@@ -1032,7 +1033,7 @@ export function GameView(props: GameViewProps): JSX.Element {
       data-touch={touch ? "" : undefined}
     >
       <header key="hud" class={layout.compactHeader ? "hud compact" : "hud"} data-tutorial="stats">
-        <span class="name" title={props.characterName}>
+        <span class="name" key={props.characterName} ref={fitTextRef} title={props.characterName}>
           {props.characterName}
         </span>
         {stats && (

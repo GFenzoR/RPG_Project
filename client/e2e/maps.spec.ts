@@ -11,6 +11,7 @@ import { expect, test } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { psql as runPsql } from "./psql.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 import { startFakeGitHub } from "../../tools/map-pr-worker/test/fake-github.ts";
 
 const repo = join(import.meta.dirname, "..", "..");
@@ -30,7 +31,7 @@ const run = `${Date.now()}-${randomLetters(6)}`;
 const password = "e2e-password-1";
 const author = {
   email: `maps-author-${run}@example.com`,
-  name: `Cartographer ${randomLetters(5).replace(/^./, (c) => c.toUpperCase())}`,
+  name: characterName("Mapper"),
 };
 const gm = { email: `maps-gm-${run}@example.com` };
 const player = { email: `maps-player-${run}@example.com` };

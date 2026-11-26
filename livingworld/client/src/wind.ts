@@ -1,16 +1,18 @@
 // The wind (livingworld/README.md "Viento"): trees, bushes and every other plant of the map
-// move with it. Pure and free of Pixi: numbers only, so the client, the tests and the sway
-// preview of tools/spritegen share the same motion.
+// stand still, and every so often a gust crosses the map and bends them as it passes. Pure
+// and free of Pixi: numbers only, so the client, the tests and the sway preview of
+// tools/spritegen share the same motion.
 //
-//   field   gusts are a smooth noise of the world position that travels along the wind
-//           direction at the wind speed: neighbouring trees move one after another, never
-//           each on its own dice
-//   plant   a slow main sway (a lean downwind plus a swing at the plant's own period) and a
-//           fast, tiny flutter of the canopy; both scaled by its kind (data/livingworld/wind.yaml)
+//   gusts   gust k starts at a random moment of its slot of the clock, with its own
+//           strength and its own direction round the wind's; its front, a line across the
+//           wind, travels `travel_tiles` and dies. Between two gusts: a long calm
+//   plant   when the front reaches it, it eases into a lean downwind, holds it while the
+//           gust blows, swings a couple of times, each swing smaller, and stands still again
 //   sprite  the base stays planted: a row moves by the square of its height over the pivot
 //           (where the trunk ends), in whole screen pixels, so the art never blurs
 //
-// Deterministic: only the tile, the clock and the data.
+// Deterministic: only the tile, the clock, the seed and the data (data/livingworld/wind.yaml).
+// With the clock every client shares, every client sees the same gust at the same moment.
 import { hash01 } from "./hash.ts";
 
 /** The plant types with wind defaults (data/livingworld/wind.yaml `kinds`). */
@@ -33,17 +35,24 @@ export function isWindKind(v: unknown): v is WindKind {
 
 /** The top of no plant ever moves further than this, sprite px (the schema's limit). */
 export const MAX_AMPLITUDE = 4;
-/** The flutter is always under a pixel. */
-export const MAX_FLUTTER = 0.95;
+/** The drift of a plant in the calm is always under a pixel. */
+export const MAX_DRIFT = 0.95;
 /** A sprite is cut into at most this many moving strips (wind-mesh.ts). */
 export const MAX_STRIPS = 16;
 /** A moving strip is at least this tall, sprite px. */
 export const STRIP_PX = 2;
-/** One flutter of the leaves, ms (each plant a little off it). */
-export const FLUTTER_MS = 430;
-/** Share of the main sway that is a steady lean downwind; the rest swings. */
-const LEAN = 0.45;
-const SWING = 0.55;
+/** A plant is still again this many of its swings after the gust lets go of it. */
+const SETTLE = 1.5;
+/** How far down their envelope the swings are when the last of them ends. */
+const DAMPING = 4.75;
+/** The gust lets go over this many times its rise. */
+const FALL = 2;
+/** A gust is born and dies over this share of its travel, at each end. */
+const EDGE = 0.15;
+/** The front is not a ruler's line: it runs up to this many tiles ahead or behind. */
+const FRONT_WOBBLE = 3;
+/** Gusts older than this many slots are never looked at (make validate keeps under it). */
+const MAX_BACK = 4;
 const TAU = Math.PI * 2;
 
 /** How a kind of plant takes the wind (data/livingworld/wind.yaml `kinds.<kind>`). */
@@ -52,9 +61,9 @@ export interface WindKindRule {
   stiffness: number;
   /** How far its top moves in a full gust, sprite px. */
   amplitude: number;
-  /** The fast shimmer of its canopy rows, sprite px (under 1). */
-  flutter: number;
-  /** One swing of the main sway, ms. */
+  /** How far its top drifts in the calm between gusts, sprite px (under 1; 0: stock-still). */
+  drift: number;
+  /** One swing after a gust, ms. */
   periodMs: number;
   /** Where it starts to move when its sprite does not say, share of the sprite's height. */
   pivot: number;
@@ -62,15 +71,37 @@ export interface WindKindRule {
 
 /** The wind over the map (data/livingworld/wind.yaml `field`). */
 export interface WindField {
-  /** The way the gusts travel, a unit vector in tiles (x east, y south). */
-  dirX: number;
-  dirY: number;
-  /** How fast they travel, tiles per second. */
+  /** The way the wind blows, radians (0 east, a quarter turn south): each gust near it. */
+  dir: number;
+  /** How fast a gust front travels, tiles per second. */
   speed: number;
-  /** The length of a gust along the wind, tiles. */
-  gustTiles: number;
-  /** Share of the strength that blows between gusts, 0..1. */
-  calm: number;
+  /** One gust per slot of the clock this long, ms: the mean time between two gusts. */
+  everyMs: number;
+  /** Where in its slot a gust starts, share of the slot (0: like a clock .. under 1). */
+  jitter: number;
+  /** The strength of a gust, between these two (each gust its own). */
+  strengthMin: number;
+  strengthMax: number;
+  /** How far a gust's direction strays from the wind's, radians either way. */
+  spread: number;
+  /** How far a gust front travels before it dies, tiles. */
+  travelTiles: number;
+  /** A plant eases into its lean over this long, ms. */
+  riseMs: number;
+  /** ... and holds it this long, while the gust blows over it, ms. */
+  holdMs: number;
+  /** How many swings it takes to stand still after the gust. */
+  swings: number;
+  /** One slow drift of a plant in the calm, ms (kinds.<kind>.drift). */
+  driftMs: number;
+  /** Another seed, another sequence of gusts. */
+  seed: number;
+  /** A front crosses its whole travel in this long, ms (worked out). */
+  crossMs: number;
+  /** The slowest plant is still again this long after a front reached it, ms (worked out). */
+  responseMs: number;
+  /** How many slots back a gust may still be moving a plant (worked out). */
+  back: number;
   /** Strength by ground surface (coasts and deserts above 1, floors indoors 0). */
   exposure: Readonly<Record<string, number>>;
   /** Strength over a surface that is not listed. */
@@ -95,7 +126,6 @@ export interface SpriteWind {
   top?: number | undefined;
   stiffness?: number | undefined;
   amplitude?: number | undefined;
-  flutter?: number | undefined;
 }
 
 /** A plant's wind, resolved: its kind's defaults with what its sprite and its item say. */
@@ -117,8 +147,8 @@ const num = (v: unknown, fallback: number, min: number, max: number): number =>
 const FALLBACK_KIND: WindKindRule = {
   stiffness: 0.4,
   amplitude: 1,
-  flutter: 0.4,
-  periodMs: 2400,
+  drift: 0,
+  periodMs: 1400,
   pivot: 0.2,
 };
 
@@ -127,10 +157,23 @@ function parseKind(raw: unknown): WindKindRule {
   return {
     stiffness: num(r["stiffness"], FALLBACK_KIND.stiffness, 0, 1),
     amplitude: num(r["amplitude"], FALLBACK_KIND.amplitude, 0, MAX_AMPLITUDE),
-    flutter: num(r["flutter"], FALLBACK_KIND.flutter, 0, MAX_FLUTTER),
+    drift: num(r["drift"], FALLBACK_KIND.drift, 0, MAX_DRIFT),
     periodMs: num(r["period_ms"], FALLBACK_KIND.periodMs, 300, 20000),
     pivot: num(r["pivot"], FALLBACK_KIND.pivot, 0, 0.95),
   };
+}
+
+/**
+ * The longest a plant moves after a gust front reached it, ms: the lean and the swings of
+ * the slowest kind (a plant's own period is at most 1.12 of its kind's `period_ms`).
+ */
+export function gustResponseMs(
+  riseMs: number,
+  holdMs: number,
+  swings: number,
+  slowestPeriodMs: number,
+): number {
+  return riseMs + holdMs + Math.max(FALL * riseMs, SETTLE * swings * slowestPeriodMs * 1.12);
 }
 
 /**
@@ -141,20 +184,51 @@ function parseKind(raw: unknown): WindKindRule {
 export function parseWind(raw: unknown): WindData | undefined {
   if (!isObj(raw)) return undefined;
   const f = isObj(raw["field"]) ? raw["field"] : {};
+  const g = isObj(raw["gusts"]) ? raw["gusts"] : {};
   const deg = num(f["direction"], 20, -3600, 3600);
+  const range: unknown[] = Array.isArray(g["strength"]) ? g["strength"] : [];
+  const strengthMin = num(range[0], 0.6, 0, 1.5);
   const exposure: Record<string, number> = {};
   if (isObj(f["exposure"]))
     for (const [surface, v] of Object.entries(f["exposure"])) exposure[surface] = num(v, 1, 0, 2);
   const kinds = {} as Record<WindKind, WindKindRule>;
   const k = isObj(raw["kinds"]) ? raw["kinds"] : {};
-  for (const kind of WIND_KINDS) kinds[kind] = parseKind(k[kind]);
+  let slowest = 0;
+  for (const kind of WIND_KINDS) {
+    kinds[kind] = parseKind(k[kind]);
+    slowest = Math.max(slowest, kinds[kind].periodMs);
+  }
+  const speed = num(f["speed"], 8, 0.5, 40);
+  const everyMs = num(g["every_s"], 45, 5, 3600) * 1000;
+  const jitter = num(g["jitter"], 0.3, 0, 0.95);
+  const travelTiles = num(g["travel_tiles"], 64, 8, 512);
+  const riseMs = num(g["rise_ms"], 450, 50, 5000);
+  const holdMs = num(g["hold_ms"], 1100, 0, 20000);
+  const swings = num(g["swings"], 2, 0, 6);
+  const crossMs = (travelTiles / speed) * 1000;
+  const responseMs = gustResponseMs(riseMs, holdMs, swings, slowest);
   return {
     field: {
-      dirX: Math.cos((deg * Math.PI) / 180),
-      dirY: Math.sin((deg * Math.PI) / 180),
-      speed: num(f["speed"], 2.5, 0, 20),
-      gustTiles: num(f["gust_tiles"], 9, 2, 64),
-      calm: num(f["calm"], 0.25, 0, 1),
+      dir: (deg * Math.PI) / 180,
+      speed,
+      everyMs,
+      jitter,
+      strengthMin,
+      strengthMax: num(range[1], 1, strengthMin, 1.5),
+      spread: (num(g["spread"], 25, 0, 180) * Math.PI) / 180,
+      travelTiles,
+      riseMs,
+      holdMs,
+      swings,
+      driftMs: num(g["drift_ms"], 9000, 1000, 120000),
+      seed: Math.round(num(g["seed"], 1, 0, 1e9)),
+      crossMs,
+      responseMs,
+      // Gust k is over by (k + jitter) slots plus its crossing and the last plant's swings.
+      back: Math.min(
+        MAX_BACK,
+        Math.max(0, Math.ceil((crossMs + responseMs) / everyMs + jitter - 1)),
+      ),
       exposure,
       open: num(f["open"], 1, 0, 2),
       forest: num(f["forest"], 0.4, 0, 1),
@@ -175,7 +249,6 @@ export function parseSpriteWind(raw: unknown): SpriteWind | undefined {
     top: opt("top", 1, 4096),
     stiffness: opt("stiffness", 0, 1),
     amplitude: opt("amplitude", 0, MAX_AMPLITUDE),
-    flutter: opt("flutter", 0, MAX_FLUTTER),
   };
 }
 
@@ -210,44 +283,151 @@ export function resolveWind(
     if (layer.top !== undefined) out.topPx = layer.top;
     if (layer.stiffness !== undefined) out.stiffness = layer.stiffness;
     if (layer.amplitude !== undefined) out.amplitude = layer.amplitude;
-    if (layer.flutter !== undefined) out.flutter = layer.flutter;
   }
   return out;
 }
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
-/** Smooth value noise in [0, 1) over the plane. */
-function noise2(u: number, v: number, salt: number): number {
+/** Smooth value noise in [0, 1) along a line. */
+function noise1(u: number, salt: number): number {
   const iu = Math.floor(u);
-  const iv = Math.floor(v);
-  const fu = smooth(u - iu);
-  const fv = smooth(v - iv);
-  const a = hash01(iu, iv, salt);
-  const b = hash01(iu + 1, iv, salt);
-  const c = hash01(iu, iv + 1, salt);
-  const d = hash01(iu + 1, iv + 1, salt);
-  return a + (b - a) * fu + (c - a) * fv + (a - b - c + d) * fu * fv;
+  const a = hash01(iu, salt, 73);
+  return a + (hash01(iu + 1, salt, 73) - a) * smooth(u - iu);
+}
+
+/** One gust: what its number, the seed and the data make of it. */
+interface Gust {
+  field: WindField;
+  k: number;
+  /** When it starts, ms. */
+  t0: number;
+  strength: number;
+  /** The way it travels, a unit vector in tiles (x east, y south). */
+  dx: number;
+  dy: number;
+  /** Which way and how much it leans a sprite, which only bends east or west. */
+  lean: number;
+  /** Where along its direction it is born, tiles. */
+  offset: number;
+}
+
+// The last few gusts worked out: a frame asks for the same one or two for every plant.
+const memo: (Gust | undefined)[] = [undefined, undefined, undefined, undefined];
+
+function gustOf(f: WindField, k: number): Gust {
+  const slot = k & 3;
+  const m = memo[slot];
+  if (m && m.k === k && m.field === f) return m;
+  const s = f.seed;
+  const angle = f.dir + f.spread * (2 * hash01(k, s, 43) - 1);
+  const dx = Math.cos(angle);
+  const g: Gust = {
+    field: f,
+    k,
+    t0: (k + f.jitter * hash01(k, s, 41)) * f.everyMs,
+    strength: f.strengthMin + (f.strengthMax - f.strengthMin) * hash01(k, s, 42),
+    dx,
+    dy: Math.sin(angle),
+    // A gust straight north or south still leans the crowns: a sprite has no depth.
+    lean: (dx < 0 ? -1 : 1) * Math.max(0.5, Math.abs(dx)),
+    offset: hash01(k, s, 44) * f.travelTiles,
+  };
+  memo[slot] = g;
+  return g;
+}
+
+// What front() says of a gust at a place (two numbers and no garbage: docs/07).
+let frontAt = 0;
+let frontStrength = 0;
+
+/**
+ * Gust `g` at (x, y), tiles: when its front gets there (frontAt, ms) and how hard it blows
+ * there (frontStrength). The front is a line across the gust's direction, a little wavy,
+ * patchy along its length; it is born `offset` tiles along, picks up, travels
+ * `travelTiles` and dies, so it passes every tile exactly once.
+ */
+function front(f: WindField, g: Gust, x: number, y: number): void {
+  const L = f.travelTiles;
+  const across = y * g.dx - x * g.dy;
+  const wobble = (2 * noise1(across / 9, g.k * 2 + 1) - 1) * FRONT_WOBBLE;
+  let pos = (x * g.dx + y * g.dy + wobble + g.offset) % L;
+  if (pos < 0) pos += L;
+  frontAt = g.t0 + (pos / f.speed) * 1000;
+  const edge = Math.min(pos, L - pos) / (L * EDGE);
+  const patch = 0.75 + 0.25 * noise1(across / 14, g.k * 2);
+  frontStrength = g.strength * patch * (edge >= 1 ? 1 : smooth(edge));
+}
+
+/** Whether gust `g` can be moving anything at `ms`. */
+const alive = (f: WindField, g: Gust, ms: number): boolean =>
+  ms >= g.t0 && ms <= g.t0 + f.crossMs + f.responseMs;
+
+/**
+ * Whether any gust is on the map at `ms`: false for the whole calm between two gusts, when
+ * nothing has to be worked out for any plant.
+ */
+export function gustActive(f: WindField, ms: number): boolean {
+  const k0 = Math.floor(ms / f.everyMs);
+  for (let k = k0; k >= k0 - f.back; k--) if (alive(f, gustOf(f, k), ms)) return true;
+  return false;
 }
 
 /**
- * The gust over world position (x, y), in tiles, at `ms`: 0 (a lull) .. 1 (a full gust).
- * A pattern frozen in the air that travels with the wind: what blows here now blows
- * `speed` tiles downwind a second later.
+ * How hard the gust blows over world position (x, y), in tiles, at `ms`: 0 in the calm,
+ * up to the gust's strength while its body passes (it picks up over `riseMs`, blows for
+ * `holdMs` and lets go). The footprints' wind (footprints.ts).
  */
 export function gustAt(f: WindField, x: number, y: number, ms: number): number {
-  const travelled = (f.speed * ms) / 1000;
-  const along = (x * f.dirX + y * f.dirY - travelled) / f.gustTiles;
-  // A gust front is wider than it is long.
-  const across = (y * f.dirX - x * f.dirY) / (f.gustTiles * 1.8);
-  const n = 0.65 * noise2(along, across, 71) + 0.35 * noise2(along * 2.3, across * 2.3, 72);
-  // More contrast than plain noise: real lulls and real gusts.
-  return smooth(Math.min(1, Math.max(0, (n - 0.22) / 0.56)));
+  const body = f.riseMs + f.holdMs + FALL * f.riseMs;
+  const k0 = Math.floor(ms / f.everyMs);
+  let level = 0;
+  for (let k = k0; k >= k0 - f.back; k--) {
+    const g = gustOf(f, k);
+    if (!alive(f, g, ms)) continue;
+    front(f, g, x, y);
+    const tau = ms - frontAt;
+    if (tau <= 0 || tau >= body) continue;
+    const shape =
+      tau < f.riseMs
+        ? smooth(tau / f.riseMs)
+        : tau < f.riseMs + f.holdMs
+          ? 1
+          : 1 - smooth((tau - f.riseMs - f.holdMs) / (FALL * f.riseMs));
+    level = Math.max(level, frontStrength * shape);
+  }
+  return level;
 }
 
-/** How hard the wind blows on a plant: the gust over the calm floor, by its exposure. */
-export function strengthAt(f: WindField, gust: number, exposure: number): number {
-  return exposure * (f.calm + (1 - f.calm) * gust);
+/** A gust front on its way to a place (nextGust). */
+export interface GustFront {
+  /** When it gets there, ms on the wind's clock. */
+  at: number;
+  /** How hard it blows there. */
+  strength: number;
+}
+
+/**
+ * The first gust front to reach (x, y) after `ms` blowing at least `min` there, or
+ * undefined when none of the next dozen does (tests, the E2E and tools: a frame never asks).
+ */
+export function nextGust(
+  f: WindField,
+  x: number,
+  y: number,
+  ms: number,
+  min = 0,
+): GustFront | undefined {
+  const k0 = Math.floor(ms / f.everyMs);
+  let best: GustFront | undefined;
+  for (let k = k0 - f.back - 1; k <= k0 + 12; k++) {
+    // Gusts start in order, so nothing later can get there before one two slots older.
+    if (best && k > k0 + 1 && gustOf(f, k).t0 >= best.at) break;
+    front(f, gustOf(f, k), x, y);
+    if (frontAt <= ms || frontStrength < min) continue;
+    if (!best || frontAt < best.at) best = { at: frontAt, strength: frontStrength };
+  }
+  return best;
 }
 
 /**
@@ -278,9 +458,53 @@ export function exposureOf(
 export const FOREST_FULL = 0.35;
 
 /**
- * The main sway of the plant on tile (x, y) at `ms`: how far its top is from rest, sprite
- * px, positive to the east. A lean downwind that comes and goes with the gusts, plus a swing
- * at the plant's own period and phase (its tile's hash), never past its amplitude.
+ * How far from rest the gust that reached a plant `tau` ms ago holds its top, as a share of
+ * its full lean: it eases in, leans while the gust blows, and when the gust lets go it
+ * swings at its own `period`, each swing smaller, until it stands still, `swings` swings
+ * and a half later. Exactly 0 before the front and after the last swing.
+ */
+export function gustShape(f: WindField, tau: number, period: number): number {
+  if (tau <= 0) return 0;
+  if (tau < f.riseMs) return smooth(tau / f.riseMs);
+  const u = tau - f.riseMs - f.holdMs;
+  if (u <= 0) return 1;
+  const settle = SETTLE * f.swings * period;
+  // A plant that does not swing lets go with the gust.
+  if (settle <= 0) return u < FALL * f.riseMs ? 1 - smooth(u / (FALL * f.riseMs)) : 0;
+  if (u >= settle) return 0;
+  const x = (u * DAMPING * SETTLE) / settle;
+  // Leaves the lean with no jerk ((1 + x) e^-x starts flat) and ends on exactly nothing.
+  const tail = u > 0.8 * settle ? 1 - smooth((u - 0.8 * settle) / (0.2 * settle)) : 1;
+  return (1 + x) * Math.exp(-x) * Math.cos((TAU * u) / period) * tail;
+}
+
+/**
+ * What a gust front of `strength` (the gust's, by the plant's exposure) that reached the
+ * plant on tile (x, y) `tau` ms ago does to its top: sprite px from rest, towards where
+ * the gust blows. The gust's shape (gustShape) by what the plant gives (a stiff one only to
+ * a strong gust), with a size and a period of its own (its tile's hash).
+ */
+export function gustLean(
+  f: WindField,
+  w: PlantWind,
+  x: number,
+  y: number,
+  tau: number,
+  strength: number,
+): number {
+  if (tau <= 0 || strength <= 0 || w.amplitude <= 0) return 0;
+  const period = w.periodMs * (1 - 0.35 * w.stiffness) * (0.88 + 0.24 * hash01(x, y, 31));
+  const shape = gustShape(f, tau, period);
+  if (shape === 0) return 0;
+  const response = Math.pow(Math.min(1.5, strength), 1 + 2 * w.stiffness);
+  return w.amplitude * (0.85 + 0.3 * hash01(x, y, 33)) * response * shape;
+}
+
+/**
+ * Where the top of the plant on tile (x, y) is at `ms`: sprite px from rest, positive to
+ * the east. Nothing in the calm (but its kind's `drift`, if any); when a gust front
+ * reaches it, what that gust does to it (gustLean) by how hard it blows there
+ * (`exposure`: the place, and the night). Never past its amplitude.
  */
 export function swayAt(
   f: WindField,
@@ -290,36 +514,22 @@ export function swayAt(
   ms: number,
   exposure: number,
 ): number {
-  return swayOf(f, w, x, y, ms, strengthAt(f, gustAt(f, x, y, ms), exposure));
-}
-
-/** swayAt for a wind strength already worked out (strengthAt). */
-export function swayOf(
-  f: WindField,
-  w: PlantWind,
-  x: number,
-  y: number,
-  ms: number,
-  strength: number,
-): number {
-  if (strength <= 0 || w.amplitude <= 0) return 0;
-  // A stiff plant ignores a breeze and gives only to a gust.
-  const response = Math.pow(Math.min(1.5, strength), 1 + 2 * w.stiffness);
-  const period = w.periodMs * (1 - 0.35 * w.stiffness) * (0.88 + 0.24 * hash01(x, y, 31));
-  const phase = hash01(x, y, 32) * TAU;
-  // Two swings that never line up: it does not tick like a metronome.
-  const swing =
-    0.72 * Math.sin((TAU * ms) / period + phase) +
-    0.28 * Math.sin((TAU * ms) / (period * 0.381) + phase * 1.7);
-  const own = 0.85 + 0.3 * hash01(x, y, 33);
-  const v = w.amplitude * own * response * (LEAN * f.dirX + SWING * swing);
+  if (exposure <= 0) return 0;
+  let v = 0;
+  if (w.drift > 0)
+    v =
+      w.drift *
+      Math.min(1, exposure) *
+      Math.sin((TAU * ms) / (f.driftMs * (0.8 + 0.4 * hash01(x, y, 36))) + hash01(x, y, 37) * TAU);
+  if (w.amplitude <= 0) return v;
+  const k0 = Math.floor(ms / f.everyMs);
+  for (let k = k0; k >= k0 - f.back; k--) {
+    const g = gustOf(f, k);
+    if (!alive(f, g, ms)) continue;
+    front(f, g, x, y);
+    v += g.lean * gustLean(f, w, x, y, ms - frontAt, exposure * frontStrength);
+  }
   return Math.max(-w.amplitude, Math.min(w.amplitude, v));
-}
-
-/** The flutter's size at a wind strength, sprite px (under 1): none in still air. */
-export function flutterOf(w: PlantWind, strength: number): number {
-  if (strength <= 0 || w.flutter <= 0) return 0;
-  return Math.min(MAX_FLUTTER, w.flutter * Math.min(1, 0.35 + strength));
 }
 
 /**
@@ -343,7 +553,7 @@ export interface StripLayout {
   edges: Float32Array;
   /** rowWeight of each strip (0 for the base). */
   weights: Float32Array;
-  /** Which strips flutter (the moving ones), by their weight. */
+  /** How many strips, the base included. */
   count: number;
 }
 
@@ -374,37 +584,23 @@ export function stripLayout(height: number, pivot: number, top: number): StripLa
 
 /**
  * The offset of every strip, in steps of 1/`steps` sprite px (whole screen pixels at that
- * zoom), written into `out`: the main sway and the bend of a passing creature (both px at
- * the top) by the strip's weight, plus the flutter, a wave running up the canopy. Returns
- * whether any strip changed, so a caller uploads only then.
+ * zoom), written into `out`: the gust and the bend of a passing creature (both px at the
+ * top) by the strip's weight. Returns whether any strip changed, so a caller uploads only
+ * then: never while the plant stands still.
  */
 export function stripOffsets(
   out: Int16Array,
   layout: StripLayout,
   topPx: number,
-  flutterPx: number,
-  flutterPhase: number,
   steps: number,
 ): boolean {
   let changed = false;
   for (let i = 0; i < layout.count; i++) {
-    const w = layout.weights[i] as number;
-    let v = 0;
-    if (w > 0) {
-      v = topPx * w;
-      // The flutter fades in over the lower canopy: the rows next to the trunk stay.
-      if (flutterPx > 0) v += flutterPx * Math.min(1, w * 3) * Math.sin(flutterPhase + i * 2.1);
-    }
-    const q = Math.round(v * steps);
+    const q = Math.round(topPx * (layout.weights[i] as number) * steps);
     if (out[i] !== q) {
       out[i] = q;
       changed = true;
     }
   }
   return changed;
-}
-
-/** The phase of a plant's flutter at `ms` (each plant a little faster or slower). */
-export function flutterPhase(x: number, y: number, ms: number): number {
-  return (TAU * ms) / (FLUTTER_MS * (0.8 + 0.4 * hash01(x, y, 34))) + hash01(x, y, 35) * TAU;
 }

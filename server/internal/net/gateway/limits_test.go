@@ -65,7 +65,7 @@ func (s *stack) loginFrom(ip, tok string, char int64) *client {
 	s.t.Helper()
 	s.token(tok, char)
 	c := s.mustDialFrom(ip)
-	if err := c.send(hello(tok, "0.1.0")); err != nil {
+	if err := c.send(hello(tok, DefaultMinClientVersion)); err != nil {
 		s.t.Fatal(err)
 	}
 	c.until("welcome", func(e *pb.ServerMessage) bool { return e.GetWelcome() != nil })
@@ -137,7 +137,7 @@ func TestHandshakeBucketBoundsRedeems(t *testing.T) {
 		}
 		var raw [32]byte
 		_, _ = rand.Read(raw[:])
-		if err := c.send(helloRaw(base64.RawURLEncoding.EncodeToString(raw[:]), "0.1.0")); err != nil {
+		if err := c.send(helloRaw(base64.RawURLEncoding.EncodeToString(raw[:]), DefaultMinClientVersion)); err != nil {
 			t.Fatal(err)
 		}
 		if r := c.disconnect(); r != pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION {
@@ -156,7 +156,7 @@ func TestMalformedTokensNeverReachTheRepository(t *testing.T) {
 		strings.Repeat("a", 42) + "=", strings.Repeat("a", 42) + "+", "",
 	} {
 		c := s.dial()
-		if err := c.send(helloRaw(tok, "0.1.0")); err != nil {
+		if err := c.send(helloRaw(tok, DefaultMinClientVersion)); err != nil {
 			t.Fatal(err)
 		}
 		if r := c.disconnect(); r != pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION {
@@ -179,7 +179,7 @@ func TestFullHandshakeSemaphoreRefusesBeforeHello(t *testing.T) {
 	s.accounts.mu.Unlock()
 	s.token("a", 7)
 	first := s.mustDialFrom("203.0.113.4")
-	if err := first.send(hello("a", "0.1.0")); err != nil {
+	if err := first.send(hello("a", DefaultMinClientVersion)); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool { return s.accounts.calls.Load() == 1 }) // holds the only slot
@@ -207,7 +207,7 @@ func TestForgedTokenHoldsNoPlayerSlot(t *testing.T) {
 	s.accounts.block = release
 	s.accounts.mu.Unlock()
 	forged := s.dial()
-	if err := forged.send(hello("forged", "0.1.0")); err != nil {
+	if err := forged.send(hello("forged", DefaultMinClientVersion)); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool { return s.accounts.calls.Load() == 1 }) // inside its redeem
@@ -238,7 +238,7 @@ func TestLastPlayerSlotTakenAfterRedeem(t *testing.T) {
 	s.token("a", 7)
 	s.token("b", 8)
 	slow := s.dial()
-	if err := slow.send(hello("a", "0.1.0")); err != nil {
+	if err := slow.send(hello("a", DefaultMinClientVersion)); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool { return s.accounts.calls.Load() == 1 })
@@ -268,7 +268,7 @@ func TestMaxPlayersGivesServerFull(t *testing.T) {
 	calls := s.accounts.calls.Load()
 	s.token("b", 8)
 	c := s.dial()
-	if err := c.send(hello("b", "0.1.0")); err != nil {
+	if err := c.send(hello("b", DefaultMinClientVersion)); err != nil {
 		t.Fatal(err)
 	}
 	if r := c.disconnect(); r != pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL {
@@ -477,7 +477,7 @@ func TestRefusalsAreCounted(t *testing.T) {
 		t.Fatalf("503 expected, got %d", status)
 	}
 	s.token("b", 8)
-	if err := c.send(hello("b", "0.1.0")); err != nil {
+	if err := c.send(hello("b", DefaultMinClientVersion)); err != nil {
 		t.Fatal(err)
 	}
 	if r := c.disconnect(); r != pb.DisconnectReason_DISCONNECT_REASON_SERVER_FULL {

@@ -11,6 +11,7 @@ import { psql } from "./psql.ts";
 import { stepKey } from "./keys.ts";
 import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, puertoClientURL, puertoServerURL, serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -53,7 +54,7 @@ const CLOSE_H = 7;
  * clips for the first 20 s, then any; the whole page. A fall: late in it (its last
  * FALL_SHOT_MS, when the effect of the blow that killed it is ending), and a close-up of
  * CLOSE_W x CLOSE_H tiles round it, so the body is big in the shot (a body behind a taller
- * creature also shows as a see-through copy). Returns what it saw on that frame (Caught).
+ * creature is covered by it). Returns what it saw on that frame (Caught).
  */
 async function shotPose(
   page: Page,
@@ -277,7 +278,7 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   // Account and character through the HTTP API (as the bots do).
   const email = `e2e-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Walker ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Walker");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -507,7 +508,7 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
 
   const email = `e2e-fight-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Fighter ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Fighter");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -593,6 +594,14 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
     })
     .toBeGreaterThan(0);
   await shot(page, "07-combat");
+  // The target wears the red halo on the ground (docs/17), and nobody else does: a close-up
+  // of the wolf shows the ring under its feet, covered in part by its own sprite.
+  expect(await page.evaluate(() => window.__rpgClient?.haloIds())).toEqual([target]);
+  const marked = await page.evaluate(
+    (id) => window.__rpgClient?.monsters().find((m) => m.id === id),
+    target,
+  );
+  if (marked) await closeShot(page, "07d-target-halo", marked);
   // A9: the server says who attacks whom (docs/17 ANI-7): a CreatureAttack of the player
   // at its wolf or of the wolf. Without those events the client still plays poses, guessed
   // from the effects and projectiles (an older server), so the poses alone prove nothing.
@@ -773,7 +782,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
 
   const email = `e2e-magic-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Mage ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Mage");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -966,8 +975,8 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
 
   const email = `e2e-voc-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const druidName = `Druid ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
-  const rangerName = `Ranger ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const druidName = characterName("Druid");
+  const rangerName = characterName("Ranger");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1130,7 +1139,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
 
   const email = `e2e-npc-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Talker ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Talker");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1303,7 +1312,7 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
 
   const email = `e2e-death-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Doomed ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Doomed");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1422,7 +1431,7 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
 
   const email = `e2e-mine-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Miner ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Miner");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1577,7 +1586,7 @@ test("chat on the local and global channels, then switch the language", async ({
 
   const email = `e2e-chat-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Talker ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Talker");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1699,7 +1708,7 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   /** Registers an account with one guardian and returns its email and character name. */
   async function account(prefix: string, title: string): Promise<{ email: string; name: string }> {
     const email = `e2e-${prefix}-${Date.now()}-${randomLetters(6)}@example.com`;
-    const name = `${title} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+    const name = characterName(title);
     expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
       201,
     );
@@ -1831,7 +1840,7 @@ test("T3.2: a guardian casts haste: its icon in the status tray, faster speed an
 
   const email = `e2e-haste-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Swift ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Swift");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1940,7 +1949,7 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   async function account(prefix: string, title: string): Promise<{ email: string; name: string }> {
     const email = `e2e-${prefix}-${Date.now()}-${randomLetters(6)}@example.com`;
-    const name = `${title} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+    const name = characterName(title);
     expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
       201,
     );
@@ -2239,7 +2248,7 @@ test("T3.4: cook a fish at the hearth of Lanternby from the station window", asy
 
   const email = `e2e-cook-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Cook ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Cook");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -2334,7 +2343,7 @@ test("T3.5: sail from Puerto's dock to the test island with the harbor master", 
 
   const email = `e2e-sail-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Sailor ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Sailor");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -2406,7 +2415,7 @@ async function newGuardian(
 ): Promise<{ email: string; password: string; name: string }> {
   const email = `e2e-${tag}-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `${tag} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName(tag);
   const apiCtx = await playwright.request.newContext({ baseURL: base });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -2917,7 +2926,7 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
      INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
      SELECT character_id, id, s, 8, 100 FROM bp, generate_series(0, 19) AS s`,
   ]);
-  const guildName = `Faro ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const guildName = characterName("Faro");
   const errors: string[] = [];
   async function enter(email: string): Promise<Page> {
     const page = await browser.newPage();
@@ -3885,7 +3894,7 @@ test("account stash: one character stores fish, the other online one takes it ou
   // One account, two characters (docs/02 "Baúl de la cuenta"): the second is made with the
   // same token. Both stand by Puerto's stash chest (3170, 6382, next to the market board).
   const owner = await newGuardian(playwright, "Baulero");
-  const alt = `Baulera ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const alt = characterName("Baulera");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   const login = await apiCtx.post("/api/auth/login", {
     data: { email: owner.email, password: owner.password, token_in_body: true },
@@ -4044,7 +4053,7 @@ test("account security: change password, sign out everywhere, email prefill", as
   expect(errors).toEqual([]);
 });
 
-// Lote 20 (livingworld/README.md "Viento"): the trees of Ivernel's shore sway in the wind,
+// Lote 20 (livingworld/README.md "Viento"): the trees of Ivernel's shore take the wind,
 // each a mesh of its map sprite: the crown moves and the foot of the trunk does not; with
 // "Animaciones reducidas" the map's own sprites come back and nothing moves; and the meshes
 // ride the atlas batch, so the trees cost no draw calls of their own (docs/07: fewer than 50
@@ -4053,11 +4062,14 @@ test("account security: change password, sign out everywhere, email prefill", as
 // shadow sways with the crown (a second mesh on the same strips; a still sprite with reduced
 // motion). The forest is shot in the morning, in the afternoon and under a full moon, and
 // the draw calls are measured with all those shadows in view.
-test("wind: crowns sway over still trunks, reduced motion stops them, draw calls stay in budget", async ({
+// Owner, 2026-11-26: a tree that always moves "looks alive, or on fire". The trees stand
+// still, and every so often a gust crosses the map and bends them as it passes: the crown
+// is shot still in the calm and moving when the gust front reaches it.
+test("wind: crowns stand still, a gust bends them over still trunks, reduced motion stops them, draw calls stay in budget", async ({
   page,
   playwright,
 }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(600_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -4150,10 +4162,12 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
   const foot = { x: tree.cx - t / 4, y: tree.cy + t / 4, width: t / 2, height: t / 4 };
   const sky = () => page.evaluate(() => window.__rpgClient?.sky());
   // Every tree in view casts, and the crowns' shadows sway with the crowns.
+  // The own player first: while its body fades in (the 300 ms after it appears) it casts
+  // no shadow yet and stands on its ellipse.
+  await expect.poll(async () => (await sky())?.selfContact, { timeout: 10_000 }).toBe(false);
   const windy = await sky();
   expect(windy?.casters).toBeGreaterThanOrEqual(tree.count);
   expect(windy?.swayingShadows).toBeGreaterThan(0);
-  expect(windy?.selfContact).toBe(false);
   const frames = async (clip: typeof crown, n: number): Promise<number> => {
     const seen = new Set<string>();
     for (let i = 0; i < n; i++) {
@@ -4162,12 +4176,45 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
     }
     return seen.size;
   };
+  // The gusts (data/livingworld/wind.yaml): the next front to reach a tile, and whether
+  // the map is in the calm between two.
+  const gust = (x: number, y: number, min: number) =>
+    page.evaluate(({ a, b, m }) => window.__rpgClient?.gust(a, b, m), { a: x, b: y, m: min });
+  /** Waits for the calm between two gusts, with at least `ms` of it left at (x, y). */
+  const calm = (x: number, y: number, ms: number): Promise<void> =>
+    expect
+      .poll(
+        async () => {
+          const g = await gust(x, y, 0);
+          return g !== undefined && g.calm && g.at > ms;
+        },
+        { timeout: 60_000, intervals: [500] },
+      )
+      .toBe(true);
+  /** Waits for the next gust front of at least `min` to reach (x, y); returns its strength. */
+  const front = async (x: number, y: number, min: number): Promise<number> => {
+    const g = await gust(x, y, min);
+    if (!g) throw new Error("no strong gust on its way");
+    await page.waitForTimeout(g.at + 150);
+    return g.strength;
+  };
+  // Between two gusts nothing moves: not the crown, not its shadow.
+  await calm(tree.x, tree.y, 4000);
+  await shot(page, `120-wind-plaza-calm-zoom${scale}`);
+  expect(await frames(crown, 5), "the crown stands still between gusts").toBe(1);
+  // The gust: the crown leans and swings, the foot of the trunk stands.
+  // (A gust comes every 45 s or so, and not every one blows hard on this tree: the wait
+  // is a minute on average.)
+  const blew = await front(tree.x, tree.y, 0.6);
+  testInfo.annotations.push({ type: "wind", description: `gust of ${blew.toFixed(2)}` });
+  const [crownFrames, footFrames] = await Promise.all([frames(crown, 6), frames(foot, 6)]);
+  expect(crownFrames, "the crown bends in the gust").toBeGreaterThan(1);
+  expect(footFrames, "the foot of the trunk stands").toBe(1);
+  // Still swinging, less and less.
   for (let i = 0; i < 4; i++) {
     await shot(page, `120-wind-plaza-zoom${scale}-${i}`);
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(300);
   }
-  expect(await frames(crown, 6), "the crown sways").toBeGreaterThan(1);
-  expect(await frames(foot, 6), "the foot of the trunk stands").toBe(1);
 
   // Reduced motion: the trees stand whole and still; switched off, they sway again.
   await openWindow(page, "options");
@@ -4183,16 +4230,35 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
   await openWindow(page, "options");
   await page.getByTestId("options").getByTestId("reduced-motion").uncheck();
   await closeWindow(page, "options");
-  expect(await frames(crown, 6), "the crown sways again").toBeGreaterThan(1);
+  // The strips are back (the next gust moves them; it is not waited for again).
+  await expect.poll(async () => (await sky())?.swayingShadows ?? 0).toBeGreaterThan(0);
 
-  // The thick of the forest: the screen with the most trees of the island.
+  // The thick of the forest: the screen with the most trees of the island. Its thornlings
+  // kill even this character in a couple of minutes, and the gust the shots wait for can be
+  // that far away: the wait is here in the plaza (a front's time at a tile does not depend
+  // on who looks), and the character goes when the front is a few seconds from the forest.
+  const coming = await gust(4221, 6071, 0.5);
+  if (!coming) throw new Error("no strong gust on its way to the forest");
+  await page.waitForTimeout(Math.max(0, coming.at - 5000));
   const say = page.getByTestId("say").getByRole("textbox");
   await say.fill("/tp 4221 6071 7");
   await say.press("Enter");
-  await arrived(page, 4221, 6071);
+  // /tp puts the character beside the tile when a thornling stands on it.
+  await expect
+    .poll(
+      async () => {
+        const s = await self(page);
+        return s ? Math.max(Math.abs(s.x - 4221), Math.abs(s.y - 6071)) : Infinity;
+      },
+      { timeout: 20_000 },
+    )
+    .toBeLessThanOrEqual(2);
+  const stood = await self(page);
   await say.blur();
   await page.waitForTimeout(600);
   const forest = await trees();
+  // The forest as a gust crosses it: the trees lean one after another.
+  await front(4221, 6071, 0.5);
   for (let i = 0; i < 4; i++) {
     await shot(page, `122-wind-forest-zoom${scale}-${i}`);
     await page.waitForTimeout(400);
@@ -4274,7 +4340,7 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
   await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
   await shot(page, "127-shadows-forest-noon");
   // Still standing in the forest: every shot above was of it.
-  expect(await self(page)).toMatchObject({ x: 4221, y: 6071 });
+  expect(await self(page)).toMatchObject({ x: stood?.x, y: stood?.y });
   await expect(page.getByTestId("death-screen")).toHaveCount(0);
   expect(errors).toEqual([]);
 });

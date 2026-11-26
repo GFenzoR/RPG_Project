@@ -11,6 +11,7 @@ import { stepKey } from "./keys.ts";
 import { psql } from "./psql.ts";
 import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -33,7 +34,7 @@ async function newGuardian(
 ): Promise<{ email: string; password: string; name: string }> {
   const email = `e2e-${tag}-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `${tag} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName(tag);
   const api = await playwright.request.newContext({ baseURL: serverURL });
   expect((await api.post("/api/auth/register", { data: { email, password } })).status()).toBe(201);
   const login = await api.post("/api/auth/login", {
@@ -752,15 +753,15 @@ test("sandbox: sharp names at 1x, 2x and 4x, NPCs with their role on a second li
   await shot(page, "101c-names-normal-4x-monsters");
   await page.evaluate(() => localStorage.removeItem("rpg.name-size"));
 
-  // ART-3: just north of the temple's south wall (its piece at 2092,2091), the piece fades
-  // and no pale copy of the player is drawn; a piece of the same wall far away does not.
+  // ART-3: just north of the temple's south wall (its piece at 2092,2091), the piece
+  // fades; a piece of the same wall far away does not.
   await zoomTo(2);
   await tp(2092, 2090, 7);
   expect(await page.evaluate(() => window.__rpgClient?.walkable(2092, 2091, 7))).toBe(false);
   await expect
     .poll(async () => {
       const f = await page.evaluate(() => window.__rpgClient?.wallFade(2092, 2091));
-      return f && f.alphas.length > 0 && f.alphas.every((a) => a < 0.5) && f.copies === 0;
+      return f && f.alphas.length > 0 && f.alphas.every((a) => a < 0.5);
     })
     .toBe(true);
   const far = await page.evaluate(() => window.__rpgClient?.wallFade(2099, 2091));
@@ -926,7 +927,7 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
   page,
   playwright,
 }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(480_000);
   const errors: string[] = [];
   const who = await newGuardian(playwright, "Caminante");
   psql([
@@ -1091,7 +1092,8 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
 
   // What erases the prints (livingworld/README.md "Huellas: qué las borra"): no clock of
   // their own. A fresh trail on the dry sand, shot, and shot again once the wind's gusts
-  // have worn it (the beach is open: it takes a gust or two).
+  // have worn it (the beach is open: it takes a gust or two, and a gust comes every 45 s
+  // or so: between two of them the prints stay as they are).
   await tp(runs.east.x, runs.east.y);
   await standing();
   await page.keyboard.down("ArrowRight");
@@ -1111,7 +1113,7 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
   const worn = (list: { wear: number }[]): number =>
     list.reduce((a, q) => a + q.wear, 0) + (fresh0.length - list.length);
   await expect
-    .poll(async () => worn(await dry()), { timeout: 90_000, intervals: [500] })
+    .poll(async () => worn(await dry()), { timeout: 240_000, intervals: [500] })
     .toBeGreaterThan(fresh0.length * 0.5);
   await around("99l-footprints-after-gust", trailEnd.x - 2, trailEnd.y);
 
@@ -1157,5 +1159,104 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
   // A wave every 7.7 s; one that reaches the first tile from the water comes soon.
   await expect.poll(wetPrints, { timeout: 60_000, intervals: [250] }).toBe(0);
   await around("99n-wet-sand-after-wave", wetEnd.x - 1, wetEnd.y);
+  expect(errors).toEqual([]);
+});
+
+// The shadows of lamps and fires (docs/17 "Sombras de las luces", owner 2026-11-26): under a
+// roof there is no sun shadow, whatever is in view; by a brazier indoors, by a torch
+// underground and by a lamp post at night the own player casts a shadow away from the light
+// and has no contact ellipse; where no light reaches (the temple of Thimblewick, which has
+// no lamps) the ellipse stays, much fainter.
+test("sandbox light shadows: indoors, underground and by a lamp at night", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Farolero");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas', level = 200, health = 1000000 WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const say = page.getByTestId("say").getByRole("textbox");
+  const command = async (text: string): Promise<void> => {
+    await say.fill(text);
+    await say.press("Enter");
+    await page.waitForTimeout(300);
+  };
+  const lit = () => page.evaluate(() => window.__rpgClient?.lightShadows());
+  const tp = async (x: number, y: number, z: number): Promise<void> => {
+    await command(`/tp ${x} ${y} ${z}`);
+    await expect
+      .poll(async () => {
+        const s = await page.evaluate(() => window.__rpgClient?.self());
+        return s ? `${s.x},${s.y},${s.z}` : "";
+      }, SLOW)
+      .toBe(`${x},${y},${z}`);
+    await say.blur();
+    await page.waitForTimeout(500);
+  };
+
+  try {
+    await command("/time speed 0");
+    await command("/time noon");
+    await say.blur();
+    // The temple of Thimblewick has no lamps: under its roof, no shadow at all and the
+    // faint ellipse under the feet.
+    await expect.poll(async () => (await lit())?.selfIndoor, { timeout: 10_000 }).toBe(true);
+    const unlit = await lit();
+    expect(unlit?.shadows).toBe(0);
+    expect(unlit?.selfContact).toBeGreaterThan(0);
+    expect(unlit?.selfContact).toBeLessThan(0.5);
+    await shot(page, "99h-light-temple-unlit");
+
+    // From the square the temple is only half in view: its floor must show no sun shadow
+    // (pending 1 of lote 20b). Looked at in the screenshot.
+    await tp(2095, 2095, 7);
+    await shot(page, "99i-light-temple-from-square");
+
+    // The temple of Puerto, between its two braziers, at noon: a shadow from the braziers
+    // and no ellipse.
+    await tp(3160, 6386, 7);
+    await expect
+      .poll(async () => (await lit())?.shadows ?? 0, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    const temple = await lit();
+    expect(temple?.selfIndoor).toBe(true);
+    expect(temple?.selfContact).toBe(0);
+    await shot(page, "99j-light-temple-braziers");
+
+    // Underground, by a wall torch of the cellars of Puerto.
+    await tp(3134, 6315, 8);
+    await expect
+      .poll(async () => (await lit())?.shadows ?? 0, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    expect((await lit())?.selfContact).toBe(0);
+    await shot(page, "99k-light-underground-torch");
+
+    // The square of Puerto at night, by a lamp post.
+    await tp(3167, 6391, 7);
+    // Noon: lamps cast nothing under the sun. Only the own player is asked: `shadows` also
+    // counts whoever stands under a roof in the server's window (the priestess between the
+    // temple's braziers, past the left edge of the screen), lit at any hour.
+    await expect.poll(async () => (await lit())?.selfLit, { timeout: 10_000 }).toBe(false);
+    expect((await lit())?.selfIndoor).toBe(false);
+    await command("/time moon 4");
+    await command("/time night");
+    await say.blur();
+    await expect.poll(async () => (await lit())?.selfLit, { timeout: 10_000 }).toBe(true);
+    expect((await lit())?.selfContact).toBe(0);
+    await shot(page, "99l-light-square-night-lamp");
+  } finally {
+    await command("/time noon");
+    await command("/time speed 0");
+  }
   expect(errors).toEqual([]);
 });

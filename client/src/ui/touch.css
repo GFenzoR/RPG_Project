@@ -109,8 +109,6 @@ body.picking-item [data-drop] {
   font-family: var(--ui-font-title);
   color: var(--ui-gold-300);
   font-weight: bold;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -204,7 +202,8 @@ body.picking-item [data-drop] {
 }
 .game[data-pad] .hotbar.stacked li button,
 .game[data-pad] .hotbar.stacked li select {
-  width: 3.2rem;
+  /* px, not rem: the root text size (17 px since 2026-11-26) must not cost the fourth slot. */
+  width: 51px;
 }
 /* Over the map and the phone drawer (z-index 8 in client.css), under the windows over the
    map (12: dialog, crafting, market, house, trade). Upright the dialog's sheet can reach
@@ -295,18 +294,24 @@ body.picking-item [data-drop] {
 .touch-menu[data-pointer="mouse"] .touch-menu-action {
   min-height: 30px;
   padding: 0 10px;
-  font-size: 14px;
+  font-size: 15px;
 }
 .touch-menu-title {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+/* The name is never cut (docs/17 UI-3 "Nombres"): too wide for the menu, its font shrinks
+   (ui/fit-text.ts) and, at the floor, it breaks onto more lines; the menu scrolls inside
+   when that makes it taller than its room. */
 .touch-menu-name {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.touch-menu-name[data-fit="wrap"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
 }
 .touch-menu-name::first-letter {
   text-transform: uppercase;

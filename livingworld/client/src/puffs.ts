@@ -11,7 +11,7 @@ export const PUFF_MS: Readonly<Record<PuffKind, number>> = { ripple: 700, dust: 
  * A step this short or shorter is a run (ms per tile): it raises dust. A walk at the base
  * speed takes far longer; a haste or a fast mount gets there.
  */
-export const RUN_STEP_MS = 260;
+export const RUN_STEP_MS = 232;
 
 export interface Puff {
   kind: PuffKind;

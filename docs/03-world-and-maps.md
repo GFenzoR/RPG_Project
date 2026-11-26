@@ -756,10 +756,10 @@ con `pruebas_vault_exit`.
   al sur; el anillo es 4-conexo, sin esquinas diagonales abiertas, así que solo se entra por
   el hueco) con dragoncillos (48+). Escalera de la mina en 3692,5796 (`stairs_down` /
   `stairs_up`), al final del camino de piedra que sale de la plaza. Piso 8: la mina, con la
-  sala de entrada, la galería de los mineros de obsidiana al oeste (33–37) y la de los
+  sala de entrada, la galería de los mineros renegados al oeste (33–37) y la de los
   gólems de escoria al este (39–44), ambas con vetas de ascua, y al sur la sala de la
   puerta sellada (el eco `volcan_forge_echo` en 3692,5826) y la forja antigua con el
-  custodio de escoria (3692,5845, respawn 1200 s). Entre las dos, el pasillo se angosta a
+  custodio (3692,5845, respawn 1200 s). Entre las dos, el pasillo se angosta a
   una casilla (`rock_wall` en 3691,5832) con la puerta con llave `forge_gate` en
   3692,5832: se abre con la llave de ascua del Capítulo 3. Protección en el templo y la plaza;
   `no_logout` en el muelle; el resto es PvP abierto. Casas: `volcan_house_cinder` (T5.5,

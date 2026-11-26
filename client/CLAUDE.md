@@ -75,8 +75,9 @@ client/
     jugador no cuenta) y después la casilla. Una cabeza que sube a una casilla con algo
     propio que usar (puerta, item, escalera de mano: `GameCanvasOptions.ownUse` →
     `Game.ownUse`) no cuenta: el click es de esa casilla, como dice el texto del cursor.
-  - **Criaturas tapadas:** si otra dibujada después cubre `HIDDEN_SHARE` (un cuarto) o más
-    de su caja, se dibuja otra vez encima del mapa, translúcida (`hiddenLayer`).
+  - **Criaturas tapadas:** quedan tapadas por la de adelante, sin más. No se dibuja nada
+    sobre una criatura por otra criatura (la copia translúcida se retiró el 2026-11-26:
+    teñía a los dos personajes; `render/overlap.test.ts`).
   - **Elevación** (ART-8): `MapView` sube lo apilado sobre un item con `elevation`
     (`ItemDef.elevation`) y el canvas sube a la criatura de esa casilla (`raisedBy`).
   - **Partículas** (A13): `render/particles.ts` (`ParticleLayer` en `view.overlay`), de los
@@ -524,9 +525,23 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   (origen distinto de `auto` y `placeholder`); si no, las formas de antes (`drawSkull`,
   colores de `state/pvp.ts` `skullColor`). La lista de batalla ya no deshabilita a los
   jugadores: un click = `SetTarget` (el servidor decide); también click derecho en el canvas.
+- **Opciones guardadas (2026-11-26, docs/05 "Opciones guardadas" y "Opciones de la
+  cuenta"):** toda opción o interruptor nuevo se declara en `OPTIONS` de
+  `state/saved-options.ts` con dónde se guarda (`character`, `account`, `device-class` o
+  `session` con su motivo); `saved-options.test.ts` falla si aparece una clave `rpg.*` de
+  `localStorage` o un mensaje `Set*` sin declarar (solo ve eso: un interruptor que viaja en
+  otro mensaje o vive en el estado de una pantalla se declara a mano). Lo que guarda una opción toma su
+  storage de `optionStorage()` (`state/option-storage.ts`), nunca `window.localStorage`
+  directo: así el cambio llega a la cuenta (`OptionsSync`, 2 s después del último; queda
+  anotado en `rpg.optsUnsent` hasta que el servidor lo confirma, y lo anotado gana en el
+  siguiente login). Una opción que dice algo de los personajes de la cuenta lleva
+  `personal: true` (no se rellena con lo que dejó otra cuenta). Una
+  opción de interfaz nueva necesita además su campo en `server/internal/accountopts`. La
+  postura, perseguir y el modo seguro vienen de `Welcome.options` (`GameUi.fightStance`,
+  `chase`, `safeMode`): el cliente ya no manda el modo seguro tras el `Welcome`.
 - Modo seguro: `Game.safeMode`/`setSafeMode` (`localStorage` `rpg.safeMode`, activado por
-  defecto, `state/pvp.ts`); se manda tras el `Welcome` solo si está apagado (el servidor
-  empieza activado). Interruptor `data-testid="safe-mode"` en "Modo de combate".
+  defecto, `state/pvp.ts`, solo como valor hasta que llega el `Welcome`); el vigente lo dice
+  `Welcome.options` y se manda solo cuando el jugador cambia el interruptor. Interruptor `data-testid="safe-mode"` en "Modo de combate".
 - `WorldState` suelta el objetivo con `combat.cannot_attack` y con los rechazos `pvp.*`
   (`TARGET_REFUSED`). Un `content_id` llamado `skull` se traduce como `client.skull.<id>`.
 - Guerras: `GuildView.wars` (`state/guild.ts`, `warActions`/`warLine` puros y con tests),
@@ -682,8 +697,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   en un templo también a la vista (sale y vuelve en el mismo batch) deja su cuerpo cayendo
   donde murió, y la criatura de vuelta es un sprite nuevo, con estado nuevo y su fundido
   de 300 ms. Una criatura que deja de dibujarse sin salida propia (otro piso, un mapa
-  nuevo) se borra. Un fantasma tapado por una criatura más alta tiene su copia translúcida
-  (`DrawnBoxes.covered`).
+  nuevo) se borra. Un fantasma tapado por una criatura más alta queda tapado (sin copia
+  translúcida desde el 2026-11-26).
 - `WorldState` no borra una salida cuando la criatura vuelve: la marca `back`, y
   `departureOf` la ignora (así un jugador que murió y despertó a la vista no "muere" al
   salir después del piso dibujado); el canvas igual la juega una vez.
@@ -710,7 +725,7 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   la mano va sobre la ropa (docs/17 "Humanoides del motor"; 8 órdenes, uno por dirección: la
   oclusión del cuerpo ya viene en sus frames). Los sprites salen de `LAYER_POOL` y vuelven con
   `release()` (`dropSprite`, `dropGhost`): dibujar un frame no crea objetos. La capa del
-  cuerpo es `figure.sprite` (siluetas y la caja de `figureRect` para el muro translúcido).
+  cuerpo es `figure.sprite` (la caja de `figureRect` para el muro translúcido).
 - **Se desvanece entero:** las capas van en un contenedor propio dentro de `figure.root`
   (después de la sombra). Pixi multiplica el alfa de un contenedor en cada hijo, así que el
   alfa de la pose no va en las capas: mientras es menor que 1, el contenedor se dibuja a
@@ -736,7 +751,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `shoot`, varita y vara `cast`, un hechizo `cast`, el resto `attack`), si se sabe qué
   lleva (`CreatureSprite.held`: lo que tiene en la mano cualquier muñeco, también otro
   jugador). Un cuerpo que no es muñeco juega el clip de su tipo (`attackAction`). Caminar usa `perTileNS` mirando al norte o
-  al sur (la regla de la zancada, `anim.ts`); la fase se cuenta en frames, así girar en
+  al sur si el clip lo trae (`anim.ts`; los humanoides del motor ya no: un solo ritmo en
+  todas las direcciones desde el 2026-11-26, docs/17 "La regla de la zancada"); la fase se cuenta en frames, así girar en
   medio de una caminata no hace saltar las piernas.
 
 ## Personalización (rama `feat/character-look`, lote 13; docs/02 "Apariencia")
@@ -916,7 +932,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   menú ☰ guarda experiencia, ayuda, idioma, opciones y salir. Ese encabezado compacto no
   ensancha la página con una fuente ancha (Linux dibuja `system-ui` con DejaVu Sans: en la
   CI se salía ~20 px a 390 px), en inglés o con números más grandes: sin lugar, cede
-  primero el nombre (hasta sus 3rem) y después el nivel (`.stat.level`), con "…"; vida y
+  primero el nombre (hasta sus 3rem; su letra encoge, `ui/fit-text.ts`, nunca se corta) y
+  después el nivel (`.stat.level`), con "…"; vida y
   maná quedan enteros (solo ellos y el ☰ tienen que entrar). El `flex-shrink` enorme del
   nombre hace que el nivel espere (flex reparte por factor × ancho, y quitarle un pelo al
   nivel ya muestra su "…"). La barra de condiciones vacía no ocupa lugar (`:empty`) y el
@@ -930,9 +947,15 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   más nuevos, 6 s, sin tomar clicks.
 - Nombres a zoom 1x (`render/labels.ts`): prioridad propio → objetivo → más cercano; si
   se pisa, pierde la línea del gremio, sube una línea o se oculta (salvo propio, objetivo o
-  a 1 casilla); nombres de más de 12 caracteres se acortan con "…". Desde
-  `feat/name-labels` las reglas rigen mientras `zoom < 2 × labelScale` (`labelsFull`): con
-  nombres grandes, a cualquier zoom (ver "La fuente del canvas").
+  a 1 casilla). Un nombre nunca se acorta ni lleva "…" (dueño, 2026-11-26): si no entra,
+  se dibuja más chico (`fitName`; ver "Nombres nítidos y NPCs en dos líneas"). Desde
+  `feat/labels-and-steps` las reglas rigen mientras la casilla mide menos de 4 alturas de
+  nombre (`labelsFull(tilePx, fontPx)`): con los tamaños de hoy, solo a zoom 1 ("grande"
+  son 15 px a zoom 2 sobre una casilla de 64). En el DOM (placa del nombre, encabezado
+  compacto, título del menú de acciones) rige lo mismo: `ui/fit-text.ts` (`fitTextRef`,
+  puro en `fitText`, con tests) encoge la letra hasta que el nombre entra, piso de 9 px, y
+  después lo parte en líneas (`data-fit="wrap"`); esas reglas CSS no llevan
+  `text-overflow`. Un nombre nuevo en el DOM lleva `ref={fitTextRef}` y `key` con su texto.
 - Hotbar: con poco ancho muestra los slots enteros que entran, con flechas ‹ › de 44 px y
   deslizamiento nativo; F1–F12 siguen en el DOM. En vertical con pad (`stacked` en
   `ui/Hotbar.tsx`) va a la derecha del pad: flechas y lápiz en una línea, y debajo los
@@ -1349,8 +1372,11 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   el rol y el gremio ya no usan la fuente pixel ni `labelScale`: son Alegreya Sans
   (`LABEL_FONT`, 700 el nombre, 500 las líneas de abajo) rasterizada al tamaño que se ve en
   px de dispositivo (`labelFontPx(zoom, devicePixelRatio, tamaño)`, `subFontPx`,
-  `labelStroke`), con el `Text` a escala 1. `render/labels.ts`: `fitName` (encoge hasta
-  `SHRINK_MIN` antes de cortar; un NPC nunca se corta), `wrapRole` (el rol del NPC en una o
+  `labelStroke`), con el `Text` a escala 1. `render/labels.ts`: `fitName` (el nombre siempre entero en
+  una línea: nunca se corta ni lleva "…"; si no entra, encoge hasta el piso `minNamePx(dpr)`,
+  9 px CSS, y si aun así no entra se dibuja más ancho que su lugar. Con todas las etiquetas
+  a la vista, el nombre más largo permitido, `CREATURE_NAME_MAX_CHARS` = 16, queda en
+  `SHRINK_MIN` o más), `wrapRole` (el rol del NPC en una o
   dos líneas por palabras, sin "…"), `stackLabel` (gremio, rol, nombre, y el tope donde se
   apoya el globo), `labelsFull(tilePx, fontPx)` y `placeLabels(boxes, tilePx, fontPx)`. El
   rol sale de `content.npcRoles` (`vite/content.ts`, `npcRoleKey` de

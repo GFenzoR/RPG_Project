@@ -6,6 +6,7 @@
 // font's own advance table (hmtx), so the test needs no browser.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { CREATURE_NAME_MAX_CHARS } from "@rpg/content-schema/npc-role";
 import { parse } from "yaml";
 import { describe, expect, it } from "vitest";
 import { loadClientContent, repoRoot } from "./content.ts";
@@ -18,9 +19,10 @@ import {
   SHRINK_MIN,
   labelFontPx,
   labelStroke,
+  minNamePx,
   subFontPx,
 } from "../src/render/label-style.ts";
-import { ROLE_LINES, fitName, labelMaxWidth, wrapRole } from "../src/render/labels.ts";
+import { ROLE_LINES, fitName, labelMaxWidth, labelsFull, wrapRole } from "../src/render/labels.ts";
 import type { MeasureLine } from "../src/render/labels.ts";
 
 const root = repoRoot();
@@ -245,7 +247,7 @@ describe("creature labels in the interface's sans", () => {
             for (const cat of catalogs) {
               const at = `${id} zoom ${zoom} dpr ${dpr} ${size}`;
               const n = cat[`npc.${id}.name`] ?? "";
-              const fit = fitName(n, px, max, name, false);
+              const fit = fitName(n, px, max, name);
               expect(fit.text, at).toBe(n);
               expect(name(fit.text, fit.fontPx), at).toBeLessThanOrEqual(max);
               expect(fit.fontPx, at).toBeGreaterThanOrEqual(Math.ceil(px * SHRINK_MIN));
@@ -261,18 +263,53 @@ describe("creature labels in the interface's sans", () => {
         }
   });
 
-  it("keeps a monster's name on one line, cut only when even the smaller size is too wide", () => {
+  it("shows a monster's name whole on one line, never cut", () => {
     const name = measurer(LABEL_NAME_WEIGHT);
     const px = labelFontPx(2, 1, "large");
     const max = labelMaxWidth(64, px);
     for (const n of creatureNames()) {
       const fit = fitName(n, px, max, name);
       expect(name(fit.text, fit.fontPx)).toBeLessThanOrEqual(max);
-      // At the fitted desktop zoom no creature of the game is cut.
       expect(fit.text, n).toBe(n);
     }
+    // Even a name longer than the limit (a character made before it) keeps every letter.
     const long = fitName("W".repeat(40), px, max, name);
-    expect(long.text.endsWith("…")).toBe(true);
-    expect(name(long.text, long.fontPx)).toBeLessThanOrEqual(max);
+    expect(long.text).toBe("W".repeat(40));
+  });
+
+  it("fits the longest name the server takes, whole and readable, at every zoom", () => {
+    const name = measurer(LABEL_NAME_WEIGHT);
+    // Names of the widest letters, as long as a name may be.
+    const worst = ["Mmmmmmmm Wwwwwww", "Wwwwwww Mmmmmmmm", "Ooooooo Dddddddd"];
+    for (const n of worst) expect([...n]).toHaveLength(CREATURE_NAME_MAX_CHARS);
+    // The names the game itself shows, and an ordinary player's name of the full length.
+    const real = [...creatureNames(), "Bartholomew Rook", "Evangelina Monte"];
+    for (const dpr of [1, 1.25, 1.5, 2])
+      for (const zoom of [1, 2, 3, 4])
+        for (const size of ["normal", "large"] as const) {
+          const scale = Math.max(1, Math.round(zoom * dpr));
+          const px = labelFontPx(scale, dpr, size);
+          const max = labelMaxWidth(32 * scale, px);
+          const floor = minNamePx(dpr);
+          const full = labelsFull(32 * scale, px);
+          for (const n of [...worst, ...real]) {
+            const fit = fitName(n, px, max, name, floor);
+            const at = `${n} zoom ${zoom} dpr ${dpr} ${size}`;
+            expect(fit.text, at).toBe(n);
+            // Never under the size that still reads, 9 CSS px.
+            expect(fit.fontPx / dpr, at).toBeGreaterThanOrEqual(8.5);
+            if (full) {
+              // Every label showing: a little smaller at most, and inside its room.
+              expect(fit.fontPx, at).toBeGreaterThanOrEqual(Math.ceil(px * SHRINK_MIN));
+              expect(name(fit.text, fit.fontPx), at).toBeLessThanOrEqual(max);
+            } else if (real.includes(n)) {
+              // Crowded (zoom 1): the names of the game still fit their tighter room.
+              expect(name(fit.text, fit.fontPx), at).toBeLessThanOrEqual(max);
+            } else if (name(fit.text, fit.fontPx) > max) {
+              // Only a name of the widest letters is wider than its room, at the floor.
+              expect(fit.fontPx, at).toBe(floor);
+            }
+          }
+        }
   });
 });

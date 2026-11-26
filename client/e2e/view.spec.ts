@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -57,7 +58,7 @@ test("the wide view at 1920x1080 and 1280x800: more of the map, and out to 31x21
 
   const email = `e2e-view-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Vista ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Vista");
   const api = await playwright.request.newContext({ baseURL: serverURL });
   expect((await api.post("/api/auth/register", { data: { email, password } })).status()).toBe(201);
   const login = await api.post("/api/auth/login", {

@@ -524,7 +524,7 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   rata, ciervo, jabalí, murciélago), `remains_chitin` (cangrejo, araña, escarabajo,
   reptante), `remains_scales` (salamandra, dragoncillo, sapo), `remains_slag` (los gólems de
   escoria), `remains_bones` (el minero ahogado), `remains_feathers` (la gaviota),
-  `remains_humanoid` (saqueadores, contrabandistas, mineros de obsidiana) y
+  `remains_humanoid` (saqueadores, contrabandistas, mineros renegados) y
   `remains_bramble` (el espinoso). Tiene que ser un item de `kind: container` con
   `pickupable: false` (`make validate` y el arranque del servidor exigen lo mismo); sin
   `corpse`, el monstruo deja `creature_remains`. Los restos duran
@@ -638,7 +638,7 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   se lo dejaría al jugador); y que el item tenga `tradeable: false` y `value: 0` (las copias que alguien
   junte tirándolas al piso no valen nada ni se comercian). Lo usan el sello de la forja del
   custodio (`ch3_warden`) y, desde m4, la tarja de los contrabandistas y el cofre sellado
-  de los reptantes (`ch2_coffer`) y la carta del minero de obsidiana (`ch3_gate`):
+  de los reptantes (`ch2_coffer`) y la carta del minero renegado (`ch3_gate`):
   `make validate` exige `each_player` en todo item de quest que cae de un monstruo, así
   deja de caer cuando la quest terminó.
 - **Comida y `well_fed`:** si algún item tiene `food_ms`, el arranque exige la condición
@@ -659,9 +659,21 @@ el rol por defecto de lo que el NPC ofrece, el primero de esta lista que tenga
 | `train_skill` | `npc_role.trainer` | Entrenamiento / Training |
 | `start_quest` | `npc_role.quest_giver` | Encargos / Errands |
 `make validate` falla si un NPC no termina con un rol (no ofrece nada de la lista y no
-declara `role`), si el rol pasa de 28 caracteres o el nombre de 22 en algún idioma (el
-cartel nunca los corta: el rol se parte en dos líneas por sus palabras), o si el nombre
-dice el oficio después de una coma ("Tilde Varga, provisiones": eso va en `role`).
+declara `role`), si el rol pasa de 28 caracteres o el nombre de 16 en algún idioma (el
+cartel nunca los corta: el rol se parte en dos líneas por sus palabras), si el nombre o el
+rol llevan puntos suspensivos ("…" o "..."), o si el nombre dice el oficio después de una
+coma ("Tilde Varga, provisiones": eso va en `role`).
+
+**Nombres de criaturas: 16 caracteres, enteros y sin "…".** El nombre de un monstruo
+(`name` de `data/monsters`, en `i18n/<idioma>/monsters.yaml`) y el de un NPC se muestran
+enteros en una sola línea sobre la criatura, nunca cortados (docs/17 "Nombres siempre
+completos"). Por eso `make validate` falla, con el archivo y la clave, si alguno pasa de
+`CREATURE_NAME_MAX_CHARS` (16, `packages/content-schema/src/npc-role.ts`) en es o en en, o
+si lleva puntos suspensivos. Es el mismo máximo de un nombre de personaje (`auth.MaxNameLen`
+del servidor; un test de Go exige que coincidan). Al acortar un nombre, que quede en buen
+español ("sabueso cenizo", no "sabueso ceniza") y cambia en el mismo commit los textos que
+lo nombran: un test de `packages/content-schema` (`npc-role.test.ts`) exige que cada paso
+de matar de `data/quests` nombre al monstruo como su etiqueta, en los dos idiomas.
 
 Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de
 `data/npcs/puerto_provisioner.yaml`). Los archivos reales son la referencia completa.
@@ -1776,7 +1788,7 @@ toca al contenido:
   bloques obligatorios:
   - `prints`: qué borra las huellas en todas partes (una huella no tiene tiempo de vida;
     `livingworld/README.md` "Huellas: qué las borra"): `still` (fuerza del viento bajo la
-    que no se toca ninguna), `fade_ms` (lo que tarda en desvanecerse una que pasó el tope),
+    que no se toca ninguna; entre dos ráfagas la fuerza es 0), `fade_ms` (lo que tarda en desvanecerse una que pasó el tope),
     `tread_px` (a qué distancia el pie de otra criatura la pisa) y `waves` (`period_ms`,
     una ola cada tanto; `reach_tiles`, hasta dónde sube la más grande; `lag_ms` por
     casilla a lo largo de la costa; `wash_ms`, lo que tarda en borrarla);
@@ -1805,21 +1817,42 @@ toca al contenido:
   vez, con `reaction` o con `wind`. `trample`: sobre una casilla con desgaste de senderos
   se dibuja aplastada. `wind`: cómo se mece (lote 20): ausente, lo que dice su sprite; un
   tipo de planta (`tree`, `palm`, `bush`, `tall_grass`, `reed`, `flower`, `vine`,
-  `cactus`, `dead_tree`); un mapa `{ kind, pivot?, top?, stiffness?, amplitude?,
-  flutter? }`; o `none` (nunca se mece). La clave `idle` del lote 17 ya no existe.
-- **`data/livingworld/wind.yaml`** (`livingworld-wind.schema.json`): el viento. `field`:
-  `direction` (grados; 0 este, 90 sur), `speed` (casillas por segundo), `gust_tiles`,
-  `calm` (0 a 1), `exposure` (fuerza por superficie, 0 a 2), `open`, `forest` (0 a 1) y
-  `night`. `kinds`: por cada tipo de planta, `stiffness` (0 a 1), `amplitude` (px en la
-  punta, hasta 4), `flutter` (px, hasta 0,95), `period_ms` y `pivot` (parte del alto que
-  queda plantada, 0 a 0,95). Los nueve tipos son obligatorios.
+  `cactus`, `dead_tree`); un mapa `{ kind, pivot?, top?, stiffness?, amplitude? }`; o
+  `none` (nunca se mece). La clave `idle` del lote 17 ya no existe.
+- **`data/livingworld/wind.yaml`** (`livingworld-wind.schema.json`): el viento. Las
+  plantas están quietas y se doblan cuando pasa una ráfaga (desde el 2026-11-26; las
+  claves `field.gust_tiles`, `field.calm` y `kinds.<tipo>.flutter` ya no existen).
+  `field`: `direction` (grados; 0 este, 90 sur), `speed` (del frente de una ráfaga,
+  casillas por segundo, 0,5 a 40), `exposure` (fuerza por superficie, 0 a 2), `open`,
+  `forest` (0 a 1) y `night`. `gusts` (obligatorio): `every_s` (una ráfaga por tramo de
+  tantos segundos, 5 a 3600), `jitter` (en qué parte de su tramo empieza, 0 a 0,95),
+  `strength` (`[mín, máx]`, 0 a 1,5), `spread` (grados que se aparta de `direction`),
+  `travel_tiles` (cuánto recorre un frente, 8 a 512), `rise_ms`, `hold_ms`, `swings`
+  (balanceos hasta quedar quieta, 0 a 6) y, opcionales, `drift_ms` y `seed`. `kinds`: por
+  cada tipo de planta, `stiffness` (0 a 1), `amplitude` (px en la punta, hasta 4), `drift`
+  (px de deriva en la calma, hasta 0,95; 0: quieta del todo), `period_ms` (un balanceo) y
+  `pivot` (parte del alto que queda plantada, 0 a 0,95). Los nueve tipos son
+  obligatorios. `make validate` exige además que `strength` vaya de menor a mayor y que
+  quede una **calma de al menos 10 s** entre dos ráfagas en cualquier casilla:
+  `every_s × (1 − jitter)` menos lo que tarda un frente en recorrer `travel_tiles` y la
+  planta más lenta en dejar de balancearse.
 - **`data/livingworld/wind_sprites.yaml`** (`livingworld-wind_sprites.schema.json`):
   **generado** por `make spritegen`, nunca a mano. `sprites`: por ruta de sprite, `{ kind,
-  pivot, top, stiffness?, amplitude?, flutter? }` (`pivot` y `top` en px sobre el borde de
+  pivot, top, stiffness?, amplitude? }` (`pivot` y `top` en px sobre el borde de
   abajo del sprite). `make validate` exige que **todo item que es una planta** tenga
   metadata de viento (aquí, por su sprite, o en `plants.yaml`) o un `wind: none`
   explícito, que un árbol declarado a mano diga su `pivot` y que cada sprite del archivo
   lo use algún item (`livingworld/README.md` "Viento").
+- **`data/livingworld/shadows.yaml` → `lights`** (2026-11-26; cliente): las sombras que
+  proyectan lámparas, antorchas y fuegos bajo techo, bajo tierra y de noche (docs/17
+  "Sombras de las luces"). Qué item da luz y hasta dónde brilla sigue siendo `light` de su
+  sprite en `assets/sprites.yaml` (`tiles`, radio en casillas); aquí va cómo son las
+  sombras: `reach` (0,5 a 4: veces el radio hasta donde proyecta), `alpha` (0 a 1),
+  `min_length` y `max_length` (0 a 3, en alturas del que proyecta: al pie de la luz y en el
+  borde), `fade` (0,05 a 1: la última parte del alcance donde se apaga), `breathe` (0 a
+  0,5: cuánto respira con la llama) y `unlit_contact` (0 a 1: qué queda de la elipse de
+  contacto donde nada proyecta sombra). Todo opcional; sin `lights` no hay sombras de luz
+  y la elipse queda como antes.
 - **`data/livingworld/shadows.yaml`** (`livingworld-shadows.schema.json`; cliente): qué
   objeto del mapa proyecta sombra bajo el sol y la luna, y cómo (docs/17 "Sombras de los
   objetos", `livingworld/README.md` "Sombras de los objetos"). Cada entrada es `none`,

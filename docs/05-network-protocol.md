@@ -61,7 +61,7 @@
 2. Cliente → HTTP GET /api/characters                  → lista de personajes
 3. Cliente → HTTP POST /api/play {character_id}        → session_token (vive 60 s)
 4. Cliente abre WS y envía Hello {session_token, client_version, locale}
-5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height, attack_events} + FullMapView + Stats + Inventory + Skills + QuestLog
+5. Servidor → Welcome {creature_id, server_time, tick_ms, max_queued_steps, view_width, view_height, attack_events, options} + FullMapView + Stats + Inventory + Skills + QuestLog
 ```
 Versión de cliente incompatible → `Disconnect{reason: OUTDATED_CLIENT}`.
 
@@ -86,7 +86,8 @@ Detalles (T1.4, `server/internal/net/gateway`):
   otro: lo retoma ("Entrar dos veces").
 - **Versión:** `client_version` es `MAJOR.MINOR.PATCH` (se ignora un sufijo `-dev` o
   `+build`). Se acepta si tiene la misma versión mayor que la mínima del servidor
-  (`-min-client-version`, por defecto `0.1.0`) y no es más vieja. La versión se revisa
+  (`-min-client-version`, por defecto `0.2.0`: el primer cliente que lee `Welcome.options`,
+  "Opciones guardadas") y no es más vieja. La versión se revisa
   antes del token, así un cliente viejo no gasta su token.
 - **Welcome** va en el primer `ServerBatch` seguido de `FullMapView`, `PlayerStats`,
   `Inventory` (equipo guardado, T1.8), `PlayerSkills` (todas las skills de
@@ -155,6 +156,8 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level, look?}], max_characters}` (2026-11-23: `look` es el aspecto guardado, `{sex, body, skin, hair, hair_color, beard}`, ausente mientras el juego no le eligió uno; `max_characters` es el tope por cuenta, con el que la pantalla de personajes deshabilita "Crear personaje nuevo") |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
+| `GET /api/account/options` | token | — | `200 {options, account}`: las opciones de interfaz de la cuenta ("Opciones de la cuenta", abajo); `{"v":1}` si nunca guardó |
+| `POST /api/account/options` | token | el documento | `204`; `400 bad_request` (no pasa el esquema), `413 too_large` (más de 16 KiB), `415`, `429` |
 | `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde (el ping se guarda 1 s contado desde que termina, y los pedidos que llegan durante un ping esperan ese mismo resultado: muchos pedidos cuestan un ping por segundo aunque la base esté lenta) |
 | `GET /api/status` | — | — | `200 {online, players, version}` (T4.3, público) |
 | `GET /api/highscores?category=&vocation=&page=` | — | — | `200 {category, vocation, page, page_size, has_more, entries: [{rank, name, vocation, value}]}` (T4.3, público) |
@@ -175,6 +178,104 @@ Un servidor sin `data/looks.yaml` ignora el `look` (crea el personaje sin aspect
 guardado). Si el contenido del cliente sí trae `lookOptions`, la pantalla de creación
 muestra los selectores pero lo elegido se pierde: es una configuración inconsistente
 (servidor y cliente deben usar el mismo `data/`), no un caso que el juego cubra.
+
+### Opciones de la cuenta (`httpapi/options.go`, `server/internal/accountopts`)
+Pedido del dueño del 2026-11-26: "todas las opciones que selecciona el jugador se deben
+guardar". Las opciones de **interfaz** viven en un documento JSON por cuenta (tabla
+`account_options`, migración 00029), así siguen al jugador a otro navegador o dispositivo.
+Las opciones de **juego** de cada personaje van por el protocolo del juego ("Opciones
+guardadas", más abajo). La tabla de qué se guarda dónde está en
+`14-continuar-en-tu-pc.md` ("Opciones guardadas").
+
+- `GET` devuelve el documento de la cuenta de la sesión; `POST` lo reemplaza, **salvo las
+  secciones `devices.<clase>` que el pedido no trae**, que quedan como estaban
+  (`Doc.CanonicalKeeping`): un guardado habla por su tipo de pantalla. Una pestaña abierta
+  hace horas en el PC no sabe lo que el teléfono guardó después, y no debe pisarlo con su
+  copia vieja. Una sección que sí viene, aunque sea vacía (`{"desktop":{}}`), reemplaza la
+  guardada: así se borra una opción de esa pantalla. La lectura, la mezcla y la escritura
+  de una cuenta van de a una: son una sola transacción que bloquea la fila de la cuenta
+  (`store.UpdateAccountOptions`), así que no depende de que el servidor sea un solo proceso,
+  y un guardado que espera a otro se rinde con su contexto. Un guardado que cabe solo nunca
+  se rechaza por lo que hay guardado: si con las secciones conservadas el documento pasa los
+  16 KiB, se guarda sin ellas (solo llega ahí una sección inflada a mano, mayor que la de
+  cualquier cliente; rechazarlo dejaría a esa pantalla sin poder guardar nada más). No hay
+  id de cuenta en el pedido: sale de
+  la sesión (`authed`), nunca del cliente. Es `POST` y no `PUT` porque el puente de la app
+  de escritorio solo deja pasar `GET` y `POST`.
+- `account` en la respuesta del `GET` es una etiqueta estable de la cuenta (no sirve para
+  nada en la API): el cliente la recuerda junto al caché para no rellenar una cuenta con lo
+  que otra dejó en el mismo navegador. Es un hash sin clave de un id secuencial, así que
+  quien la tenga puede hallar el id probando: **solo se le manda a la propia cuenta**. Si
+  algún día se muestra a terceros, debe pasar a un HMAC con una clave del servidor.
+- **Esquema cerrado, versión 1** (`accountopts.Doc`): una clave desconocida en cualquier
+  nivel, un tipo equivocado, un valor fuera de su enum o rango, datos después del
+  documento o más de 16 KiB (`accountopts.MaxBytes`) lo rechazan entero. No hay texto
+  libre: cada cadena es un enum, un id (`[a-z0-9_.-]`, hasta 64) o un nombre de personaje
+  (letras, espacios, `'` y `-`, hasta 32).
+
+  | Campo | Valor |
+  |---|---|
+  | `v` | `1` (obligatorio) |
+  | `lang` | código de idioma (`es`, `en`) |
+  | `audio` | `{volume: {master, music, sfx, ui, ambient}, muted: {…}}`, volúmenes 0..1 |
+  | `controls` | `menu` \| `classic` |
+  | `reduced_motion`, `camera_shake`, `chat_bubbles` | booleanos |
+  | `ui_scale`, `text_scale` | 0,5..2 |
+  | `name_size` | `normal` \| `large` |
+  | `chat_opacity` | entero 0..100 |
+  | `hotkeys` | `{<vocación>: [hasta 12 ids de hechizo o null]}`, hasta 16 vocaciones |
+  | `track` | `{<personaje>: <id de quest>}`, hasta 32 |
+  | `devices` | `{desktop?, touch?}`, cada uno `{touch_pad, zoom (1..32), minimap {open, scale}, windows}` |
+
+  `windows` es el formato v3 de `client/src/ui/windows.ts` (`{v: 3, z, win, others}`, hasta
+  64 ventanas por mapa, cada lugar `{open?, collapsed?, x?, y?, w?, h?}` con enteros de
+  ±100000).
+- **Por clase de dispositivo** (decisión de este lote): lo que solo tiene sentido en un tipo
+  de pantalla (lugares y tamaños de ventanas en píxeles, zoom del mapa, minimapa, pad
+  táctil) se guarda una vez para `desktop` (puntero fino) y otra para `touch` (teléfono o
+  tablet, puntero grueso). Lo demás es de la cuenta.
+- **Lo guardado nunca son los bytes del cliente:** el servidor decodifica, valida y vuelve a
+  codificar en forma canónica (`Doc.Canonical`); la tabla además limita el tamaño (64 KiB
+  de JSONB: un documento válido de 16 KiB de texto ocupa cerca del doble como JSONB, así
+  que el tope de la tabla es un respaldo y no el límite que encuentra un documento
+  válido). Un documento guardado que el servidor ya no acepta se lee como vacío. Al
+  releerlo, JSONB lo devuelve con un espacio tras cada `:` y `,` (hasta un 20 % más largo
+  que la forma canónica): el tope de 16 KiB se aplica a la forma canónica, por eso lo
+  guardado se lee con `accountopts.ParseStored`, que quita ese espaciado antes de validar,
+  y nunca con `Parse` directo.
+- **Límites:** sesión obligatoria; `Content-Type: application/json` (frena formularios
+  cross-site, como el resto de la API); 20 guardados de ráfaga y uno cada 3 s por cuenta
+  (`DefaultOptionsRateLimit`, `429` con `Retry-After`), aparte del límite por cuenta de
+  `authed`.
+- **Cliente** (`client/src/state/saved-options.ts`, `option-storage.ts`): `localStorage`
+  sigue siendo el caché que lee cada pantalla, y lo único que hay antes del login. Al
+  entrar a la lista de personajes: **el servidor gana y lo local rellena lo que al servidor
+  le falta** (los mapas se mezclan clave por clave; un layout de ventanas es un solo valor),
+  y si el resultado difiere de lo guardado, se manda. Una excepción: lo que el jugador
+  eligió en esa misma página antes de entrar (el idioma o el volumen en la pantalla de
+  login) es su elección más nueva y gana. Después, cada cambio se manda 2 s después del
+  último (`SAVE_DELAY_MS`) con la sección de su propia clase de dispositivo y nada de las
+  otras. Al salir de la cuenta deja de mandar.
+  - **Lo que no llegó a enviarse no se pierde:** cada clave cambiada queda anotada en
+    `localStorage` (`rpg.optsUnsent`) hasta que el servidor confirma el guardado. Si la
+    pestaña o la app se cierra antes de los 2 s, o el `POST` falla (sin red, `429`), en el
+    siguiente login el valor local de esas claves gana, igual que lo elegido antes de
+    entrar (también su ausencia: una opción que el jugador quitó sigue quitada). Además lo
+    pendiente sale al cerrar la página (`pagehide`, `fetch` con `keepalive`) y un guardado
+    fallido se reintenta solo a los 10 s, 30 s, 1, 2 y 5 min (`RETRY_DELAYS_MS`); después
+    espera al próximo cambio o login.
+  - **Otra cuenta en el mismo navegador:** si la etiqueta `account` del `GET` no es la del
+    caché (`rpg.optsOwner`), las anotaciones de la otra cuenta se descartan y sus opciones
+    personales (`track` y `hotkeys`: nombres de personajes, misiones, hechizos) se borran
+    del navegador en vez de subirse. Lo demás (volumen, ventanas, tamaños) es del
+    navegador y sí rellena.
+  - **Entrar al juego** espera hasta 2 s a que el login traiga las opciones
+    (`OptionsSync.ready`), para que el juego no abra con las ventanas que el login está
+    por reemplazar.
+  - **Límites conocidos:** dos dispositivos de la **misma** clase abiertos a la vez: gana
+    el último que guarda. Quitar una opción (volver al zoom ajustado, dejar de seguir una
+    misión) la borra del servidor, pero otro navegador de la misma clase que todavía la
+    tenga la vuelve a subir en su próximo login ("lo local rellena").
 
 `POST /api/auth/register` acepta además `lang` (idioma del email de verificación). El
 cliente solo lo manda si `GET /api/auth/config` dice `email: true`: los servidores
@@ -392,7 +493,7 @@ auth). Pasado el límite responden `429 rate_limited`.
   en todos lados" que falla (red o error del servidor) conserva la sesión de este equipo,
   como la cookie en la web: se ve el error y se puede reintentar.
 - **Reglas:** email ASCII normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
-  19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
+  19 MiB, t=2, p=1). Nombre de personaje de 3 a 16 caracteres, 1–3 palabras de letras
   ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin
   distinguir mayúsculas y sin suplantar al staff: se rechaza si, en minúsculas y sin
   espacios, contiene `admin`, `gamemaster`, `moderat`/`moderad`, `soporte`/`support`,
@@ -705,18 +806,29 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
 ### Caminar (T1.4, `server/internal/session`)
 - El servidor marca el ritmo: un paso empieza cuando terminó el anterior. Duración de un
   paso recto = `base_step_ms × terreno% / velocidad`, con terreno el `ground.speed` de la
-  casilla **de destino** (100 por defecto), redondeada hacia arriba a ticks de 50 ms (al
-  menos uno). Un paso en diagonal dura esos ticks × `diagonal_cost` (√2, leído en
-  milésimas: 1.414), redondeado al tick más cercano y nunca menos que el recto: así un
-  paso recto de 10 ticks es uno diagonal de 14, no de 15, y la velocidad por casilla de
-  distancia es la misma en las 8 direcciones. Una excepción: si el paso recto dura un solo
-  tick, el diagonal dura dos (√2 redondearía a uno y la diagonal rendiría √2 veces más
-  distancia por tick; solo pasa a velocidades que hoy nadie alcanza: 2000 en suelo normal,
-  1000 en camino). `diagonal_cost` va de 1 a 2 (`world.MaxDiagonalCost`: con más, el costo
-  de una ruta no cabría en el A*). `CreatureMove.duration_ms` es esa duración
-  ya redondeada; el cliente predice la misma con aritmética entera
-  (`client/src/state/step-time.ts`, igual que `StepTicks`). La posición cambia al
+  casilla **de destino** (100 por defecto), redondeada hacia arriba al milisegundo y nunca
+  menos que un tick (50 ms). Un paso en diagonal dura eso × `diagonal_cost` (√2, leído en
+  milésimas: 1.414), redondeado al milisegundo más cercano y nunca menos que el recto: la
+  velocidad por casilla de distancia es la misma en las 8 direcciones, y norte, sur, este
+  y oeste cuestan lo mismo. `diagonal_cost` va de 1 a 2 (`world.MaxDiagonalCost`: con
+  más, el costo de una ruta no cabría en el A*). `CreatureMove.duration_ms` es esa
+  duración, **sin redondear a ticks** (desde el 2026-11-26; el mensaje no cambió, solo
+  deja de ser múltiplo de 50); el cliente predice la misma con aritmética entera
+  (`client/src/state/step-time.ts`, igual que `World.StepMs`). La posición cambia al
   **empezar** el paso.
+- **El ritmo en ticks (`pace`, `session/move.go`).** El loop solo puede esperar ticks
+  enteros: para un paso de `ms` espera `(ms + lo que debe la caminata) / 50` ticks,
+  redondeado hacia abajo (al menos uno), y lo que sobra lo debe el paso siguiente **de la
+  misma caminata** (el que empieza en el tick en que termina este). Un paso de 435 ms son
+  8, 9, 9, 8, 9... ticks: n pasos tardan n × 435 ms, menos de un tick de diferencia y
+  nunca de más. Un paso después de una pausa (aunque sea de un tick) no debe nada, así
+  que parar y arrancar nunca rinde más que caminar seguido: un paso suelto dura sus ticks
+  enteros más la pausa, que es más que `ms`. Jugadores y monstruos usan lo mismo.
+  El cliente dibuja cada paso con su `duration_ms` entero, uno detrás del otro: el del
+  servidor llega hasta un tick antes de que termine de dibujarse el anterior, y eso es el
+  ritmo, no atraso (`Walk.rest` en `client/src/state/world.ts`; solo lo que pase de ahí
+  se recupera con `PLAYOUT_CATCH_UP`). Así una caminata se ve a una sola velocidad y no
+  alternando pasos de 400 y 450 ms.
 - **`Walk` encola un paso de teclado** detrás de los pasos de teclado que ya esperan, como
   mucho `movement.max_queued_steps` (`balance.yaml`, 4; el `Welcome` se lo dice al
   cliente, así un cambio del YAML no necesita recompilar el cliente); si en la cola hay un
@@ -791,7 +903,19 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
 - `SetFightMode{stance, chase}`: `stance` ofensivo/equilibrado/defensivo multiplica el
   golpe máximo y la defensa del escudo (`combat.modes` de `balance.yaml`); `UNSPECIFIED`
   se ignora. Por defecto equilibrado y sin perseguir. Con `chase` el jugador da un paso
-  hacia su objetivo cuando no está pegado a él y no tiene pasos en cola.
+  hacia su objetivo cuando no está pegado a él y no tiene pasos en cola. El servidor los
+  guarda por personaje ("Opciones guardadas").
+- **Opciones guardadas** (`session/options.go`, migración 00029, pedido del dueño del
+  2026-11-26): la postura, perseguir y el modo seguro (`SetSafeMode`) son del personaje y
+  el servidor es su dueño. El loop los cambia con esos dos mensajes (un `stance` fuera del
+  enum no cambia nada), van en cada snapshot (`characters.opt_stance`, `opt_chase`,
+  `opt_safe`, por el camino de guardado de siempre: nada de base de datos en el loop) y
+  vuelven en el siguiente login, en un relogueo rápido (del snapshot sin confirmar) y en un
+  login que reemplaza a otro (del jugador en memoria). Morir no los toca.
+  `Welcome.options` (`GameOptions{stance, chase, safe_mode}`) le dice al cliente los
+  vigentes: el cliente los muestra y **no los vuelve a mandar** al entrar. Un personaje de
+  antes de la migración tiene los de siempre (equilibrado, sin perseguir, modo seguro
+  activado); una fila con una postura inválida pelea equilibrada.
 - Ronda: con el objetivo a una casilla (también en diagonal) el jugador golpea cada
   `combat.attack_interval_ms` (2000 ms). Fórmulas en `server/internal/combat` (doc 02).
   Sin arma golpea con los puños (`combat.fist_attack`, con su skill `fist`); con arma,
@@ -1422,8 +1546,9 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
 
 ### PvP (T5.2, `server/internal/session/pvp.go` y `guildwar.go`)
 Reglas y números en `02-game-design.md` ("PvP") y `balance.yaml` `pvp`.
-- **`SetSafeMode{enabled}`** (cliente → servidor): el modo seguro. Cada login empieza con
-  él activado; el cliente lo manda tras el `Welcome` si el jugador lo apagó, y cada vez
+- **`SetSafeMode{enabled}`** (cliente → servidor): el modo seguro. Activado por defecto;
+  desde el 2026-11-26 el servidor lo guarda por personaje y el `Welcome` dice el vigente
+  ("Opciones guardadas", en "Combate cuerpo a cuerpo"), así que el cliente lo manda solo cada vez
   que cambia el interruptor. Responde `pvp.safe_on` / `pvp.safe_off`.
 - **Atacar a un jugador:** el mismo `SetTarget`. El servidor valida en cada ronda (zonas,
   niveles, staff, modo seguro); si deja de valer, suelta el objetivo y manda el motivo.

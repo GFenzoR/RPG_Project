@@ -755,14 +755,32 @@ const MaxQueuedSteps = 8
 // Movement holds the walking constants (docs/02-game-design.md, "Movimiento").
 type Movement struct {
 	// BaseStepMs is the step duration on 100 % terrain at speed 100:
-	// step_ms = base_step_ms * terrain% / speed (diagonals × DiagonalCost).
+	// step_ms = base_step_ms * terrain% / speed (diagonals × DiagonalCost). Every
+	// creature walks by it: lowering it speeds up players, monsters and NPCs alike.
 	BaseStepMs   int     `yaml:"base_step_ms"`
 	DiagonalCost float64 `yaml:"diagonal_cost"`
-	MaxPathTiles int     `yaml:"max_path_tiles"`
+	// SpeedPerLevelPct is how much faster a player walks per level over the first, in
+	// percent of its vocation's speed (LevelSpeed). No cap but experience.max_level.
+	SpeedPerLevelPct float64 `yaml:"speed_per_level_pct"`
+	MaxPathTiles     int     `yaml:"max_path_tiles"`
 	// MaxQueuedSteps is how many keyboard steps (Walk) may wait in a player's queue: the
 	// client predicts that many ahead so a held key walks without a stop between tiles,
 	// and one more resets the walk (docs/05 "Caminar").
 	MaxQueuedSteps int `yaml:"max_queued_steps"`
+}
+
+// MaxSpeedPerLevelPct caps movement.speed_per_level_pct.
+const MaxSpeedPerLevelPct = 5
+
+// LevelSpeed returns the speed of a player of level whose vocation's speed at that level
+// is base (Vocation.AtLevel, with the vocation's own points per level): base × (100 +
+// speed_per_level_pct × (level − 1)) / 100, rounded to the nearest point (halves up) and
+// at least 1. Level 1 is the vocation's speed. Whole numbers like the step timer: the
+// percent is read in thousandths, so a half is a half on every machine.
+func (m Movement) LevelSpeed(base, level int) int {
+	n := int64(max(level, 1) - 1)
+	milli := int64(math.Round(m.SpeedPerLevelPct * 1000)) // thousandths of a percent
+	return int(max((int64(max(base, 0))*(100_000+milli*n)+50_000)/100_000, 1))
 }
 
 // Experience is the level curve: total XP for level n is a*n^3 + b*n^2 + c*n + d.
@@ -890,6 +908,9 @@ func ParseBalance(raw []byte) (Balance, error) {
 	}
 	if m.DiagonalCost < 1 || m.DiagonalCost > MaxDiagonalCost {
 		return Balance{}, errors.New("movement.diagonal_cost must be in 1..2 (world.MaxDiagonalCost)")
+	}
+	if m.SpeedPerLevelPct < 0 || m.SpeedPerLevelPct > MaxSpeedPerLevelPct {
+		return Balance{}, fmt.Errorf("movement.speed_per_level_pct must be in 0..%d", MaxSpeedPerLevelPct)
 	}
 	if m.MaxPathTiles <= 0 || m.MaxPathTiles > 100 {
 		return Balance{}, errors.New("movement.max_path_tiles must be in 1..100 (world.MaxPathLength)")

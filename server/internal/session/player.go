@@ -45,9 +45,11 @@ type Player struct {
 
 	// Walking: queue[qhead:] are the steps left; readyAt is the first tick at which
 	// the next step may start (the current step's duration has elapsed).
+	// pace is the part of a tick the walk still owes (move.go).
 	queue   []world.Direction
 	qhead   int
 	readyAt game.Tick
+	pace    pace
 	// dest is where a WalkPath ends; reroutes around creatures aim at it.
 	dest    world.Pos
 	hasDest bool
@@ -431,6 +433,7 @@ func (w *World) snapshot(p *Player, final bool) Snapshot {
 		PvP:         w.pvpState(p),
 		Cosmetics:   p.cos,
 		Look:        p.look,
+		Options:     p.gameOptions(),
 		Explored:    p.explored.Snapshot(w.saveSeq),
 		Final:       final,
 	}
@@ -596,6 +599,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		c.PvP = s.PvP
 		c.Cosmetics = s.Cosmetics
 		c.Look = s.Look
+		c.Options = s.Options
 		c.ExploredUnsaved = s.Explored // the final save may not be written yet
 	}
 
@@ -615,11 +619,12 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		maxHealth:  stats.Health,
 		maxMana:    stats.Mana,
 		capacity:   stats.Capacity,
-		speed:      max(stats.Speed, 1),
-		baseSpeed:  max(stats.Speed, 1),
+		speed:      w.mv.LevelSpeed(stats.Speed, c.Level),
+		baseSpeed:  w.mv.LevelSpeed(stats.Speed, c.Level),
 		dir:        world.South,
-		stance:     pb.FightStance_FIGHT_STANCE_BALANCED,
-		safe:       true, // T5.2: until the client says otherwise
+		stance:     c.Options.stance(),
+		chase:      c.Options.Chase,
+		safe:       !c.Options.Unsafe, // T5.2: on until the player turns it off
 		walkEpoch:  1,
 	}
 	p.pos = w.placement(c)
@@ -673,6 +678,7 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		ViewWidth:      ViewTilesW,
 		ViewHeight:     ViewTilesH,
 		AttackEvents:   true, // CreatureAttack and CreatureDisappear.reason (attack.go)
+		Options:        p.gameOptions().msg(),
 	}}})
 	w.dayNightJoin(ctx.Tick, p) // the sky before the first frame
 	// Saved conditions first (T3.2): the first stats, and what observers get, already
@@ -735,6 +741,7 @@ func (w *World) state(p *Player, c Character) Character {
 	c.Pos, c.HasPos = p.pos, true
 	c.Cosmetics = p.cos
 	c.Look = p.look
+	c.Options = p.gameOptions()
 	c.ExploredUnsaved = p.explored.All() // all of it: its touched sectors may not be saved yet
 	if p.premSeq > c.PremiumSeq {        // the online player heard of a newer shop change
 		c.Owned, c.Premium, c.PremiumSeq = p.owned, p.premium, p.premSeq

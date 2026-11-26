@@ -403,6 +403,21 @@ dibujan lo mismo; nada cambia en el mapa ni en el servidor):
     queda para el editor de mapas y `mapcli render`, que no tienen hora;
   - la **sombra de contacto** de una criatura solo se dibuja donde no hay sombra
     proyectada (bajo tierra, bajo techo, noche sin luna): nunca las dos juntas.
+  - el **halo del objetivo** (hecho, 2026-11-26; el dueño: "un halo rojo en el piso, que se
+    vea que está en el piso y que en ciertas partes lo tape el sprite del enemigo"): la
+    criatura que el jugador ataca lleva un anillo rojo (`--ui-life-300`, con relleno
+    `--ui-life-500` al 28 %) achatado como la sombra de contacto (`CONTACT_FLAT`), centrado
+    en su línea de pies (la `stance` del atlas, `CreatureBody.stand`) y 6 px más ancho que
+    su elipse de contacto, así que crece con la base de la criatura. Vive en el contenedor
+    de la criatura **debajo** de su figura (`render/target-halo.ts`): el sprite tapa la
+    parte de atrás del anillo y, como el contenedor se intercala con los items por fila
+    (`placeEntity`), lo que esté delante de la criatura tapa el frente. Late despacio
+    (1,8 s, alfa 0,6 a 1,0); con "Animaciones reducidas" queda quieto. Sigue a la criatura
+    al caminar (se coloca cada cuadro). Un `Graphics` por criatura marcada, que solo se
+    redibuja si cambia su tamaño. **Reemplazó** el marco cuadrado rojo que se dibujaba
+    encima del sprite; no había otro marcador de "seguida" ni de "hover" sobre el cuerpo
+    (el hover es el texto de `hoverText` y el seguimiento no dibuja nada), así que no queda
+    ninguno que distinguir.
 
 ### ART-6 Paleta y valores
 - **Paleta maestra:** si se integra LPC, la de LPC Revised (~170 colores) es la referencia.
@@ -509,18 +524,30 @@ arte.
   (se mueve el tronco). El sprite se corta en tiras horizontales que se corren de lado por
   el cuadrado de su altura sobre el *pivot* (donde termina el tronco): el tronco no se
   mueve nunca.
-- **Poco:** 1 a 2 px en la punta de un árbol (vaivén lento, de unos 3 s) más un aleteo
-  rápido de la copa de menos de 1 px. Un arbusto, la mitad; hierba y juncos se doblan
-  desde el suelo; un cactus o un árbol seco casi no se mueven. Los números por tipo están
-  en `data/livingworld/wind.yaml`.
+- **Quietas, y cada tanto una ráfaga** (el dueño, 2026-11-26, después de jugar los lotes
+  19 y 20: "el movimiento que le agregaste a las plantas es demasiado, pareciera que
+  tienen vida o que se están como quemando; tiene que ser un movimiento generado por un
+  random y cada cierto rato, como si pasara una ráfaga de viento"). Regla de arte: **una
+  planta que se mueve siempre se lee viva o en llamas; el viento es un suceso, no un
+  estado.** El vaivén constante y el aleteo de la copa se sacaron. Una planta está quieta
+  y, cada 45 s en promedio (al azar: entre 24 y 67 s en un mismo lugar), el frente de una
+  ráfaga cruza el mapa: al llegarle, la planta se inclina, sostiene un segundo, se
+  balancea dos veces cada vez menos y queda quieta otra vez. Fuerza, momento y dirección
+  de cada ráfaga son al azar, e iguales para todos los jugadores (reloj del servidor).
+- **Poco:** 1 a 2 px en la punta de un árbol con una ráfaga mediana, hasta 3 con una
+  fuerte. Un arbusto, la mitad; hierba y juncos se doblan desde el suelo; un cactus o un
+  árbol seco casi no se mueven. Todos los números (cada cuánto, qué tan fuerte, cuántos
+  balanceos, px por tipo) están en `data/livingworld/wind.yaml`.
 - **Píxeles enteros de pantalla.** Cada tira se corre un número entero de px de pantalla al
   zoom actual: el pixel art no se desenfoca ni tiembla. Es el recurso clásico del pixel art
   hecho a mano (correr filas), no un estirado.
-- **Ráfagas que cruzan el mapa.** El viento es un campo que viaja: los árboles de un bosque
-  se inclinan uno tras otro, cada uno con su fase y su tamaño. Nunca todos a la vez.
+- **Ráfagas que cruzan el mapa.** El frente viaja (8 casillas por segundo): los árboles de
+  un bosque se inclinan uno tras otro, cada uno con su tamaño y su ritmo. Nunca todos a la
+  vez.
 - **Según el lugar:** más en la costa y el desierto, menos dentro de un bosque y sobre la
   piedra de un pueblo, nada adentro (pisos de madera) ni en cuevas, un poco menos de noche.
-- **La sombra de la copa se mece con la copa** y la del tronco queda quieta (2026-11-25:
+- **La sombra de la copa se dobla con la copa** en la ráfaga (quieta en la calma) y la del
+  tronco queda quieta (2026-11-25:
   la sombra de un árbol es una segunda malla sobre las mismas tiras; "Sombras de los
   objetos", abajo). Con "Animaciones reducidas" la sombra sigue, quieta.
 - **Estandartes y bandera** siguen con su bucle de frames de ART-7 (una onda que recorre
@@ -544,6 +571,10 @@ Revisado el 2026-11-25 con `make sway-preview` (cada planta en 8 momentos) y `ma
 sway-preview SCENE=forest` y `SCENE=town` (cuatro momentos de un bosque y de una plaza con
 árboles, a zoom 2): los troncos quietos, las copas a 1 o 2 px de su lugar, cada árbol en
 su fase, ninguna silueta rota. Falta mirarlo en movimiento en el juego (E2E del lote).
+Revisado otra vez el 2026-11-26 con las ráfagas: `make sway-preview` muestra ahora cada
+planta quieta y en 10 momentos de **una** ráfaga plena (se inclina, se balancea, termina
+quieta) y `SCENE=forest|town` cuatro momentos alrededor de un frente (1,5 s antes: todo
+quieto; después, el frente cruzando).
 
 ### Mundo vivo (hecho, 2026-11-23, rama `feat/living-ground`, lote 17)
 Pedido del dueño: "el entorno reacciona a los jugadores que pasan, para que el mundo se
@@ -554,21 +585,22 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
   2026-11-24: "tienen que coincidir con los pasos que da el personaje; si no, se ve muy
   falso"; `livingworld/README.md` "Huellas que coinciden con los pasos"). Pies
   alternados a cada lado de la línea del camino, giradas a la dirección real (las 8) y
-  separadas por la zancada real (16 px al este, 9 al norte o al sur, 8 y 8 en diagonal:
+  separadas por lo que el cuerpo avanza entre pisadas (16 px en los cuatro sentidos, 11 y 11
+  en diagonal:
   "La regla de la zancada" abajo); las bestias dejan cuatro patas por ciclo, las grandes
   más grandes y más hondas, arañas y cangrejos dos líneas de puntos, y las voladoras nada.
   Ninguna con el pie en el aire, quieto, girando en el lugar, deslizándose por una
   corrección ni al teletransportarse. El sonido del paso, la onda en el agua, el polvo al
   correr y las motas de MOV-7 salen de la misma pisada. Son máscaras blancas
   (`livingworld/fx/footprint_*`) teñidas con el `tint` de su superficie, un tono más oscuro
-  del suelo: se leen sin contorno. Se desvanecen en la segunda mitad de su vida; en la arena
-  el viento las borra antes, en ráfagas que recorren el mapa.
+  del suelo: se leen sin contorno. No tienen tiempo de vida: en la arena las borra el
+  viento, de a una ráfaga (entre dos ráfagas quedan como están).
 - **Plantas que reaccionan:** hierba, hierba alta, flores, juncos, arbustos y jardineras se
   doblan hacia donde va quien pasa y vuelven con un resorte corto (900 ms). Los árboles
   se sacuden 1 px y sueltan alguna hoja (también de vez en cuando, solos). Desde el lote
   20 el doblez se suma al viento sobre las mismas tiras del sprite (abajo).
 - **Agua y polvo:** anillos achatados que se abren en el agua baja; una nube de polvo al
-  correr (paso de 260 ms o menos) por tierra, arena o ceniza, las dos bajo el pie que pisa.
+  correr (paso de 232 ms o menos) por tierra, arena o ceniza, las dos bajo el pie que pisa.
   Las motas de MOV-7 siguen, también desde la pisada.
 - **Bichos:** pájaros y mariposas por el pasto que huyen cuando el jugador se acerca,
   luciérnagas de noche y sombras de peces en el agua. Pocos (10) y
@@ -699,6 +731,53 @@ objetos, incluidos los árboles".
   `99f-daynight-new-moon` y `99g-daynight-dawn`. **Pendiente mirarlas** en el E2E final del lote (docs/14): la
   revisión visual de esta rama se hizo sobre una vista previa local, sin capturas
   guardadas.
+#### Sombras de las luces y bajo techo fiable (hecho, 2026-11-26, rama `feat/light-shadows`)
+Pedido del dueño tras jugar los lotes 19 y 20: "dentro de los edificios no deberíamos tener
+la sombra del sol, sino que se debe guiar por la iluminación del mismo edificio o de la
+fuente de luz más cercana; tiene que ser dinámico, porque si no se ve como que nada tiene
+techo. Saca la sombra redonda cuando hay otra fuente de luz, y cuando no hay fuente de luz
+déjala mucho más tenue; que el personaje no se vea flotando".
+- **Bajo techo ya no depende de lo que se ve.** Las casillas techadas las calcula el build
+  del cliente sobre `world/` entero (`client/vite/roofs.ts`, con la misma regla
+  `indoorTiles`: suelo encerrado por muros, vanos de hasta 3 casillas, hasta 400 casillas)
+  y van en el contenido (`ClientContent.roofs`, tramos por piso). `MapView` las toma
+  (`roofs`) en vez de adivinar con las casillas que mandó el servidor: un edificio visto
+  desde afuera, con su muro del fondo fuera de la ventana, es techo igual (era el
+  pendiente 1 del lote 20b: desde la plaza de Thimblewick el piso del templo mostraba la
+  sombra de sus muros). Sin ese dato (el editor, un fixture) queda la adivinanza de antes.
+  No hizo falta una zona `indoor` en el formato de mapa.
+- **Sombras de las luces** (`client/src/render/light-shadows.ts`, cuentas en
+  `livingworld/client/src/light-shadows.ts`): bajo techo, bajo tierra y al aire libre de
+  noche, cada criatura y cada objeto con altura (los `silhouette` de `shadows.yaml`; los
+  muros no: taparían la habitación) cerca de una luz proyecta su sombra en dirección
+  contraria a la luz. Dan luz los items cuyo sprite tiene `light` en `assets/sprites.yaml`
+  (antorcha de pared, brasero, farol, fogón, fragua: los mismos que brillan en el mapa de
+  luz, con el mismo radio); cómo se ven sus sombras es `lights` de
+  `data/livingworld/shadows.yaml`. Una luz alcanza `reach` veces su radio; la sombra es
+  corta al pie de la luz (`min_length`) y larga en el borde (`max_length`), y se apaga en
+  el último `fade` del alcance. Entre luces se mezclan **las dos más cercanas**, cada una
+  pesada por cuánto más cerca está que la tercera: el peso de una luz es cero en el
+  instante en que cambia de puesto con la siguiente, así la sombra nunca salta al caminar
+  entre faroles (un test camina entre cuatro y mide cada paso). La llama hace respirar la
+  capa (`breathe`, 6 %); con "Animaciones reducidas" queda quieta.
+- **Cada luz de su lado:** un fogón bajo techo no proyecta sombras en la calle ni un farol
+  de la calle adentro de una casa; una antorcha en el muro de un edificio alumbra los dos
+  lados. Bajo techo las luces proyectan también de día; al aire libre, según lo oscuro que
+  esté (`Sky.lamps`: nada a mediodía, todo de noche), y conviven con la sombra de la luna.
+- **Capa:** un segundo `CastShadows` (los mismos sprites de pool y un solo `AlphaFilter`)
+  en `MapView.litOverlay`, sobre los pisos de adentro (que tapan las sombras del sol) y
+  bajo los items. Cada criatura apunta la suya (`CastShadows.aim`: dirección y fuerza
+  propias). En el tramo donde la sombra se apaga, las capas de un muñeco llevan alfa y se
+  suman un poco donde se pisan: se aceptó, dura un instante y con poca opacidad.
+- **Elipse de contacto:** ninguna mientras se dibuje cualquier sombra proyectada (sol,
+  luna o luz; `contactOf`). Sin ninguna (bajo techo sin lámparas, cueva sin antorchas,
+  noche sin luna lejos de un farol) queda, mucho más tenue (`unlit_contact`, 40 % de la de
+  antes), en la línea de los pies.
+- **Queda** (docs/14): el templo de Thimblewick no tiene lámparas (ahí se ve la elipse
+  tenue, sin sombra); las ventanas iluminadas y las velas no dan luz todavía (no tienen
+  `light`); la sombra de un muro fino sigue arrancando separada de él (pendiente 2 del
+  lote 20b, sin tocar).
+
 ## 3. Animación de criaturas y personajes (ANI)
 
 ### ANI-1 Direcciones
@@ -1239,15 +1318,25 @@ casilla: cada pie está apoyado medio ciclo, mientras el cuerpo pasa sobre él m
 (`STRIDE`, 16 px), así el pie se corre hacia atrás exactamente lo que el cuerpo avanza.
 Frames por casilla = frames × 32 / (2 × zancada) = 8 (`walkPerTile`); los frames están medio
 frame corridos del contacto, así en cada uno hay un pie apoyado (a +6, +2, −2 y −6 px de la
-cadera). Mirando al norte o al sur, la vista 3/4 acorta la profundidad del modelo (0,58 px por
-unidad) y la casilla del mapa no: el ciclo dura más en pantalla, 8 / 0,58 = 13,86 frames por
-casilla (`perTileNS`, `per_tile_ns` en `assets/sprites.yaml`, que el cliente usa con
-`AnimActionMeta.perTileNS`). Un paso en diagonal recorre una casilla de ancho y una de alto en
-pantalla: el ciclo avanza por distancia, hypot(8; 13,86) = 16 frames por paso
-(`walkPerStep`, también para las criaturas de 4 direcciones: un animal hace √2 veces su
-`perTile`). `humanoid.test.ts` mide el contacto del pie, píxel por píxel, en las ocho
-direcciones contra lo que avanza el cliente: se queda a 1 px de su punto del suelo (en las
-diagonales, en x y en y).
+cadera). **Un solo ritmo en todas las direcciones (dueño, 2026-11-26).** Mirando al norte o
+al sur, la vista 3/4 acorta la profundidad del modelo (0,58 px por unidad) y la casilla del
+mapa no. Hasta el lote 20 el ciclo se alargaba ahí para que el pie no patinara: 8 / 0,58 =
+13,86 frames por casilla (`perTileNS`), o sea 1,73 ciclos por casilla contra 1 al este. A los
+mismos px por segundo las piernas se movían un 73 % más rápido, y el dueño lo vio como que
+"arriba y abajo se camina más rápido que a los costados". Ahora los humanoides del motor no
+llevan `per_tile_ns` en `assets/sprites.yaml`: un ciclo (dos pisadas) por casilla en los
+cuatro sentidos, y en diagonal 8 × √2 = 11,31 frames en un paso que dura √2 veces más, la
+misma cadencia por segundo (`walkPerStep`, también para las criaturas de 4 direcciones: un
+animal hace √2 veces su `perTile`). **El costo, a sabiendas:** al norte y al sur el pie
+apoyado patina hacia adelante 16 × (1 − 0,58) = 6,8 px por apoyo (2,5 px en diagonal); visto
+de frente o de espaldas se nota mucho menos que dos velocidades distintas. El arte no puede
+dar las dos cosas: un pie que no patine con un ciclo por casilla necesitaría una zancada de
+28 unidades de profundidad, más que la pierna. Si se prefiere el pie firme, es una línea
+(`HUMANOID_PER_TILE_NS` = `HUMANOID_PER_TILE_NS_HOLD` en `specs/humanoid/index.ts` y el
+`per_tile_ns` de vuelta en el YAML). `perTileNS` sigue en el motor para un arte que lo pida.
+`humanoid.test.ts` mide el contacto del pie, píxel por píxel, en las ocho direcciones contra
+lo que avanza el cliente: al este y al oeste se queda a 1 px de su punto del suelo; en las
+demás, no patina más que lo dicho.
 La cadera baja ~1 px cuando la pierna apoyada está más lejos (contacto) y sube cuando pasa por
 debajo; los brazos van contra las piernas (22°) y el tronco se inclina 4°. **La pausa de 100 ms entre pasos (ANI-3)** no cambió: con pasos encadenados
 el siguiente empieza donde termina el anterior (el colchón de jitter y la predicción de
@@ -1325,7 +1414,7 @@ el respaldo del cliente) y cada NPC que es una persona tiene su retrato quieto `
 
 **NPCs y monstruos humanoides** tienen su `look` en `data/npcs` y `data/monsters` (cuerpo,
 piel, pelo, barba y lo que llevan): los 19 NPCs que eran de LPC y el saqueador, el
-contrabandista, el minero de obsidiana y el minero ahogado. Las composiciones de LPC, las
+contrabandista, el minero renegado y el minero ahogado. Las composiciones de LPC, las
 paletas `palettes` de `assets/sprites.yaml` y el pack `assets/vendor/ulpc/` (con sus filas de
 `CREDITS.md` y los textos de `/credits`) salieron: nada los usa. El preset `lpc` de
 spritepack queda (es una capacidad de la herramienta, con sus tests).
@@ -1341,8 +1430,9 @@ son finas a 1x (la espada mide 13 px, el arco 20).
 **Pendiente:** las piezas de un juego de armadura son de un solo tinte (el cinturón de la
 coraza, del mismo color); el arco no se tensa con la mano (la cuerda queda recta); los
 jugadores ajenos se ven con su atuendo hasta que `feat/character-look` mande su equipo (sus
-ataques juegan el clip de su tipo, `figureAttack`: uno a distancia dispara); la silueta
-translúcida (tapado por un muro o por otra criatura) muestra solo el cuerpo.
+ataques juegan el clip de su tipo, `figureAttack`: uno a distancia dispara). La silueta
+translúcida ya no existe (detrás de un muro cede el muro, ART-3; detrás de otra criatura
+queda tapado, 2026-11-26).
 
 ## 4. Sensación de movimiento (MOV)
 
@@ -1476,8 +1566,9 @@ vale esto.**
   - `Game.frame` (`client/src/game.ts`) no hace nada mientras `world.pending` exista, y
     `WorldState.canStep` exige `pending === undefined`. El paso siguiente sale cuando
     terminó la animación del anterior **y** llegó el `CreatureMove` que lo confirma.
-  - Al nivel 1 un paso dura 500 ms (`base_step_ms` 1000, velocidad 205, terreno 100,
-    redondeado a ticks de 50 ms), así que casi no se nota.
+  - Al nivel 1 un paso duraba 500 ms (`base_step_ms` 1000, velocidad 205, terreno 100,
+    redondeado a ticks de 50 ms; desde el 2026-11-26, 435 ms sin redondear), así que casi
+    no se nota.
   - A nivel alto o con haste (pasos de 200–300 ms), un RTT de 150 ms más la espera al tick
     alcanzan para frenar al jugador en cada casilla.
 - **Cada paso pierde un frame.** `predictStep` empieza el paso nuevo en `now` (la hora del
@@ -1553,14 +1644,23 @@ teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
   - Una marca animada en la casilla destino del click (anillo de 300 ms).
   - Polvo y ondas al pisar (ART-7).
   - El texto de la acción por defecto junto al cursor (UI-5).
-- **MOV-8 Velocidad (👤 decisión del dueño, no cambia sin él).** Al nivel 1 se camina a 2
-  casillas por segundo. Bajar `base_step_ms` de 1000 a 800 da 400 ms por paso (2,5
-  casillas/s). Toca balance:
-  - la persecución de los monstruos;
-  - el kiteo de los arqueros;
-  - el ritmo de horas por nivel que usa la detección de bots (`balance.yaml` `pace`).
+- **MOV-8 Velocidad (👤 decisión del dueño; resuelta el 2026-11-26: +15 % para todas las
+  criaturas, `base_step_ms` 891, y +0,2 % por nivel para los jugadores; docs/02
+  "Movimiento").** Al nivel 1 se caminaba a 2 casillas por segundo (ahora 2,3). La
+  propuesta de entonces era bajar `base_step_ms` a 800; el dueño eligió 891. Lo que tocaba
+  de balance, y cómo quedó:
+  - la persecución de los monstruos: todos caminan por el mismo número y los puntos de
+    velocidad de los monstruos no cambiaron, así que quién alcanza a quién no cambió
+    (cada criatura ganó entre 12 % y 21 % según su redondeo a ticks de antes; docs/02);
+  - el kiteo de los arqueros: igual, y el jugador gana además el 0,2 % por nivel;
+  - el ritmo de horas por nivel que usa la detección de bots (`balance.yaml`
+    `experience.pace`): no se tocó. La señal `income` compara contra la mediana de la
+    banda y marca desde 4 veces (docs/01 "Detección de bots"); caminar 15 a 30 % más
+    rápido queda muy por debajo. No se midió de nuevo con una simulación de caza: si las
+    carreras de `TestVocationCareers` se recalibran, se mira ahí.
 
-  Por eso queda propuesto y no aplicado.
+  Queda por probar a mano que huir de un lobo o alcanzar a un ladrón se sienta bien
+  (docs/14 "Velocidad de movimiento").
 - **MOV-9 Criterio de aceptación (✅ A6: E2E con un proxy de latencia en Playwright, no un
   parámetro de desarrollo del cliente).**
   - Con 150 ms de latencia simulada en el WebSocket (parámetro de desarrollo), mantener una
@@ -1996,7 +2096,7 @@ su cabeza, para que la conversación se sienta natural.
   (ver docs/14).
 - **Cómo se ve:** una caja oscura redondeada con una colita hacia la cabeza, justo sobre
   el nombre (sobre la barra de vida si el nombre está oculto a zoom 1), en la fuente del
-  canvas (Pixelify Sans 11 px, UI-3) con líneas de 13 px. Decir: pergamino sobre marrón;
+  canvas (Pixelify Sans 11 px hasta 2026-11-26; ver "Texto y chat" abajo) con líneas de 13 px. Decir: pergamino sobre marrón;
   gritar: naranja con borde de 2 px y dura 1,5 veces más; susurrar: azul gris, caja más
   transparente y dura 0,8 veces; NPC: verde pálido. La fuente es de píxel: un grito no se
   agranda (se vería borroso), se distingue por color, borde y duración.
@@ -2024,6 +2124,27 @@ su cabeza, para que la conversación se sienta natural.
   con `Text.width`); `game-canvas.ts` pone la capa entre los nombres y los números
   flotantes y la ancla al nombre; `WorldState.takeSpeech` guarda lo dicho (hasta
   `SPEECH_QUEUE`, 16) hasta el frame siguiente. Hook E2E `__rpgClient.bubbles()`.
+
+### Texto de la interfaz, globos y chat (hecho, 2026-11-26, rama `feat/ui-text-and-chat`)
+Pedidos del dueño tras jugar los lotes 19 y 20:
+- **Fuentes de la UI +1 px.** La raíz pasó de 16 a 17 px (`html { font-size: calc(17px * var(--ui-text-scale)) }`
+  en `ui/client.css`): todo lo que está en `rem` sube a la vez y la opción de tamaño de texto
+  (90 % a 130 %) sigue multiplicando. Los pocos `font-size` en px fijos (tarjeta de objeto,
+  pisos del minimapa, contador de la barra, menú táctil) subieron 1 px a mano. La fuente es la
+  misma (Alegreya Sans, vectorial), solo cambia el tamaño: la definición no se pierde.
+- **Globos +2 px y nítidos.** El texto del globo es de 13 px CSS (antes 11), la sans de la
+  interfaz en 600 (no la pixel, que fuera de su grilla de 11 px se veía borrosa), rasterizada
+  al tamaño que se ve en píxeles de dispositivo con la regla de los nombres
+  (`bubbleMetrics(dpr)` en `render/bubbles.ts`: fuente, interlínea, relleno y ancho escalan con
+  la densidad, enteros). El ancho de ajuste de línea subió de 150 a 180 px.
+- **Enter y el chat.** Enter sin nada con foco enfoca la línea del chat; Enter con texto la
+  envía y devuelve el foco al juego; Enter con la línea vacía o Escape también lo devuelven. Así
+  se escribe y se camina sin tocar el mouse. Enter no actúa si lo usa otro elemento (un botón, un
+  campo, un `select`) o si el juego o una ventana ya lo consumieron. Máquina pura en
+  `state/chat-focus.ts` (con tests), conectada en `ui/Chat.tsx`.
+- **Inventario más compacto.** El espacio entre casillas (mochila, bolsillos, contenedores) pasó
+  de 3 a 1 px; en pantallas táctiles queda en 2 px con casillas de 44 px. El maniquí del equipo
+  mantiene 2 px (`DOLL_GAP`, par, para que los íconos caigan en píxeles enteros).
 
 ### Minimapa (hecho, 2026-11-23, rama `feat/minimap`)
 Pedido del dueño: un minimapa como el de Tibia (la mecánica: explorar para verlo), con los
@@ -2268,8 +2389,8 @@ protocolo no cambian.
   (`back`), y `departureOf` la ignora. El cuerpo cae donde murió y el jugador aparece con
   su fundido de 300 ms en el templo.
 - **Cuerpos tapados.** Un cuerpo que cae o se desvanece detrás de una criatura más alta (el
-  lobo muerto justo al norte del mago) también tiene la copia translúcida de ART-2
-  (`DrawnBoxes.covered`).
+  lobo muerto justo al norte del mago) queda tapado por ella: la copia translúcida de
+  ART-2 se retiró el 2026-11-26 (teñía a los dos, ver "Criaturas tapadas").
 - **Polvo y ondas al pisar (MOV-7, ART-7).** Dato: la clave `steps` de un suelo en la
   sección `tiles` de `assets/sprites.yaml` (`dust` o `ripple`), que spritepack lleva a
   `atlas.json`. Hoy: polvo en arena, tierra, ceniza y senda de escoria; ondas en la arena
@@ -2333,12 +2454,20 @@ que pide atribución (los personajes de LPC, OGA-BY 3.0 y CC-BY-SA 3.0) y fuente
   con otro jugador parado al sur de una puerta, el click derecho en la puerta lo atacaba).
 - **Criaturas tapadas por otra más alta (`07-combat`).** El jugador de LPC mide ~1,4
   casillas y tapaba al lobo de la casilla de arriba. El orden de dibujo se queda (el de
-  adelante tapa al de atrás, como pide ART-3); lo que se suma es la silueta: si una
-  criatura dibujada después cubre una cuarta parte o más de la caja de otra
-  (`HIDDEN_SHARE`), la de atrás se dibuja otra vez encima del mapa, aclarada y al 55 %
-  (`HIDDEN_ALPHA`, `HIDDEN_TINT` en `game-canvas.ts`), como el jugador detrás de un muro.
-  Vale para todas las criaturas, también para un NPC tapado por otro en el pueblo. Detrás
-  de un muro, en cambio, los demás siguen ocultos.
+  adelante tapa al de atrás, como pide ART-3) y la de atrás queda tapada, sin más: se la
+  elige con un click en lo que asoma (su caja, `DrawnBoxes.pick`). Detrás de un muro los
+  demás también siguen ocultos.
+  - **Sin copia translúcida (retirada el 2026-11-26).** Hasta entonces, si una criatura
+    dibujada después cubría una cuarta parte o más de la caja de otra, la de atrás se
+    dibujaba otra vez encima del mapa, aclarada y al 55 % (tinte `0xffe2c8`) y solo con su
+    cuerpo, sin ropa. Con los humanoides del motor (suben 16 px sobre su casilla: el de
+    adelante cubre un tercio del de atrás) eso pasaba con **cada** par de personajes en
+    columna, y la copia pálida caía sobre los dos. El dueño, al probar los lotes 19 y 20:
+    "cuando un personaje está detrás de otro cambian de color, eso no debería pasar". Se
+    quitó la copia entera (la capa, su pool, `HIDDEN_*` y `forEachHidden`/`covered` de
+    `creature-hits.ts`): nada se dibuja sobre una criatura por otra criatura. Lo cuida
+    `client/src/render/overlap.test.ts`. Si alguna vez hace falta ver a un bicho chico
+    tapado del todo, que sea un contorno o un marcador, nunca un tinte sobre los cuerpos.
 - **Elevación (ART-8):** ver ART-8.
 - **Muralla y ventanas (ART-3).** `tools/spritegen/src/recipes/walls.ts`: `drawPiece` toma
   la altura de la cara (`TALL_FACE` = 64 para la muralla) y un dibujo extra por pieza (la
@@ -2967,15 +3096,43 @@ y abajo qué es lo que hace (Tilde Varga / Provisiones)".
   CSS. La misma ventana se ve igual al 100 % y al 150 % de escala de Windows.
 - **NPCs en dos líneas** (`render/labels.ts`): la primera el nombre (violeta
   `0xc79bff`), la segunda qué hace, más chica y más pálida (`LABEL_ROLE_COLOR`
-  `0xe4d9f5`). Nunca "…": el nombre de un NPC encoge hasta el 82 % si no entra y no se
+  `0xe4d9f5`). Nunca "…": el nombre encoge si no entra y no se
   corta; el rol, si no entra en el ancho, se parte **por sus palabras** en dos líneas
   (`wrapRole`). El texto del rol es contenido (`role` en `data/npcs`, docs/06 "NPC con
   diálogo de ventana"): el cliente lo saca del bundle de contenido (`npcRoles`,
   `client/vite/content.ts`), sin tocar el protocolo. Los nombres de los NPCs ya no repiten
   el oficio después de una coma ("Tilde Varga, provisiones" → "Tilde Varga").
-- **Nombres largos** de jugadores y monstruos: una sola línea; primero encogen (hasta el
-  82 %, `fitName`) y solo pasado el ancho duro (12 tamaños de letra con espacio, 7,5 cuando
-  los nombres se amontonan) se cortan con "…".
+- **Nombres siempre completos y en una sola línea** (dueño, 2026-11-26: "los nombres nunca se
+  deben mostrar incompletos, con puntos suspensivos; la segunda línea está reservada para el
+  tipo de NPC o título"): `fitName` nunca corta ni añade "…" a ningún nombre (jugador,
+  monstruo ni NPC); si no entra en el ancho de la etiqueta (12 tamaños de letra con espacio,
+  7,5 cuando se amontonan) encoge lo que haga falta, con piso de `minNamePx(dpr)` (`NAME_MIN_PX`, 9 px CSS: en
+  px de dispositivo según la densidad, para que mida lo mismo a la vista al 100 % y al
+  200 %; un nombre que ni así entra se dibuja entero y más ancho que su lugar). Con todas
+  las etiquetas a la vista, el nombre más largo permitido queda en `SHRINK_MIN` (82 %) o
+  más; amontonadas (zoom 1), los nombres del juego entran y solo uno de 16 letras de las
+  más anchas llega al piso (`client/vite/canvas-font.test.ts`). Para
+  que eso siga legible se **acota el largo**: `CREATURE_NAME_MAX_CHARS` = 16
+  (`packages/content-schema/src/npc-role.ts`) es el máximo de un nombre de jugador (servidor
+  `auth.MaxNameLen`, formulario de creación y su pista), de monstruo y de NPC en es y en en;
+  `make validate` falla con la clave que se pasa, y un test de Go exige que servidor y
+  constante coincidan. Los personajes ya creados con más de 16 letras no se renombran:
+  conservan su nombre, se ve entero y algo más chico, y se los sigue encontrando por
+  nombre (invitar al grupo, invitado de una casa: `auth.MaxKnownNameLen` =
+  `KNOWN_NAME_MAX_CHARS` = 20, solo para buscar un personaje, nunca para crearlo). El rol del NPC (segunda línea) sigue
+  la regla de arriba y tampoco puede llevar "…" (`make validate` lo comprueba).
+- **Lo mismo en la interfaz DOM** (`client/src/ui/fit-text.ts`, puro y con tests): la placa
+  del nombre sobre la barra de experiencia (`.vname`), el encabezado compacto (`.hud .name`)
+  y el título del menú de acciones (`.touch-menu-name`, el nombre de la criatura o del item)
+  ya no cortan con "…" (`text-overflow` se quitó de esas reglas). `fitTextRef` es el `ref`
+  de esos elementos: si el texto es más ancho que su caja, encoge la letra hasta que entra
+  (piso `FIT_MIN_PX` = `NAME_MIN_PX`, 9 px CSS) y, si ni en el piso entra, marca el elemento
+  con `data-fit="wrap"` y la hoja de estilos lo deja partirse en más líneas, en cualquier
+  letra: nunca se pierden letras. Se vuelve a ajustar cuando cambia su caja
+  (`ResizeObserver`), el tamaño de la ventana o llegan las fuentes; el elemento lleva `key`
+  con su texto, así un nombre nuevo parte del tamaño de la hoja de estilos. Un personaje de
+  17 a 20 letras (de antes del límite) se ve entero en la placa; uno de 16 también en un
+  teléfono angosto.
 - **Apilado** (`stackLabel`): sobre la barra de vida va la línea del gremio, encima el rol
   y arriba el nombre; la marca PvP queda a la izquierda del nombre y el globo de diálogo
   (UI-11) se apoya sobre el tope del bloque entero, o sea, sobre las dos líneas. Las
@@ -2984,7 +3141,7 @@ y abajo qué es lo que hace (Tilde Varga / Provisiones)".
 - **Los números flotantes y los globos** siguen en la fuente pixel con su escala entera.
 - **Tests:** `label-style.test.ts` (tamaño entero en px de dispositivo a zoom 1–4 y
   densidad 1, 1,25, 1,5 y 2; más chico que el lote 19; contraste del rol), `labels.test.ts`
-  (dos líneas, sin "…" para NPCs, encoger antes de cortar, apilado con el globo),
+  (dos líneas, sin "…" para NPCs, encoger sin cortar nunca, el piso por densidad, apilado con el globo),
   `packages/content-schema/src/npc-role.test.ts` y `validate.test.ts` (todo NPC de `data/`
   termina con un rol en es y en). E2E: `100-*` (el instructor a 2x y 1x, de cerca, y la
   plaza de Thimblewick con sus NPCs a 1x y 2x), `101-*` (monstruos a 2x y 4x).

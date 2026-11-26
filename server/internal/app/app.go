@@ -165,6 +165,10 @@ type App struct {
 	handler http.Handler
 }
 
+// New finds the interface options store with a type assertion: a *store.Store that
+// stopped implementing it would silently drop the routes.
+var _ httpapi.AccountOptions = (*store.Store)(nil)
+
 // New builds the stack. Nothing runs until Run.
 func New(cfg Config) (*App, error) {
 	if cfg.Store == nil || cfg.Clock == nil {
@@ -195,6 +199,8 @@ func New(cfg Config) (*App, error) {
 	a.Auth = authSvc
 	// The ranking reads Postgres; fake stores of tests may not implement it.
 	highscores, _ := cfg.Store.(httpapi.Highscores)
+	// The accounts' interface options too (migration 00029).
+	accountOptions, _ := cfg.Store.(httpapi.AccountOptions)
 	// The map submission portal (T4.5) also lives in Postgres only.
 	submissions, _ := cfg.Store.(httpapi.MapSubmissions)
 	// The public guild pages too (T5.1).
@@ -250,7 +256,8 @@ func New(cfg Config) (*App, error) {
 		MapSubmitLimits: cfg.MapSubmitLimits,
 		MapPRWorker:     cfg.MapPRWorker,
 
-		Shop: shop,
+		Shop:    shop,
+		Options: accountOptions,
 	})
 	if err != nil {
 		return nil, err
@@ -575,6 +582,7 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 		Cosmetics: store.Cosmetics{Outfit: s.Cosmetics.Outfit, Color: s.Cosmetics.Color, NameEffect: s.Cosmetics.NameEffect},
 		Look: store.Look{Sex: s.Look.Sex, Body: s.Look.Body, Skin: s.Look.Skin, Hair: s.Look.Hair, HairColor: s.Look.HairColor,
 			Beard: s.Look.Beard},
+		Options: store.GameOptions{Stance: int(s.Options.Stance), Chase: s.Options.Chase, Unsafe: s.Options.Unsafe},
 		SavedAt: a.cfg.Clock.Now(),
 	}
 }

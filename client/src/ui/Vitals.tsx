@@ -9,6 +9,7 @@ import type { Translate } from "../i18n/i18n.ts";
 import type { GameUi } from "../game.ts";
 import type { ExperienceCurve } from "../content-types.ts";
 import { toNextLevel } from "../state/experience.ts";
+import { fitTextRef } from "./fit-text.ts";
 
 /** Below this share of health the life orb beats and the map's edge turns red. */
 export const LOW_HEALTH = 0.25;
@@ -95,7 +96,7 @@ export function ExperienceBar(props: {
   return (
     <div class="xp" data-tutorial="stats" role="group" aria-label={t("client.vitals.title")}>
       <div class="nameplate">
-        <span class="vname" title={props.name}>
+        <span class="vname" key={props.name} ref={fitTextRef} title={props.name}>
           {props.name}
         </span>
         {stats && (

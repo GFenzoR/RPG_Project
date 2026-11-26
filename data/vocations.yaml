@@ -5,6 +5,9 @@
 # Capacity is in grams, a realistic human load (owner, 2026-11-23; docs/02 "Unidades"):
 # 40-45 kg at level 1 (the guardian strongest, the arcanist weakest), about 80-120 kg at
 # level 75. TestHuntLootFits (server/internal/sim) checks a hunt's loot still fits.
+# Speed: every vocation starts at the same speed and adds the same points per level; on top
+# of them a player walks balance.yaml movement.speed_per_level_pct faster per level (owner,
+# 2026-11-26), so no level walks slower than it did before that day.
 - id: guardian
   name: vocation.guardian.name
   description: vocation.guardian.desc

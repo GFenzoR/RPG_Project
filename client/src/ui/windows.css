@@ -364,10 +364,11 @@
   left: 100%;
   margin-left: 1px;
 }
+/* The name is never cut (docs/17 UI-3 "Nombres"): too wide for the plate, its font shrinks
+   (ui/fit-text.ts, down to the floor of the map's labels) and, past that, it breaks onto
+   more lines; the plate grows upwards. */
 .vname {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--ui-font-title);
   font-size: 0.85rem;
@@ -375,6 +376,12 @@
   letter-spacing: 0.03em;
   color: var(--ui-gold-300);
   text-shadow: 0 1px 0 #000;
+}
+.vname[data-fit="wrap"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
+  text-align: center;
 }
 .vlevel {
   flex: none;
@@ -515,7 +522,7 @@
   position: absolute;
   right: 1px;
   bottom: 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   font-weight: 700;
   color: var(--ui-danger);
@@ -782,7 +789,7 @@ body.dragging-window * {
 .container-window > .container.framed .cells {
   display: grid;
   grid-template-columns: repeat(auto-fill, var(--ui-slot));
-  gap: 3px;
+  gap: 1px;
 }
 .gwin[data-size="narrow"] {
   --gwin-w: 16rem;

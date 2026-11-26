@@ -39,6 +39,7 @@ import type {
   TextParam,
   FloatingTextKind,
   LivingObjectEvent,
+  GameOptions as SavedGameOptions,
 } from "@rpg/protocol";
 import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
@@ -51,7 +52,7 @@ import { WorldClockState } from "./world-clock.ts";
 import { modsOf } from "./mods.ts";
 import { mapItemKey } from "./corpse-art.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
-import { stepMs } from "./step-time.ts";
+import { stepMs, TICK_MS } from "./step-time.ts";
 import {
   PLAYOUT_CATCH_UP,
   PLAYOUT_MAX_LAG_MS,
@@ -104,6 +105,19 @@ export interface Walk {
   duration: number;
   /** The step before, while it is still being drawn (it ends when this one starts). */
   prev?: Walk | undefined;
+  /**
+   * A step of the server: the part of a tick its walk still owes when it ends, ms. The
+   * server waits whole ticks for a step that lasts `duration_ms` and carries the rest to
+   * the walk's next step (docs/05 "Caminar"), whose tick comes this long before this
+   * step ends.
+   */
+  rest?: number | undefined;
+  /**
+   * A step of the server: when its walk's next step comes on the server's timeline
+   * (batchTime) if the walk goes on, `rest` before this one ends there. A step that comes
+   * a tick later or more follows a stop: the server's pace owes it nothing.
+   */
+  next?: number | undefined;
 }
 
 /** An own step the client predicted and sent, until the server confirms it. */
@@ -504,6 +518,11 @@ export class WorldState implements TileSource {
   private walkSeq = 0;
   /** The last lookRev handed out: every new one is greater (CreatureState.lookRev). */
   private lookSeq = 0;
+  /**
+   * Welcome.options: the character's saved game options, as the server holds them now
+   * (docs/05 "Opciones guardadas"); undefined before the Welcome or from an older server.
+   */
+  gameOptions: SavedGameOptions | undefined;
   /** Welcome.max_queued_steps: how many own steps may wait for the server. */
   private maxQueued = 0;
   /**
@@ -790,6 +809,7 @@ export class WorldState implements TileSource {
         this.maxQueued = msg.value.maxQueuedSteps;
         this.view = serverView(msg.value.viewWidth, msg.value.viewHeight);
         this.attackEvents = msg.value.attackEvents;
+        this.gameOptions = msg.value.options;
         if (msg.value.serverTime > 0n) this.clockOffset = Number(msg.value.serverTime) - Date.now();
         break;
       case "fullMapView":
@@ -1361,18 +1381,27 @@ export class WorldState implements TileSource {
     let start = Math.max(at, now);
     let drawn = duration;
     let prev: Walk | undefined;
+    // What the walk's pace owes this step (Walk.rest of the one before): its tick came
+    // this long before that one ends. Starting when it ends is on time, not behind.
+    // Only while the walk goes on (Walk.next): after a stop, even of one tick with the step
+    // before still drawn, the server's pace started again from nothing owed.
+    let owed = 0;
+    if (old?.next !== undefined && samePos(old.to, from) && at - old.next < TICK_MS / 2)
+      owed = old.rest ?? 0;
     if (old && old.start + old.duration > now && samePos(old.to, from)) {
       const lag = old.start + old.duration - start;
       if (lag <= PLAYOUT_MAX_LAG_MS) {
         prev = pruned(old, now);
         if (lag > 0) {
           start += lag;
-          drawn = duration - Math.min(lag, duration * PLAYOUT_CATCH_UP);
+          const late = start - Math.max(at + owed, now);
+          if (late > 0) drawn = duration - Math.min(late, duration * PLAYOUT_CATCH_UP);
         }
       }
     }
     c.pos = to;
-    c.walk = { from, to, start, duration: drawn, prev };
+    const rest = (owed + duration) % TICK_MS;
+    c.walk = { from, to, start, duration: drawn, prev, rest, next: at + owed + duration - rest };
     c.slide = slideBetween(
       before,
       this.drawPos(c, now),

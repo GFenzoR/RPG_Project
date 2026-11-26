@@ -4,6 +4,7 @@
 // character offered the house accepts it here. The server validates everything and
 // answers each action with a fresh HouseUpdate. No hooks: the forms are uncontrolled and
 // read their fields on submit, so the tests walk the element tree (House.test.ts).
+import { KNOWN_NAME_MAX_CHARS } from "@rpg/content-schema/npc-role";
 import type { JSX } from "preact";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
@@ -142,7 +143,7 @@ export function HouseWindow(props: Props & { now?: number }): JSX.Element | null
           >
             <input
               name="name"
-              maxLength={20}
+              maxLength={KNOWN_NAME_MAX_CHARS}
               aria-label={t("client.house.guest_name")}
               placeholder={t("client.house.guest_name")}
               data-testid="house-guest-name"
@@ -181,7 +182,7 @@ export function HouseWindow(props: Props & { now?: number }): JSX.Element | null
             >
               <input
                 name="name"
-                maxLength={20}
+                maxLength={KNOWN_NAME_MAX_CHARS}
                 aria-label={t("client.house.transfer_to")}
                 placeholder={t("client.house.transfer_to")}
               />

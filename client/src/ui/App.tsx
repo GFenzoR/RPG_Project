@@ -1,6 +1,7 @@
 // Screens of the client: login, sign up, characters (list and creation) and the game.
 // DOM with Preact over the canvas (client/CLAUDE.md): accessible, translatable and easy to
 // drive from Playwright. Every visible text goes through t().
+import { CREATURE_NAME_MAX_CHARS } from "@rpg/content-schema/npc-role";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { DisconnectReason } from "@rpg/protocol";
@@ -10,6 +11,7 @@ import type { GameUi } from "../game.ts";
 import type { AudioEngine } from "../audio/engine.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { ApiError, accountApi, api } from "../net/api.ts";
+import { optionStorage, optionsSync } from "../state/option-storage.ts";
 import type { Character, LookJSON } from "../net/api.ts";
 import {
   canCreate,
@@ -55,7 +57,15 @@ export interface AppProps {
   touchPad?: boolean | undefined;
   /** The desktop game's Options window (docs/17 UI-5): language, sound, controls. */
   settings?: GameSettings | undefined;
+  /**
+   * The account's saved options reached localStorage after a login and changed it
+   * (state/saved-options.ts): the owner of the option states reads them again.
+   */
+  onOptionsSynced?: (() => void) | undefined;
 }
+
+/** The longest entering the game waits for the account's saved options (a slow server). */
+const OPTIONS_WAIT_MS = 2000;
 
 /** Heartbeat of the HTTP session while playing: well under the server's 30 min idle timeout. */
 const KEEPALIVE_MS = 5 * 60 * 1000;
@@ -86,16 +96,14 @@ function Screens({
   audio,
   touchPad,
   settings,
+  onOptionsSynced,
 }: AppProps): JSX.Element {
   const [screen, setScreen] = useState<Screen>({ name: "loading" });
   const [notice, setNotice] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     // A still-valid session cookie skips the login.
-    api.characters().then(
-      () => setScreen({ name: "characters" }),
-      () => setScreen({ name: "login" }),
-    );
+    api.characters().then(toCharacters, () => setScreen({ name: "login" }));
   }, []);
 
   // Outside the game the menus play the title screen's music (assets/sounds.yaml
@@ -109,8 +117,22 @@ function Screens({
     audio.setAmbience([]);
   }, [inGame, audio]);
 
-  const toCharacters = (): void => setScreen({ name: "characters" });
-  const toLogin = (): void => setScreen({ name: "login" });
+  // With a session: the account's saved options come in (the server wins, this browser
+  // fills what it lacks); back from the game, what changed there goes out.
+  const syncedRef = useRef(onOptionsSynced);
+  syncedRef.current = onOptionsSynced;
+  const toCharacters = (): void => {
+    setScreen({ name: "characters" });
+    void optionsSync()
+      .login()
+      .then((changed) => {
+        if (changed) syncedRef.current?.();
+      });
+  };
+  const toLogin = (): void => {
+    optionsSync().logout();
+    setScreen({ name: "login" });
+  };
 
   const view = current();
   if (screen.name === "game") return view;
@@ -157,8 +179,14 @@ function Screens({
             lang={locale}
             notice={notice}
             onPlay={(character, sessionToken) => {
-              setNotice(undefined);
-              setScreen({ name: "game", character, sessionToken });
+              // The game reads its options (the windows, the zoom) as it opens: not before
+              // the account's saved ones are in, when the login is still fetching them.
+              void optionsSync()
+                .ready(OPTIONS_WAIT_MS)
+                .then(() => {
+                  setNotice(undefined);
+                  setScreen({ name: "game", character, sessionToken });
+                });
             }}
             onLoggedOut={toLogin}
           />
@@ -199,7 +227,9 @@ function AuthForm(props: {
 }): JSX.Element {
   const { t, mode } = props;
   // Lote 17: the game never keeps the login; only the last email is remembered.
-  const [email, setEmail] = useState(() => (mode === "login" ? loadLastEmail(safeStorage()) : ""));
+  const [email, setEmail] = useState(() =>
+    mode === "login" ? loadLastEmail(optionStorage()) : "",
+  );
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -211,7 +241,7 @@ function AuthForm(props: {
     try {
       if (mode === "register") await api.register(email, password, props.lang);
       await api.login(email, password);
-      saveLastEmail(email, safeStorage());
+      saveLastEmail(email, optionStorage());
       props.onDone();
     } catch (err) {
       setError(errorText(t, err));
@@ -317,7 +347,7 @@ function Characters(props: {
       setView(firstView(r.characters.length));
       const now = Date.now();
       const notes = takeStayed(
-        safeStorage(),
+        optionStorage(),
         now,
         r.characters.map((c) => c.name),
       );
@@ -431,11 +461,11 @@ function Characters(props: {
               name="name"
               required
               minLength={3}
-              maxLength={20}
+              maxLength={CREATURE_NAME_MAX_CHARS}
               value={name}
               onInput={(e) => setName(e.currentTarget.value)}
             />
-            <small>{t("client.characters.name_hint")}</small>
+            <small>{t("client.characters.name_hint", { max: CREATURE_NAME_MAX_CHARS })}</small>
           </label>
           <label>
             {t("client.characters.vocation")}
@@ -593,7 +623,7 @@ function GameScreen(props: {
   // The atlas did not load after its retries: the error and its "Retry" button show.
   const [loadFailed, setLoadFailed] = useState(false);
   const [ui, setUi] = useState<GameUi>(emptyGameUi);
-  const [storage] = useState(safeStorage);
+  const [storage] = useState(optionStorage);
   // The conditions now, for the way out (onEnd, pagehide) outside a render.
   const conditions = useRef(ui.conditions);
   conditions.current = ui.conditions;
@@ -668,13 +698,4 @@ function GameScreen(props: {
       storage={storage}
     />
   );
-}
-
-/** localStorage, or undefined where the browser blocks it. */
-function safeStorage(): Storage | undefined {
-  try {
-    return window.localStorage;
-  } catch {
-    return undefined;
-  }
 }

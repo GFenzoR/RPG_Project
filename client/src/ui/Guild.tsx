@@ -12,6 +12,7 @@
 // Invite (the form and the invitations sent), Wars and Message (of the day). The tab lives
 // in the caller. Without `tab` (the side panel of small screens) the parts show one under
 // the other, but Summary and Ranks (the names carry their ranks there).
+import { KNOWN_NAME_MAX_CHARS } from "@rpg/content-schema/npc-role";
 import type { JSX } from "preact";
 import { GuildAction, GuildRank } from "@rpg/protocol";
 import type { ClientContent } from "../content-types.ts";
@@ -217,7 +218,7 @@ export function GuildPanel(props: {
     >
       <input
         name="name"
-        maxLength={20}
+        maxLength={KNOWN_NAME_MAX_CHARS}
         placeholder={t("client.guild.invite_placeholder")}
         aria-label={t("client.guild.invite_placeholder")}
         autoComplete="off"

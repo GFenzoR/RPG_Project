@@ -200,6 +200,6 @@ func (w *World) climb(ctx *game.TickContext, p *Player, pt *world.Portal) {
 	}
 	p.activePaced(ctx.Tick, antibot.KindOther, p.readyAt)
 	ground, _, _ := w.m.Tile(to)
-	p.readyAt = ctx.Tick + w.StepTicks(ground, p.speed, false)
+	p.readyAt = ctx.Tick + p.pace.ticks(ctx.Tick, w.StepMs(ground, p.speed, false))
 	w.Teleport(p, to)
 }

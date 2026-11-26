@@ -49,6 +49,12 @@ type AccountIdentity struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type AccountOption struct {
+	AccountID int64
+	Doc       []byte
+	UpdatedAt pgtype.Timestamptz
+}
+
 type AccountStashItem struct {
 	AccountID int64
 	Slot      int16
@@ -112,6 +118,9 @@ type Character struct {
 	LookHairColor string
 	LookBeard     string
 	LookSex       string
+	OptStance     int16
+	OptChase      bool
+	OptSafe       bool
 }
 
 type CharacterExplored struct {

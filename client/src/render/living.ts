@@ -84,6 +84,7 @@ export function mountLivingWorld(
   night: () => boolean = () => false,
   sheltered: () => boolean = () => false,
   onFootfall?: (fall: Footfall, events: readonly string[], voice: StepVoice | undefined) => void,
+  windClock?: () => number,
 ): LivingWorld | undefined {
   const data = content.livingWorld;
   if (!data) return undefined;
@@ -100,6 +101,8 @@ export function mountLivingWorld(
       night,
       // Underground: no wind (the canvas knows the dark floors).
       sheltered,
+      // The server's clock: every client sees the same gust of wind at the same moment.
+      windClock,
       onFootfall,
     },
   );

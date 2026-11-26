@@ -35,8 +35,10 @@ import (
 
 // Defaults for Config.
 const (
-	// DefaultMinClientVersion is the oldest client version the server accepts.
-	DefaultMinClientVersion = "0.1.0"
+	// DefaultMinClientVersion is the oldest client version the server accepts: the first
+	// that reads Welcome.options (an older one would show the safe mode on while the server
+	// holds it off: savedoptions_test.go).
+	DefaultMinClientVersion = "0.2.0"
 	// MaxMessageBytes is the largest client frame (docs/05: 4 KB).
 	MaxMessageBytes = 4096
 	// DefaultHelloWait is how long a new connection may take to send its Hello (audit
@@ -493,6 +495,7 @@ func toCharacter(pc store.PlayCharacter) session.Character {
 		PremiumSeq: pc.PremiumSeq,
 		Look: content.Look{Sex: pc.Look.Sex, Body: pc.Look.Body, Skin: pc.Look.Skin, Hair: pc.Look.Hair, HairColor: pc.Look.HairColor,
 			Beard: pc.Look.Beard},
+		Options: session.GameOptions{Stance: pb.FightStance(pc.Options.Stance), Chase: pc.Options.Chase, Unsafe: pc.Options.Unsafe},
 	}
 	for _, s := range pc.Skills {
 		c.Skills = append(c.Skills, session.SkillState{ID: s.ID, Level: s.Level, Tries: s.Tries})

@@ -54,6 +54,8 @@ type PlayCharacter struct {
 	// Look is the character's body (characters.look_*); empty fields for a character
 	// created before looks existed (the game picks one from its id).
 	Look Look
+	// Options are the character's saved game options (characters.opt_*).
+	Options GameOptions
 	// Stash is the account's stash (account_stash_items, docs/02 "Baúl de la cuenta"),
 	// cells in order (Slot: the cell). The game uses it only when no character of the
 	// account is in the world already (it owns the stash then).
@@ -201,8 +203,33 @@ type CharacterState struct {
 	// Cosmetics are the equipped cosmetics (T5.7).
 	Cosmetics Cosmetics
 	// Look is the character's body (docs/02 "Apariencia").
-	Look    Look
+	Look Look
+	// Options are the character's game options (characters.opt_*).
+	Options GameOptions
 	SavedAt time.Time
+}
+
+// GameOptions are the game options a character keeps between logins (migration 00029,
+// docs/02 "Opciones guardadas"). The zero value is a character that never changed them:
+// balanced, not chasing, safe mode on.
+type GameOptions struct {
+	// Stance is the protocol's FightStance (1 offensive, 2 balanced, 3 defensive); a
+	// value outside it is saved and loaded as balanced.
+	Stance int
+	Chase  bool
+	// Unsafe is the PvP safe mode turned off.
+	Unsafe bool
+}
+
+// stanceBalanced is FightStance BALANCED, the default (characters.opt_stance).
+const stanceBalanced = 2
+
+// column is the opt_stance value of o: a stance out of range is balanced.
+func (o GameOptions) column() int16 {
+	if o.Stance < 1 || o.Stance > 3 {
+		return stanceBalanced
+	}
+	return int16(o.Stance)
 }
 
 // CharacterBelongsTo reports whether characterID is a character of accountID.
@@ -296,6 +323,7 @@ func (s *Store) PlayCharacter(ctx context.Context, accountID, id int64, now time
 		Cosmetics: Cosmetics{Outfit: row.Outfit, Color: row.OutfitColor, NameEffect: row.NameEffect},
 		Look: Look{Sex: row.LookSex, Body: row.LookBody, Skin: row.LookSkin, Hair: row.LookHair, HairColor: row.LookHairColor,
 			Beard: row.LookBeard},
+		Options:    GameOptions{Stance: int(row.OptStance), Chase: row.OptChase, Unsafe: !row.OptSafe},
 		Owned:      owned,
 		Premium:    row.PremiumBalance,
 		PremiumSeq: row.PremiumSeq,
@@ -358,6 +386,9 @@ func saveCharacterState(ctx context.Context, q *db.Queries, c CharacterState) er
 		LookHairColor: c.Look.HairColor,
 		LookBeard:     c.Look.Beard,
 		LookSex:       c.Look.Sex,
+		OptStance:     c.Options.column(),
+		OptChase:      c.Options.Chase,
+		OptSafe:       !c.Options.Unsafe,
 		SavedAt:       ts(c.SavedAt),
 	})
 	if err != nil {

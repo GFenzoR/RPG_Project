@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { isLicenseFile, registeredPacks } from "./credits.ts";
 import { checkIdsLock } from "./ids.ts";
-import { NPC_NAME_MAX_CHARS, NPC_ROLE_MAX_CHARS, npcRoleKey } from "./npc-role.ts";
+import { CREATURE_NAME_MAX_CHARS, NPC_ROLE_MAX_CHARS, npcRoleKey } from "./npc-role.ts";
 import { SCHEMA_DIR, SchemaSet } from "./schemas.ts";
 import type { RefKind, SchemaName, Usage } from "./schemas.ts";
 import { loadYaml, parseYaml, suggest } from "./source.ts";
@@ -251,6 +251,7 @@ class Validator {
     this.checkSounds();
     this.checkLivingWorld();
     this.checkPlantWind();
+    this.checkWindGusts();
     this.checkShadows();
     const lockFile = join(dataDir, "ids.lock.yaml");
     const lock = existsSync(lockFile)
@@ -2697,6 +2698,7 @@ class Validator {
     }
 
     this.checkNpcRoles(catalogs);
+    this.checkMonsterNames(catalogs);
     // Every key referenced from data/ exists in every language.
     const used = new Set<string>();
     for (const k of this.index.i18nKeys) {
@@ -2750,7 +2752,8 @@ class Validator {
       // A default is not written in the file: count it as used and check it exists.
       if (npc["role"] !== key) this.index.i18nKeys.push({ value: key, path: [], src });
       const lines: [string, number, PathSegment[]][] = [[key, NPC_ROLE_MAX_CHARS, ["role"]]];
-      if (typeof npc["name"] === "string") lines.push([npc["name"], NPC_NAME_MAX_CHARS, ["name"]]);
+      if (typeof npc["name"] === "string")
+        lines.push([npc["name"], CREATURE_NAME_MAX_CHARS, ["name"]]);
       for (const [k, max, path] of lines)
         for (const lang of LANGUAGES) {
           const text = catalogs.get(lang)?.get(k)?.text;
@@ -2762,6 +2765,12 @@ class Validator {
               at,
               `"${text}" (${k}, ${lang}) is longer than ${max} characters: an NPC's label shows its name and its role whole, on two lines`,
             );
+          if (text.includes("…") || text.includes("..."))
+            this.error(
+              src,
+              at,
+              `"${text}" (${k}, ${lang}) has an ellipsis: a label never shows a name or a role cut`,
+            );
           if (path[0] === "name" && text.includes(","))
             this.error(
               src,
@@ -2769,6 +2778,31 @@ class Validator {
               `"${text}" (${k}, ${lang}) says what the NPC does after a comma: that goes in its role, under the name`,
             );
         }
+    }
+  }
+
+  /**
+   * A monster's name is shown whole on one line over its head (docs/17 "Nombres"): at most
+   * CREATURE_NAME_MAX_CHARS characters in every language, so the label can shrink it a
+   * little and never has to cut it.
+   */
+  private checkMonsterNames(catalogs: Map<string, Map<string, { text?: unknown }>>): void {
+    for (const src of this.monsters) {
+      const monster = isObj(src.data) ? src.data : undefined;
+      const key = monster?.["name"];
+      if (typeof key !== "string") continue;
+      for (const lang of LANGUAGES) {
+        const text = catalogs.get(lang)?.get(key)?.text;
+        if (typeof text !== "string") continue;
+        if ([...text].length > CREATURE_NAME_MAX_CHARS)
+          this.error(
+            src,
+            ["name"],
+            `"${text}" (${key}, ${lang}) is longer than ${CREATURE_NAME_MAX_CHARS} characters: a creature's name shows whole on one line`,
+          );
+        if (text.includes("…") || text.includes("..."))
+          this.error(src, ["name"], `"${text}" (${key}, ${lang}) has an ellipsis`);
+      }
     }
   }
 
@@ -2951,6 +2985,41 @@ class Validator {
             ["sprites", sprite],
             `no item of data/items uses the sprite "${sprite}": run \`make spritegen\``,
           );
+  }
+
+  /**
+   * The gusts of data/livingworld/wind.yaml (livingworld/README.md "Viento"): between two
+   * gusts the plants stand still, so the slots have to leave a real calm everywhere on the
+   * map. The shortest one is the shortest time between two gusts minus what a gust takes to
+   * cross its travel and the slowest plant to stop swinging after it (the numbers of
+   * livingworld/client/src/wind.ts gustResponseMs: this package does not import the module).
+   */
+  private checkWindGusts(): void {
+    const wind = this.wind;
+    if (!wind || !isObj(wind.data)) return;
+    const field = wind.data["field"];
+    const gusts = wind.data["gusts"];
+    const kinds = wind.data["kinds"];
+    if (!isObj(field) || !isObj(gusts) || !isObj(kinds)) return; // the schema said so
+    const n = (v: unknown): number => (typeof v === "number" ? v : NaN);
+    const strength = asList(gusts["strength"]);
+    if (n(strength[0]) > n(strength[1]))
+      this.error(wind, ["gusts", "strength"], "strength is [weakest, strongest]");
+    let slowest = 0;
+    for (const k of Object.values(kinds))
+      if (isObj(k) && typeof k["period_ms"] === "number")
+        slowest = Math.max(slowest, k["period_ms"]);
+    const rise = n(gusts["rise_ms"]);
+    const cross = (n(gusts["travel_tiles"]) / n(field["speed"])) * 1000;
+    const response =
+      rise + n(gusts["hold_ms"]) + Math.max(2 * rise, 1.5 * n(gusts["swings"]) * slowest * 1.12);
+    const calm = n(gusts["every_s"]) * 1000 * (1 - n(gusts["jitter"])) - cross - response;
+    if (Number.isFinite(calm) && calm < MIN_CALM_MS)
+      this.error(
+        wind,
+        ["gusts"],
+        `the calm between two gusts can be as short as ${(calm / 1000).toFixed(1)} s (a gust crosses its travel in ${(cross / 1000).toFixed(1)} s and the slowest plant swings for ${(response / 1000).toFixed(1)} s): at least ${MIN_CALM_MS / 1000} s. Raise every_s, or lower jitter, travel_tiles, swings or the kinds' period_ms`,
+      );
   }
 
   /**
@@ -3366,6 +3435,8 @@ function kitSlot(item: Obj): string | undefined {
 }
 
 /** The plant types that stand on a trunk: wind needs to know where it ends. */
+/** Between two gusts of wind nothing moves for at least this long, anywhere (checkWindGusts). */
+const MIN_CALM_MS = 10_000;
 const TRUNK_KINDS = new Set(["tree", "palm", "cactus", "dead_tree"]);
 
 /**

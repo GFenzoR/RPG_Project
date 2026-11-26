@@ -99,6 +99,12 @@ export interface MapViewOptions {
    * so no sun shadow shows in there, and indoorAt answers. Absent: no floor (the editor).
    */
   indoors?: ((floor: number) => boolean) | undefined;
+  /**
+   * The roofed tiles of a floor when the map itself says them (the game client ships them,
+   * worked out from world/ at build time): used instead of guessing from the tiles in view,
+   * so a building half seen from outside is indoors too. Undefined for a floor: the guess.
+   */
+  roofs?: ((floor: number) => ((x: number, y: number) => boolean) | undefined) | undefined;
 }
 
 /** A sprite that plays frames (an animated ground or item). */
@@ -195,6 +201,11 @@ export class MapView {
    * items and creatures: marks that lie on the ground (the living world's footprints).
    */
   readonly groundOverlay = new Container({ label: "ground overlay" });
+  /**
+   * World space over every ground, the indoor floors included, and under the items: what a
+   * roof must not hide (the shadows lamps and torches cast, render/light-shadows.ts).
+   */
+  readonly litOverlay = new Container({ label: "lit overlay" });
   readonly tileSize: number;
 
   private readonly world = new Container({ label: "world" });
@@ -218,6 +229,7 @@ export class MapView {
   private readonly art: ArtLookup | undefined;
   private readonly elevation: ElevationLookup | undefined;
   private readonly indoors: ((floor: number) => boolean) | undefined;
+  private readonly roofs: MapViewOptions["roofs"];
   /** Open, wall or unknown for each tile of a chunk object (indoorTiles). */
   private readonly cells = new WeakMap<ChunkData, Uint8Array>();
   private floorZ: number;
@@ -241,6 +253,7 @@ export class MapView {
     this.art = opts.art;
     this.elevation = opts.elevation;
     this.indoors = opts.indoors;
+    this.roofs = opts.roofs;
     this.tileSize = opts.tileSize;
     this.floorZ = opts.floor;
     this.world.addChild(
@@ -248,6 +261,7 @@ export class MapView {
       this.groundOverlay,
       this.shadowLayer,
       this.indoorLayer,
+      this.litOverlay,
       this.itemLayer,
       this.overlay,
     );
@@ -598,6 +612,18 @@ export class MapView {
     data: ChunkData,
   ): { mask: Uint8Array | null; deps: CachedChunk["indoorDeps"] } {
     if (!this.indoors?.(this.floorZ)) return NO_INDOOR;
+    const roof = this.roofs?.(this.floorZ);
+    if (roof) {
+      // The map's own roofs: nothing is read from the neighbours, nothing can change it.
+      let mask: Uint8Array | null = null;
+      for (let ly = 0; ly < CHUNK_TILES; ly++)
+        for (let lx = 0; lx < CHUNK_TILES; lx++) {
+          if (!roof(cx * CHUNK_TILES + lx, cy * CHUNK_TILES + ly)) continue;
+          mask ??= new Uint8Array(CHUNK_TILES * CHUNK_TILES);
+          mask[ly * CHUNK_TILES + lx] = 1;
+        }
+      return { mask, deps: [] };
+    }
     const deps: CachedChunk["indoorDeps"] = [];
     const around: (Uint8Array | undefined)[] = [];
     for (let oy = -1; oy <= 1; oy++)

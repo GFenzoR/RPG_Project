@@ -226,7 +226,7 @@ func (s *stack) login(tok string, char int64) *client {
 	s.t.Helper()
 	s.token(tok, char)
 	c := s.dial()
-	if err := c.send(hello(tok, "0.1.0")); err != nil {
+	if err := c.send(hello(tok, DefaultMinClientVersion)); err != nil {
 		s.t.Fatal(err)
 	}
 	c.until("welcome", func(e *pb.ServerMessage) bool { return e.GetWelcome() != nil })
@@ -298,11 +298,14 @@ func TestHandshakeRefusals(t *testing.T) {
 		want pb.DisconnectReason
 	}{
 		{"not a hello", &pb.ClientMessage{Message: &pb.ClientMessage_Ping{Ping: &pb.Ping{}}}, pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION},
-		{"unknown token", hello("nope", "0.1.0"), pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION},
+		{"unknown token", hello("nope", DefaultMinClientVersion), pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION},
 		{"older client", hello("good", "0.0.9"), pb.DisconnectReason_DISCONNECT_REASON_OUTDATED_CLIENT},
+		// A client from before the saved options (0.1.x) ignores Welcome.options: it would
+		// show the safe mode on while the server holds it off (savedoptions_test.go).
+		{"before saved options", hello("good", "0.1.9"), pb.DisconnectReason_DISCONNECT_REASON_OUTDATED_CLIENT},
 		{"other major", hello("good", "1.0.0"), pb.DisconnectReason_DISCONNECT_REASON_OUTDATED_CLIENT},
 		{"no version", hello("good", ""), pb.DisconnectReason_DISCONNECT_REASON_OUTDATED_CLIENT},
-		{"character gone", hello("gone", "0.1.0"), pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION},
+		{"character gone", hello("gone", DefaultMinClientVersion), pb.DisconnectReason_DISCONNECT_REASON_INVALID_SESSION},
 	}
 	for _, c := range cases {
 		cl := s.dial()

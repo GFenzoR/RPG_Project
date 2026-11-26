@@ -54,7 +54,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
 | Decidir si la vocación "Druida" / "Druid" cambia de nombre: es igual a la de Tibia (regla legal). La auditoría de contenido (m12) renombró los hechizos parecidos, pero el nombre de una vocación es decisión tuya. Si cambia, es solo `vocation.druid.name` en `i18n/*/vocations.yaml` y los textos que la nombran (el id `druid` se queda) | Regla legal | `02-game-design.md` "Vocaciones (nombres provisionales)" |
-| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (`base_step_ms` 1000 → 800, MOV-8); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2; resuelta el 2026-11-19: el dueño los quiere proporcionados, 36-40 px, docs/17 "Humanoides del motor"); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
+| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (MOV-8; resuelta el 2026-11-26: +15 %, `base_step_ms` 891, y +0,2 % por nivel); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2; resuelta el 2026-11-19: el dueño los quiere proporcionados, 36-40 px, docs/17 "Humanoides del motor"); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
 
 ## Orden sugerido
 No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba), salvo
@@ -104,6 +104,196 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Viento por ráfagas (hecho, rama `feat/wind-gusts`; el dueño el 2026-11-26, después de
+  jugar los lotes 19 y 20: "el movimiento que le agregaste a las plantas es demasiado,
+  pareciera que tienen vida o que se están como quemando; tiene que ser un movimiento
+  generado por un random y cada cierto rato, como si pasara una ráfaga de viento";
+  `livingworld/README.md` "Viento", docs/17 "Mundo vivo: el viento"):** el vaivén
+  constante y el aleteo de la copa se sacaron. Las plantas están quietas y, cada 45 s en
+  promedio (al azar, igual para todos: reloj del servidor y semilla), el frente de una
+  ráfaga cruza el mapa y cada planta se inclina, se balancea dos veces y queda quieta.
+  Las sombras de las copas y el borrado de huellas siguen las mismas ráfagas (una huella
+  solo se gasta mientras una ráfaga le pasa encima). Con "Animaciones reducidas", nada se
+  mueve. Sin cambios de servidor ni de protocolo. Queda:
+  - **Mirarlo en el juego** (E2E del lote y playtest del dueño): que la calma se lea como
+    calma y la ráfaga como un suceso que cruza la pantalla. Todo se afina en
+    `data/livingworld/wind.yaml` sin código: cada cuánto (`gusts.every_s`, `jitter`), qué
+    tan fuerte (`gusts.strength`, `kinds.<tipo>.amplitude`), cuánto balanceo
+    (`gusts.swings`, `kinds.<tipo>.period_ms`), qué tan rápido cruza (`field.speed`).
+  - **Decisiones para revisar:** la deriva en la calma (`kinds.<tipo>.drift`) quedó en 0
+    para todos los tipos (quietas del todo); el bosque denso calma el viento un 25 % (era
+    40 %: con ráfagas, adentro casi no se veía); los árboles pasaron de 2 a 3 px de
+    amplitud y las palmeras de 3 a 4 (ahora es el tope de una ráfaga fuerte, no un vaivén).
+  - **Huellas:** con el viento solo en ráfagas, un rastro en la playa dura de una a tres
+    ráfagas (medio minuto a un par de minutos; antes, menos de un minuto). Las tasas
+    (`surfaces.yaml` `prints.wind`, `prints.still`) se subieron para eso; mirar si es
+    mucho.
+  - **Una ráfaga puede nacer o morir en medio de la pantalla** (recorre 64 casillas y se
+    apaga): es a propósito, pero mirarlo. Sin sonido propio: la ráfaga no se oye (el
+    ambiente de viento sigue siendo una capa por zona).
+  - **E2E:** el test del viento y el de las huellas ahora esperan una ráfaga real (hasta
+    un par de minutos en el peor caso); si resultan lentos, bajar `every_s` solo en el
+    arnés pide un contenido de prueba aparte, que hoy no hay.
+- **Halo rojo del objetivo (hecho, rama `feat/target-halo`; el dueño el 2026-11-26; docs/17
+  ART-5 "halo del objetivo"):** anillo plano en el piso bajo el monstruo atacado, tapado en
+  parte por su sprite y por lo que esté delante; late despacio y queda quieto con "Animaciones
+  reducidas". Reemplazó el marco cuadrado. Sin cambios de servidor. Queda **mirar la captura
+  `07d-target-halo` del E2E** (que se lea sobre pasto y arena, y con el lobo caminando) y
+  ajustar `HALO_*` en `client/src/render/target-halo.ts` si es mucho o poco.
+- **Dos personajes, uno detrás del otro, cambiaban de color (arreglado, rama
+  `fix/overlap-tint`; el dueño el 2026-11-26: "cuando un personaje está detrás de otro
+  cambian de color, eso no debería pasar"):** no era un tinte compartido ni una sombra. Era
+  la copia translúcida de ART-2 para criaturas tapadas: la de atrás se dibujaba otra vez
+  encima de todo, pálida (tinte `0xffe2c8`, 55 %) y solo con el cuerpo desnudo. Con los
+  humanoides del motor pasaba con cada par en columna, y la copia caía sobre los dos.
+  Se quitó entera (docs/17 "Criaturas tapadas"); solo cliente. Queda:
+  - **Mirarlo en el juego** (E2E del lote y playtest): dos personajes y un personaje con un
+    NPC o un monstruo en casillas contiguas de norte a sur, quietos y cruzándose: cada uno
+    con sus colores, el de adelante tapando al de atrás.
+  - **Un bicho chico tapado del todo** por un personaje (una rata justo al norte) ya no se
+    ve hasta que alguno se mueve; se lo sigue eligiendo por lo que asoma, y su nombre y su
+    barra se dibujan igual. Si molesta al jugar, la salida es un contorno o un marcador,
+    no volver a teñir los cuerpos.
+- **Nombres en una sola línea y de largo acotado (hecho, rama `feat/names-one-line`,
+  2026-11-26; el dueño: "los nombres nunca se deben mostrar incompletos (con puntos
+  suspensivos); hay que limitar el tamaño del nombre de los usuarios"; docs/17 "Nombres
+  siempre completos"):** `fitName` ya no corta ni pone "…"; el máximo de un nombre de
+  personaje baja de 20 a 16 (`auth.MaxNameLen` = `CREATURE_NAME_MAX_CHARS`, formulario y
+  pista de creación) y los nombres de monstruos y NPCs en es y en caben en 16 (`make
+  validate` lo exige). Diez monstruos en español y uno en inglés se acortaron, con nombres
+  gramaticales ("saqueador de naufragios" → "saqueador", "minero de obsidiana" → "minero
+  renegado", "sabueso de ceniza" → "sabueso cenizo", "dragoncillo de ascua" →
+  "dragoncillo", "custodio de escoria" → "custodio", "cinder salamander" → "ember
+  salamander", que conserva la palabra de su botín, "salamander scale"), y las misiones,
+  los diálogos, los items, los créditos y los docs dicen el mismo nombre (dos tests de
+  `packages/content-schema`: cada paso de matar nombra al monstruo como su etiqueta, y un
+  monstruo conserva en inglés la palabra que comparte con su botín). Los personajes viejos
+  con 17 a 20 letras conservan su nombre: se ven enteros y más chicos, en el mapa y en la
+  interfaz (la placa del nombre, el encabezado compacto y el título del menú de acciones
+  ya no cortan con "…": `client/src/ui/fit-text.ts` encoge la letra hasta que entra, con el
+  piso de 9 px de las etiquetas, y si ni así entra parte el nombre en más líneas), y se
+  los puede seguir invitando al grupo o a una casa (`auth.MaxKnownNameLen` =
+  `KNOWN_NAME_MAX_CHARS` = 20, solo para buscar). Los E2E (y el smoke de escritorio) arman
+  sus nombres con `characterName` de `client/e2e/names.ts`. Falta el e2e completo de la
+  rama (corre en la verificación final del lote); ningún e2e prueba todavía un nombre de 20
+  letras en la placa (hay que renombrar un personaje con `psql`): lo cubren los tests de
+  `fit-text.test.ts`. **Para el dueño:** (1) amontonadas a zoom 1 y tamaño "grande", un
+  nombre de 16 letras de las más anchas ("Mmmmmmmm Wwwwwww") llega al piso de 9 px y aun
+  así se dibuja más ancho que su lugar (entero, sin romper nada): aceptarlo o bajar el
+  máximo a 14 o 15; (2) confirmar los nombres en español que quedaron genéricos:
+  "murciélago", "escarabajo", "saqueador", "contrabandista", "custodio" (el jefe del
+  capítulo 3) y "dragoncillo".
+
+- **Opciones guardadas (hecho, rama `feat/saved-options`; el dueño el 2026-11-25/26: "las
+  selecciones de los personajes se deben guardar, por ejemplo las opciones de batalla" y
+  "todas las opciones que selecciona el jugador se deben guardar"):** las opciones de juego
+  se guardan por personaje en el servidor y las de interfaz en un documento por cuenta
+  (docs/05 "Opciones guardadas" y "Opciones de la cuenta", docs/18). La auditoría:
+
+  | Opción | Dónde vivía | Dónde se guarda ahora |
+  |---|---|---|
+  | Postura de combate (ofensiva, equilibrada, defensiva) | memoria del servidor y estado de la pantalla: se perdía en cada login | personaje (`characters.opt_stance`), vuelve en `Welcome.options` |
+  | Perseguir al objetivo | igual | personaje (`characters.opt_chase`) |
+  | Modo seguro (PvP) | `localStorage` `rpg.safeMode`, reenviado tras cada `Welcome` | personaje (`characters.opt_safe`); `rpg.safeMode` queda solo como valor hasta que llega el `Welcome` |
+  | Aspecto del personaje | personaje (`characters.look_*`, lote 13) | sin cambios |
+  | Idioma | `rpg.lang` | cuenta (`lang`) |
+  | Volumen y silencio por canal | `rpg.audio` | cuenta (`audio`) |
+  | Controles (menú o clásico) | `rpg.controls` | cuenta (`controls`) |
+  | Animaciones reducidas | `rpg.motion` | cuenta (`reduced_motion`) |
+  | Escala de la interfaz, tamaño del texto | `rpg.ui-scale`, `rpg.text-scale` | cuenta (`ui_scale`, `text_scale`) |
+  | Sacudida de cámara, globos de chat | `rpg.shake`, `rpg.chat-bubbles` | cuenta (`camera_shake`, `chat_bubbles`) |
+  | Tamaño de los nombres | `rpg.name-size` | cuenta (`name_size`) |
+  | Opacidad del chat | `rpg.chat-opacity` | cuenta (`chat_opacity`) |
+  | Barra de hechizos F1–F12 (por vocación) | `rpg.hotkeys.<vocación>` | cuenta (`hotkeys`) |
+  | Misión seguida (por personaje) | `rpg.track` | cuenta (`track`) |
+  | Pad táctil | `rpg.touchPad` | por clase de dispositivo, `desktop` o `touch` (`devices.<clase>.touch_pad`) |
+  | Zoom del mapa | `rpg.zoom` | por clase de dispositivo (`zoom`) |
+  | Minimapa (abierto, escala) | `rpg.minimap` | por clase de dispositivo (`minimap`) |
+  | Ventanas (abiertas, lugar, tamaño, plegadas, orden) | `rpg.windows` | por clase de dispositivo (`windows`) |
+  | Objetivo de ataque | memoria del servidor | no se guarda: no es una preferencia |
+  | Canal y pestaña del chat | estado de la pantalla | no se guarda: sigue a la conversación; cada login empieza en el local |
+  | Experiencia compartida del grupo | el grupo, en memoria del servidor | no se guarda: es del grupo, que termina cuando sus miembros salen |
+  | Último email del login | `rpg.lastEmail` | solo en el navegador: existe antes de saber la cuenta |
+  | Nota "quedaste en combate" | `rpg.stayedInFight` | solo en el navegador: no es una opción |
+
+  No existe auto-loot ni otra opción de juego por personaje todavía; cuando se sume una,
+  va en `session.GameOptions`, `characters.opt_*` y `Welcome.options`. El registro es
+  `OPTIONS` de `client/src/state/saved-options.ts`: `saved-options.test.ts` falla si aparece
+  una clave `rpg.*` de `localStorage` o un mensaje `Set*` del protocolo sin declarar, o un
+  campo del documento que el esquema del servidor no tiene (y al revés). El test **solo ve
+  esas dos cosas**: un interruptor que viaja en otro mensaje (la experiencia compartida del
+  grupo va en `PartyAction`) o una elección que vive solo en el estado de una pantalla se
+  declaran a mano. Tras la revisión del lote: un cambio que no llegó a enviarse (pestaña
+  cerrada antes de 2 s, `POST` fallido) queda anotado y gana en el siguiente login; cada
+  guardado lleva solo la sección de su clase de dispositivo y el servidor conserva las
+  otras; lo que otra cuenta dejó en el navegador no se sube (docs/05 "Opciones de la
+  cuenta"). Queda:
+  - **El cliente pasa a 0.2.0 y el servidor ya no acepta 0.1.x** (`-min-client-version`,
+    por defecto `0.2.0`): un cliente anterior ignora `Welcome.options` y mostraría el modo
+    seguro activado con el servidor teniéndolo apagado. **Hay que volver a armar la app de
+    escritorio** (el build web va dentro del exe); una vieja recibe "cliente
+    desactualizado" al entrar al mundo. El orden al desplegar está en docs/09 ("Subir la
+    versión mínima del cliente"); en este PC, el exe de `play/latest` se vuelve a armar
+    junto con el servidor.
+  - **Quitar una opción no se propaga del todo:** volver al zoom ajustado o dejar de seguir
+    una misión la borra del servidor, pero otro navegador de la misma clase que todavía la
+    tenga la vuelve a subir en su próximo login. Si molesta, la salida es guardar "sin
+    valor" explícito en el documento.
+  - **La espera al entrar al juego** es de 2 s como mucho: con un servidor más lento que
+    eso el juego abre con las ventanas locales y el login las reemplaza por debajo.
+  - **El tope de la tabla** (`account_options`, 64 KiB de JSONB) no se pudo medir sin
+    Postgres en esta pasada: `store/options_integration_test.go` guarda ahora el documento
+    válido más grande; correr `make test-integration` con la base levantada.
+  - **La migración 00029** puede chocar de número con otra rama del lote: si pasa, se
+    renumera la que entre después (`migrations/embed_test.go` lo detecta).
+  - **Un jugador que tenía el modo seguro apagado** en su navegador lo encuentra activado
+    la primera vez (el servidor no sabía de esa elección): lo apaga una vez y queda.
+  - **Dos dispositivos de la misma clase abiertos a la vez** (dos PC) con la misma cuenta:
+    gana el último que guarda. PC y teléfono no se pisan: cada uno guarda su sección. Si
+    molesta, la salida es mezclar por campo en el servidor.
+  - **El idioma elegido en el sitio público** (otra página) no cuenta como "elegido antes
+    de entrar": al entrar al juego gana el guardado en la cuenta.
+  - **Probarlo a mano en dos navegadores** (o navegador y app de escritorio): cambiar
+    postura, volumen, ventanas y hotkeys en uno y entrar en el otro.
+- **Texto de la UI +1 px, globos +2 px, Enter para el chat, inventario compacto (hecho, rama
+  `feat/ui-text-and-chat`; docs/17 "Texto de la interfaz, globos y chat"):** falta revisar en el e2e
+  que ninguna ventana se corte a 1280x720 y 1920x1080 con la raíz en 17 px.
+- **Velocidad de movimiento (hecho, rama `feat/movement-speed`; el dueño el 2026-11-26,
+  después de jugar los lotes 19 y 20: "arriba y abajo creo que es más rápido que hacia los
+  costados", "+15 % en todas las direcciones", "+0,2 % por nivel"; docs/02 "Movimiento",
+  docs/05 "Caminar", docs/17 "La regla de la zancada"):**
+  - **Medido:** el servidor cobra lo mismo por un paso en los cuatro sentidos y el cliente
+    lo dibuja a los mismos px/s. La diferencia estaba en la animación: 1,73 ciclos de
+    piernas por casilla al norte y al sur contra 1 al este. Ahora es 1 en todas. A cambio
+    el pie apoyado patina 6,8 px por apoyo mirando al norte o al sur (2,5 en diagonal).
+    **Para mirar al jugar:** si ese patinaje molesta más que la diferencia de ritmo, se
+    vuelve atrás con una línea (docs/17). Otra cosa que puede seguir dando la sensación y
+    no se tocó: la vista es de 31 × 21 casillas, así que una casilla hacia arriba es una
+    parte más grande del alto de la pantalla que una hacia el costado del ancho.
+  - **+15 % a todas las criaturas** (`base_step_ms` 1000 → 891): nivel 1, de 500 a 435 ms
+    por casilla. Los monstruos y NPCs también, por el mismo número, para no tocar el
+    balance de perseguir y huir. Como además los pasos dejaron de redondearse hacia arriba
+    a ticks, cada monstruo ganó entre 12 % y 21 % según cuánto le tocaba de redondeo (el
+    lobo, 550 → 469 ms; el gólem de escoria, 850 → 743): **conviene probar a mano que
+    huir de un lobo o alcanzar a un ladrón se siga sintiendo bien.**
+  - **+0,2 % por nivel**, sin tope (docs/02), **sumado** a los 3 puntos por nivel de las
+    vocaciones: nivel 50, de 300 a 231 ms por casilla; nivel 100, de 200 a 149. Ningún
+    nivel camina más lento que antes y quien dejaba atrás a un monstruo lo sigue haciendo.
+    **Para confirmar con el dueño:** la primera versión de la rama reemplazaba los 3 puntos
+    por el 0,2 % (nivel 50: 396 ms, más lento que antes); la revisión eligió sumar porque
+    el pedido era acelerar. Si a nivel alto queda demasiado rápido, se baja
+    `per_level.speed` en `data/vocations.yaml` (y `TestRepoMovementSpeed` con él).
+  - **Pasos al milisegundo:** `CreatureMove.duration_ms` ya no es múltiplo de 50; el
+    servidor reparte los ticks entre los pasos de una caminata y el cliente los dibuja
+    seguidos. Probado con simulación (`walking.test.ts`, un paso de 435 ms con 0 a 80 ms de
+    RTT y con jitter); **falta verlo en una red real** con RTT alto: con más de ~50 ms de
+    ida el servidor arranca cada paso cuando llega el `Walk` y no en el tick exacto (no se
+    ve en el cliente propio, que predice; un observador podría ver un paso unos ms tarde).
+  - El polvo al correr pasó de 260 a 232 ms por paso (`RUN_STEP_MS`), el mismo umbral de
+    velocidad de antes (385 puntos): sin haste se llega al nivel 50 (antes, al 66).
+  - Un observador que ve a alguien parar un tick y seguir ya no arrastra el resto del
+    paso anterior (`Walk.next` en `client/src/state/world.ts`, test en `world.test.ts`). `client/e2e/movement.spec.ts` espera pasos de 435 ms (no se corrió
+    acá: lo corre el e2e final del lote).
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:
@@ -113,9 +303,8 @@ el punto 5:
   de spritegen, o la pista `wind` de `assets/sprites.yaml`) y `make validate` falla si
   falta. Sin cambios de servidor ni de protocolo. Queda:
   - **Mirarlo en movimiento** (E2E del lote y playtest del dueño): un bosque y un pueblo
-    con árboles, a zoom 2 y a zoom 1; que se lea sutil y orgánico. Si es mucho o poco, los
-    números están en `data/livingworld/wind.yaml` (`kinds.<tipo>.amplitude`, `field.calm`,
-    `field.speed`); no hace falta código.
+    con árboles, a zoom 2 y a zoom 1; que se lea sutil y orgánico. **Resuelto el
+    2026-11-26:** el dueño lo encontró demasiado (arriba, "Viento por ráfagas").
   - **Arreglo de paso:** las plantas del lote 17 nunca reaccionaban en el juego real (el
     pegamento le daba al módulo el número del item y los datos van por id); ahora sí se
     doblan al pasar. Mirar que el doblez de hierba y arbustos (hasta ~6 px en la punta) no
@@ -123,7 +312,7 @@ el punto 5:
   - **Tiempo de frame en el navegador** sobre un bosque: medido solo en Node (0,8 ms con
     999 árboles, docs/07); falta el número real con GPU.
   - **Sin clima:** cuando haya lluvia o tormenta, es un factor más sobre la fuerza del
-    viento (`strengthAt`). Las hojas que caen no derivan con el viento.
+    viento (la exposición que recibe `swayAt`). Las hojas que caen no derivan con el viento.
   - **Estandartes y bandera** siguen con su bucle de frames; no siguen las ráfagas.
   - **El editor de mapas** no muestra el vaivén (no monta el mundo vivo): los árboles se
     ven quietos ahí, ya sin los frames viejos.
@@ -350,7 +539,7 @@ el punto 5:
     de `data/vocations.yaml` o bajar el peso de las pieles y el mineral.
   - **Decisión de balance para el dueño, material pesado:** al cubrir todos los niveles
     el test mostró que 60 muertes de espinoso (100 kg: troncos de olmo), de gólem de
-    escoria (112 kg: mineral de ascua y núcleos) y de minero de obsidiana (46 kg) **no
+    escoria (112 kg: mineral de ascua y núcleos) y de minero renegado (46 kg) **no
     entran**; la cuenta a mano anterior ("entran de sobra") estaba mal. Hoy son la
     excepción declarada del test (`heavyHaul`: deben entrar 15 muertes; entran 17, 20 y
     43 al más justo). Si se quiere que entren enteros hay que bajar su botín (p. ej. el
@@ -562,23 +751,45 @@ el punto 5:
         mataban a mitad de camino y el test pasaba igual): ahora entra con nivel 200 y
         el test exige que termine de pie en el bosque. Números en docs/07: 60 fps y 6
         draw calls. Dos cosas que se ven mal y quedan:
-        - **Sol dentro de un edificio visto de lejos:** una habitación cuyo muro más
-          lejano queda fuera de la ventana del servidor (a 12 filas o más, o 17 columnas)
-          cuenta como aire libre "hasta ver su último muro" (`indoorTiles`), así que desde
-          la plaza de Thimblewick (2095,2095) el piso del templo muestra la sombra de sus
-          muros y la del vano (`99d`, `99d2`), y desaparecen al dar un paso al norte
-          (comprobado con capturas desde 2095, 2094, 2093 y 2092). Arreglo posible: una
-          zona `indoor` en el mapa, o recordar los muros ya vistos.
+        - **Sol dentro de un edificio visto de lejos (arreglado, 2026-11-26, rama
+          `feat/light-shadows`):** los techos ya no se adivinan con lo que está a la
+          vista: los calcula el build sobre `world/` entero (`client/vite/roofs.ts`,
+          docs/17 "Sombras de las luces y bajo techo fiable"). Falta mirarlo en la
+          captura `99i-light-temple-from-square` del E2E final.
         - **La sombra de un muro fino arranca separada de él:** la sombra de bloque sale
           del borde de la casilla, y el dibujo de un muro vertical ocupa solo el medio
           (20 de 64 px a 2x): quedan unos 11 px de sprite de pasto al sol entre el muro
           y su sombra (`99d2`, al este del templo). Arreglo: que el bloque use el ancho
           del dibujo de la pieza y no la casilla.
-      - **"Bajo techo" es una heurística** (los mapas no tienen techos): casillas
-        encerradas por muros, con vanos de hasta 3 casillas, hasta 400 casillas. Un
-        edificio con un vano más ancho o un patio chico amurallado se leen mal (uno con
-        sol adentro, el otro sin sombras). Si molesta: marcar el interior en el mapa
-        (una zona `indoor`), que es un cambio de formato.
+      - **"Bajo techo" sigue siendo una regla, ahora sobre el mapa entero** (los mapas
+        no tienen techos): casillas encerradas por muros, con vanos de hasta 3
+        casillas, hasta 400 casillas, calculadas en el build. Un edificio con un vano
+        más ancho o un patio chico amurallado se leen mal (uno con sol adentro, el otro
+        sin sombras). Si molesta: marcar el interior en el mapa (una zona `indoor`),
+        que es un cambio de formato. Un muro que cambie en el servidor sin un build
+        nuevo del cliente (hoy no pasa: el mapa se despliega con el cliente) dejaría el
+        techo viejo. El build cuenta como muro un item `kind: wall` o con
+        `joins_walls`; el canvas, la pieza de muro del atlas: hoy coinciden.
+      - **Sombras de las luces (hecho, 2026-11-26, rama `feat/light-shadows`)**, docs/17
+        "Sombras de las luces". Queda:
+        - **Mirar las capturas del E2E** (`99h` a `99l` de `e2e/sandbox.spec.ts`): el
+          test se escribió sin poder correrlo (el lote corre el E2E una vez al final).
+          Usa `/tp` a casillas de Puerto elegidas del mapa sin verlas (templo
+          3160,6386; sótano 3134,6315,8 junto a una antorcha; plaza 3167,6391 junto a
+          un farol): si alguna no es pisable, cambiarla por una vecina.
+        - **Thimblewick no tiene lámparas** (solo la fragua y el fogón del oeste): su
+          templo y sus tiendas muestran la elipse tenue y ninguna sombra. Si el dueño
+          quiere ver sombras ahí, poner braseros o faroles con `mapcli`.
+        - **Ventanas iluminadas y velas no dan luz** (sus sprites no tienen `light`).
+        - **Los muros no proyectan sombra de las luces** (solo criaturas y objetos
+          `silhouette`), y una luz no es tapada por un muro dentro de su mismo lado
+          (dos habitaciones de un mismo edificio comparten sus luces).
+        - **Dos luces opuestas a igual distancia** se cancelan (una sombra corta bajo
+          los pies) en vez de dar dos sombras: es una sola sombra mezclada por criatura.
+        - **En el borde del alcance** las capas de un muñeco llevan alfa y se suman un
+          poco donde se pisan (un instante, con poca opacidad).
+        - **La pasada de filtro extra** no se midió en pantalla (docs/07 tiene solo el
+          lado JS): mirar los fps de noche en una plaza con faroles.
       - **Bajo techo no se ven huellas ni ondas del mundo vivo:** el suelo de adentro se
         dibuja encima de `groundOverlay` para tapar las sombras, y tapa también eso.
         Hoy los interiores son de madera y piedra (sin huellas); un interior de arena o
@@ -964,7 +1175,7 @@ el punto 5:
   - **Para la descripción del PR, textos que cambiaron más allá del género:** los nombres
     de los estados pasaron a sustantivos ("Envenenado" a "Veneno", "Acelerado" a "Prisa",
     etc.), "Náufrago" a "El naufragio" y "no está conectado" a "en línea". El texto de
-    `coffer_smuggler` ("contrabandista del cofre") es mujer, así que todo su spawn sale
+    `coffer_smuggler` ("contrabandista") es mujer, así que todo su spawn sale
     mujer: un spawn no mezcla sexos (decisión de diseño, no un bug).
   - **Revisar en los screenshots** (`20-druid-heal` y `cli.ts sheet --only humans/`) los
     pantalones y las grebas sobre la mujer robusta: su cadera (4.0) queda muy cerca del
@@ -1012,7 +1223,9 @@ el punto 5:
   pieles para jugadores, seis peinados, nueve colores de pelo, tres barbas) y un muñeco de
   capas que muestra lo que llevan (`data/looks.yaml`, `worn` en las 76 piezas que se ven,
   `look` en los 19 NPCs personas y los 4 monstruos humanoides). El caminar sale de la zancada
-  (un ciclo por casilla, 8 frames; 13,86 al norte y al sur): el pie apoyado no patina. El
+  (un ciclo por casilla, 8 frames; hasta el 2026-11-26 eran 13,86 al norte y al sur para que el
+  pie no patinara ahí, ver "Velocidad de movimiento" en "Pendientes conocidos"): el pie
+  apoyado no patina al este ni al oeste. El
   ataque se juega con el arma (arco y ballesta disparan, varita y vara conjuran). El pack
   `assets/vendor/ulpc/` salió del repo. Lo que arregló la revisión de la rama: el arma y el
   escudo van sobre la ropa en las cuatro direcciones (el arco mirando al oeste y la hoja
@@ -1035,9 +1248,9 @@ el punto 5:
     ataque a distancia: eso queda para la prueba a mano.
   - **Los otros jugadores**: hecho en `feat/character-look` (el punto siguiente): cada
     jugador se ve con su aspecto y su equipo.
-  - **La silueta translúcida** (tapado por otra criatura) muestra solo el cuerpo, sin ropa
-    ni arma. Detrás de un muro ya no hay silueta: el muro se vuelve translúcido (docs/17
-    ART-3, 2026-11-23).
+  - **La silueta translúcida** ya no existe: detrás de un muro, el muro se vuelve
+    translúcido (docs/17 ART-3, 2026-11-23); detrás de otra criatura, queda tapado (se
+    retiró el 2026-11-26, ver "Pendientes conocidos").
   - Un juego de armadura es de un solo tinte (el cinturón también); el arco no se tensa con
     la mano; el JSON del atlas creció ~0,9 MB por los 3612 nombres de frame (docs/07).
   - Si el dueño quiere más formas (un sombrero de ala, una capa, un escudo de torre de
@@ -1335,7 +1548,7 @@ el punto 5:
     atascado; solo no puede levantar más hasta soltar algo.
   - **Ids con `feat/item-forge`:** las 35 piezas nuevas tomaron los números 271-305; la
     forja, rebasada encima, corrió `make gen-ids` y sus piedras y el ámbar son 306-309.
-  - **Balance justo:** el minero de obsidiana al nivel 35 queda en 11,0 % de la vida (el piso
+  - **Balance justo:** el minero renegado al nivel 35 queda en 11,0 % de la vida (el piso
     es 10 %; con los atributos del kit su golpe cuerpo a cuerpo subió de 52 a 60). Con el arco de tejo al nivel 5, ningún duelo de Puerto deja al montaraz bajo
     la mitad de su vida y su cura (nivel 4) se usa recién en el Bosque; el chequeo de
     hechizos lo acepta para una cura que sus primeras cazas no necesitan (docs/02,
@@ -1596,10 +1809,10 @@ el punto 5:
       yunque ni los cajones: mirarlos a mano con las coordenadas de arriba (`make play`).
     - **Animales:** todos los monstruos tienen frames, menos la gaviota. Catorce son del
       Gemini del dueño (docs/17 "Hecho: criaturas de Gemini"): lobo, rata de sentina,
-      cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y espinoso
-      (rama `feat/gemini-creatures`), y reptante hueco, escarabajo de mena, sabueso de
-      ceniza, salamandra de brasa, gólem de escoria, dragoncillo de ascua y el custodio de
-      escoria, jefe del Volcán en 96x96 (rama `feat/gemini-creatures-2`). La gaviota sigue
+      cangrejo marino, murciélago, araña de musgo, sapo de ciénaga y espinoso
+      (rama `feat/gemini-creatures`), y reptante hueco, escarabajo, sabueso cenizo,
+      salamandra ígnea, gólem de escoria, dragoncillo y el custodio, jefe del Volcán en
+      96x96 (rama `feat/gemini-creatures-2`). La gaviota sigue
       con un frame de spritegen: hay una hoja de Gemini buena en
       `build/gemini/art/thieving_gull_a.png` del worktree `.wt/gc`, sin commitear ni usar;
       cambiarla es decisión del dueño. Cómo se hace una: `assets/README.md`, "Criaturas
@@ -1619,9 +1832,9 @@ el punto 5:
       worktree `.wt/vf`, no commiteadas). Todas pisan su casilla con la sombra de contacto
       y a escala con la persona de LPC; el custodio (96x96) en la forja, con nombre y barra
       sobre la cabeza y sin recortes; el jabalí y el ciervo de 64x64, el ciervo adulto; el
-      reptante hueco se lee bien sobre la cueva. Para el dueño: el sabueso de ceniza mirando
+      reptante hueco se lee bien sobre la cueva. Para el dueño: el sabueso cenizo mirando
       al norte (su primer frame de caminar) es una silueta angosta y vertical y contrasta
-      poco sobre la ceniza; el escarabajo de mena fuera de la luz del jugador casi no se ve
+      poco sobre la ceniza; el escarabajo fuera de la luz del jugador casi no se ve
       (solo su nombre); la sombra de 20 px bajo el custodio queda chica pero no rara. Los
       martillazos del custodio y los golpes del gólem no se miraron cuadro a cuadro.
     - **Escala (decidida, docs/17 ART-2 "Animales medianos"):** los animales se miden
@@ -1635,8 +1848,8 @@ el punto 5:
       (`stance` de `atlas.json`); solo se ve donde no hay sombra proyectada.
     - **Click sobre la cabeza** de un personaje alto: hecho (rama `feat/world-art-2`,
       ART-2). Elige a la criatura antes que la casilla; el propio jugador queda fuera.
-      Y una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
-      de `07-combat`) se dibuja otra vez, translúcida, encima del mapa.
+      Una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
+      de `07-combat`) queda tapada: su copia translúcida se retiró el 2026-11-26.
     - **Atlas:** pasó de 1 a 2 páginas (docs/07).
     - **Pantalla de créditos (A1):** hecha: la página `/credits` del sitio, enlazada
       desde el pie del sitio y desde Opciones, y en la app de escritorio un botón de
@@ -1925,9 +2138,9 @@ el punto 5:
     animadas", arriba) salvo la gaviota, que sigue con un frame de spritegen y la
     animación procedural de ANI-5 (el saltito por casilla de `packages/renderer/src/anim.ts`;
     el viejo `walkBob` ya no existe).
-  - **Velocidad base:** a nivel 1 un paso dura 500 ms (2 casillas/s). Se siente lento al
-    lado de Diablo 2, pero es balance (`base_step_ms`, `speed` de las vocaciones): no se
-    tocó.
+  - **Velocidad base:** a nivel 1 un paso duraba 500 ms (2 casillas/s). Se sentía lento al
+    lado de Diablo 2; el dueño la subió el 2026-11-26 (435 ms, "Velocidad de movimiento"
+    en "Pendientes conocidos").
   - **Medirlo en una red real:** la simulación cubre RTT de 2 a 300 ms con jitter, un
     corte de 1 s y `Walk` perdidos, y el E2E `e2e/movement.spec.ts` corre con ~150 ms de
     latencia simulada en el WebSocket; falta jugarlo por el hosting de pruebas (docs/13) y

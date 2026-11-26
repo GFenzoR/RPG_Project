@@ -2,7 +2,14 @@
 # Our own numbers: they aim for a familiar feel but must never be copied from Tibia
 # (CLAUDE.md legal rule).
 movement:
-  base_step_ms: 1000        # step = base_step_ms * terrain% / speed (see 02-game-design)
+  # step = base_step_ms * terrain% / speed, in ms (see 02-game-design). Every creature walks
+  # by it: players, monsters and NPCs. 891 since 2026-11-26 (owner: +15 % in every
+  # direction): a level 1 player (speed 205) took 500 ms a tile and takes 435.
+  base_step_ms: 891
+  # A player walks this much faster per level over the first, in % of its vocation's speed
+  # at that level (owner, 2026-11-26). It adds to the vocations' per_level.speed points, it
+  # does not replace them: level 50 is 352 points +9.8 % = 387. No cap but max_level.
+  speed_per_level_pct: 0.2
   diagonal_cost: 1.414      # √2 in the step timer's thousandths: one speed in all 8 directions
   max_path_tiles: 100
   max_queued_steps: 4       # keyboard steps the client predicts and the server queues ahead

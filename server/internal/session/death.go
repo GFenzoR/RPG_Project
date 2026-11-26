@@ -103,7 +103,7 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 		p.questDirty = true // the milestones' level marks of the quest log (questRecheck)
 		stats := p.vocation.AtLevel(level)
 		p.maxHealth, p.maxMana, p.capacity = stats.Health+p.gear.health, stats.Mana+p.gear.mana, stats.Capacity
-		p.baseSpeed = max(stats.Speed, 1)
+		p.baseSpeed = w.mv.LevelSpeed(stats.Speed, level)
 	}
 	// A death ends every condition (T3.2): the speed returns to its base, an invisible
 	// player shows up again before it is teleported.

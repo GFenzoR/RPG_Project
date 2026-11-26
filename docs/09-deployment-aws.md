@@ -701,6 +701,19 @@ git tag desktop-v0.2.0 && git push origin desktop-v0.2.0
   `/ws` se autentica con el token de un uso del `Hello`, nunca con cookie, así que permitir
   esos orígenes no habilita que otra página use la sesión de nadie.
 - Para dejar fuera apps viejas: sube `-min-client-version` del gameserver (docs/05).
+- **Subir la versión mínima del cliente** (pasó con 0.2.0, el primero que lee
+  `Welcome.options`): el servidor nuevo rechaza en el `Hello` a todo cliente anterior, sea
+  una PWA que el navegador tiene cacheada o un exe de escritorio viejo. Es lo buscado, pero
+  el orden importa:
+  1. Publica primero la app de escritorio de la versión nueva (el tag de arriba y el
+     Release), para que haya algo que descargar cuando el viejo deje de entrar.
+  2. Despliega el cliente web y el servidor **juntos** (el mismo `docker compose up` de
+     este doc): el web nuevo contra el servidor viejo funciona, el web viejo contra el
+     servidor nuevo no.
+  3. Una PWA instalada toma el build nuevo al recargar; quien tenga la pestaña abierta ve
+     "cliente desactualizado" hasta que recarga.
+  En el PC de desarrollo vale lo mismo: tras actualizar `play/latest`, vuelve a armar el exe
+  de escritorio antes de jugar con él.
 - La app abre directo el juego (`play/index.html`, `app.windows[0].url` de
   `tauri.conf.json`), nunca la landing (T4.3).
 

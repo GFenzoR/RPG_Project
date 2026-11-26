@@ -14,7 +14,7 @@ import (
 
 // Conditions (T3.2, docs/02-game-design.md "Condiciones"): poison, burning and shocked
 // hit their holder every interval with their element; slowed and hasted change its
-// speed (and so StepTicks); keen_eye raises a combat skill; invisible hides a player.
+// speed (and so StepMs); keen_eye raises a combat skill; invisible hides a player.
 // The rules of each one are balance.yaml conditions; a source (spell, monster attack)
 // gives its strength and duration.
 //

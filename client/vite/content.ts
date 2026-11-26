@@ -27,6 +27,7 @@ import { npcRoleKey } from "@rpg/content-schema/npc-role";
 import { parseAmbience } from "@rpg/living-world/ambience";
 import { parseLivingWorldData, shadowOf } from "@rpg/living-world/data";
 import { loadCredits } from "./credits.ts";
+import { loadRoofs } from "./roofs.ts";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
 import type {
@@ -344,6 +345,7 @@ export function loadClientContent(root: string): ClientContent {
       })
     : [];
   const forge = loadForge(balance, ids);
+  const houseDoors = loadHouseDoors(root);
   return {
     items,
     livingWorld: loadLivingWorld(root, items),
@@ -381,8 +383,9 @@ export function loadClientContent(root: string): ClientContent {
     sounds: loadSounds(root),
     questMusic: loadQuestMusic(root),
     islands: loadIslands(root),
-    houseDoors: loadHouseDoors(root),
+    houseDoors,
     portals: loadPortals(root),
+    roofs: loadRoofs(root, wallItems(root, items), houseDoors),
     i18n,
   };
 }
@@ -969,6 +972,23 @@ function loadIslands(root: string): IslandRect[] {
     const r = i["rect"];
     return [{ id: i["id"], x: num0(r["x"]), y: num0(r["y"]), w: num0(r["w"]), h: num0(r["h"]) }];
   });
+}
+
+/**
+ * Whether an item id is a wall or joins walls, as the canvas reads it from the atlas (tile
+ * art `wall`, `joins`): an item of kind wall, or one whose sprite assets/sprites.yaml gives
+ * `joins_walls` (a gate set in a wall).
+ */
+function wallItems(root: string, items: Record<number, ItemDef>): (id: string) => boolean {
+  const file = join(root, "assets", "sprites.yaml");
+  const raw = existsSync(file) ? readYaml(file) : undefined;
+  const tiles = isObj(raw) && isObj(raw["tiles"]) ? raw["tiles"] : {};
+  const walls = new Set<string>();
+  for (const item of Object.values(items)) {
+    const meta = item.sprite === undefined ? undefined : tiles[item.sprite];
+    if (item.kind === "wall" || (isObj(meta) && meta["joins_walls"] === true)) walls.add(item.id);
+  }
+  return (id) => walls.has(id);
 }
 
 /** Door tiles of every houses.yaml (T5.4), as "x,y,z"; make validate checks the files. */

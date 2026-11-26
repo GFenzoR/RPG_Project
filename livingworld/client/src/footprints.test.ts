@@ -16,7 +16,7 @@ import {
   windErosion,
 } from "./footprints.ts";
 import type { Footprint, PrintField, PrintRules, PrintSpec } from "./footprints.ts";
-import { exposureOf, parseWind } from "./wind.ts";
+import { exposureOf, gustAt, nextGust, parseWind } from "./wind.ts";
 import type { WindField } from "./wind.ts";
 
 const read = (name: string): unknown =>
@@ -90,12 +90,29 @@ describe("the wind", () => {
     expect(gale).toBeGreaterThan(breeze * 4);
   });
 
-  it("blows the prints off an open beach in well under a minute", () => {
+  it("blows the prints off an open beach in a few gusts, and only a gust does it", () => {
     const sim = new FootprintSim(FIELD, WIND, T);
     sim.add(print({ exposure: exposure("sand") }), 0);
-    const gone = run(sim, 60_000);
+    // In the calm between two gusts a print stays exactly as it is.
+    let last = 0;
+    let gone = -1;
+    for (let t = 0; t < 5 * 60_000 && gone < 0; t += 50) {
+      const blowing = gustAt(WIND, 10, 10, t + 50) > 0;
+      sim.step(50, t + 50);
+      const wear = sim.prints[0]?.wear ?? 1;
+      if (!blowing) expect(wear).toBe(last);
+      last = wear;
+      if (sim.count === 0) gone = t + 50;
+    }
     expect(gone).toBeGreaterThan(1500); // a gust has to come: never at once
-    expect(gone).toBeLessThan(60_000);
+    expect(gone).toBeLessThan(5 * 60_000);
+    // A strong gust alone takes most of a print.
+    const strong = nextGust(WIND, 10, 10, 0, 0.75);
+    if (!strong) throw new Error("no strong gust");
+    const one = new FootprintSim(FIELD, WIND, T);
+    one.add(print({ exposure: exposure("sand") }), strong.at - 500);
+    run(one, 6000, strong.at - 500);
+    expect(one.prints[0]?.wear ?? 1).toBeGreaterThan(0.5);
   });
 
   it("leaves them for very long in a sheltered spot, and for ever underground", () => {
@@ -120,63 +137,82 @@ describe("the wind", () => {
     expect(cave.prints[0]?.wear).toBe(0);
   });
 
-  it("takes a trail from the windward side: what erases here erases downwind a moment later", () => {
-    // The gusts are a pattern that travels with the wind (wind.ts gustAt): a print k tiles
-    // downwind lives through exactly what the upwind one did, k / speed seconds later.
-    const k = 6;
-    const delay = (k / WIND.speed) * 1000;
-    const wearOf = (dx: number, from: number): number[] => {
-      const sim = new FootprintSim(FIELD, WIND, T);
-      sim.add(
-        print({
-          x: (40 + dx * WIND.dirX) * T,
-          y: (40 + dx * WIND.dirY) * T,
-          exposure: exposure("sand"),
-          rules: { wind: 0.05, waves: false, tread: 0 },
-        }),
-        from,
-      );
-      const out: number[] = [];
-      for (let t = 0; t < 20_000; t += 50) {
-        sim.step(50, from + t + 50);
-        out.push(sim.prints[0]?.wear ?? 1);
-      }
-      return out;
-    };
-    const upwind = wearOf(0, 0);
-    const downwind = wearOf(k, delay);
-    for (let i = 0; i < upwind.length; i += 20)
-      expect(downwind[i] as number).toBeCloseTo(upwind[i] as number, 6);
-    // And at the same moment the two are not alike: the front is somewhere between them.
-    const together = wearOf(k, 0);
-    expect(together.some((w, i) => Math.abs(w - (upwind[i] as number)) > 0.01)).toBe(true);
-    // It comes in gusts: the wear climbs in bursts, with lulls in which it stands still.
+  it("takes a trail one print after another, as the gust front crosses it", () => {
+    // The front of a gust travels (wind.ts): each print of a trail starts to go when the
+    // front reaches its own tile, not all of them at once.
+    const y = 40;
+    const xs = [30, 36, 42, 48];
+    const rules = { wind: 0.05, waves: false, tread: 0 };
+    // A gust that blows hard on the whole trail.
+    let from = 0;
+    let arrivals: number[] = [];
+    for (;;) {
+      const first = nextGust(WIND, xs[0] as number, y, from, 0.7);
+      if (!first) throw new Error("no gust over the trail");
+      arrivals = xs.map((x) => nextGust(WIND, x, y, first.at - 6000, 0.7)?.at ?? Infinity);
+      if (arrivals.every((t) => Math.abs(t - first.at) < 6000)) break;
+      from = first.at;
+    }
+    const start = Math.min(...arrivals) - 1000;
+    const sim = new FootprintSim(FIELD, WIND, T);
+    for (const x of xs)
+      sim.add(print({ x: x * T, y: y * T, exposure: exposure("sand"), rules }), start);
+    const began = xs.map(() => -1);
+    for (let t = start; t < start + 12_000; t += 50) {
+      sim.step(50, t + 50);
+      sim.prints.forEach((q, i) => {
+        if (q.wear > 0 && (began[i] as number) < 0) began[i] = t + 50;
+      });
+    }
+    // Each one when the front got to it (a moment later: the gust has to pick up).
+    began.forEach((t, i) => {
+      expect(t).toBeGreaterThan(arrivals[i] as number);
+      expect(t).toBeLessThan((arrivals[i] as number) + WIND.riseMs + 100);
+    });
+    expect(Math.max(...began) - Math.min(...began)).toBeGreaterThan(500);
+    // It comes in gusts: over ten minutes the wear of a print climbs in a few bursts, with
+    // long calms in which it stands still.
+    const lone = new FootprintSim(FIELD, WIND, T);
+    lone.add(print({ exposure: exposure("sand"), rules: { ...rules, wind: 0.001 } }), 0);
     let still = 0;
     let bursts = 0;
-    for (let i = 20; i < upwind.length; i += 20) {
-      const d = (upwind[i] as number) - (upwind[i - 20] as number);
-      if (d < 1e-4) still++;
+    let before = 0;
+    for (let t = 0; t < 10 * 60_000; t += 1000) {
+      for (let k = 0; k < 20; k++) lone.step(50, t + (k + 1) * 50);
+      const wear = lone.prints[0]?.wear ?? 1;
+      if (wear === before) still++;
       else bursts++;
+      before = wear;
     }
-    expect(bursts).toBeGreaterThan(0);
-    expect(still).toBeGreaterThan(0);
+    expect(bursts).toBeGreaterThan(3);
+    expect(still).toBeGreaterThan(bursts * 4);
   });
 
   it("is the same on every client: place and clock decide, nothing else", () => {
     const once = (): number => {
       const sim = new FootprintSim(FIELD, WIND, T);
-      sim.add(print({ exposure: 1.3 }), 0);
-      run(sim, 3000);
+      sim.add(print({ exposure: 1.3, rules: { wind: 0.01, waves: false, tread: 0 } }), 0);
+      run(sim, 180_000);
       return sim.prints[0]?.wear ?? 1;
     };
     expect(once()).toBe(once());
+    expect(once()).toBeGreaterThan(0);
+    // The gusts' clock is the one every client shares, not the frame's: two clients whose
+    // own clocks differ wear the same print alike.
+    const shared = (frameClock: number): number => {
+      const sim = new FootprintSim(FIELD, WIND, T);
+      sim.add(print({ exposure: 1.3, rules: { wind: 0.01, waves: false, tread: 0 } }), frameClock);
+      for (let t = 0; t < 180_000; t += 50) sim.step(50, frameClock + t + 50, 1, t + 50);
+      return sim.prints[0]?.wear ?? 1;
+    };
+    expect(shared(5_000_000)).toBe(once());
   });
 
   it("is calmer at night: the same print wears less", () => {
     const wearAfter = (scale: number): number => {
       const sim = new FootprintSim(FIELD, WIND, T);
       sim.add(print({ exposure: 1.3, rules: { wind: 0.01, waves: false, tread: 0 } }), 0);
-      run(sim, 60_000, 0, scale);
+      run(sim, 180_000, 0, scale);
       return sim.prints[0]?.wear ?? 1;
     };
     expect(wearAfter(WIND.night)).toBeLessThan(wearAfter(1));

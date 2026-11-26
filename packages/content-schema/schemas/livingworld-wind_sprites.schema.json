@@ -47,8 +47,7 @@
           "maximum": 4096
         },
         "stiffness": { "type": "number", "minimum": 0, "maximum": 1 },
-        "amplitude": { "type": "number", "minimum": 0, "maximum": 4 },
-        "flutter": { "type": "number", "minimum": 0, "maximum": 0.95 }
+        "amplitude": { "type": "number", "minimum": 0, "maximum": 4 }
       }
     }
   }

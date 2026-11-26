@@ -625,3 +625,30 @@ describe("client content (docs/17 UI-6, UI-8)", () => {
     }
   });
 });
+
+describe("the roofs of world/ (client/vite/roofs.ts, docs/17 'Bajo techo')", () => {
+  const roofs = loadClientContent(REPO).roofs ?? {};
+  const at = (x: number, y: number, z = 7): boolean => {
+    const runs = roofs[String(z)] ?? [];
+    for (let i = 0; i + 2 < runs.length; i += 3)
+      if (
+        runs[i] === y &&
+        x >= (runs[i + 1] as number) &&
+        x < (runs[i + 1] as number) + (runs[i + 2] as number)
+      )
+        return true;
+    return false;
+  };
+
+  it("roofs the whole temple of Thimblewick, whatever the player has in view", () => {
+    // Where characters wake up (world/islands/pruebas/island.yaml `temple`), and the square
+    // in front of it, from where its floor used to show the sun's shadows.
+    expect(at(2095, 2086)).toBe(true);
+    expect(at(2095, 2095)).toBe(false);
+  });
+
+  it("has no roofs underground", () => {
+    expect(Object.keys(roofs).every((z) => Number(z) < 8)).toBe(true);
+    expect(Object.keys(roofs).length).toBeGreaterThan(0);
+  });
+});

@@ -28,7 +28,7 @@ import (
 )
 
 // ClientVersion is the version the bot sends in Hello.
-const ClientVersion = "0.1.0"
+const ClientVersion = "0.2.0"
 
 // Direction is a walking direction, clockwise from north.
 type Direction int

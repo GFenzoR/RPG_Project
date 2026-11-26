@@ -23,10 +23,10 @@ function view(chunks: Map<string, ChunkData>): MapView {
   return new MapView({ source, texture: () => Texture.WHITE, tileSize: T, floor: 7 });
 }
 
-/** root → world → [ground, ground overlay, shadows, indoor ground, items, overlay]. */
+/** root → world → [ground, ground overlay, shadows, indoor ground, lit overlay, items, overlay]. */
 const layer = (v: MapView, i: number): Container =>
   (v.root.children[0] as Container).children[i] as Container;
-const itemLayer = (v: MapView): Container => layer(v, 4);
+const itemLayer = (v: MapView): Container => layer(v, 5);
 
 /** Global tile of each drawn item sprite, in draw order. */
 const drawn = (v: MapView): string[] =>
@@ -618,6 +618,7 @@ describe("MapView indoors", () => {
       "ground overlay",
       "shadows",
       "indoor ground",
+      "lit overlay",
       "items",
       "overlay",
     ]);
@@ -671,6 +672,35 @@ describe("MapView indoors", () => {
     expect(v.indoorAt(30, 6)).toBe(true);
     expect(v.indoorAt(33, 6)).toBe(true);
     expect(v.indoorAt(36, 6)).toBe(false);
+  });
+
+  it("takes the map's own roofs: a room half seen is indoors before its last wall is (owner, 2026-11-26)", () => {
+    // The same house across two chunks, with only its west half known: the guess says
+    // outdoors, the roofs the map ships say indoors, and nothing waits for the east half.
+    const whole = house(28, 4, 31, 8);
+    const west: ChunkData = {
+      ground: whole.ground,
+      items: whole.items.filter((i) => i.x !== 31 || i.y === 4 || i.y === 8),
+    };
+    const chunks = new Map<string, ChunkData>([["7/0/0", west]]);
+    const roofed = (x: number, y: number): boolean => x >= 29 && x <= 34 && y >= 5 && y <= 7;
+    const v = new MapView({
+      source: { chunk: (z, cx, cy) => chunks.get(`${z}/${cx}/${cy}`) },
+      texture: () => Texture.WHITE,
+      art: (id) => (id === "wall" ? wallArt : undefined),
+      tileSize: T,
+      floor: 7,
+      indoors: () => true,
+      roofs: (z) => (z === 7 ? roofed : undefined),
+    });
+    v.render({ x: 0, y: 0, zoom: 1 }, { width: 2048, height: 1024 });
+    expect(v.indoorAt(30, 6)).toBe(true);
+    expect(v.indoorAt(27, 6)).toBe(false);
+    // Its floor is drawn over the sun's shadows (the indoor layer), like a whole room's.
+    expect(layer(v, 3).children.length).toBeGreaterThan(0);
+    // A floor the map has no roofs for falls back to the guess.
+    v.setFloor(6);
+    expect(v.indoorAt(30, 6)).toBe(false);
   });
 
   it("hides the baked shadow art at strength 0: the client casts every shadow itself", () => {

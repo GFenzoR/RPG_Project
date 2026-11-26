@@ -78,6 +78,8 @@ type Character struct {
 	// Look is the saved body (docs/02 "Apariencia"); one that is empty or not a player's
 	// choice of data/looks.yaml is replaced by the one picked from the id (loadLook).
 	Look content.Look
+	// Options are the saved game options (options.go).
+	Options GameOptions
 	// Stash is the account stash as this login read it (stash.go, Slot: the cell). It is
 	// used only when the World does not hold the account's stash already.
 	Stash []ItemState
@@ -117,6 +119,8 @@ type Snapshot struct {
 	Cosmetics Cosmetics
 	// Look is the character's body (docs/02 "Apariencia").
 	Look content.Look
+	// Options are the character's game options (options.go).
+	Options GameOptions
 	// Explored are the minimap sectors whose bits the database may not have yet: gained
 	// during the login and not covered by an acknowledged snapshot (a copy; explore.Map
 	// Snapshot and Saved). Upserted, never deleted.

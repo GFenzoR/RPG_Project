@@ -35,14 +35,28 @@ export const HUMANOID_VIEWS: Partial<Record<Dir, number>> = { w: 10, e: -10 };
 
 /** Frames per tile walked, from the stride (skeleton.ts walkKeys): the planted foot holds. */
 export const HUMANOID_PER_TILE = walkPerTile(WALK_FRAMES, STRIDE);
-/** The same facing north or south, where the model's depth is foreshortened (rounded). */
-export const HUMANOID_PER_TILE_NS = Math.round((HUMANOID_PER_TILE / PROJECTION.depth) * 100) / 100;
+/**
+ * The frames per tile that would hold the planted foot facing north or south, where the
+ * model's depth is foreshortened (rounded): the walk played this until 2026-11-26.
+ */
+export const HUMANOID_PER_TILE_NS_HOLD =
+  Math.round((HUMANOID_PER_TILE / PROJECTION.depth) * 100) / 100;
+/**
+ * The same facing north or south: one cadence in every direction (owner, 2026-11-26). The
+ * map's tile is as tall as it is wide but the model's depth is drawn 0.58 as long, so the
+ * foot-holding cadence was 1.73 cycles per tile there, against one walking east: at the
+ * same px/s the legs moved 73 % faster and walking north or south read as faster. With one
+ * cycle per tile the planted foot slides forward STRIDE × (1 − depth) = 6.8 px per stance
+ * facing north or south (2.5 px on a diagonal); seen from the front or the back that reads
+ * far less than two speeds do. sprites.yaml carries no per_tile_ns for a humanoid.
+ */
+export const HUMANOID_PER_TILE_NS = HUMANOID_PER_TILE;
 
 /**
  * The same walking a diagonal (docs/17 ANI-1): a diagonal step slides a tile across and a
  * tile down the screen, as far as a straight step each way, so the cycle plays the frames
- * of both, by distance: hypot(perTile, perTileNS). packages/renderer anim.ts computes the
- * same from the atlas.
+ * of both, by distance: hypot(perTile, perTileNS), √2 cycles in a step √2 as long: the
+ * cadence of a straight step. packages/renderer anim.ts computes the same from the atlas.
  */
 export const HUMANOID_PER_TILE_DIAG = Math.hypot(HUMANOID_PER_TILE, HUMANOID_PER_TILE_NS);
 
@@ -100,7 +114,6 @@ export function layerSpec(def: LayerDef): SpriteSpec {
     actions: actionsFor(def),
     views: HUMANOID_VIEWS,
     perTile: HUMANOID_PER_TILE,
-    perTileNS: HUMANOID_PER_TILE_NS,
     trim: true,
     ...(def.slot === "body"
       ? {}

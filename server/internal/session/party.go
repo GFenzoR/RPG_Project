@@ -86,9 +86,9 @@ func (w *World) partyCommand(ctx *game.TickContext, p *Player, m *pb.PartyComman
 		w.invite(ctx, p, w.seenPlayer(p, id), "")
 	case pb.PartyAction_PARTY_ACTION_INVITE_NAME:
 		// Empty, or far longer than any name (the client caps the field at
-		// auth.MaxNameLen characters, up to 4 bytes each): a malformed intent, ignored.
+		// auth.MaxKnownNameLen characters, up to 4 bytes each): a malformed intent, ignored.
 		// The name comes back in the answer: cleaned like chat (no control characters).
-		if raw := m.GetName(); len(raw) <= 4*auth.MaxNameLen {
+		if raw := m.GetName(); len(raw) <= 4*auth.MaxKnownNameLen {
 			if name := cleanChat(raw); name != "" {
 				w.invite(ctx, p, w.onlineFor(p, name), name)
 			}

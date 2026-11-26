@@ -391,7 +391,7 @@ secundaria.
   (MOV-7), y el E2E de MOV-9 con ~150 ms de latencia simulada. El polvo y las ondas al
   pisar y el toque corto que solo gira (MOV-2), después: entrada de abajo.
 - [x] **Criaturas animadas con Gemini (docs/17 SRC-4 #6 y SRC-5; rama `feat/gemini-creatures`).**
-  Lobo, rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de
+  Lobo, rata de sentina, cangrejo marino, murciélago, araña de musgo, sapo de
   ciénaga y espinoso con caminar, quieto, atacar y morir (sur, norte y oeste; el este
   espejado), una hoja de Gemini cada uno cortada con `tools/gemini/import_art.py`
   (`--cut rows|blobs`); pistas `mirror`, `anchor` y `ms` en spritepack; quieto y atacar solo
@@ -405,9 +405,9 @@ secundaria.
   que solo gira (MOV-2) y Ctrl+flecha; `11b-death` en primer plano. Lo que queda: docs/14,
   "Pendientes conocidos".
 - [x] **Criaturas de Gemini, segunda tanda (docs/17 "Hecho: criaturas de Gemini"; rama
-  `feat/gemini-creatures-2`).** Reptante hueco, escarabajo de mena y los cinco del Volcán
-  (sabueso de ceniza, salamandra de brasa, gólem de escoria, dragoncillo de ascua y el
-  custodio de escoria, jefe de 96x96) con caminar, quieto, atacar y morir; ningún monstruo
+  `feat/gemini-creatures-2`).** Reptante hueco, escarabajo y los cinco del Volcán
+  (sabueso cenizo, salamandra ígnea, gólem de escoria, dragoncillo y el
+  custodio, jefe de 96x96) con caminar, quieto, atacar y morir; ningún monstruo
   queda con un solo frame de Dungeon Crawl. Escala revisada (ART-2, "Animales medianos"): el
   jabalí y el ciervo de spritegen pasan a 64x64 más grandes, con los pies en la casilla y la
   sombra de contacto. La gaviota sigue de spritegen (decisión del dueño).

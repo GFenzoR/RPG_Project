@@ -23,6 +23,7 @@ import type { ClientContent } from "../content-types.ts";
 import { PRESENCE_GRACE_MS, WorldState } from "./world.ts";
 import { PLAYOUT_MARGIN_MS, PREDICT_TIMEOUT_MS, SLIDE_MS, STEP_LEAD_MS } from "./motion.ts";
 import type { CreatureState } from "./world.ts";
+import { followCamera } from "../render/viewport.ts";
 
 const content: ClientContent = {
   items: {
@@ -458,11 +459,65 @@ describe("WorldState", () => {
     expect(w.drawPos(tom, at2 + 200)).toEqual({ x: 101.5, y: 202 });
   });
 
+  it("a walk seen after a stop of one tick starts its pace again, like the server's", () => {
+    // 435 ms steps (session/move.go pace): the server waits 8, 9, 9... ticks for a walk's
+    // steps and each is drawn when the one before ends. It stops for one tick while the
+    // last step is still drawn, and walks on: its pace starts again from nothing owed
+    // (8 ticks), and so must the drawing's, or the step after is taken for late.
+    const w = entered();
+    const tom = w.creatures.get(9) as CreatureState;
+    const step = (n: number, at: number) =>
+      w.apply(move(9, [100 + n, 202], [101 + n, 202], 435), at - 100, at);
+    step(0, 1000);
+    step(1, 1400); // 8 ticks
+    expect(tom.walk).toMatchObject({ start: 1435, duration: 435, rest: 20 });
+    // The walk would go on at 1850 (9 ticks); the server stood one tick more.
+    step(2, 1900);
+    expect(tom.walk?.prev).toBeDefined(); // the step before is still drawn (to 1870)
+    expect(tom.walk).toMatchObject({ start: 1900, duration: 435, rest: 35 });
+    step(3, 2300); // 8 ticks again: on time, back to back, at its own duration
+    expect(tom.walk).toMatchObject({ start: 2335, duration: 435, rest: 20 });
+    step(4, 2750); // 9 ticks
+    expect(tom.walk).toMatchObject({ start: 2770, duration: 435, rest: 5 });
+  });
+
+  it("draws a step north, east, south or west at one speed on screen", () => {
+    // Owner, 2026-11-26: "up and down feels faster than sideways". A step is drawn along
+    // its tiles at one rate whatever its axis, and the camera turns tiles into device
+    // pixels with one unit for both (tiles are square): the same ms per tile is the same
+    // px per second. 435 ms: a level 1 player's step (data/balance.yaml).
+    const ZOOM = 2;
+    const TILE = 32;
+    const travelled = (to: [number, number], t: number): number => {
+      const w = entered();
+      const s = w.self as CreatureState;
+      w.apply(move(7, [100, 200], to, 435), 0);
+      const a = followCamera(100, 200, ZOOM, TILE);
+      const p = w.drawPos(s, t);
+      const b = followCamera(p.x, p.y, ZOOM, TILE);
+      // Device pixels the world scrolled under the player, along the step's axis.
+      return Math.hypot(b.x - a.x, b.y - a.y) * TILE * ZOOM;
+    };
+    const dirs: [number, number][] = [
+      [100, 199],
+      [101, 200],
+      [100, 201],
+      [99, 200],
+    ];
+    for (const t of [87, 217.5, 300, 435]) {
+      const px = dirs.map((to) => travelled(to, t));
+      const want = Math.round((t / 435) * TILE * ZOOM);
+      for (const d of px) expect(d).toBe(want);
+    }
+    // 64 device px a tile in 435 ms: 147 px/s in the four directions.
+    expect(travelled([100, 199], 435)).toBe(64);
+  });
+
   it("computes step durations like the server", () => {
     const w = entered();
-    // sand 150%, speed 200: 750 ms straight, 15 ticks; diagonal × √2 = 21.21 → 21 ticks
-    expect(w.stepDuration({ x: 102, y: 200, z: 7 }, 200, true)).toBe(1050);
-    expect(w.stepDuration({ x: 100, y: 201, z: 7 }, 220, false)).toBe(500); // 455 → 500
+    // sand 150%, speed 200: 750 ms straight; diagonal × √2 = 1060.5 → 1061 ms
+    expect(w.stepDuration({ x: 102, y: 200, z: 7 }, 200, true)).toBe(1061);
+    expect(w.stepDuration({ x: 100, y: 201, z: 7 }, 220, false)).toBe(455); // 454.5, to the ms
   });
 });
 

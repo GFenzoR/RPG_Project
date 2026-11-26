@@ -19,7 +19,7 @@
 import type { Surface } from "./data.ts";
 import type { PrintKind } from "./gait.ts";
 import { hash01 } from "./hash.ts";
-import { gustAt, strengthAt } from "./wind.ts";
+import { gustActive, gustAt } from "./wind.ts";
 import type { WindField } from "./wind.ts";
 
 /** docs/07: footprints alive at once. */
@@ -291,21 +291,23 @@ export class FootprintSim {
   }
 
   /**
-   * `ms` pass, up to clock `now`: the wind (times `windScale`: the night's calmer wind, 0
-   * where none blows), the waves, the rain and the cap erase; the gone ones are dropped.
+   * `ms` pass, up to clock `now`: the wind's gusts (on their own clock `windNow`, the one
+   * the plants bend by; times `windScale`: the night's calmer wind, 0 where none blows),
+   * the waves, the rain and the cap erase; the gone ones are dropped.
    */
-  step(ms: number, now: number, windScale = 1): void {
+  step(ms: number, now: number, windScale = 1, windNow = now): void {
     const f = this.field;
-    const wf = windScale > 0 ? this.windField : undefined;
+    // In the calm between two gusts the wind erases nothing.
+    const wf =
+      windScale > 0 && this.windField && gustActive(this.windField, windNow)
+        ? this.windField
+        : undefined;
     const s = ms / 1000;
     let w = 0;
     for (const p of this.prints) {
       if (wf && p.wind > 0 && p.exposure > 0) {
-        const strength = strengthAt(
-          wf,
-          gustAt(wf, p.x / this.tile, p.y / this.tile, now),
-          p.exposure * windScale,
-        );
+        const strength =
+          p.exposure * windScale * gustAt(wf, p.x / this.tile, p.y / this.tile, windNow);
         p.wear += windErosion(p.wind, strength, f.still) * s;
       }
       if (this.rain > 0) p.wear += this.rain * s;

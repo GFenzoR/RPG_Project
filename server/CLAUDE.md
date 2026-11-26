@@ -551,6 +551,21 @@ server/
   errores propios (`store.ErrNameTaken`...); los servicios dependen de interfaces para
   poder testearse sin Postgres (ver `internal/auth/authtest`).
 
+- **Opciones guardadas** (docs/05 "Opciones guardadas" y "Opciones de la cuenta"): las de
+  juego de un personaje son `session.GameOptions` (`session/options.go`): el loop es su
+  dueño, viajan en `Snapshot.Options` y `Character.Options` (también en `state` y en el
+  relogueo desde `unsaved`) y salen en `Welcome.options`; una nueva necesita su columna
+  `characters.opt_*`, su validación en el mensaje que la cambia y su entrada en `OPTIONS`
+  del cliente. Las de interfaz son el documento de `internal/accountopts` (esquema cerrado:
+  un campo nuevo se valida ahí y se declara en `OPTIONS`; el test del cliente compara los
+  dos) por `httpapi/options.go`; nunca guardes los bytes del cliente, solo `Canonical()`.
+  Un guardado conserva las secciones `devices.<clase>` que no trae (`CanonicalKeeping`),
+  dentro de la transacción de `store.UpdateAccountOptions` (bloquea la fila de la cuenta;
+  nada de mutex en `httpapi`). Lo leído de la base se valida con `ParseStored`, no con
+  `Parse`: JSONB lo devuelve espaciado y más largo que `MaxBytes`.
+  El cliente mínimo es 0.2.0 (`gateway.DefaultMinClientVersion`): el primero que lee
+  `Welcome.options`.
+
 - **Minimapa** (`session/minimap.go`, `explore`, docs/02 y docs/05 "Minimapa"): lo explorado
   es `Player.explored` (`explore.Map`, bits por sector de 32x32, solo crecen), cargado con
   `Character.Explored` (y `ExploredUnsaved` de un relogueo rápido) y guardado en el snapshot

@@ -184,12 +184,12 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
 | 15–20 | 14 | ciervo, sapo, espinoso | 13,4k | 188,3k → 343,6k | 9,4 → 17,1 |
 | 20–25 | 14 | contrabandista, reptante | 14,3k | 109,6k → 307,2k | 5,1 → 14,3 |
 | 25–40 | 16 | sabueso, salamandra | 17,6k | 298,7k → 455,3k | 11,3 → 17,2 |
-| 40–50 | 14 | minero de obsidiana, gólem | 20,7k | 169,2k → 475,2k | 5,5 → 15,3 |
+| 40–50 | 14 | minero renegado, gólem | 20,7k | 169,2k → 475,2k | 5,5 → 15,3 |
 | 50–60 | 12 | dragoncillo, custodio | 22,9k | 72,6k → 433,0k | 2,1 → 12,6 |
 | **Total** | **100** | 126 → 253 monstruos | | | **43,4 → 108,6** |
 
 - **Cómo se llegó:** respawns más cortos (gaviota y rata 30 s, cangrejo 35, lobo y
-  murciélago 45, jabalí, araña, ciervo, sabueso, salamandra, minero de obsidiana y gólem
+  murciélago 45, jabalí, araña, ciervo, sabueso, salamandra, minero renegado y gólem
   60, sapo 50, saqueador y escarabajo 70, espinoso y contrabandista 75, dragoncillo 75,
   minero ahogado y reptante 90; el custodio sigue en 1200), más monstruos por spawn y 20
   spawns nuevos (`world/islands/*/spawns.yaml`), separados unos 12–20 casilleros para que
@@ -329,7 +329,7 @@ mientras no se usan). Por frame:
 | Huellas | 64 vivas (la nueva reemplaza a la más gastada; los objetos se reutilizan) | gasto y alfa de cada una |
 | Pisadas (`gait.ts`) | un estado por criatura en vista (256; los viejos se reutilizan) | por criatura dibujada: una resta de fases y los contactos de su andar (2 a 8 comparaciones); nada creado: un `WalkSample` y una `Footfall` reutilizados, los eventos de sonido de cada superficie hechos una vez |
 | Plantas | 48 moviéndose por pasos | el doblez de las plantas en vista; la lista se rearma solo cuando cambia `MapView.version` |
-| Viento (lote 20) | solo las plantas en vista (y 3 casillas de margen); una malla de hasta 17 tiras (68 vértices) por planta, en el batch de los sprites | por planta: una ráfaga (dos ruidos), tres senos y un seno por tira; los vértices se reescriben solo cuando una tira cambia de píxel de pantalla (la mayoría de los frames, ninguna) |
+| Viento (lote 20) | solo las plantas en vista (y 3 casillas de margen); una malla de hasta 17 tiras (68 vértices) por planta, en el batch de los sprites | en la calma entre dos ráfagas (la mayor parte del tiempo), nada: una pregunta por frame (`gustActive`) y ninguna por planta; con una ráfaga en el mapa, por planta: el frente (dos ruidos de una dimensión), una exponencial y un coseno; los vértices se reescriben solo cuando una tira cambia de píxel de pantalla |
 | Ondas y polvo | 24 | frame y alfa |
 | Hojas | 24 | caída y alfa |
 | Bichos | 10 | moverse; buscar hogares recorre la vista cada `SCAN_MS` (1 s), no cada frame |
@@ -349,8 +349,10 @@ navegador se mira en la revisión del E2E final del lote (docs/14).
 
 **Viento, el peor caso** (`livingworld/client/src/wind.test.ts`, "stays inside the frame
 budget"): una pantalla de bosque con un árbol en **cada** casilla de la vista de 31x21 y su
-margen (37x27 = 999 árboles de 64x96, 999 mallas). Medido el 2026-11-25: **0,8 ms por
-frame** en Node (el cálculo y la reescritura de vértices; el test falla sobre 2 ms, el
+margen (37x27 = 999 árboles de 64x96, 999 mallas), **mientras una ráfaga la cruza** (desde
+el 2026-11-26 las plantas están quietas entre ráfagas y ese frame no cuesta nada). Medido
+el 2026-11-25 con el vaivén constante: **0,8 ms por frame** en Node; con las ráfagas el
+peor frame cuesta menos, sin aleteo por tira (el cálculo y la reescritura de vértices; el test falla sobre 2 ms, el
 mismo tope holgado de las sombras proyectadas). Un bosque real del mapa tiene entre 150 y
 300 árboles en vista. La exposición de cada planta (25 casillas de alrededor) y su malla se
 calculan una vez, al armar la lista (cuando entra o sale un chunk), no por frame; las
@@ -392,6 +394,18 @@ decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
   (`CastShadows.begin`/`part`/`end`: textura, ancla, posición, skew y escala de cada
   sprite) cuesta ~0,035 ms por frame en Node en la PC del dueño (2026-11-24), el 0,2 % de
   un frame de 16,6 ms; `cast-shadows.test.ts` lo vigila con un tope holgado de 2 ms.
+- Cliente, sombras de las luces (docs/17 "Sombras de las luces", 2026-11-26): una segunda
+  capa igual (`CastShadows` en `MapView.litOverlay`: sprites de pool, texturas de la
+  criatura, **una** pasada de `AlphaFilter` más, solo mientras alguna sombra de luz se
+  dibuja; a mediodía al aire libre, ninguna). Por criatura y frame se recorren las luces
+  del mapa en vista (`lightCast`, sin crear nada; la lista de luces se rearma solo cuando
+  cambia el mapa). Las de los objetos (`LitObjectShadows`) se colocan cuando cambia el
+  mapa o la noche (16 pasos), no por frame. A lo sumo las 2 luces más cercanas pesan.
+  **Medido solo del lado JS:** 100 criaturas contra 40 luces, ~0,042 ms por frame en Node
+  en la PC del dueño (2026-11-26), el 0,25 % de un frame. La pasada de filtro extra y los
+  fps en pantalla quedan para el E2E final del lote.
+- Cliente, techos: `ClientContent.roofs` son tramos `[y, x, largo]` por piso, calculados en
+  el build; al cargar se pasan a un `Set` por piso (una vez).
   **Sin medir contra este presupuesto, el lado GPU:** el pedido era "un sprite más por
   criatura visible" y se hizo uno por capa (hasta 540 con 60 jugadores en vista) más la
   pasada del filtro, casi del tamaño de la pantalla, y de noche se suma el mapa de luz.
@@ -667,8 +681,8 @@ precalculado (ahora 8 órdenes).
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por
 chunk, `MapView.forEachEmitter`). Se apagan con movimiento reducido. Las cajas de las
-criaturas (click en la cabeza, siluetas) reusan sus objetos frame a frame; las siluetas
-salen de un pool que solo crece hasta las que se vieron juntas. Los pasos (MOV-7) usan el
+criaturas (click en la cabeza) reusan sus objetos frame a frame (las copias translúcidas
+de criaturas tapadas y su pool se retiraron el 2026-11-26). Los pasos (MOV-7) usan el
 mismo pool: el ambiente deja 16 de las 100 libres para ellos (`STEP_RESERVE`), y cada paso
 sobre arena, tierra o ceniza suma 6 y sobre arena mojada 8, de 220 a 460 ms de vida.
 

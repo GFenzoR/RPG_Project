@@ -21,6 +21,7 @@ import {
   viewTiles,
 } from "../state/minimap.ts";
 import type { MinimapView } from "../state/minimap.ts";
+import { optionStorage } from "../state/option-storage.ts";
 import "./minimap.css";
 
 const MAX_SCALE = Math.max(...MINIMAP_SCALES);
@@ -38,7 +39,9 @@ interface MinimapPrefs {
 function loadPrefs(phone: boolean): MinimapPrefs {
   const fallback = { open: !phone, scale: 2 };
   try {
-    const v = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "null") as Partial<MinimapPrefs> | null;
+    const v = JSON.parse(
+      optionStorage()?.getItem(PREFS_KEY) ?? "null",
+    ) as Partial<MinimapPrefs> | null;
     if (!v) return fallback;
     const scale = MINIMAP_SCALES.includes(v.scale as 1) ? (v.scale as number) : 2;
     return { open: typeof v.open === "boolean" ? v.open : fallback.open, scale };
@@ -49,7 +52,7 @@ function loadPrefs(phone: boolean): MinimapPrefs {
 
 function savePrefs(p: MinimapPrefs): void {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+    optionStorage()?.setItem(PREFS_KEY, JSON.stringify(p));
   } catch {
     // Storage blocked: the choice lasts for this page only.
   }
