@@ -4,6 +4,7 @@
 // call goes through Rust (net/desktop.ts), which keeps the token in memory for the run.
 // The game never keeps the login (lote 17): nothing here stores a token.
 import { desktopApi, isDesktop } from "./desktop.ts";
+import type { OptionsDoc } from "../state/saved-options.ts";
 import type { Look } from "@rpg/renderer/look";
 
 export interface Character {
@@ -251,6 +252,10 @@ export const accountApi = {
   logoutAll: (): Promise<void> => call("POST", "/api/auth/logout-all"),
   /** Lote 17: heartbeat while playing, so the session does not go idle. */
   keepalive: (): Promise<void> => call("POST", "/api/auth/keepalive"),
+  /** The account's interface options document (docs/05 "Opciones de la cuenta"). */
+  options: (): Promise<OptionsDoc> =>
+    call<{ options: OptionsDoc }>("GET", "/api/account/options").then((r) => r.options),
+  saveOptions: (doc: OptionsDoc): Promise<void> => call("PUT", "/api/account/options", doc),
 };
 
 /** OAuth login and linked identities (T2.1, docs/05 "OAuth"). */

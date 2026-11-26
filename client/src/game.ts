@@ -23,7 +23,8 @@ import {
   MarketSide,
   PartyAction,
 } from "@rpg/protocol";
-import type { Direction, DisconnectReason, FightStance, Skull } from "@rpg/protocol";
+import { FightStance } from "@rpg/protocol";
+import type { Direction, DisconnectReason, Skull } from "@rpg/protocol";
 import {
   ItemPicker,
   defaultAction,
@@ -58,6 +59,7 @@ import {
 } from "./input/keyboard.ts";
 import { cooldownLeft, hotkeySlot, loadHotkeys, saveHotkeys } from "./state/hotkeys.ts";
 import { loadSafeMode, saveSafeMode } from "./state/pvp.ts";
+import { optionStorage } from "./state/option-storage.ts";
 import { loadZoom, saveZoom } from "./render/zoom.ts";
 import type { ZoomView } from "./render/zoom.ts";
 import { DEFAULT_NAME_SIZE } from "./render/label-style.ts";
@@ -190,6 +192,9 @@ export interface GameUi {
   guild: GuildView | undefined;
   /** The safe mode switch (T5.2). */
   safeMode: boolean;
+  /** The fight stance and chasing: the server keeps them per character (Welcome.options). */
+  fightStance: FightStance;
+  chase: boolean;
   guildInvitations: GuildInvitationView[];
   /** The player's own name (to tell itself apart in the guild's member list). */
   selfName: string;
@@ -550,6 +555,8 @@ export class Game {
   private dragging: ItemRef | undefined;
   /** The map's zoom this device remembers (undefined = fit the view) and the one drawn. */
   private zoomPref: number | undefined;
+  private stance: FightStance = FightStance.BALANCED;
+  private chase = false;
   private zoomView: ZoomView | undefined;
 
   constructor(opts: GameOptions) {
@@ -582,9 +589,18 @@ export class Game {
           this.steer.heard(e.message);
           if (e.message.case === "creatureLook") this.lookAnswered(e.message.value.id);
           if (e.message.case === "welcome") this.trackAfterWelcome = true;
-          if (e.message.case === "welcome" && !this.safe) {
-            // T5.2: the server starts every login in safe mode.
-            this.conn.send({ case: "setSafeMode", value: { enabled: false } });
+          if (e.message.case === "welcome") {
+            const saved = this.world.gameOptions;
+            if (saved) {
+              // The server keeps the character's game options and says the ones in force.
+              this.stance = validStance(saved.stance);
+              this.chase = saved.chase;
+              this.safe = saved.safeMode;
+              saveSafeMode(this.safe, this.opts.storage);
+            } else if (!this.safe) {
+              // A server from before saved options starts every login in safe mode.
+              this.conn.send({ case: "setSafeMode", value: { enabled: false } });
+            }
           }
         }
         this.sound(cues);
@@ -626,10 +642,13 @@ export class Game {
   }
 
   setFightMode(stance: FightStance, chase: boolean): void {
+    this.stance = validStance(stance);
+    this.chase = chase;
+    this.publish();
     this.conn.send({ case: "setFightMode", value: { stance, chase } });
   }
 
-  /** The safe mode (T5.2): kept in the browser and sent to the server, which enforces it. */
+  /** The safe mode (T5.2): the server keeps it per character and enforces it. */
   get safeMode(): boolean {
     return this.safe;
   }
@@ -1977,6 +1996,8 @@ export class Game {
       partyInviting: this.partyInviting,
       guild: w.guild.view(performance.now()),
       safeMode: this.safe,
+      fightStance: this.stance,
+      chase: this.chase,
       guildInvitations: [...w.guild.invitations(performance.now())],
       selfName: w.self?.name ?? "",
       selfId: w.selfId,
@@ -2535,12 +2556,17 @@ export class Game {
   };
 }
 
+/** A stance the fight panel can show: anything else is balanced. */
+function validStance(s: FightStance): FightStance {
+  return s === FightStance.OFFENSIVE || s === FightStance.DEFENSIVE ? s : FightStance.BALANCED;
+}
+
 const TRACK_KEY = "rpg.track";
 
 /** The quest a character tracks on this device ("" or undefined: none). */
 export function loadTracked(name: string): string | undefined {
   try {
-    const all = JSON.parse(localStorage.getItem(TRACK_KEY) ?? "{}") as Record<string, unknown>;
+    const all = JSON.parse(optionStorage()?.getItem(TRACK_KEY) ?? "{}") as Record<string, unknown>;
     const v = all[name];
     return typeof v === "string" && v !== "" ? v : undefined;
   } catch {
@@ -2551,11 +2577,13 @@ export function loadTracked(name: string): string | undefined {
 function saveTracked(name: string, id: string): void {
   try {
     const all = new Map(
-      Object.entries(JSON.parse(localStorage.getItem(TRACK_KEY) ?? "{}") as Record<string, string>),
+      Object.entries(
+        JSON.parse(optionStorage()?.getItem(TRACK_KEY) ?? "{}") as Record<string, string>,
+      ),
     );
     if (id) all.set(name, id);
     else all.delete(name);
-    localStorage.setItem(TRACK_KEY, JSON.stringify(Object.fromEntries(all)));
+    optionStorage()?.setItem(TRACK_KEY, JSON.stringify(Object.fromEntries(all)));
   } catch {
     // Storage blocked: tracking lasts for this login only.
   }

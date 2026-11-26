@@ -39,6 +39,7 @@ import type {
   TextParam,
   FloatingTextKind,
   LivingObjectEvent,
+  GameOptions as SavedGameOptions,
 } from "@rpg/protocol";
 import { CHUNK_TILES } from "@rpg/renderer/camera";
 import type { ChunkData, TileSource } from "@rpg/renderer";
@@ -504,6 +505,11 @@ export class WorldState implements TileSource {
   private walkSeq = 0;
   /** The last lookRev handed out: every new one is greater (CreatureState.lookRev). */
   private lookSeq = 0;
+  /**
+   * Welcome.options: the character's saved game options, as the server holds them now
+   * (docs/05 "Opciones guardadas"); undefined before the Welcome or from an older server.
+   */
+  gameOptions: SavedGameOptions | undefined;
   /** Welcome.max_queued_steps: how many own steps may wait for the server. */
   private maxQueued = 0;
   /**
@@ -790,6 +796,7 @@ export class WorldState implements TileSource {
         this.maxQueued = msg.value.maxQueuedSteps;
         this.view = serverView(msg.value.viewWidth, msg.value.viewHeight);
         this.attackEvents = msg.value.attackEvents;
+        this.gameOptions = msg.value.options;
         if (msg.value.serverTime > 0n) this.clockOffset = Number(msg.value.serverTime) - Date.now();
         break;
       case "fullMapView":

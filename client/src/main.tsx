@@ -38,23 +38,18 @@ import { InterfaceOptions } from "./ui/InterfaceOptions.tsx";
 import { AudioEngine, browserPorts } from "./audio/engine.ts";
 import type { MusicState } from "./audio/engine.ts";
 import { loadPrefs } from "./audio/prefs.ts";
+import { optionStorage } from "./state/option-storage.ts";
 import "./ui/client.css";
 // Installable web client (T5.6): registers the service worker on import (production only).
 import "./pwa.ts";
 
 const languages = Object.keys(content.i18n);
 
-function safeStorage(): Storage | undefined {
-  try {
-    return window.localStorage;
-  } catch {
-    return undefined;
-  }
-}
-
 // One engine for the whole page (T3.7): the menus click too, and the context survives
 // leaving and entering the game.
-const storage = safeStorage();
+// Every option goes through the watched storage: a change reaches the account's saved
+// options a moment later (state/option-storage.ts).
+const storage = optionStorage();
 const audio = new AudioEngine(content.sounds, loadPrefs(storage), browserPorts());
 // Browsers only start audio after a gesture: the first one unlocks it. On touch screens
 // pointerdown does not count as one (pointerup, touchend and click do).
@@ -90,7 +85,7 @@ if (__RPG_E2E_HOOKS__) {
 
 function readStored(): string | null {
   try {
-    return window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return storage?.getItem(LANGUAGE_STORAGE_KEY) ?? null;
   } catch {
     return null;
   }
@@ -98,7 +93,7 @@ function readStored(): string | null {
 
 function store(lang: string): void {
   try {
-    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+    storage?.setItem(LANGUAGE_STORAGE_KEY, lang);
   } catch {
     // storage blocked: the choice lasts until the page reloads
   }
@@ -146,6 +141,24 @@ function Root(): JSX.Element {
     document.documentElement.lang = lang;
     document.title = t("client.title");
   }, [lang, t]);
+  // The account's saved options arrived after the login and differ from what this
+  // browser had: every option state reads its value again (the server won).
+  const [syncs, setSyncs] = useState(0);
+  const reloadOptions = (): void => {
+    const stored = readStored();
+    if (stored !== null && languages.includes(stored)) setLang(stored);
+    setTouchPad(loadTouchPad(storage, coarsePointer()));
+    setControls(loadControls(storage));
+    setReducedMotion(loadReducedMotion(storage));
+    setUiScale(loadUiScale(storage));
+    setTextScale(loadTextScale(storage));
+    setShake(loadCameraShake(storage));
+    setBubbles(loadChatBubbles(storage));
+    setNameSize(loadNameSize(storage));
+    setChatOpacity(loadChatOpacity(storage));
+    audio.setPrefs(loadPrefs(storage));
+    setSyncs((n) => n + 1); // the sound sliders mount again with the engine's values
+  };
   const language = (): JSX.Element => (
     <LanguagePicker
       t={t}
@@ -206,7 +219,7 @@ function Root(): JSX.Element {
   const picker = (
     <>
       {language()}
-      <AudioOptions t={t} audio={audio} storage={storage}>
+      <AudioOptions key={syncs} t={t} audio={audio} storage={storage}>
         {padToggle()}
         {interfaceOptions()}
       </AudioOptions>
@@ -220,7 +233,7 @@ function Root(): JSX.Element {
       languagePicker={picker}
       settings={{
         language: language(),
-        sound: <SoundOptions t={t} audio={audio} storage={storage} />,
+        sound: <SoundOptions key={syncs} t={t} audio={audio} storage={storage} />,
         touchPad: padToggle(),
         controlsMode: controls,
         controls: (
@@ -246,6 +259,7 @@ function Root(): JSX.Element {
       }}
       audio={audio}
       touchPad={touchPad}
+      onOptionsSynced={reloadOptions}
     />
   );
 }
