@@ -571,6 +571,33 @@ describe("facings (docs/17 ANI-1)", () => {
     expect(walkPerStep(trot, in_)).toBeCloseTo(2 * Math.SQRT2, 6);
   });
 
+  it("walks the engine humanoid at one cadence in the eight directions", () => {
+    // assets/sprites.yaml since 2026-11-26: per_tile 8 and no per_tile_ns. Before, facing
+    // north or south played 13.86 frames per tile: at the same px/s the legs moved 73 %
+    // faster than walking east, and up and down read as faster than sideways.
+    const walk = { frames: 8, ms: 0, perTile: 8, dirs: DIRS };
+    const in_ = newAnimInput();
+    const per = (dir: (typeof DIRS)[number], dx: number, dy: number): number => {
+      in_.dir = dir;
+      in_.moveDx = dx;
+      in_.moveDy = dy;
+      return walkPerStep(walk, in_);
+    };
+    // The four straight steps: the same frames (footfalls) per tile, so per second.
+    expect(per("n", 0, -1)).toBe(8);
+    expect(per("s", 0, 1)).toBe(8);
+    expect(per("e", 1, 0)).toBe(8);
+    expect(per("w", -1, 0)).toBe(8);
+    // A diagonal step lasts √2 as long (docs/02 diagonal_cost) and plays √2 as many.
+    for (const [dx, dy] of [
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+      [-1, -1],
+    ] as const)
+      expect(per(dx > 0 ? "e" : "w", dx, dy) / Math.SQRT2).toBeCloseTo(8, 9);
+  });
+
   it("advances the cycle by the diagonal's length, so the feet do not slide", () => {
     const HUMAN: AnimMeta = {
       ...LPC,

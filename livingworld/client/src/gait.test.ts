@@ -34,7 +34,7 @@ const gait = (name: string): Gait => {
 };
 
 const DIRS4: ("n" | "e" | "s" | "w")[] = ["n", "e", "s", "w"];
-/** The engine humanoid's walk (assets/sprites.yaml: per_tile 8, per_tile_ns 13.86). */
+/** The engine humanoid's walk (assets/sprites.yaml: per_tile 8 in every facing). */
 const HUMAN: AnimMeta = {
   w: 64,
   h: 64,
@@ -44,7 +44,7 @@ const HUMAN: AnimMeta = {
   shadow: "ellipse",
   actions: {
     idle: { frames: 2, ms: 500, dirs: DIRS4 },
-    walk: { frames: 8, ms: 0, perTile: 8, perTileNS: 13.86, dirs: DIRS4 },
+    walk: { frames: 8, ms: 0, perTile: 8, dirs: DIRS4 },
   },
 };
 /** A beast with a four-frame walk clip, a cycle per tile. */
@@ -238,14 +238,14 @@ describe("footfalls over the walk cycle", () => {
   });
 
   const EIGHT: [string, number, number, number][] = [
-    ["n", 0, -1, 13.86],
-    ["ne", 1, -1, Math.hypot(8, 13.86)],
+    ["n", 0, -1, 8],
+    ["ne", 1, -1, 8 * Math.SQRT2],
     ["e", 1, 0, 8],
-    ["se", 1, 1, Math.hypot(8, 13.86)],
-    ["s", 0, 1, 13.86],
-    ["sw", -1, 1, Math.hypot(8, 13.86)],
+    ["se", 1, 1, 8 * Math.SQRT2],
+    ["s", 0, 1, 8],
+    ["sw", -1, 1, 8 * Math.SQRT2],
     ["w", -1, 0, 8],
-    ["nw", -1, -1, Math.hypot(8, 13.86)],
+    ["nw", -1, -1, 8 * Math.SQRT2],
   ];
   for (const [name, dx, dy, per] of EIGHT)
     it(`walking ${name}: prints a stride apart, alternating, turned the way it walks`, () => {
@@ -342,20 +342,20 @@ describe("footfalls over the walk cycle", () => {
   });
 
   it("a stop mid-cycle leaves the last planted foot only, and the walk resumes from there", () => {
-    // One tile north is 13.86 of the 8 frames: it stops in the middle of the second cycle.
+    // A diagonal step is 11.31 of the 8 frames: it stops in the middle of the second cycle.
     const tracker = new FootfallTracker(DATA.viewDepth);
     const { falls } = walk(
       HUMAN,
       gait("biped"),
       [
-        { dx: 0, dy: -1, ms: 400 },
+        { dx: 1, dy: -1, ms: 400 },
         { dx: 0, dy: 0, ms: 3000 },
       ],
       1000 / 60,
       tracker,
     );
-    // Contacts at frames 0, 4, 8 (= 0), 12 (= 4): the last one planted before the stop.
-    expect(falls.map((f) => f.side)).toEqual([1, -1, 1, -1]);
+    // Contacts at frames 0, 4, 8 (= 0): the last one planted before the stop.
+    expect(falls.map((f) => f.side)).toEqual([1, -1, 1]);
     expect(Math.max(...falls.map((f) => f.t))).toBeLessThan(400);
   });
 
