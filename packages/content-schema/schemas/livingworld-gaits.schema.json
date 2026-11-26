@@ -29,8 +29,12 @@
     "gaits": {
       "type": "object",
       "minProperties": 1,
-      "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
-      "additionalProperties": { "$ref": "#/$defs/gait" }
+      "propertyNames": {
+        "$ref": "common.schema.json#/$defs/id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/gait"
+      }
     },
     "defaults": {
       "description": "The gait of each kind of body.",
@@ -38,17 +42,29 @@
       "additionalProperties": false,
       "required": ["humanoid", "beast", "big_beast", "flying"],
       "properties": {
-        "humanoid": { "$ref": "common.schema.json#/$defs/id" },
-        "beast": { "$ref": "common.schema.json#/$defs/id" },
-        "big_beast": { "$ref": "common.schema.json#/$defs/id" },
-        "flying": { "$ref": "common.schema.json#/$defs/id" }
+        "humanoid": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "beast": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "big_beast": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "flying": {
+          "$ref": "common.schema.json#/$defs/id"
+        }
       }
     },
     "creatures": {
       "description": "The gait of a monster or NPC by its id, over its body's default.",
       "type": "object",
-      "propertyNames": { "$ref": "common.schema.json#/$defs/id" },
-      "additionalProperties": { "$ref": "common.schema.json#/$defs/id" }
+      "propertyNames": {
+        "$ref": "common.schema.json#/$defs/id"
+      },
+      "additionalProperties": {
+        "$ref": "common.schema.json#/$defs/id"
+      }
     }
   },
   "$defs": {
@@ -79,7 +95,11 @@
           "minimum": 0,
           "maximum": 16
         },
-        "scale": { "type": "number", "minimum": 0.25, "maximum": 4 },
+        "scale": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4
+        },
         "depth": {
           "description": "Opacity of a fresh print.",
           "type": "number",
@@ -101,7 +121,9 @@
                 "minimum": 0,
                 "exclusiveMaximum": 1
               },
-              "side": { "enum": ["left", "right", "centre"] },
+              "side": {
+                "enum": ["left", "right", "centre"]
+              },
               "along": {
                 "description": "Sprite pixels along the body: front feet +, hind feet -.",
                 "type": "number",
@@ -110,6 +132,12 @@
               }
             }
           }
+        },
+        "print_spread": {
+          "description": "Sprite pixels on screen a print is drawn out to its foot's side of the path, so the two feet read as two rows where the 3/4 view squeezes them into one line.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 6
         }
       }
     }

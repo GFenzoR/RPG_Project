@@ -37,6 +37,7 @@ describe("footfalls glue", () => {
     rise: 0,
     scale: 1,
     depth: 1,
+    spread: 0,
     contacts: Array.from({ length: contacts }, (_, i) => ({ at: i / contacts, side: 0, along: 0 })),
   });
   const content = (gaits: boolean): ClientContent =>

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CritterSim, FLEE_MS, MAX_CRITTERS, RETURN_MS } from "./critters.ts";
 import { EMPTY_DATA, groundSurfaces, isSurface, parseLivingWorldData } from "./data.ts";
 import type { SurfaceRules } from "./data.ts";
-import { FootprintSim, gust, MAX_FOOTPRINTS, stepRotation } from "./footprints.ts";
+import { stepRotation } from "./footprints.ts";
 import { footstepEvents } from "./footsteps.ts";
 import { seededRandom } from "./hash.ts";
 import { LEAF_FALL_MS, LEAF_REST_MS, LeafSim, MAX_LEAVES } from "./leaves.ts";
@@ -27,8 +27,6 @@ function first<T>(list: readonly T[]): T {
 }
 
 const rules = (over: Partial<SurfaceRules> = {}): SurfaceRules => ({
-  footprintMs: 10000,
-  wind: 0,
   dust: false,
   ripple: false,
   tint: 0x553311,
@@ -42,10 +40,18 @@ describe("data", () => {
     const d = parseLivingWorldData(
       {
         surfaces: {
-          sand: { footprints: 9000, wind: 2, dust: true, tint: "#7a6440", critters: ["bird", "x"] },
+          sand: {
+            prints: { wind: 2, tread: 0.5 },
+            dust: true,
+            tint: "#7a6440",
+            critters: ["bird", "x"],
+          },
+          wet_sand: { prints: { waves: true } },
           lava: {},
-          marble: { footprints: 1 },
+          marble: { prints: {} },
         },
+        prints: { still: 0.5, waves: { period_ms: 6000 } },
+        steps: { volume: 0.6, left: { pitch: -0.03 } },
       },
       {
         plants: [
@@ -56,16 +62,25 @@ describe("data", () => {
       },
     );
     expect(d.surfaces.sand).toEqual({
-      footprintMs: 9000,
-      wind: 2,
+      prints: { wind: 2, waves: false, tread: 0.5 },
       dust: true,
       ripple: false,
       tint: 0x7a6440,
       sound: "sand",
       critters: ["bird"],
     });
-    expect(d.surfaces.lava?.footprintMs).toBe(0);
-    expect(Object.keys(d.surfaces)).toEqual(["sand", "lava"]);
+    expect(d.surfaces.lava?.prints).toBeUndefined();
+    expect(d.surfaces.wet_sand?.prints).toEqual({ wind: 0, waves: true, tread: 0 });
+    expect(Object.keys(d.surfaces)).toEqual(["sand", "wet_sand", "lava"]);
+    // What the file leaves out keeps its default.
+    expect(d.prints).toMatchObject({ still: 0.5, fadeMs: 700 });
+    expect(d.prints?.waves).toMatchObject({ periodMs: 6000, reachTiles: 2.5 });
+    expect(d.steps).toEqual({
+      volume: 0.6,
+      jitter: 0,
+      left: { pitch: -0.03, gain: 1 },
+      right: { pitch: 0, gain: 1 },
+    });
     expect(d.plants).toEqual({
       bush: { reaction: "bend", leaves: false, trample: false },
       oak: { reaction: "rustle", leaves: true, trample: false },
@@ -86,63 +101,8 @@ describe("data", () => {
   });
 });
 
+// What erases a footprint has its own tests: footprints.test.ts.
 describe("footprints", () => {
-  it("fade out over the end of their life and are gone after it", () => {
-    const sim = new FootprintSim();
-    sim.add(0, 0, 0, "feet", "mud", rules());
-    const p = sim.prints[0];
-    expect(p && FootprintSim.alpha(p)).toBe(1);
-    sim.step(5000, 5000);
-    expect(p && FootprintSim.alpha(p)).toBe(1);
-    sim.step(2500, 7500);
-    expect(p && FootprintSim.alpha(p)).toBeCloseTo(0.5);
-    sim.step(2500, 10000);
-    expect(sim.count).toBe(0);
-  });
-
-  it("leaves none on a surface without footprints", () => {
-    const sim = new FootprintSim();
-    sim.add(0, 0, 0, "feet", "stone", rules({ footprintMs: 0 }));
-    expect(sim.count).toBe(0);
-  });
-
-  it("never holds more than the cap: the most worn gives way", () => {
-    const sim = new FootprintSim();
-    for (let i = 0; i < MAX_FOOTPRINTS; i++) {
-      sim.add(i, 0, 0, "paw", "snow", rules());
-      sim.step(10, i * 10);
-    }
-    expect(sim.count).toBe(MAX_FOOTPRINTS);
-    sim.add(999, 0, 0, "big_paw", "snow", rules());
-    expect(sim.count).toBe(MAX_FOOTPRINTS);
-    expect(sim.prints.some((p) => p.x === 0)).toBe(false); // the first one, most worn, went
-    expect(sim.prints.some((p) => p.x === 999)).toBe(true);
-  });
-
-  it("wind wears sand faster, in gusts, the same way every run", () => {
-    const run = (): number[] => {
-      const still = new FootprintSim();
-      const windy = new FootprintSim();
-      still.add(40, 40, 0, "feet", "mud", rules({ footprintMs: 1e6 }));
-      windy.add(40, 40, 0, "feet", "sand", rules({ footprintMs: 1e6, wind: 3 }));
-      const out: number[] = [];
-      for (let t = 0; t < 4000; t += 50) {
-        still.step(50, t);
-        windy.step(50, t);
-      }
-      out.push(still.prints[0]?.wear ?? -1, windy.prints[0]?.wear ?? -1);
-      return out;
-    };
-    const [still, windy] = run();
-    expect(still).toBe(4000);
-    expect(windy).toBeGreaterThan(4000);
-    expect(run()).toEqual([still, windy]);
-    // Gusts come and go: calm somewhere, strong somewhere else.
-    const samples = Array.from({ length: 200 }, (_, i) => gust(64, 64, i * 250));
-    expect(Math.min(...samples)).toBeLessThan(0.05);
-    expect(Math.max(...samples)).toBeGreaterThan(0.8);
-  });
-
   it("point the way the creature walks", () => {
     expect(stepRotation(0, -1)).toBe(0);
     expect(stepRotation(1, 0)).toBeCloseTo(Math.PI / 2);

@@ -2,8 +2,27 @@
 # each ground surface (data/items `ground.surface`) leaves behind in the client. Cosmetic:
 # the server never reads this file.
 #
-#   footprints  ms a footprint lasts in still air (absent or 0: none)
-#   wind        extra wear per ms in a full gust (sand: footprints blow away faster)
+# prints: what erases footprints everywhere. A footprint has no lifetime: it stays until
+# the wind, a wave, another creature's foot or the cap takes it (README "Huellas: qué las
+# borra").
+#   still     the wind's strength (wind.yaml: exposure x gust) under which no mark is
+#             touched: a sheltered spot never gets past it
+#   fade_ms   a mark over the cap (the oldest) fades out over this long
+#   tread_px  another creature's foot landing this near a mark scuffs it
+#   waves     the shore: a wave every period_ms (8 loops of the water's 4 frames of 240 ms,
+#             so it comes with the surf), each running up to reach_tiles from the water's
+#             edge (most of them less), lag_ms later per tile along the coast; it wipes a
+#             mark over wash_ms
+# steps: how the own player's steps sound.
+#   volume    THE loudness of steps: a factor over the volume of every step sound of
+#             assets/sounds.yaml. Lower it here, not there
+#   jitter    each step's pitch moves at random up to this share either way
+#   left, right   each foot's own colour: pitch (a share, -0.03 = 3 % lower) and gain
+# surfaces:
+#   prints    a foot leaves its mark on it, and what erases that mark:
+#       wind    share of a mark a wind of strength 1 over `still` erases per second
+#       waves   the waves of the water next to it wipe its marks
+#       tread   share another creature's foot erases when it lands on it
 #   dust        running over it raises a dust cloud
 #   ripple      a step through it spreads rings on the water
 #   tint        colour of its footprints and dust
@@ -11,12 +30,22 @@
 #               (default: the surface's name; without a mapping it plays step.self)
 #   critters    ambient critters it can host: bird and butterfly by day, firefly at
 #               night, fish in water
+prints:
+  still: 0.45
+  fade_ms: 700
+  tread_px: 5
+  waves: { period_ms: 7680, reach_tiles: 2.5, lag_ms: 400, wash_ms: 500 }
+steps:
+  volume: 0.7
+  jitter: 0.04
+  left: { pitch: -0.03, gain: 0.94 }
+  right: { pitch: 0.02, gain: 1 }
 surfaces:
-  sand: { footprints: 14000, wind: 2.5, dust: true, tint: "#6e5634", sound: sand, critters: [bird] }
-  wet_sand: { footprints: 24000, tint: "#4a3a26", sound: wet_sand }
-  snow: { footprints: 40000, wind: 0.5, tint: "#7f8fa6", sound: snow }
-  mud: { footprints: 40000, tint: "#3a2c1c", sound: mud }
-  ash: { footprints: 20000, wind: 1.5, dust: true, tint: "#3c3634", sound: ash }
+  sand: { prints: { wind: 0.4, tread: 0.5 }, dust: true, tint: "#6e5634", sound: sand, critters: [bird] }
+  wet_sand: { prints: { wind: 0.03, waves: true, tread: 0.6 }, tint: "#4a3a26", sound: wet_sand }
+  snow: { prints: { wind: 0.12, tread: 0.4 }, tint: "#7f8fa6", sound: snow }
+  mud: { prints: { tread: 0.6 }, tint: "#3a2c1c", sound: mud }
+  ash: { prints: { wind: 0.3, tread: 0.5 }, dust: true, tint: "#3c3634", sound: ash }
   dirt: { dust: true, tint: "#7a6248", sound: dirt }
   grass: { sound: grass, critters: [bird, butterfly, firefly] }
   tall_grass: { sound: tall_grass, critters: [butterfly, firefly] }

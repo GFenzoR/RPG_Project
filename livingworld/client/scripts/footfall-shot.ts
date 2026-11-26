@@ -37,7 +37,7 @@ import {
   HUMANOID_PER_TILE_NS,
   WALK_FRAMES,
 } from "../../../tools/spritegen/src/engine/specs/humanoid/index.ts";
-import { FootfallTracker, newWalkSample, parseGaits } from "../src/gait.ts";
+import { FootfallTracker, newWalkSample, parseGaits, printOffset } from "../src/gait.ts";
 
 const ROOT = new URL("../../../", import.meta.url);
 const T = 32;
@@ -169,6 +169,7 @@ function capture(name: string, dx: number, dy: number, tiles: number): void {
   const sample = newWalkSample();
   const tracker = new FootfallTracker(data?.viewDepth ?? 1);
   const marks: Mark[] = [];
+  const spread = { x: 0, y: 0 };
   const shots: Image[] = [];
   const stepMs = 400;
   const dir = dirOf(dx, dy);
@@ -196,7 +197,9 @@ function capture(name: string, dx: number, dy: number, tiles: number): void {
     sample.gait = gait;
     let landed = false;
     tracker.sample(sample, (f) => {
-      marks.push({ x: f.x, y: f.y, rot: f.rot });
+      // The print is drawn a little out to its foot's side (Gait.spread), as index.ts does.
+      printOffset(f.dx, f.dy, f.side, f.gait.spread, spread);
+      marks.push({ x: f.x + spread.x, y: f.y + spread.y, rot: f.rot });
       landed = true;
     });
     if (!landed || marks.length <= 2) continue;

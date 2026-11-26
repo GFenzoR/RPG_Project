@@ -6,7 +6,8 @@ import type { LivingWorld, PlantSprite, Surface } from "./index.ts";
 const data = parseLivingWorldData(
   {
     surfaces: {
-      sand: { footprints: 8000, wind: 2, dust: true, sound: "sand" },
+      sand: { prints: { wind: 2, tread: 0.5 }, dust: true, sound: "sand" },
+      wet_sand: { prints: { waves: true }, sound: "wet_sand" },
       water_shallow: { ripple: true, critters: ["fish"] },
       grass: { critters: ["bird"] },
     },
@@ -27,6 +28,7 @@ const data = parseLivingWorldData(
         print: "feet",
         stance: 2,
         reach: 0.25,
+        print_spread: 1,
         contacts: [
           { at: 0, side: "right" },
           { at: 0.5, side: "left" },
@@ -39,7 +41,14 @@ const data = parseLivingWorldData(
 const biped = data.gaits?.gaits["biped"];
 
 /** What the client heard: the events of each footfall, and whose it was. */
-const heard: { events: readonly string[]; self: boolean; x: number }[] = [];
+const heard: {
+  events: readonly string[];
+  self: boolean;
+  x: number;
+  side: number;
+  rate: number | undefined;
+  take: number | undefined;
+}[] = [];
 
 function mount(surface: Surface, reduced = { on: false }) {
   heard.length = 0;
@@ -58,7 +67,15 @@ function mount(surface: Surface, reduced = { on: false }) {
       },
     },
     reduced: () => reduced.on,
-    onFootfall: (f, events) => heard.push({ events, self: f.self, x: f.x }),
+    onFootfall: (f, events, voice) =>
+      heard.push({
+        events,
+        self: f.self,
+        x: f.x,
+        side: f.side,
+        rate: voice?.rate,
+        take: voice?.pick(3),
+      }),
   });
   const view = { x: 0, y: 0, width: 20, height: 15, z: 7 };
   return { lw, grass, tree, view, stage };
@@ -130,11 +147,12 @@ describe("createLivingWorld", () => {
     expect(shown).toHaveLength(2);
     const [right, left] = shown;
     // Walking east: half a stride (8 px) ahead of the body at each contact, the right
-    // foot south of the path's line and the left north of it (2 px across, 0.5 deep).
+    // foot south of the path's line and the left north of it (2 px across, 0.5 deep),
+    // and each mark drawn a pixel further out to its side (print_spread): two rows.
     expect(right?.position.x).toBe(3.5 * 32 + 8);
     expect(left?.position.x).toBe(3.5 * 32 + 16 + 8);
-    expect(right?.position.y).toBe(5 * 32 + 28 + 1);
-    expect(left?.position.y).toBe(5 * 32 + 28 - 1);
+    expect(right?.position.y).toBe(5 * 32 + 28 + 2);
+    expect(left?.position.y).toBe(5 * 32 + 28 - 2);
     expect(right?.rotation).toBeCloseTo(Math.PI / 2);
   });
 
@@ -240,5 +258,131 @@ describe("createLivingWorld", () => {
     lw.onTick(48, view);
     expect(shown()).toBe(1);
     expect(grass.scale?.y).toBe(1);
+  });
+
+  it("both feet leave their print and both feet sound, a little apart, no take twice running", () => {
+    const { lw, view } = mount("sand");
+    lw.onTick(0, view);
+    stride(lw, 3, 6);
+    lw.onTick(16, view);
+    // Six tiles, a cycle each: twelve footfalls, right and left in turn.
+    expect(heard).toHaveLength(12);
+    expect(heard.filter((h) => h.side === 1)).toHaveLength(6);
+    expect(heard.filter((h) => h.side === -1)).toHaveLength(6);
+    for (let i = 1; i < heard.length; i++) {
+      expect(heard[i]?.side).toBe(-(heard[i - 1]?.side ?? 0));
+      expect(heard[i]?.take).not.toBe(heard[i - 1]?.take);
+      // Every beat the same stride after the one before: no limp.
+      expect((heard[i]?.x ?? 0) - (heard[i - 1]?.x ?? 0)).toBeCloseTo(16, 5);
+    }
+    for (const h of heard) {
+      expect(h.events).toEqual(["step.self.sand", "step.self"]);
+      expect(h.rate).toBeDefined();
+    }
+    // And both leave a mark: as many prints of the left foot as of the right.
+    const prints = lw.footprints();
+    expect(prints).toHaveLength(12);
+    expect(prints.filter((p) => p.side === 1)).toHaveLength(6);
+    expect(prints.filter((p) => p.side === -1)).toHaveLength(6);
+    // Two rows on the ground: the right foot's south of the left's, walking east.
+    const ys = (side: number): number[] => prints.filter((p) => p.side === side).map((p) => p.y);
+    expect(Math.min(...ys(1))).toBeGreaterThan(Math.max(...ys(-1)) + 2);
+  });
+
+  it("another creature's feet leave prints too, without a voice; and scuff the marks they cross", () => {
+    const { lw, view } = mount("sand");
+    lw.onTick(0, view);
+    stride(lw, 3, 2);
+    const mine = lw.footprints().length;
+    expect(mine).toBe(4);
+    // Creature 2 walks the same tiles: its own four prints, and mine are scuffed.
+    const w = newWalkSample();
+    for (let t = 0; t < 800; t += 20) {
+      const at = t / 400;
+      Object.assign(w, {
+        id: 2,
+        x: (3 + at + 0.5) * 32,
+        y: 5 * 32 + 28,
+        z: 7,
+        phase: at % 1,
+        frames: 8,
+        dx: 1,
+        dy: 0,
+        cyclePx: 32,
+        gait: biped,
+        sliding: false,
+        self: false,
+        stepMs: 400,
+      });
+      lw.onCreatureWalk(w);
+    }
+    const others = heard.filter((h) => !h.self);
+    expect(others).toHaveLength(4);
+    expect(others.filter((h) => h.side === 1)).toHaveLength(2);
+    expect(others.filter((h) => h.side === -1)).toHaveLength(2);
+    for (const h of others) expect(h.rate).toBeUndefined();
+    const prints = lw.footprints();
+    expect(prints.filter((p) => p.by === 2)).toHaveLength(4);
+    expect(prints.filter((p) => p.by === 1).every((p) => p.wear > 0)).toBe(true);
+    expect(prints.filter((p) => p.by === 2).every((p) => p.wear === 0)).toBe(true);
+  });
+
+  it("names the sound of the ground under that foot, not of the tile the body is on", () => {
+    // Grass west of x = 5 tiles, sand from there on: the foot lands half a stride ahead.
+    heard.length = 0;
+    const stage = { ground: new Container(), air: new Container() };
+    const lw = createLivingWorld(stage, (x) => (x < 5 ? "grass" : "sand"), {
+      tileSize: 32,
+      data,
+      onFootfall: (f, events) =>
+        heard.push({ events, self: f.self, x: f.x, side: f.side, rate: 1, take: 0 }),
+    });
+    stride(lw, 3, 3);
+    expect(heard.length).toBe(6);
+    for (const h of heard)
+      expect(h.events[0], `foot at ${h.x}`).toBe(
+        Math.floor(h.x / 32) < 5 ? "step.self.grass" : "step.self.sand",
+      );
+    expect(new Set(heard.map((h) => h.events[0])).size).toBe(2);
+    // Prints only where the ground keeps them.
+    expect(lw.footprints().every((p) => p.x >= 5 * 32)).toBe(true);
+  });
+
+  it("on wet sand by the water the next waves wipe the prints, the nearest first; dry sand keeps its own", () => {
+    // Water from x = 8 on; wet sand west of it, and dry sand on the rows above row 5.
+    heard.length = 0;
+    const stage = { ground: new Container(), air: new Container() };
+    const lw = createLivingWorld(
+      stage,
+      (x, y) => (y < 5 ? "sand" : x >= 8 ? "water_shallow" : "wet_sand"),
+      { tileSize: 32, data },
+    );
+    const view = { x: 0, y: 0, width: 20, height: 15, z: 7 };
+    lw.onTick(1000, view);
+    stride(lw, 5, 2);
+    const all = lw.footprints().filter((p) => p.surface === "wet_sand");
+    expect(all).toHaveLength(4);
+    // Those the waves reach know which wave takes them; the one at the very limit of the
+    // biggest wave (2.5 tiles up the beach) is left to the wind and the cap.
+    const wet = all.filter((p) => Number.isFinite(p.waveAt));
+    expect(wet).toHaveLength(3);
+    expect(wet.every((p) => p.waveAt > 1000 && p.x >= 6 * 32)).toBe(true);
+    const nearest = Math.max(...wet.map((p) => p.x));
+    const furthest = Math.min(...wet.map((p) => p.x));
+    const waveOf = (x: number): number => wet.find((p) => p.x === x)?.waveAt ?? 0;
+    expect(waveOf(furthest)).toBeGreaterThanOrEqual(waveOf(nearest));
+    // Nothing happens before the first wave; after it, the print by the water is gone.
+    const first = Math.min(...wet.map((p) => p.waveAt));
+    for (let t = 1100; t < first - 50; t += 100) lw.onTick(t, view);
+    expect(lw.footprints().filter((p) => p.surface === "wet_sand")).toHaveLength(4);
+    expect(lw.footprints().every((p) => p.wear === 0)).toBe(true);
+    for (let t = first; t < first + 1500; t += 100) lw.onTick(t, view);
+    expect(lw.footprints().some((p) => p.x === nearest)).toBe(false);
+    // And in the end every wave-washed print goes, with no clock of its own.
+    const last = Math.max(...wet.map((p) => p.waveAt));
+    for (let t = first + 1500; t < last + 1500; t += 100) lw.onTick(t, view);
+    const left = lw.footprints().filter((p) => p.surface === "wet_sand");
+    expect(left).toHaveLength(1);
+    expect(left[0]?.wear).toBe(0);
   });
 });

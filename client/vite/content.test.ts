@@ -40,8 +40,11 @@ describe("client content (T0.5)", () => {
     for (const d of Object.values(content.items))
       if (d.ground && d.walkable) expect(d.surface, d.id).toBeDefined();
     const lw = content.livingWorld;
-    expect(lw?.surfaces.sand?.footprintMs).toBeGreaterThan(0);
-    expect(lw?.surfaces.sand?.wind).toBeGreaterThan(0);
+    expect(lw?.surfaces.sand?.prints?.wind).toBeGreaterThan(0);
+    expect(lw?.surfaces.wet_sand?.prints?.waves).toBe(true);
+    expect(lw?.surfaces.grass?.prints).toBeUndefined();
+    expect(lw?.steps?.volume).toBeGreaterThan(0);
+    expect(lw?.prints?.waves.periodMs).toBeGreaterThan(0);
     expect(lw?.plants["tall_grass"]).toMatchObject({
       reaction: "bend",
       leaves: false,

@@ -19,9 +19,11 @@ import { Container, Sprite, Texture } from "pixi.js";
 import type { Mesh } from "pixi.js";
 import { CritterSim, MAX_CRITTERS } from "./critters.ts";
 import type { LivingWorldData, PlantRule, Surface } from "./data.ts";
-import { FootprintSim, MAX_FOOTPRINTS } from "./footprints.ts";
-import { footstepEvents } from "./footsteps.ts";
-import { FootfallTracker } from "./gait.ts";
+import { FootprintSim, MAX_FOOTPRINTS, shoreDistance } from "./footprints.ts";
+import type { Footprint, PrintSpec } from "./footprints.ts";
+import { footstepEvents, StepVoicer } from "./footsteps.ts";
+import type { StepVoice } from "./footsteps.ts";
+import { FootfallTracker, printOffset } from "./gait.ts";
 import type { Footfall, WalkSample } from "./gait.ts";
 import { seededRandom, tileKey } from "./hash.ts";
 import { LeafSim, MAX_LEAVES } from "./leaves.ts";
@@ -66,8 +68,27 @@ export type {
   ObjectSurface,
   ObjectSurfaceLookup,
 } from "./objects.ts";
-export { gust, FootprintSim, MAX_FOOTPRINTS, PRINT_KINDS, stepRotation } from "./footprints.ts";
-export type { Footprint, PrintKind } from "./footprints.ts";
+export {
+  DEFAULT_PRINT_FIELD,
+  FootprintSim,
+  MAX_FOOTPRINTS,
+  nextWash,
+  PRINT_KINDS,
+  shoreDistance,
+  SOFT_FOOTPRINTS,
+  stepRotation,
+  waveReach,
+  waveTime,
+  windErosion,
+} from "./footprints.ts";
+export type {
+  Footprint,
+  PrintField,
+  PrintKind,
+  PrintRules,
+  PrintSpec,
+  WaveRules,
+} from "./footprints.ts";
 export { SwaySim, bendPx, rustleOffset, SWAY_MS, MAX_SWAYS } from "./sway.ts";
 export * from "./wind.ts";
 export { WindMesh } from "./wind-mesh.ts";
@@ -86,7 +107,8 @@ export {
   wearSprite,
 } from "./wear.ts";
 export type { WearDraw, WearTile } from "./wear.ts";
-export { footstepEvents, STEP_EVENT } from "./footsteps.ts";
+export { DEFAULT_STEP_RULES, footstepEvents, STEP_EVENT, StepVoicer } from "./footsteps.ts";
+export type { FootSound, StepRules, StepVoice } from "./footsteps.ts";
 export {
   BODY_KINDS,
   FootfallTracker,
@@ -95,6 +117,7 @@ export {
   gaitOf,
   newWalkSample,
   parseGaits,
+  printOffset,
 } from "./gait.ts";
 export type { BodyKind, Footfall, Gait, GaitContact, GaitData, WalkSample } from "./gait.ts";
 export { hash01, seededRandom } from "./hash.ts";
@@ -167,10 +190,13 @@ export interface LivingWorldOptions {
   seed?: number | undefined;
   /**
    * A foot of a creature in view touched the ground (gait.ts), reduced effects or not:
-   * `events` are the sound events of a step on that ground, most specific first
-   * (footsteps.ts; the client plays the own player's). Both are reused: read them here.
+   * `events` are the sound events of a step on the ground under that foot, most specific
+   * first, and `voice` how the own player's foot sounds (footsteps.ts: the left and the
+   * right apart, a jitter, never the same take twice running; the client plays it). All
+   * three are reused: read them here.
    */
-  onFootfall?: ((fall: Footfall, events: readonly string[]) => void) | undefined;
+  onFootfall?:
+    ((fall: Footfall, events: readonly string[], voice: StepVoice | undefined) => void) | undefined;
 }
 
 /** One tile step of a creature in view, as the client starts drawing it (plants react). */
@@ -222,6 +248,8 @@ export interface LivingWorld {
   windStrips(sprite: PlantSprite): WindMesh | undefined;
   /** Changes whenever a sprite gets its strips or loses them. */
   windVersion(): number;
+  /** The footprints on the ground now (tests and the E2E hook: read, never keep). */
+  footprints(): readonly Footprint[];
   /** Counts for tests and the debug overlay. */
   stats(): {
     wear: number;
@@ -364,7 +392,8 @@ export function createLivingWorld(
   const leafPool = new Pool(air, MAX_LEAVES, texture);
   const critterPool = new Pool(air, MAX_CRITTERS, texture);
 
-  const prints = new FootprintSim();
+  const prints = new FootprintSim(data.prints, data.wind?.field, T);
+  const voicer = new StepVoicer(data.steps);
   const sway = new SwaySim();
   const puffs = new PuffSim();
   const random = seededRandom(options.seed ?? 0x11fe);
@@ -609,19 +638,56 @@ export function createLivingWorld(
   let wasReduced = false;
   const reduced = (): boolean => options.reduced?.() ?? false;
 
+  /** The floor of the footfall being marked, for isWater (made once: no closure per foot). */
+  let fallZ = 0;
+  const isWater = (x: number, y: number): boolean => surfaceAt(x, y, fallZ) === "water_shallow";
+  const printOff = { x: 0, y: 0 };
+  const spec: PrintSpec = {
+    x: 0,
+    y: 0,
+    rot: 0,
+    kind: "feet",
+    surface: "sand",
+    tint: 0,
+    rules: { wind: 0, waves: false, tread: 0 },
+  };
   /** A foot on the ground: its mark by the surface under it, and the client's beat. */
   const onFootfall = (f: Footfall): void => {
-    const s = surfaceAt(Math.floor(f.x / T), Math.floor(f.y / T), f.z);
+    const tx = Math.floor(f.x / T);
+    const ty = Math.floor(f.y / T);
+    const s = surfaceAt(tx, ty, f.z);
     const rules = s ? data.surfaces[s] : undefined;
     // A drawing gliding over a correction is not where its feet walk: no marks.
     if (s && rules && !f.sliding && !reduced()) {
       const g = f.gait;
-      if (rules.footprintMs > 0) prints.add(f.x, f.y, f.rot, g.print, s, rules, g.scale, g.depth);
+      // Whoever walks over the marks of another scuffs them, whatever it leaves itself.
+      prints.tread(f.x, f.y, f.id);
+      if (rules.prints) {
+        // Drawn a little out to the foot's side, so both feet read as two rows (Gait.spread).
+        printOffset(f.dx, f.dy, f.side, g.spread, printOff);
+        fallZ = f.z;
+        spec.x = f.x + printOff.x;
+        spec.y = f.y + printOff.y;
+        spec.rot = f.rot;
+        spec.kind = g.print;
+        spec.surface = s;
+        spec.tint = rules.tint;
+        spec.rules = rules.prints;
+        spec.side = f.side;
+        spec.by = f.id;
+        spec.exposure = exposureAt(tx, ty, f.z);
+        spec.shore = rules.prints.waves
+          ? shoreDistance(tx, ty, (data.prints ?? prints.field).waves.reachTiles, isWater)
+          : undefined;
+        spec.scale = g.scale;
+        spec.depth = g.depth;
+        prints.add(spec, last ?? 0);
+      }
       if (rules.ripple) puffs.add("ripple", f.x, f.y, 0xffffff);
       if (rules.dust && f.stepMs > 0 && f.stepMs <= RUN_STEP_MS)
         puffs.add("dust", f.x, f.y, rules.tint);
     }
-    options.onFootfall?.(f, eventsOn(s));
+    options.onFootfall?.(f, eventsOn(s), f.self ? voicer.next(f.side) : undefined);
   };
 
   const clearAll = (): void => {
@@ -677,7 +743,6 @@ export function createLivingWorld(
       floorZ = view.z;
       ground.visible = true;
       air.visible = true;
-      prints.step(ms, now);
       puffs.step(ms);
       leaves.step(ms);
       sway.prune(now);
@@ -685,6 +750,9 @@ export function createLivingWorld(
       const [x0, y0, x1, y1] = viewTiles(view);
       // Plants: the wind and the bends from steps; idle leaves from trees in view.
       const trees = movePlants(now, ms, view.zoom ?? 1, x0, y0, x1, y1);
+      // The same wind erases the footprints (footprints.ts): none underground, calmer at
+      // night, as the plants have it this frame.
+      prints.step(ms, now, (options.sheltered?.() ?? false) ? 0 : (windScale ?? 1));
       if (trees > 0 && random() < leaves.chance(trees, ms)) {
         let pick = Math.floor(random() * trees);
         for (const p of plants) {
@@ -720,6 +788,10 @@ export function createLivingWorld(
 
     windVersion() {
       return meshesVersion;
+    },
+
+    footprints() {
+      return prints.prints;
     },
 
     stats() {

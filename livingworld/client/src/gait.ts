@@ -46,6 +46,12 @@ export interface Gait {
   scale: number;
   /** How deep its prints are: their opacity while fresh, 0 to 1. */
   depth: number;
+  /**
+   * Sprite pixels on screen a print is drawn out to its foot's side of the path, over where
+   * the foot really stands: the 3/4 view squeezes the feet of a body walking east or west
+   * into one line, and both feet's marks must read as two rows.
+   */
+  spread: number;
   contacts: readonly GaitContact[];
 }
 
@@ -109,6 +115,7 @@ export function parseGaits(raw: unknown): GaitData | undefined {
       rise: num(g["rise"], 0),
       scale: Math.max(0.25, num(g["scale"], 1)),
       depth: Math.min(1, Math.max(0, num(g["depth"], 1))),
+      spread: Math.max(0, num(g["print_spread"], 0)),
       contacts,
     };
   }
@@ -207,6 +214,9 @@ export interface Footfall {
   z: number;
   /** The print's rotation, radians (0 = walking north, clockwise). */
   rot: number;
+  /** The way it walks on the map: -1, 0 or 1 each. */
+  dx: number;
+  dy: number;
   /** -1 the left foot, 1 the right, 0 on the centre line. */
   side: number;
   /** Which of the gait's contacts it is. */
@@ -259,6 +269,28 @@ export function footOffset(
   out.y = (dy / len) * ahead + (hy * along + hx * across) * viewDepth;
 }
 
+/**
+ * Where the print of a foot is drawn, from where the foot stands: `spread` sprite pixels on
+ * screen out to its side of the path it walks, (dx, dy). Written to `out`.
+ */
+export function printOffset(
+  dx: number,
+  dy: number,
+  side: number,
+  spread: number,
+  out: { x: number; y: number },
+): void {
+  const len = Math.hypot(dx, dy);
+  if (len === 0 || side === 0 || spread === 0) {
+    out.x = 0;
+    out.y = 0;
+    return;
+  }
+  // The path's right-hand side on screen (y grows down: walking north, right is east).
+  out.x = (-dy / len) * side * spread + 0; // + 0: never -0
+  out.y = (dx / len) * side * spread + 0;
+}
+
 interface TrackState {
   /** The cycle last seen, 0 to 1; NaN before its first walking frame. */
   phase: number;
@@ -294,6 +326,8 @@ export class FootfallTracker {
       y: 0,
       z: 0,
       rot: 0,
+      dx: 0,
+      dy: 0,
       side: 0,
       contact: 0,
       gait: {
@@ -304,6 +338,7 @@ export class FootfallTracker {
         rise: 0,
         scale: 1,
         depth: 1,
+        spread: 0,
         contacts: [],
       },
       sliding: false,
@@ -419,6 +454,8 @@ export class FootfallTracker {
     f.y = w.y - gait.rise + this.off.y;
     f.z = w.z;
     f.rot = stepRotation(w.dx, w.dy);
+    f.dx = w.dx;
+    f.dy = w.dy;
     f.side = c.side;
     f.contact = index;
     f.gait = gait;

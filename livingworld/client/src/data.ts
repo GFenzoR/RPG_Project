@@ -7,6 +7,10 @@ import type { AmbienceData } from "./ambience.ts";
 import { isWindKind, parseSpriteWind, parseWind, parseWindSprites, resolveWind } from "./wind.ts";
 import type { PlantWind, SpriteWind, WindData, WindKind } from "./wind.ts";
 
+import { DEFAULT_PRINT_FIELD } from "./footprints.ts";
+import type { PrintField, PrintRules } from "./footprints.ts";
+import { DEFAULT_STEP_RULES } from "./footsteps.ts";
+import type { FootSound, StepRules } from "./footsteps.ts";
 import { parseGaits } from "./gait.ts";
 import type { GaitData } from "./gait.ts";
 import { parseShadows } from "./shadows.ts";
@@ -40,10 +44,8 @@ export function isSurface(v: unknown): v is Surface {
 
 /** What a step on a surface leaves behind (data/livingworld/surfaces.yaml). */
 export interface SurfaceRules {
-  /** How long a footprint lasts in still air, ms; 0: the surface keeps none. */
-  footprintMs: number;
-  /** How much faster the wind wears footprints away in a gust (0: no wind). */
-  wind: number;
+  /** A foot leaves its print on it, and what erases it (footprints.ts); absent: no prints. */
+  prints?: PrintRules | undefined;
   /** A creature running over it raises a dust cloud. */
   dust: boolean;
   /** A step through it spreads rings on the water. */
@@ -104,6 +106,10 @@ export interface LivingWorldData {
   gaits?: GaitData | undefined;
   /** data/livingworld/shadows.yaml (shadows.ts); absent: no map object casts a shadow. */
   shadows?: ShadowRules | undefined;
+  /** What erases footprints everywhere (surfaces.yaml `prints`); absent: the defaults. */
+  prints?: PrintField | undefined;
+  /** How steps sound (surfaces.yaml `steps`); absent: every take as recorded. */
+  steps?: StepRules | undefined;
 }
 
 export const EMPTY_DATA: LivingWorldData = { surfaces: {}, plants: {} };
@@ -116,6 +122,54 @@ const DEFAULT_TINT = 0x5a4a36;
 function parseTint(v: unknown): number {
   if (typeof v !== "string" || !/^#[0-9a-f]{6}$/i.test(v)) return DEFAULT_TINT;
   return Number.parseInt(v.slice(1), 16);
+}
+
+const num = (v: unknown, fallback: number, min: number, max: number): number =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
+
+/** `prints` of a surface: true or a mapping; anything else (absent, false): no prints. */
+function parsePrintRules(raw: unknown): PrintRules | undefined {
+  if (raw === true) return { wind: 0, waves: false, tread: 0 };
+  if (!isObj(raw)) return undefined;
+  return {
+    wind: num(raw["wind"], 0, 0, 10),
+    waves: raw["waves"] === true,
+    tread: num(raw["tread"], 0, 0, 1),
+  };
+}
+
+/** The top-level `prints` of surfaces.yaml over the defaults. */
+export function parsePrintField(raw: unknown): PrintField {
+  const d = DEFAULT_PRINT_FIELD;
+  if (!isObj(raw)) return d;
+  const w = isObj(raw["waves"]) ? raw["waves"] : {};
+  return {
+    still: num(raw["still"], d.still, 0, 10),
+    fadeMs: num(raw["fade_ms"], d.fadeMs, 1, 60000),
+    treadPx: num(raw["tread_px"], d.treadPx, 0, 64),
+    waves: {
+      periodMs: num(w["period_ms"], d.waves.periodMs, 0, 600000),
+      reachTiles: num(w["reach_tiles"], d.waves.reachTiles, 0, 8),
+      lagMs: num(w["lag_ms"], d.waves.lagMs, 0, 60000),
+      washMs: num(w["wash_ms"], d.waves.washMs, 1, 60000),
+    },
+  };
+}
+
+/** The top-level `steps` of surfaces.yaml over the defaults. */
+export function parseStepRules(raw: unknown): StepRules {
+  const d = DEFAULT_STEP_RULES;
+  if (!isObj(raw)) return d;
+  const foot = (v: unknown, f: FootSound): FootSound =>
+    isObj(v)
+      ? { pitch: num(v["pitch"], f.pitch, -0.5, 0.5), gain: num(v["gain"], f.gain, 0, 2) }
+      : f;
+  return {
+    volume: num(raw["volume"], d.volume, 0, 2),
+    jitter: num(raw["jitter"], d.jitter, 0, 0.5),
+    left: foot(raw["left"], d.left),
+    right: foot(raw["right"], d.right),
+  };
 }
 
 /**
@@ -143,9 +197,15 @@ export function parseLivingWorldData(
     wind?: WindData;
     gaits?: GaitData;
     shadows?: ShadowRules;
+    prints?: PrintField;
+    steps?: StepRules;
   } = { surfaces: {}, plants: {} };
   const sh = parseShadows(shadows);
   if (sh) out.shadows = sh;
+  if (isObj(surfaces)) {
+    if (surfaces["prints"] !== undefined) out.prints = parsePrintField(surfaces["prints"]);
+    if (surfaces["steps"] !== undefined) out.steps = parseStepRules(surfaces["steps"]);
+  }
   const g = parseGaits(gaits);
   if (g) out.gaits = g;
   if (dayNight !== undefined && dayNight !== null) out.dayNight = parseDayNight(dayNight);
@@ -159,16 +219,14 @@ export function parseLivingWorldData(
   const s = isObj(surfaces) && isObj(surfaces["surfaces"]) ? surfaces["surfaces"] : {};
   for (const [name, raw] of Object.entries(s)) {
     if (!isSurface(name) || !isObj(raw)) continue;
-    const fp = raw["footprints"];
-    const wind = raw["wind"];
+    const prints = parsePrintRules(raw["prints"]);
     const critters = Array.isArray(raw["critters"])
       ? raw["critters"].filter((c): c is CritterKind =>
           (CRITTER_KINDS as readonly unknown[]).includes(c),
         )
       : [];
     out.surfaces[name] = {
-      footprintMs: typeof fp === "number" && fp > 0 ? fp : 0,
-      wind: typeof wind === "number" && wind > 0 ? wind : 0,
+      ...(prints ? { prints } : {}),
       dust: raw["dust"] === true,
       ripple: raw["ripple"] === true,
       tint: parseTint(raw["tint"]),

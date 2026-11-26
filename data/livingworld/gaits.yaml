@@ -16,6 +16,9 @@
 #               under the body (the near feet are drawn below it)
 #     scale     size of the prints (default 1)
 #     depth     opacity of a fresh print, 0 to 1 (default 1): a heavy body presses deeper
+#     print_spread  sprite px on screen a print is drawn out to its foot's side of the
+#               path (default 0): walking east the 3/4 view squeezes a biped's two feet
+#               into one line, and the marks of both must read as two rows
 #     contacts  the feet of one cycle: `at` (0 to 1, when it lands; a walk clip's frame 0
 #               starts at 0; a creature without a walk clip hops once per tile, landing at
 #               the end), `side` (left | right | centre) and `along` (sprite px along the
@@ -35,6 +38,7 @@ gaits:
     reach: 0.25
     rise: 6
     depth: 0.9
+    print_spread: 1.5
     contacts:
       - { at: 0, side: right }
       - { at: 0.5, side: left }
@@ -44,6 +48,7 @@ gaits:
     reach: 0.25
     rise: 5
     scale: 1.6
+    print_spread: 2
     contacts:
       - { at: 0, side: right }
       - { at: 0.5, side: left }

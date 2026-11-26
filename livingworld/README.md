@@ -68,12 +68,13 @@ lw.destroy();
   lugar en que cada pie toca el suelo, leídos del ciclo de caminar que el cliente dibuja.
   De cada pisada salen la huella, la onda, el polvo, las motas de MOV-7 y el sonido del
   paso: un solo golpe con la animación.
-- **Huellas** (`footprints.ts`): cada pie que se apoya en `sand`, `wet_sand`, `snow`, `mud` o
-  `ash` deja su marca en el lugar de ese pie, girada hacia donde camina. Se gasta 1 ms por
-  ms; con viento (`wind`, en la arena) se gasta más en ráfagas que salen de la posición y la
-  hora (`gust`, sin `Math.random`). Se desvanece en la segunda mitad de su vida. Tope
-  `MAX_FOOTPRINTS` (64): una nueva reemplaza a la más gastada; los objetos se reutilizan
-  (ninguno nuevo por huella).
+- **Huellas** (`footprints.ts`, "Huellas: qué las borra" abajo): cada pie que se apoya en
+  `sand`, `wet_sand`, `snow`, `mud` o `ash` deja su marca en el lugar de ese pie, girada
+  hacia donde camina; la del pie izquierdo y la del derecho se dibujan en dos hileras
+  (`print_spread`). **No tienen tiempo de vida:** las borra lo que pasa en ese lugar (el
+  viento, una ola, otra criatura que las pisa) o el tope (`MAX_FOOTPRINTS`, 64: pasadas las
+  `SOFT_FOOTPRINTS`, 56, las más viejas se desvanecen; nunca desaparecen de golpe). Los
+  objetos se reutilizan (ninguno nuevo por huella).
 - **Plantas** (`sway.ts`): un paso dobla la planta de la casilla y, a la mitad, las 8
   vecinas, hacia donde camina (de frente o de espaldas, las de los lados hacia afuera): un
   resorte amortiguado de `SWAY_MS` (900 ms). Una planta sólida (arbusto, árboles:
@@ -98,11 +99,96 @@ lw.destroy();
   noche; sombras de peces en el agua. Dónde viven sale del hash de la casilla y de los
   `critters` de su superficie; se buscan cada `SCAN_MS` (1 s), no cada frame. Tope
   `MAX_CRITTERS` (10).
-- **Pasos con sonido** (`footsteps.ts`): cada pisada del jugador propio pide
-  `step.self.<sound>` (el de la superficie bajo ese pie) y después `step.self`; suena el
-  primero que `assets/sounds.yaml` mapea. Cada `sound` de `surfaces.yaml` tiene tres tomas
-  propias (`tools/soundgen/src/steps.ts`), bajas y a la misma sonoridad. Suena también con "Animaciones reducidas" (un
-  sonido no es una animación). Sin `gaits.yaml` vuelve a sonar con el paso del servidor.
+- **Pasos con sonido** (`footsteps.ts`, "Los dos pies" abajo): cada pisada del jugador
+  propio pide `step.self.<sound>` (el de la superficie **bajo ese pie**) y después
+  `step.self`; suena el primero que `assets/sounds.yaml` mapea. Cada `sound` de
+  `surfaces.yaml` tiene tres tomas propias (`tools/soundgen/src/steps.ts`), bajas y a la
+  misma sonoridad. `StepVoicer` le da a cada pisada su voz: el pie izquierdo y el derecho
+  apenas distintos, un pequeño cambio de tono por paso y nunca la misma toma dos veces
+  seguidas. El volumen de todos los pasos es un número: `steps.volume` de `surfaces.yaml`.
+  Suena también con "Animaciones reducidas" (un sonido no es una animación). Sin
+  `gaits.yaml` vuelve a sonar con el paso del servidor.
+
+### Los dos pies (rama `feat/labels-and-steps`; el dueño, 2026-11-25)
+"El sonido de los pasos se lo pusiste solo al pie derecho, pareciera que está cojeando", y
+"los pasos se marcan en el piso de uno de los dos pies, debiesen ser de los 2".
+- **Qué pasaba.** El rastreador ya avisaba los dos pies (derecho en `at: 0`, izquierdo en
+  `at: 0.5`), pero nada los distinguía:
+  - *Huellas:* caminando al este u oeste la vista 3/4 aplasta la separación de los pies
+    (2,2 px a cada lado en el cuerpo, 1,3 px en pantalla) y las dos marcas, iguales, caían
+    en una sola fila: se leía como las de un solo pie.
+  - *Sonido:* la toma salía al azar entre tres, podía repetirse, y los dos pies sonaban
+    idénticos; a paso rápido, o caminando al norte o en diagonal (hasta 4 pisadas por
+    casilla), la misma toma se pisaba a sí misma y el motor descartaba la que pasaba de
+    `max_voices`: un ritmo disparejo.
+- **Huellas en dos hileras.** `print_spread` (`gaits.yaml`, 1,5 px para `biped`, 2 para
+  `big_biped`) corre el dibujo de cada marca hacia el lado de su pie (`printOffset`, en px
+  de pantalla, perpendicular al camino). La pisada (dónde suena, qué superficie, las motas)
+  sigue siendo la del pie real; solo el dibujo se abre. Caminando al este quedan dos
+  filas a 5,6 px; en diagonal y al norte también.
+- **Cada pie con su voz** (`StepVoicer`, determinista: nada de `Math.random`):
+  - el izquierdo y el derecho con unos puntos de diferencia (`steps.left`,
+    `steps.right`: `pitch` y `gain`; hoy −3 % y 0,94 contra +2 % y 1);
+  - un cambio de tono por paso de hasta ±`steps.jitter` (4 %), sacado del número del paso;
+  - la toma: cualquiera menos la anterior (`pick(n)`), así que con tres tomas ninguna se
+    pisa a sí misma y los dos pies las usan todas.
+  El módulo entrega la voz (`StepVoice`: `gain`, `rate`, `pick`) en `onFootfall`; el
+  motor de audio del cliente la aplica (`AudioEngine.play(events, at, listener, voice)`:
+  ganancia sobre el volumen del sonido y `playbackRate`).
+- **Volumen.** `steps.volume` (0,7) multiplica el `volume` de cada toma de
+  `assets/sounds.yaml` (0,15, todas iguales): 0,105, un fondo. Es el único número que hay
+  que tocar; un test (`client/vite/step-sounds.test.ts`) exige que quede bajo 0,12 y a
+  menos de un quinto de un golpe (0,8) y de la música (0,7); la capa de ambiente más baja
+  está en 0,15.
+- **Según el piso.** La superficie es la del suelo bajo el pie (`surfaceAt` de la casilla
+  donde cae, no la del cuerpo). `client/vite/step-sounds.test.ts` recorre todas las
+  casillas de `world/`: cada suelo caminable tiene superficie, cada superficie su evento
+  con tres tomas, y ningún archivo se comparte entre superficies; pasto, tierra y piedra
+  existen en el mapa y suenan con archivos distintos. (El dueño los oyó iguales porque
+  las tomas por superficie entraron el mismo día, rama `feat/step-sounds`; antes todo caía
+  en `step`.)
+- **Otras criaturas:** dejan sus dos (o cuatro, u ocho) pies igual que el jugador; su paso
+  no suena (pendiente, abajo).
+
+### Huellas: qué las borra (rama `feat/labels-and-steps`; el dueño, 2026-11-25)
+"En la arena no debiesen borrarse después de un rato necesariamente; es según el viento o
+según las olas, dinámico." Una huella guarda cuánto se borró (`wear`, de 0 a 1) y se ve con
+`depth × (1 − wear)`. Nada la gasta por sí solo. Todo sale de su posición, del reloj y de
+`data/livingworld` (sin azar y sin estado del servidor: dos clientes con el mismo reloj ven
+la misma playa).
+- **Viento.** El mismo campo que mece las plantas (`wind.ts`: `gustAt`, `strengthAt`).
+  Cada huella guarda la exposición de su lugar al nacer (`exposureOf` sobre las 5x5
+  casillas: arena y orilla soplan fuerte, madera y piedra casi nada, un bosque denso
+  calma). Por segundo se borra `prints.wind × (fuerza − still)²` (`windErosion`); bajo
+  `prints.still` (0,45) no se toca. En una playa abierta (exposición ~1,3) una ráfaga
+  llena se lleva una huella de arena en unos 4 s de soplar y un rastro dura de unos
+  segundos a menos de un minuto, según cuándo llegue la ráfaga; como las ráfagas son un patrón que viaja con el
+  viento, el rastro se va **desde barlovento**: lo que borra aquí borra río abajo un
+  momento después (un test lo comprueba con el desfase exacto). En un rincón al abrigo
+  (exposición bajo 0,45) la fuerza nunca pasa de `still`: la huella queda hasta el tope.
+  De noche el viento es más suave (`field.night`); bajo tierra no hay (`sheltered`).
+- **Olas.** En `wet_sand` (`waves: true`) junto al agua. Hay una ola cada
+  `waves.period_ms` (7680 ms: ocho vueltas del bucle del agua, 4 frames de 240 ms, así
+  llega con la rompiente dibujada; no hay otro ciclo de mar con el que sincronizar: el
+  ambiente es un loop continuo). Cada ola sube una distancia propia (`waveReach`, de 0,75
+  casillas a `reach_tiles`, la mayoría cortas, por el número de ola) y llega `lag_ms` más
+  tarde por casilla a lo largo de la costa (`waveTime`). Al nacer, la huella mide su
+  distancia al borde del agua (`shoreDistance`) y calcula la primera ola que llega hasta
+  ella (`nextWash`); cuando llega, se borra en `wash_ms` (0,5 s). Pegada al agua se va con
+  la ola siguiente; más arriba espera una ola grande; fuera de alcance, queda al viento.
+- **Otras criaturas.** El pie de otra criatura que cae a `tread_px` (5 px) de una huella
+  le borra `tread` de la superficie (0,5 en arena: dos pisadas la deshacen). Los pies
+  propios no borran las propias.
+- **Lluvia:** no hay clima todavía; el gancho es `FootprintSim.rain` (parte borrada por
+  segundo, hoy 0).
+- **Bajo techo o bajo tierra** (polvo, ceniza de una cueva): sin viento ni olas, quedan
+  hasta el tope.
+- **Tope:** `MAX_FOOTPRINTS` (64) en total. Pasadas `SOFT_FOOTPRINTS` (56), las más
+  viejas se marcan y se desvanecen en `fade_ms` (0,7 s): la reserva de 8 hace que nunca
+  haya que sacar una de golpe (solo una ráfaga de más de 8 huellas en un frame pisa la
+  más borrada).
+- **Datos** (`surfaces.yaml`): arriba, `prints` (`still`, `fade_ms`, `tread_px`, `waves`);
+  por superficie, `prints: { wind, waves, tread }` (ausente: no deja huellas).
 
 ### Huellas que coinciden con los pasos (rama `feat/footprint-sync`; el dueño, 2026-11-24)
 "Las marcas al caminar, por ejemplo en la arena, tienen que coincidir con los pasos que da
@@ -509,15 +595,19 @@ los demás módulos).
 (enum `surface` de `common.schema.json`: `sand`, `wet_sand`, `snow`, `mud`, `grass`,
 `tall_grass`, `dirt`, `ash`, `stone`, `wood`, `water_shallow`, `lava`).
 
-`data/livingworld/surfaces.yaml` (por superficie): `footprints` (ms), `wind`, `dust`,
-`ripple`, `tint` (`#rrggbb`), `sound`, `critters`. `make validate` exige que toda superficie
+`data/livingworld/surfaces.yaml`: arriba, `prints` (qué borra las huellas en todas partes:
+`still`, `fade_ms`, `tread_px`, `waves: { period_ms, reach_tiles, lag_ms, wash_ms }`) y
+`steps` (cómo suenan los pasos: `volume`, el único número del volumen; `jitter`; `left` y
+`right` con `pitch` y `gain`); por superficie: `prints` (`wind`, `waves`, `tread`; ausente:
+no deja huellas), `dust`, `ripple`, `tint` (`#rrggbb`), `sound`, `critters`. `make validate` exige que toda superficie
 que usa un suelo esté descrita.
 
 `data/livingworld/gaits.yaml` (cliente, "Huellas que coinciden con los pasos" arriba):
 `view.depth` (cuánto acorta la vista 3/4 el eje norte-sur; el `PROJECTION.depth` del motor
 de sprites), `slide_px`, `gaits` (por nombre: `print` = `feet` | `paw` | `big_paw` | `dot` |
 `trail`, el sprite `livingworld/fx/footprint_<print>`; `stance`, `reach`, `rise`, `scale`,
-`depth` = opacidad de la huella fresca; `contacts`: lista de `{ at, side: left | right |
+`depth` = opacidad de la huella fresca; `print_spread` = px que el dibujo de la huella se
+abre hacia el lado de su pie; `contacts`: lista de `{ at, side: left | right |
 centre, along }`; vacía: no deja pisadas), `defaults` (`humanoid`, `beast`, `big_beast`,
 `flying`) y `creatures` (id de monstruo o NPC → andar). `make validate` exige que cada
 andar nombrado exista y que cada criatura sea un monstruo o un NPC de `data/`.
@@ -553,7 +643,8 @@ la superficie de un suelo y la reacción de una planta en la paleta.
 
 ## Cómo agregar
 - **Una superficie que deja huellas** (p. ej. nieve en una isla nueva): el suelo con
-  `surface: snow` en `data/items`; su fila en `surfaces.yaml` (`footprints`, `tint`, `sound`).
+  `surface: snow` en `data/items`; su fila en `surfaces.yaml` (`prints` con lo que la borra: `wind`, `waves`, `tread`; `tint`,
+  `sound`).
   Sin código.
 - **Una planta** (se mece con el viento y reacciona al paso): "Cómo agregar una planta",
   en "Viento". Su sprite declara el viento; `make validate` no deja olvidarlo.
@@ -657,8 +748,11 @@ la superficie de un suelo y la reacción de una planta en la paleta.
 - Fuera de la carpeta: `client/vite/content.test.ts` (superficies y datos al cliente),
   `client/src/audio/cues.test.ts` (sonido del paso), `client/src/render/living.test.ts`
   (el andar de cada cuerpo, qué pisadas levantan motas), `packages/renderer/src/anim.test.ts`
-  (`Pose.walk`), `client/e2e/sandbox.spec.ts` ("sandbox footprints": la playa de
-  Thimblewick, recto y en diagonal, con capturas `99h` a `99j`), `packages/renderer/src/map-view.test.ts`
+  (`Pose.walk`), `client/vite/step-sounds.test.ts` (el sonido del paso sobre todas las
+  casillas de `world/`), `client/src/audio/engine.test.ts` (la voz de una pisada),
+  `client/e2e/sandbox.spec.ts` ("sandbox footprints": la playa de Thimblewick, recto y en
+  diagonal, los dos pies con su huella y su sonido, y el rastro antes y después de una
+  ráfaga y de una ola, capturas `99h` a `99n`), `packages/renderer/src/map-view.test.ts`
   (`groundOverlay`, `forEachItemSprite`), `packages/content-schema/src/validate.test.ts`,
   `tools/spritepack` y `tools/spritegen` (sprites en `assets/livingworld/sprites/`).
 - A ojo: `node --experimental-strip-types tools/spritegen/src/cli.ts preview --only
@@ -947,7 +1041,14 @@ determinista):
 - Huellas: descalzo o con botas dejan la misma marca; los contactos de las criaturas
   dibujadas a mano (Gemini) son los de su tipo de cuerpo, sin medir sus frames; una
   criatura sin sprite en el atlas (el bloque de color) no deja pisadas ni suena; el
-  sonido de paso es solo el del jugador propio.
+  sonido de paso es solo el del jugador propio (los de otros jugadores cerca, posicionales
+  y más bajos, serían `AudioEngine.play` con `at`: falta decidir si se quieren).
+- Huellas: la marca del pie izquierdo y la del derecho son el mismo sprite (simétrico);
+  una horma por pie pide otro sprite de spritegen. No hay lluvia (`FootprintSim.rain` es
+  el gancho). Las olas no se dibujan subiendo por la arena: la huella se borra con el
+  ritmo de la rompiente, pero no hay lámina de agua que la tape.
+- Pasos: caminando al norte, al sur o en diagonal la animación da más pisadas por casilla
+  (3,5 y 4 contra 2 al este), y suenan todas; si cansa, bajar `steps.volume`.
 - Sonidos de paso propios por superficie: sin ffmpeg no se pudieron generar; los eventos ya
   existen y caen en `step`.
 - Día y noche: una sombra no se aleja de una fogata cercana; no hay hora en el HUD; bajo

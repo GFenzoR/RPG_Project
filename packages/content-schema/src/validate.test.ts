@@ -595,11 +595,15 @@ describe("validator diagnostics", () => {
 
   it("checks the living world: surfaces, plants and a schema for each file (livingworld/README.md)", () => {
     edit("data/items/ground.yaml", "surface: sand }", "surface: marble }");
+    // A footprint has no lifetime any more: the old field is refused, and so is a wind
+    // that would un-erase, or steps louder than the schema lets them be.
     edit(
       "data/livingworld/surfaces.yaml",
+      "  mud: { prints: { tread: 0.6 },",
       "  mud: { footprints: 40000,",
-      "  mud: { footprints: -1,",
     );
+    edit("data/livingworld/surfaces.yaml", "prints: { wind: 0.4,", "prints: { wind: -1,");
+    edit("data/livingworld/surfaces.yaml", "  volume: 0.7", "  volume: 7");
     edit("data/livingworld/surfaces.yaml", "  lava: {}", "  lava: {}\n  marsh: {}");
     appendFileSync(
       file("data/livingworld/plants.yaml"),
@@ -610,6 +614,8 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes("ground.yaml") && m.includes("surface"))).toBe(true);
     expect(out.some((m) => m.includes("surfaces.yaml") && m.includes("marsh"))).toBe(true);
     expect(out.some((m) => m.includes("surfaces.yaml") && m.includes("footprints"))).toBe(true);
+    expect(out.some((m) => m.includes("surfaces.sand.prints.wind"))).toBe(true);
+    expect(out.some((m) => m.includes("steps.volume"))).toBe(true);
     expect(out.some((m) => m.includes('plant "bush" already listed'))).toBe(true);
     expect(out.some((m) => m.includes('unknown item "no_such_plant"'))).toBe(true);
     expect(out.some((m) => m.includes("plants.yaml") && m.includes("reaction"))).toBe(true);

@@ -18,6 +18,7 @@ import {
   gaitOf,
   newWalkSample,
   parseGaits,
+  printOffset,
   stepRotation,
 } from "./gait.ts";
 import type { Gait, GaitData } from "./gait.ts";
@@ -497,5 +498,111 @@ describe("the print's place", () => {
     expect(o).toEqual({ x: 0, y: 2 });
     footOffset(0, 0, 5, 5, 1, 5, k, o);
     expect(o).toEqual({ x: 0, y: 0 });
+  });
+
+  describe('both feet, everywhere (owner, 2026-11-25: "pareciera que está cojeando")', () => {
+    const DIRS8: [string, number, number][] = [
+      ["north", 0, -1],
+      ["north-east", 1, -1],
+      ["east", 1, 0],
+      ["south-east", 1, 1],
+      ["south", 0, 1],
+      ["south-west", -1, 1],
+      ["west", -1, 0],
+      ["north-west", -1, -1],
+    ];
+    // From a slowed crawl to a hasted sprint, ms per tile, at 30, 60 and 144 fps.
+    const SPEEDS = [1200, 800, 500, 400, 300, 220, 150, 100];
+    const RATES = [1000 / 30, 1000 / 60, 1000 / 144];
+
+    for (const [name, dx, dy] of DIRS8) {
+      it(`a biped walking ${name}: left and right in turn, evenly, at every speed and frame rate`, () => {
+        for (const ms of SPEEDS)
+          for (const frameMs of RATES) {
+            const label = `${name} ${ms} ms/tile ${Math.round(1000 / frameMs)} fps`;
+            const { falls } = walk(HUMAN, gait("biped"), repeat(8, { dx, dy, ms }), frameMs);
+            expect(falls.length, label).toBeGreaterThanOrEqual(15);
+            const left = falls.filter((f) => f.side === -1).length;
+            const right = falls.filter((f) => f.side === 1).length;
+            expect(left + right, label).toBe(falls.length);
+            expect(Math.abs(left - right), label).toBeLessThanOrEqual(1);
+            for (let i = 1; i < falls.length; i++)
+              expect((falls[i] as Fall).side, `${label} #${i}`).toBe(-(falls[i - 1] as Fall).side);
+            // No limp: every beat comes the same time after the one before, give or take
+            // the frames it is drawn on.
+            const gaps = falls.slice(1).map((f, i) => f.t - (falls[i] as Fall).t);
+            const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+            for (const g of gaps)
+              expect(Math.abs(g - mean), label).toBeLessThanOrEqual(frameMs * 2 + 1);
+          }
+      });
+    }
+
+    it("the prints of the two feet lie on two lines either side of the path, in all 8 directions", () => {
+      const o = { x: 0, y: 0 };
+      for (const [name, dx, dy] of DIRS8) {
+        const { falls } = walk(HUMAN, gait("biped"), repeat(6, { dx, dy, ms: 400 }));
+        // Across the path on screen: the right-hand normal of the way it walks.
+        const len = Math.hypot(dx, dy);
+        const across = (f: Fall): number => {
+          printOffset(dx, dy, f.side, gait("biped").spread, o);
+          return ((f.x + o.x) * -dy + (f.y + o.y) * dx) / len;
+        };
+        const rights = falls.filter((f) => f.side === 1).map(across);
+        const lefts = falls.filter((f) => f.side === -1).map(across);
+        expect(rights.length, name).toBeGreaterThan(2);
+        expect(lefts.length, name).toBeGreaterThan(2);
+        // Two rows at least 3 px apart: they read as two feet, not one.
+        expect(Math.min(...rights) - Math.max(...lefts), name).toBeGreaterThanOrEqual(3);
+      }
+    });
+
+    it("draws a print out to its foot's own side, by the gait's spread", () => {
+      const o = { x: 0, y: 0 };
+      printOffset(1, 0, 1, 1.5, o); // east: the right foot is south
+      expect(o).toEqual({ x: 0, y: 1.5 });
+      printOffset(1, 0, -1, 1.5, o);
+      expect(o).toEqual({ x: 0, y: -1.5 });
+      printOffset(0, -1, 1, 2, o); // north: the right foot is east
+      expect(o.x).toBe(2);
+      printOffset(0, 1, 0, 2, o); // on the centre line: where it stands
+      expect(o).toEqual({ x: 0, y: 0 });
+      expect(gait("biped").spread).toBeGreaterThan(0);
+      expect(gait("quadruped").spread).toBe(0);
+    });
+
+    it("every other body puts down both sides too: as many left feet as right", () => {
+      for (const [name, meta] of [
+        ["quadruped", BEAST],
+        ["big_quadruped", BEAST],
+        ["many_legs", BEAST],
+        ["slither", BEAST],
+        ["hop", STILL],
+        ["big_biped", HUMAN],
+      ] as const)
+        for (const [dir, dx, dy] of DIRS8)
+          for (const ms of [800, 400, 150]) {
+            const { falls } = walk(meta, gait(name), repeat(8, { dx, dy, ms }));
+            const left = falls.filter((f) => f.side === -1).length;
+            const right = falls.filter((f) => f.side === 1).length;
+            const label = `${name} ${dir} ${ms}`;
+            expect(left, label).toBeGreaterThan(2);
+            expect(Math.abs(left - right), label).toBeLessThanOrEqual(2);
+          }
+    });
+
+    it("every gait of the data with feet has them on both sides", () => {
+      for (const g of Object.values(DATA.gaits)) {
+        if (g.contacts.length === 0) continue;
+        expect(
+          g.contacts.some((c) => c.side < 0),
+          g.name,
+        ).toBe(true);
+        expect(
+          g.contacts.some((c) => c.side > 0),
+          g.name,
+        ).toBe(true);
+      }
+    });
   });
 });
