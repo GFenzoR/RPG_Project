@@ -89,20 +89,40 @@ el doble click o Ctrl+click derecho.
   en `05-network-protocol.md` "Caminar"). La velocidad crece con el nivel y con
   condiciones (haste, paralyze; ver "Condiciones" en Combate).
 - **Velocidad (pedido del dueño, 2026-11-26).**
-  - **+15 % para todos:** `base_step_ms` pasó de 1000 a 891. Es el número por el que
-    caminan todas las criaturas, así que jugadores, monstruos y NPCs se aceleraron por el
-    mismo factor y perseguir y huir quedan como estaban. Un jugador de nivel 1 (velocidad
-    205) tardaba 500 ms por casilla y tarda 435 (500 / 1,15).
-  - **+0,2 % por nivel:** la velocidad de un jugador es la de su vocación ×
-    (100 + `movement.speed_per_level_pct` × (nivel − 1)) / 100, redondeada al punto
-    (`content.Movement.LevelSpeed`). Nivel 1 = la base. Nivel 50: +9,8 % (225 puntos,
-    396 ms por casilla); nivel 100: +19,8 % (246, 363 ms). **Sin tope** propio: el único
-    límite es `experience.max_level` (nivel 1000: el triple, 146 ms por casilla; si un día
-    molesta, se agrega un tope en `balance.yaml`). Reemplaza a los 3 puntos por nivel de
-    las vocaciones (`per_level.speed` quedó en 0 en `vocations.yaml`), que eran +1,5 %
-    por nivel: **a nivel alto se camina más lento que antes** (nivel 50: 352 puntos y
-    300 ms por casilla antes, 225 y 396 ahora). El equipo (`speed`, "+N de velocidad") y
-    las condiciones se suman encima como siempre.
+  - **+15 % para todos:** `base_step_ms` pasó de 1000 a 891 (×1,122 en ms). Es el número
+    por el que caminan todas las criaturas: jugadores, monstruos y NPCs. Un jugador de
+    nivel 1 (velocidad 205) tardaba 500 ms por casilla y tarda 435 (500 / 1,15). El 15 %
+    justo vale para esa velocidad: antes cada paso se redondeaba hacia arriba a ticks de
+    50 ms (488 ms eran 500) y ya no ("Pasos al milisegundo", abajo), así que cada criatura
+    ganó entre 12 % y 21 % según cuánto le tocaba de redondeo (el lobo, de 550 a 469 ms).
+    Perseguir y huir se deciden por los puntos de velocidad, que no cambiaron para los
+    monstruos y solo subieron para los jugadores (el punto siguiente): quien escapaba de
+    un monstruo lo sigue haciendo. Lo que cambió es por cuánto, unos ms por casilla según
+    el redondeo que tenía cada uno.
+  - **+0,2 % por nivel, sumado a lo que ya había:** la velocidad de un jugador es la de
+    su vocación en ese nivel (`start.speed` + `per_level.speed` × (nivel − 1): 205 + 3 por
+    nivel, como antes) × (100 + `movement.speed_per_level_pct` × (nivel − 1)) / 100,
+    redondeada al punto con la mitad hacia arriba (`content.Movement.LevelSpeed`, en
+    enteros como el temporizador de pasos). Nivel 1 = la base. Un punto es lo mínimo que
+    se gana: el 0,2 % solo no llega a un punto hasta el nivel 3 (205,4 en el 2), pero con
+    los 3 puntos de la vocación cada nivel camina más rápido que el anterior.
+
+    | Nivel | Antes (puntos, ms por casilla) | Ahora (puntos, ms por casilla) |
+    |---|---|---|
+    | 1 | 205, 500 | 205, 435 |
+    | 16 | 250, 400 | 258, 346 |
+    | 50 | 352, 300 | 387, 231 |
+    | 100 | 502, 200 | 601, 149 |
+
+    **Ningún nivel camina más lento que antes**, ni en puntos ni en ms
+    (`TestRepoMovementSpeed`). **Sin tope** propio: el límite es el tick, un paso nunca
+    dura menos de 50 ms, y se llega cerca del nivel 300 (antes, cerca del 600); si un día
+    molesta, se agrega un tope en `balance.yaml`. La primera versión de la rama
+    reemplazaba los 3 puntos por el 0,2 % y dejaba al nivel 50 en 396 ms, más lento que
+    los 300 de antes; la revisión lo cambió a sumar porque el pedido era acelerar. Si el
+    dueño prefiere que el nivel pese menos, se baja `per_level.speed` en
+    `data/vocations.yaml`. El equipo (`speed`, "+N de velocidad") y las condiciones se
+    suman encima como siempre.
   - **Pasos al milisegundo:** antes un paso se redondeaba hacia arriba a ticks de 50 ms,
     y por eso unos pocos puntos de velocidad no cambiaban nada (de 205 a 222 puntos se
     caminaba igual, y con 223 de golpe un 11 % más rápido). Ahora el paso dura lo que da
@@ -566,8 +586,8 @@ hechizo se lance, `TestVocationCareers` (`server/internal/sim/balance_vocations_
 - Curva cúbica propia, ajustable: `xp(nivel) = a·n³ + b·n² + c·n` con coeficientes en
   balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h
   (`experience.pace` en balance.yaml; la detección de bots lo usa como ritmo esperado).
-- Al subir de nivel: +HP, +MP y +capacidad según vocación, y +0,2 % de velocidad
-  (`movement.speed_per_level_pct`, "Movimiento").
+- Al subir de nivel: +HP, +MP, +capacidad y +velocidad según vocación, y sobre esa
+  velocidad +0,2 % por nivel (`movement.speed_per_level_pct`, "Movimiento").
 
 ## Skills que suben con el uso
 Cada skill tiene nivel y progreso (%). Sube **solo al usarla**, y cada nivel cuesta

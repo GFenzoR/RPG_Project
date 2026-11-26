@@ -276,10 +276,13 @@ el punto 5:
     a ticks, cada monstruo ganó entre 12 % y 21 % según cuánto le tocaba de redondeo (el
     lobo, 550 → 469 ms; el gólem de escoria, 850 → 743): **conviene probar a mano que
     huir de un lobo o alcanzar a un ladrón se siga sintiendo bien.**
-  - **+0,2 % por nivel**, sin tope (docs/02). Reemplazó a los 3 puntos por nivel de las
-    vocaciones, que eran +1,5 % por nivel: **un personaje de nivel alto camina más lento
-    que antes** (nivel 50: 300 → 396 ms por casilla). Si el dueño quería sumar el 0,2 %
-    a lo que había y no reemplazarlo, es `per_level.speed` en `data/vocations.yaml`.
+  - **+0,2 % por nivel**, sin tope (docs/02), **sumado** a los 3 puntos por nivel de las
+    vocaciones: nivel 50, de 300 a 231 ms por casilla; nivel 100, de 200 a 149. Ningún
+    nivel camina más lento que antes y quien dejaba atrás a un monstruo lo sigue haciendo.
+    **Para confirmar con el dueño:** la primera versión de la rama reemplazaba los 3 puntos
+    por el 0,2 % (nivel 50: 396 ms, más lento que antes); la revisión eligió sumar porque
+    el pedido era acelerar. Si a nivel alto queda demasiado rápido, se baja
+    `per_level.speed` en `data/vocations.yaml` (y `TestRepoMovementSpeed` con él).
   - **Pasos al milisegundo:** `CreatureMove.duration_ms` ya no es múltiplo de 50; el
     servidor reparte los ticks entre los pasos de una caminata y el cliente los dibuja
     seguidos. Probado con simulación (`walking.test.ts`, un paso de 435 ms con 0 a 80 ms de
@@ -287,7 +290,9 @@ el punto 5:
     ida el servidor arranca cada paso cuando llega el `Walk` y no en el tick exacto (no se
     ve en el cliente propio, que predice; un observador podría ver un paso unos ms tarde).
   - El polvo al correr pasó de 260 a 232 ms por paso (`RUN_STEP_MS`), el mismo umbral de
-    velocidad de antes. `client/e2e/movement.spec.ts` espera pasos de 435 ms (no se corrió
+    velocidad de antes (385 puntos): sin haste se llega al nivel 50 (antes, al 66).
+  - Un observador que ve a alguien parar un tick y seguir ya no arrastra el resto del
+    paso anterior (`Walk.next` en `client/src/state/world.ts`, test en `world.test.ts`). `client/e2e/movement.spec.ts` espera pasos de 435 ms (no se corrió
     acá: lo corre el e2e final del lote).
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y

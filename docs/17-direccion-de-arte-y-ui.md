@@ -1646,13 +1646,21 @@ teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
   - El texto de la acción por defecto junto al cursor (UI-5).
 - **MOV-8 Velocidad (👤 decisión del dueño; resuelta el 2026-11-26: +15 % para todas las
   criaturas, `base_step_ms` 891, y +0,2 % por nivel para los jugadores; docs/02
-  "Movimiento").** Al nivel 1 se caminaba a 2 casillas por segundo (ahora 2,3). Bajar `base_step_ms` de 1000 a 800 da 400 ms por paso (2,5
-  casillas/s). Toca balance:
-  - la persecución de los monstruos;
-  - el kiteo de los arqueros;
-  - el ritmo de horas por nivel que usa la detección de bots (`balance.yaml` `pace`).
+  "Movimiento").** Al nivel 1 se caminaba a 2 casillas por segundo (ahora 2,3). La
+  propuesta de entonces era bajar `base_step_ms` a 800; el dueño eligió 891. Lo que tocaba
+  de balance, y cómo quedó:
+  - la persecución de los monstruos: todos caminan por el mismo número y los puntos de
+    velocidad de los monstruos no cambiaron, así que quién alcanza a quién no cambió
+    (cada criatura ganó entre 12 % y 21 % según su redondeo a ticks de antes; docs/02);
+  - el kiteo de los arqueros: igual, y el jugador gana además el 0,2 % por nivel;
+  - el ritmo de horas por nivel que usa la detección de bots (`balance.yaml`
+    `experience.pace`): no se tocó. La señal `income` compara contra la mediana de la
+    banda y marca desde 4 veces (docs/01 "Detección de bots"); caminar 15 a 30 % más
+    rápido queda muy por debajo. No se midió de nuevo con una simulación de caza: si las
+    carreras de `TestVocationCareers` se recalibran, se mira ahí.
 
-  Por eso queda propuesto y no aplicado.
+  Queda por probar a mano que huir de un lobo o alcanzar a un ladrón se sienta bien
+  (docs/14 "Velocidad de movimiento").
 - **MOV-9 Criterio de aceptación (✅ A6: E2E con un proxy de latencia en Playwright, no un
   parámetro de desarrollo del cliente).**
   - Con 150 ms de latencia simulada en el WebSocket (parámetro de desarrollo), mantener una
