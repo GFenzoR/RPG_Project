@@ -459,6 +459,28 @@ describe("WorldState", () => {
     expect(w.drawPos(tom, at2 + 200)).toEqual({ x: 101.5, y: 202 });
   });
 
+  it("a walk seen after a stop of one tick starts its pace again, like the server's", () => {
+    // 435 ms steps (session/move.go pace): the server waits 8, 9, 9... ticks for a walk's
+    // steps and each is drawn when the one before ends. It stops for one tick while the
+    // last step is still drawn, and walks on: its pace starts again from nothing owed
+    // (8 ticks), and so must the drawing's, or the step after is taken for late.
+    const w = entered();
+    const tom = w.creatures.get(9) as CreatureState;
+    const step = (n: number, at: number) =>
+      w.apply(move(9, [100 + n, 202], [101 + n, 202], 435), at - 100, at);
+    step(0, 1000);
+    step(1, 1400); // 8 ticks
+    expect(tom.walk).toMatchObject({ start: 1435, duration: 435, rest: 20 });
+    // The walk would go on at 1850 (9 ticks); the server stood one tick more.
+    step(2, 1900);
+    expect(tom.walk?.prev).toBeDefined(); // the step before is still drawn (to 1870)
+    expect(tom.walk).toMatchObject({ start: 1900, duration: 435, rest: 35 });
+    step(3, 2300); // 8 ticks again: on time, back to back, at its own duration
+    expect(tom.walk).toMatchObject({ start: 2335, duration: 435, rest: 20 });
+    step(4, 2750); // 9 ticks
+    expect(tom.walk).toMatchObject({ start: 2770, duration: 435, rest: 5 });
+  });
+
   it("draws a step north, east, south or west at one speed on screen", () => {
     // Owner, 2026-11-26: "up and down feels faster than sideways". A step is drawn along
     // its tiles at one rate whatever its axis, and the camera turns tiles into device

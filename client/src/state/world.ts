@@ -112,6 +112,12 @@ export interface Walk {
    * step ends.
    */
   rest?: number | undefined;
+  /**
+   * A step of the server: when its walk's next step comes on the server's timeline
+   * (batchTime) if the walk goes on, `rest` before this one ends there. A step that comes
+   * a tick later or more follows a stop: the server's pace owes it nothing.
+   */
+  next?: number | undefined;
 }
 
 /** An own step the client predicted and sent, until the server confirms it. */
@@ -1377,12 +1383,15 @@ export class WorldState implements TileSource {
     let prev: Walk | undefined;
     // What the walk's pace owes this step (Walk.rest of the one before): its tick came
     // this long before that one ends. Starting when it ends is on time, not behind.
+    // Only while the walk goes on (Walk.next): after a stop, even of one tick with the step
+    // before still drawn, the server's pace started again from nothing owed.
     let owed = 0;
+    if (old?.next !== undefined && samePos(old.to, from) && at - old.next < TICK_MS / 2)
+      owed = old.rest ?? 0;
     if (old && old.start + old.duration > now && samePos(old.to, from)) {
       const lag = old.start + old.duration - start;
       if (lag <= PLAYOUT_MAX_LAG_MS) {
         prev = pruned(old, now);
-        owed = old.rest ?? 0;
         if (lag > 0) {
           start += lag;
           const late = start - Math.max(at + owed, now);
@@ -1391,7 +1400,8 @@ export class WorldState implements TileSource {
       }
     }
     c.pos = to;
-    c.walk = { from, to, start, duration: drawn, prev, rest: (owed + duration) % TICK_MS };
+    const rest = (owed + duration) % TICK_MS;
+    c.walk = { from, to, start, duration: drawn, prev, rest, next: at + owed + duration - rest };
     c.slide = slideBetween(
       before,
       this.drawPos(c, now),
