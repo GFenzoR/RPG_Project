@@ -23,10 +23,10 @@ function view(chunks: Map<string, ChunkData>): MapView {
   return new MapView({ source, texture: () => Texture.WHITE, tileSize: T, floor: 7 });
 }
 
-/** The layers: root → world → [ground, ground overlay, shadows, items, overlay]. */
+/** root → world → [ground, ground overlay, shadows, indoor ground, items, overlay]. */
 const layer = (v: MapView, i: number): Container =>
   (v.root.children[0] as Container).children[i] as Container;
-const itemLayer = (v: MapView): Container => layer(v, 3);
+const itemLayer = (v: MapView): Container => layer(v, 4);
 
 /** Global tile of each drawn item sprite, in draw order. */
 const drawn = (v: MapView): string[] =>
@@ -559,5 +559,127 @@ describe("MapView elevation (docs/17 ART-8)", () => {
     v.render({ x: 0, y: 0, zoom: 1 }, { width: 40 * T, height: 40 * T });
     expect(itemLayer(v).children.map((s) => s.y)).toEqual([4 * T, 4 * T]);
     expect(v.elevationAt(2, 3)).toBe(0);
+  });
+});
+
+// docs/17 ART-5: the sun's shadows stay out of the buildings. The map has no roofs, so the
+// tiles walls close in are "indoors": their ground is drawn over the shadows.
+describe("MapView indoors", () => {
+  const G = "grass";
+  const wallArt: TileArt<Texture> = {
+    base: Texture.WHITE,
+    ms: 250,
+    sync: "world",
+    joinsWalls: true,
+    light: 0,
+    anchorX: 1,
+    wall: Array.from({ length: 16 }, () => Texture.WHITE),
+  };
+  type Stack = { x: number; y: number; stack: string[] };
+  const open = (): (string | null)[] => new Array<string | null>(32 * 32).fill(G);
+  /** A house: walls round (x0..x1, y0..y1), with a gap of `gap` tiles in its south wall. */
+  const house = (x0: number, y0: number, x1: number, y1: number, gap = 0): ChunkData => {
+    const items: Stack[] = [];
+    for (let x = x0; x <= x1; x++)
+      for (let y = y0; y <= y1; y++) {
+        const edge = x === x0 || x === x1 || y === y0 || y === y1;
+        if (edge && !(y === y1 && x > x0 && x <= x0 + gap)) items.push({ x, y, stack: ["wall"] });
+      }
+    return { ground: new Array<string | null>(32 * 32).fill(G), items };
+  };
+  const make = (
+    chunks: Map<string, ChunkData>,
+    indoors: ((z: number) => boolean) | undefined,
+  ): MapView => {
+    const v = new MapView({
+      source: { chunk: (z, cx, cy) => chunks.get(`${z}/${cx}/${cy}`) },
+      texture: () => Texture.WHITE,
+      art: (id) => (id === "wall" ? wallArt : undefined),
+      tileSize: T,
+      floor: 7,
+      indoors,
+    });
+    v.render({ x: 0, y: 0, zoom: 1 }, { width: 2048, height: 1024 });
+    return v;
+  };
+
+  it("knows the tiles walls close in, and draws their ground over the shadows", () => {
+    const v = make(new Map([["7/0/0", house(4, 4, 9, 8)]]), () => true);
+    expect(v.indoorAt(5, 5)).toBe(true);
+    expect(v.indoorAt(8, 7)).toBe(true);
+    // The walls themselves and the open ground are not indoors.
+    expect(v.indoorAt(4, 4)).toBe(false);
+    expect(v.indoorAt(3, 5)).toBe(false);
+    expect(v.indoorAt(20, 20)).toBe(false);
+    expect(v.indoorAt(-1, 5)).toBe(false);
+    const world = v.root.children[0] as Container;
+    expect(world.children.map((c) => c.label)).toEqual([
+      "ground",
+      "ground overlay",
+      "shadows",
+      "indoor ground",
+      "items",
+      "overlay",
+    ]);
+    // The 4 x 3 tiles inside: their ground is in the indoor layer and not in the ground's.
+    const indoor = layer(v, 3).children[0] as Container;
+    expect(indoor.children).toHaveLength(12);
+    expect((layer(v, 0).children[0] as Container).children).toHaveLength(32 * 32 - 12);
+    expect(indoor.children.map((s) => `${s.x / T},${s.y / T}`)).toContain("5,5");
+  });
+
+  it("closes a room at its doorway, and is outdoors where the gap is wider than a door", () => {
+    const door = make(new Map([["7/0/0", house(4, 4, 9, 8, 2)]]), () => true);
+    expect(door.indoorAt(5, 5)).toBe(true);
+    // The doorway's own tiles are under the lintel.
+    expect(door.indoorAt(5, 8)).toBe(true);
+    expect(door.indoorAt(5, 9)).toBe(false);
+    const open = make(new Map([["7/0/0", house(4, 4, 9, 8, 4)]]), () => true);
+    expect(open.indoorAt(5, 5)).toBe(false);
+    expect(layer(open, 3).children).toHaveLength(0);
+  });
+
+  it("answers only on the floors asked for, and never without the option (the editor)", () => {
+    const chunks = new Map([["7/0/0", house(4, 4, 9, 8)]]);
+    const editor = make(chunks, undefined);
+    expect(editor.indoorAt(5, 5)).toBe(false);
+    expect(layer(editor, 3).children).toHaveLength(0);
+    // Underground (the client names the floors under the sky): nothing is "indoors".
+    const cave = make(chunks, (z) => z < 7);
+    expect(cave.indoorAt(5, 5)).toBe(false);
+    expect(make(chunks, (z) => z <= 7).indoorAt(5, 5)).toBe(true);
+  });
+
+  it("closes a house that lies across two chunks, and redraws when its last wall is seen", () => {
+    // Walls from x 28 of chunk 0 to x 3 of chunk 1 (global 28..35), open between them.
+    const whole = house(28, 4, 31, 8);
+    const west: ChunkData = {
+      ground: whole.ground,
+      items: whole.items.filter((i) => i.x !== 31 || i.y === 4 || i.y === 8),
+    };
+    const walls: Stack[] = [];
+    for (let x = 0; x <= 3; x++)
+      for (let y = 4; y <= 8; y++)
+        if (x === 3 || y === 4 || y === 8) walls.push({ x, y, stack: ["wall"] });
+    const east: ChunkData = { ground: open(), items: walls };
+    const chunks = new Map<string, ChunkData>([["7/0/0", west]]);
+    const v = make(chunks, () => true);
+    // The east half is not known yet: the room counts as outdoors.
+    expect(v.indoorAt(30, 6)).toBe(false);
+    chunks.set("7/1/0", east);
+    v.render({ x: 0, y: 0, zoom: 1 }, { width: 2048, height: 1024 });
+    expect(v.indoorAt(30, 6)).toBe(true);
+    expect(v.indoorAt(33, 6)).toBe(true);
+    expect(v.indoorAt(36, 6)).toBe(false);
+  });
+
+  it("hides the baked shadow art at strength 0: the client casts every shadow itself", () => {
+    const v = make(new Map([["7/0/0", house(4, 4, 9, 8)]]), () => true);
+    expect(layer(v, 2).visible).toBe(true);
+    v.castShadowStrength = 0;
+    expect(layer(v, 2).visible).toBe(false);
+    v.castShadowStrength = 1;
+    expect(layer(v, 2).visible).toBe(true);
+    expect(layer(v, 2).alpha).toBe(CAST_SHADOW_ALPHA);
   });
 });

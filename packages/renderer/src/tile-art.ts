@@ -548,3 +548,131 @@ export function stackElevation(
   for (let i = 0; i < n && h < MAX_ELEVATION; i++) h += Math.max(0, elevationOf(stack[i] ?? ""));
   return Math.min(h, MAX_ELEVATION);
 }
+
+// ---- under a roof (docs/17 ART-5) ----------------------------------------------------------
+// The map has no roofs: a building is a ring of walls with its floor open to the viewer. The
+// sun's shadows do not fall in there, so the renderer needs to know which tiles are indoors:
+// the ones walls (and what joins them: doors, gates) close off from the open ground. A
+// doorway is a gap in a wall, and most buildings have one with no door in it (a temple, a
+// shop): a gap of up to DOORWAY_TILES between two walls closes the room too.
+
+/** A tile for indoorTiles: open ground, a wall (or what joins walls), or nothing known. */
+export const CELL_OPEN = 0;
+export const CELL_WALL = 1;
+export const CELL_UNKNOWN = 2;
+/** How far beyond a chunk's edge indoorTiles looks for the way out, tiles. */
+export const INDOOR_REACH = 16;
+/** The widest gap in a wall that is a doorway and not open ground, tiles. */
+export const DOORWAY_TILES = 3;
+/** Walled ground bigger than this is a courtyard under the sky, not a room, tiles. */
+export const MAX_INDOOR_AREA = 400;
+
+/**
+ * Which tiles of a `size` x `size` chunk are indoors: index ly * size + lx -> 1, or null
+ * when none is. `cell(x, y)` reads a tile in the chunk's local coordinates, from -reach to
+ * size + reach - 1 (the neighbours' tiles). A tile is outdoors when open ground connects it
+ * (by its four sides) to the edge of that window or to a tile nothing is known of; indoors
+ * when walls close it in. A doorway closes it too, and is indoors itself: open tiles in a
+ * straight gap of up to DOORWAY_TILES between two walls, unless both walls go on to the
+ * same side (that is an alley between two buildings, not a gap in one wall). So a house, a
+ * temple with its open doorway or a walled cellar is indoors; walled ground of more than
+ * MAX_INDOOR_AREA tiles (a courtyard, a town inside its ramparts) is not; a room half known
+ * (the edge of what the client has) counts as outdoors until its last wall is seen.
+ */
+export function indoorTiles(
+  size: number,
+  reach: number,
+  cell: (x: number, y: number) => number,
+): Uint8Array | null {
+  const n = size + 2 * reach;
+  const grid = new Uint8Array(n * n);
+  let walls = false;
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const c = cell(x - reach, y - reach);
+      grid[y * n + x] = c;
+      if (c === CELL_WALL) walls = true;
+    }
+  if (!walls) return null;
+  const OUT = 3;
+  const DOOR = 4;
+  const isOpen = (c: number | undefined): boolean => c === CELL_OPEN || c === DOOR;
+  const at = (x: number, y: number): number =>
+    x < 0 || y < 0 || x >= n || y >= n ? CELL_UNKNOWN : (grid[y * n + x] as number);
+  // The doorways: runs of open tiles between two walls, along either axis.
+  for (let axis = 0; axis < 2; axis++) {
+    const dx = axis === 0 ? 1 : 0;
+    const dy = 1 - dx;
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) {
+        // The first open tile after a wall.
+        if (!isOpen(at(x, y)) || at(x - dx, y - dy) !== CELL_WALL) continue;
+        let len = 1;
+        while (len <= DOORWAY_TILES && isOpen(at(x + len * dx, y + len * dy))) len++;
+        const bx = x + len * dx;
+        const by = y + len * dy;
+        if (len > DOORWAY_TILES || at(bx, by) !== CELL_WALL) continue;
+        const ax = x - dx;
+        const ay = y - dy;
+        // Both walls going on to the same side: a corridor between two walls.
+        if (
+          (at(ax + dy, ay + dx) === CELL_WALL && at(bx + dy, by + dx) === CELL_WALL) ||
+          (at(ax - dy, ay - dx) === CELL_WALL && at(bx - dy, by - dx) === CELL_WALL)
+        )
+          continue;
+        for (let k = 0; k < len; k++) grid[(y + k * dy) * n + x + k * dx] = DOOR;
+      }
+  }
+  // Flood the outdoors: OUT marks an open tile the open ground reaches.
+  const queue = new Int32Array(n * n);
+  let head = 0;
+  let tail = 0;
+  const seed = (i: number): void => {
+    if (grid[i] !== CELL_OPEN) return;
+    grid[i] = OUT;
+    queue[tail++] = i;
+  };
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const i = y * n + x;
+      if (grid[i] === CELL_UNKNOWN) {
+        if (x > 0) seed(i - 1);
+        if (x < n - 1) seed(i + 1);
+        if (y > 0) seed(i - n);
+        if (y < n - 1) seed(i + n);
+      } else if (x === 0 || y === 0 || x === n - 1 || y === n - 1) seed(i);
+    }
+  const spread = (i: number, into: (j: number) => void): void => {
+    const x = i % n;
+    if (x > 0) into(i - 1);
+    if (x < n - 1) into(i + 1);
+    if (i >= n) into(i - n);
+    if (i < n * (n - 1)) into(i + n);
+  };
+  while (head < tail) spread(queue[head++] as number, seed);
+  // What is left is walled in, room by room: IN marks the rooms, OUT the courtyards. A
+  // doorway on the window's edge or by an unknown tile belongs to no room.
+  const IN = 5;
+  const SEEN = 6;
+  const join = (i: number): void => {
+    if (!isOpen(grid[i])) return;
+    grid[i] = SEEN;
+    queue[tail++] = i;
+  };
+  for (let i = 0; i < grid.length; i++) {
+    if (!isOpen(grid[i])) continue;
+    const first = (tail = head = 0);
+    join(i);
+    while (head < tail) spread(queue[head++] as number, join);
+    const room = tail - first <= MAX_INDOOR_AREA ? IN : OUT;
+    for (let k = first; k < tail; k++) grid[queue[k] as number] = room;
+  }
+  let out: Uint8Array | null = null;
+  for (let ly = 0; ly < size; ly++)
+    for (let lx = 0; lx < size; lx++) {
+      if (grid[(ly + reach) * n + lx + reach] !== IN) continue;
+      out ??= new Uint8Array(size * size);
+      out[ly * size + lx] = 1;
+    }
+  return out;
+}
