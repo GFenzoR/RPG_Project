@@ -17,7 +17,7 @@
 | `livingworld/sounds/ambience/*.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`, `src/ambience.ts`): el ambiente posicional del mundo vivo | Sí |
 | `livingworld/sounds/steps/<sonido>_<n>.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`, `src/steps.ts`): una pisada por superficie (pasto, pasto alto, tierra, arena, arena mojada, ceniza, piedra, madera, nieve, barro, agua baja), tres tomas de cada una, todas a la misma sonoridad | Sí |
 | `sounds/music/gemini/<lugar>_<toma>.ogg` | Música elegida por el dueño entre las tomas de Gemini ("Generado con IA" en `CREDITS.md`), temas enteros en estéreo escritos por `make music-gemini` | Sí |
-| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, las versiones extra de las cuevas, con fuente, título y medidas (puntos de entrada) | Sí (lo escribe `make music-gemini`) |
+| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, las versiones extra de cada lugar, con fuente, título y medidas (puntos de entrada) | Sí (lo escribe `make music-gemini`) |
 
 - Todo lo de `sounds/` sale de recetas en código (`tools/soundgen/src/sfx.ts` y
   `music.ts`): osciladores, ruido, envolventes y una cuerda pulsada (Karplus-Strong). Las
@@ -33,7 +33,8 @@ Desde el 2026-11-18 la música del juego es la que el dueño eligió entre las t
 Gemini hizo para cada lugar (`tools/gemini/music_slots.json`: título, Puerto, Bosque,
 Volcán, Cuevas, combate y el guardián de la forja), más seis versiones de cueva pedidas
 el mismo día (`cave_mine`, `cave_crystal`, `cave_flooded`, `cave_abyss`, `cave_ossuary`,
-`cave_ember`). Las tomas están fuera de git, en `build/music-gemini/<lugar>_<n>.mp4` con su
+`cave_ember`) y, desde el 2026-11-25, dos versiones más por lugar en el mismo estilo
+(`versions` de `music_slots.json`: `title_vigil`, `bosque_mist`...). Las tomas están fuera de git, en `build/music-gemini/<lugar>_<n>.mp4` con su
 sidecar (la tercera de Puerto es `probe_1.mp4`), y las elecciones en
 `build/music-gemini/picks.json`:
 ```json
@@ -44,9 +45,12 @@ sidecar (la tercera de Puerto es `probe_1.mp4`), y las elecciones en
   todas: la primera es el sonido del lugar (`music_puerto`), las demás sonidos propios
   (`music_puerto_2`, `music_puerto_3`), y todas forman la pool del lugar en `sounds.yaml`
   (`music.pools.town_puerto`), que el director de música baraja.
-- **Las versiones de cueva** (`cave_pool`: `"mine"`, `"cave_mine"` o `"cave_mine_1"`) se
-  suman a la pool de las cuevas después de su toma (`music_cueva_mine`...). Mientras el dueño
-  no escriba `cave_pool`, entran las seis que pasan las medidas
+- **Las versiones de un lugar** (`<lugar>_pool`: `cave_pool`, `bosque_pool`, `title_pool`,
+  `town_puerto_pool`, `volcan_pool`, `boss_forge_pool`; cada nombre como `"mine"`,
+  `"cave_mine"` o `"cave_mine_1"`) se suman a la pool del lugar después de su toma
+  (`music_cueva_mine`, `music_bosque_mist`...). Mientras el dueño no escriba esa clave,
+  entran las de `Slot.extras` de `music_import.py` (las seis de cueva del 2026-11-18 y, de
+  las del 2026-11-25, las que caben en el presupuesto de docs/07) que pasan las medidas
   (`music_convert.piece_problems`: tema entero de 2 minutos o más, volumen medible, ningún
   hueco de silencio de más de 6 s, al menos dos puntos de entrada), marcadas
   **provisionales** (en el manifiesto y en su fila de `CREDITS.md`); las que no pasan quedan
@@ -550,7 +554,9 @@ prompts en `assets/prompts/sprites/creatures/`):
 Música, del MP4 al juego:
 1. `python tools/gemini/music_queue.py run` pide los temas de `tools/gemini/music_slots.json`
    uno a la vez (o `music_web.py ask` uno suelto) y deja `build/gemini/music/<tema>_<n>.mp4`
-   con su `.json`.
+   con su `.json`. Con `--slots <id>,... --takes 1` pide **versiones** (`versions` del mismo
+   archivo): otro tema del estilo de un lugar, con su texto y otro instrumento, ánimo o
+   tempo, para ampliar su pool.
 2. Se escuchan (para probar una conversión suelta: `python tools/gemini/music_convert.py
    build/gemini/music/<tema>_<n>.mp4 --no-loop`, el tema entero a -14 LUFS en Ogg Opus con
    sus puntos de entrada en el `.json`; sin `--no-loop` hace un loop cerrado con crossfade,

@@ -1914,7 +1914,7 @@ music:           # el director de música (client/src/audio/director.ts)
   `make music-gemini` desde las elecciones del dueño; no se editan a mano. Una pool hecha a
   mano va en `pools:` fuera de las marcas. Lo que tiene cada lugar está en
   `assets/sounds/music/gemini.yaml` (`format: 2`): `pick`, `provisional`, `extras` (las
-  versiones extra de las cuevas), `skipped` (las que quedaron afuera y por qué),
+  versiones extra del lugar, `<lugar>_pool` en `picks.json`), `skipped` (las que quedaron afuera y por qué),
   `file`/`volume` del sonido del lugar, `fallback` (el tema de soundgen que vuelve con
   `none`), `pool` y `tracks` (cada toma con su fuente, el título que le dio Gemini, su
   prompt, si es provisional, y sus medidas: `seconds`, `end`, `entries`, `longest_quiet`,

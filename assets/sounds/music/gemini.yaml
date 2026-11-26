@@ -2,7 +2,7 @@
 # `make music-gemini` (tools/gemini/music_import.py) from the owner's picks in
 # build/music-gemini/picks.json: change a pick there and run it again; never by hand.
 # pick: a take (1, 2, 3), a pool of takes, or none; provisional: not picked yet (take 1);
-# extras: the slot's extra versions (picks.json cave_pool), provisional until listed;
+# extras: the slot's extra versions (picks.json <slot>_pool), provisional until listed;
 # file/volume: the slot's own sound (its pool's first track); fallback: the soundgen
 # theme that plays with none (kept, with its recipe, for that); pool: the sounds the
 # music director shuffles; tracks: every take shipped, whole, with where it may start.
@@ -101,10 +101,11 @@ slots:
     sound: "music_bosque"
     pick: "1"
     provisional: false
+    extras: ["mist_1"]
     file: "sounds/music/gemini/bosque_1.ogg"
     volume: 0.7
     fallback: "sounds/music/bosque.ogg"
-    pool: ["music_bosque"]
+    pool: ["music_bosque", "music_bosque_mist"]
     tracks:
       - take: "1"
         sound: "music_bosque"
@@ -124,14 +125,33 @@ slots:
         lufs: -14
         kbps: 48
         bytes: 1071197
+      - take: "mist_1"
+        sound: "music_bosque_mist"
+        file: "sounds/music/gemini/bosque_mist_1.ogg"
+        volume: 0.74
+        provisional: true
+        source: "bosque_mist_1.mp4"
+        source_sha256: "7e0ce448314bc3ac82c1eded87fd00632011a5015e412589f07d69fe09279ee2"
+        title: "Beneath the Gnarled Canopy"
+        made: "2026-11-25"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/bosque_mist_1.txt"
+        seconds: 173.85
+        end: 171.05
+        entries: [10.2, 31.5, 51.2, 67.4, 82.8, 106.1, 121.5, 138.2]
+        longest_quiet: 0
+        lufs: -14.47
+        kbps: 48
+        bytes: 1023074
   volcan:
     sound: "music_volcan"
     pick: "2"
     provisional: false
+    extras: ["cinder_1"]
     file: "sounds/music/gemini/volcan_2.ogg"
     volume: 0.77
     fallback: "sounds/music/volcan.ogg"
-    pool: ["music_volcan"]
+    pool: ["music_volcan", "music_volcan_cinder"]
     tracks:
       - take: "2"
         sound: "music_volcan"
@@ -151,6 +171,24 @@ slots:
         lufs: -14.79
         kbps: 48
         bytes: 1066083
+      - take: "cinder_1"
+        sound: "music_volcan_cinder"
+        file: "sounds/music/gemini/volcan_cinder_1.ogg"
+        volume: 0.83
+        provisional: true
+        source: "volcan_cinder_1.mp4"
+        source_sha256: "4f1e2357780d9fc84498867884fd37adc094a1778ed7db73d28503d9593607b1"
+        title: "Beneath the Obsidian Ridge"
+        made: "2026-11-25"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/volcan_cinder_1.txt"
+        seconds: 175.06
+        end: 166.46
+        entries: [12.4, 27.4, 54.9, 75.4, 96, 115.2, 130.2]
+        longest_quiet: 0
+        lufs: -15.51
+        kbps: 48
+        bytes: 1043578
   cave:
     sound: "music_cueva"
     pick: "1"

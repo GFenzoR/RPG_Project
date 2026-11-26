@@ -83,6 +83,18 @@ class ThePicks(unittest.TestCase):
             with self.assertRaises(SystemExit, msg=bad):
                 mi.read_picks(bad)
 
+    def test_every_slot_with_music_takes_extra_versions(self):
+        # The owner (2026-11-25): more tracks of the same styles, in every slot's pool.
+        self.assertEqual(
+            mi.read_picks('{"picks": {"bosque_pool": ["mist", "bosque_hollow_1"], "town_puerto_pool": "town_puerto_dusk", '
+                          '"boss_forge_pool": ["Slag"], "title_pool": "none"}}'),
+            {"bosque_pool": ("mist_1", "hollow_1"), "town_puerto_pool": ("dusk_1",), "boss_forge_pool": ("slag_1",),
+             "title_pool": ()})
+        # A fight has no music, so it has no pool to add to.
+        self.assertEqual(SLOT["combat"].extras_key, "")
+        with self.assertRaises(SystemExit):
+            mi.read_picks('{"picks": {"combat_pool": ["rage"]}}')
+
     def test_fights_only_take_none(self):
         # The owner (2026-11-18): an ordinary fight keeps the zone's music.
         with self.assertRaises(SystemExit):
@@ -113,7 +125,9 @@ class ThePicks(unittest.TestCase):
         self.assertEqual(mi.file_of(cave, "mine_1"), "sounds/music/gemini/cave_mine_1.ogg")
         self.assertEqual(mi.extras_choice(cave, {}), (tuple("%s_1" % n for n in cave.extras), True))
         self.assertEqual(mi.extras_choice(cave, {"cave_pool": ("mine_1",)}), (("mine_1",), False))
-        self.assertEqual(mi.extras_choice(SLOT["title"], {}), ((), False))
+        self.assertEqual(mi.extras_choice(SLOT["combat"], {}), ((), False))
+        self.assertEqual([mi.sound_of(puerto, 3, "dusk_1"), mi.file_of(puerto, "dusk_1"), mi.source_name(puerto.id, "dusk_1")],
+                         ["music_puerto_dusk", "sounds/music/gemini/town_puerto_dusk_1.ogg", "town_puerto_dusk_1"])
         self.assertEqual((mi.kbps_of(cave), mi.kbps_of(puerto)), (mi.AMBIENT_KBPS, mi.KBPS))
         self.assertEqual([mi.pick_text(t) for t in ((), ("2",), ("1", "3"))], ['"none"', '"2"', '["1", "3"]'])
 
@@ -126,6 +140,27 @@ class ThePicks(unittest.TestCase):
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "music_slots.json"), encoding="utf-8") as h:
             asked = [slot["id"] for slot in json.load(h)["slots"]]
         self.assertEqual(sorted(asked), sorted(SLOT))
+
+    def test_every_version_of_the_asks_is_an_extra_version_of_its_slot(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "music_slots.json"), encoding="utf-8") as h:
+            book = json.load(h)
+        versions = book["versions"]
+        self.assertEqual(len({v["id"] for v in versions}), len(versions))
+        self.assertFalse({v["id"] for v in versions} & set(SLOT))
+        for version in versions:
+            slot = SLOT[version["of"]]
+            self.assertTrue(slot.extras_key, version["id"])
+            self.assertTrue(version["id"].startswith(slot.id + "_"), version["id"])
+            # The queue writes <id>_1.mp4, which is where the importer looks for it
+            # (<id>_<n>.mp4, by its alias, when an earlier ask brought no track).
+            take = mi.extra_version(version["id"], slot.id)
+            self.assertEqual(take, version["id"][len(slot.id) + 1:] + "_1")
+            self.assertRegex(mi.source_name(slot.id, take), "^%s_[1-9]$" % version["id"])
+        # What ships before the owner lists his own is one of them (or a cave version of 2026-11-18).
+        asked = {v["id"] for v in versions}
+        for slot in mi.SLOTS:
+            if slot.id != "cave":
+                self.assertFalse({"%s_%s" % (slot.id, name) for name in slot.extras} - asked, slot.id)
         self.assertEqual(len({slot.sound for slot in mi.SLOTS}), len(mi.SLOTS))
 
 

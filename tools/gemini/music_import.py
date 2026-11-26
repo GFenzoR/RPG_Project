@@ -16,10 +16,15 @@ is editing that file and running it again:
   ships every take of it: the first is the slot's sound (`music_puerto`), the
   others are sounds of their own (`music_puerto_2`...), and the client's music
   director shuffles them (`client/src/audio/director.ts`).
-- **The caves' extra versions** (`cave_pool`: names like "mine" or
-  "cave_mine_1") join the cave's pool after its pick. Until the owner lists
-  them, every version of `Slot.extras` whose take passes the measures
-  (`music_convert.piece_problems`) ships, marked `provisional`.
+- **A slot's extra versions** (`<slot>_pool`, like `cave_pool` or
+  `bosque_pool`: names like "mine" or "cave_mine_1") join the slot's pool
+  after its pick: more tracks in the slot's style, each asked with a text of
+  its own (the caves' six of 2026-11-18; the `versions` of `music_slots.json`,
+  2026-11-25). Until the owner lists them, every version of `Slot.extras`
+  whose take passes the measures (`music_convert.piece_problems`) ships,
+  marked `provisional`. `Slot.extras` holds what fits the size budget
+  (docs/07 "Audio"): a version delivered but not named there waits in
+  `build/music-gemini/` for the owner to list it.
 - **A slot that is missing is not picked yet**: its take 1 plays, marked
   `provisional` (in the manifest and in its CREDITS.md row).
 - **`none` (or `off`) keeps what played before Gemini**: the soundgen theme of
@@ -106,28 +111,38 @@ class Slot:
     fallback_volume: float = 0.0
     rule: str = ""  # "title" or "bosses.<monster id>" in sounds.yaml music:; "" = a zone's pool
     ambient: bool = False  # encoded at AMBIENT_KBPS
-    extras_key: str = ""  # the picks.json key of its extra versions
-    extras: tuple[str, ...] = ()  # those versions, shipped provisionally until the owner lists his
+    extras: tuple[str, ...] = ()  # its extra versions shipped provisionally until the owner lists his
     off: bool = False  # only "none"/"off": the owner turned it off
 
+    @property
+    def extras_key(self) -> str:
+        """The picks.json key of its extra versions (`cave_pool`); "" for a slot that is off."""
+        return "" if self.off else self.id + "_pool"
 
-## The slots of music_slots.json, in the order sounds.yaml lists them.
+
+## The slots of music_slots.json, in the order sounds.yaml lists them. `extras`: the six
+## cave versions of 2026-11-18, and of the versions of 2026-11-25 (`versions` in
+## music_slots.json: twelve asked for, seven delivered) the two that fit under the 16 MiB
+## of docs/07 "Audio": one more track for each island that had a single one. The other
+## five wait in build/music-gemini/ for the owner to list them (`<slot>_pool`) once the
+## budget allows.
 SLOTS = (
     Slot("title", "music_title", "la pantalla de título (login y personajes)", rule="title"),
     Slot("town_puerto", "music_puerto", "Puerto (también la isla de inicio y la de pruebas)",
          "sounds/music/puerto.ogg", 0.7),
-    Slot("bosque", "music_bosque", "la Isla del Bosque", "sounds/music/bosque.ogg", 0.7),
-    Slot("volcan", "music_volcan", "la Isla Volcánica", "sounds/music/volcan.ogg", 0.75),
+    Slot("bosque", "music_bosque", "Selvaine", "sounds/music/bosque.ogg", 0.7, extras=("mist",)),
+    Slot("volcan", "music_volcan", "Karvask", "sounds/music/volcan.ogg", 0.75, extras=("cinder",)),
     Slot("cave", "music_cueva", "las minas y cuevas (pisos bajo el mar)", "sounds/music/cueva.ogg", 0.8,
-         ambient=True, extras_key="cave_pool",
+         ambient=True,
          extras=("mine", "crystal", "flooded", "abyss", "ossuary", "ember")),
     Slot("combat", "music_combat", "los combates", off=True),
     Slot("boss_forge", "music_boss_forge", "el guardián de la forja", rule="bosses.slagbound_warden"),
 )
 
 ## Takes delivered under another name: town_puerto's third is the probe the
-## main session asked first (2026-11-17).
-ALIASES = {("town_puerto", "3"): "probe_1"}
+## main session asked first (2026-11-17); the title's "vigil" came on its second
+## ask (the first was answered with text only, 2026-11-25).
+ALIASES = {("town_puerto", "3"): "probe_1", ("title", "vigil_1"): "title_vigil_2"}
 
 VERSIONS = ("1", "2", "3")
 ## File names the page gave a take that had no title of its own (town_puerto_2: "output").
@@ -185,12 +200,12 @@ class Entry:
 # --- the pure parts (tested by test_music_import.py) --------------------------------------
 
 
-def extra_version(name: str) -> str:
-    """An extra version as the picks may write it ("mine", "cave_mine",
-    "cave_mine_1", "mine_2") as `<name>_<take>`: "mine_1", "mine_2"."""
+def extra_version(name: str, slot: str = "cave") -> str:
+    """An extra version of `slot` as the picks may write it ("mine",
+    "cave_mine", "cave_mine_1", "mine_2") as `<name>_<take>`: "mine_1", "mine_2"."""
     value = str(name).strip().lower()
-    if value.startswith("cave_"):
-        value = value[len("cave_"):]
+    if value.startswith(slot + "_"):
+        value = value[len(slot) + 1:]
     if not EXTRA.match(value):
         raise SystemExit("picks.json: %r is not a version name (\"mine\", \"cave_mine_1\")" % name)
     return value if re.search(r"_[1-9]$", value) else value + "_1"
@@ -215,7 +230,7 @@ def read_picks(text: str) -> dict[str, tuple[str, ...]]:
             if len(names) == 1 and str(names[0]).strip().lower() in NONE:
                 out[key] = ()
                 continue
-            versions = tuple(extra_version(name) for name in names)
+            versions = tuple(extra_version(name, extras[key].id) for name in names)
             if not versions or len(set(versions)) != len(versions):
                 raise SystemExit("picks.json: %s must list different versions, not %r" % (key, value))
             out[key] = versions
@@ -254,7 +269,7 @@ def extras_choice(slot: Slot, picks: dict[str, tuple[str, ...]]) -> tuple[tuple[
         return (), False
     if slot.extras_key in picks:
         return picks[slot.extras_key], False
-    return tuple(extra_version(name) for name in slot.extras), True
+    return tuple(extra_version(name, slot.id) for name in slot.extras), True
 
 
 def source_name(slot: str, take: str) -> str:
@@ -428,7 +443,7 @@ def manifest_text(entries: list[Entry], kbps: int = KBPS, ambient_kbps: int = AM
         "# `make music-gemini` (tools/gemini/music_import.py) from the owner's picks in",
         "# build/music-gemini/picks.json: change a pick there and run it again; never by hand.",
         "# pick: a take (1, 2, 3), a pool of takes, or none; provisional: not picked yet (take 1);",
-        "# extras: the slot's extra versions (picks.json cave_pool), provisional until listed;",
+        "# extras: the slot's extra versions (picks.json <slot>_pool), provisional until listed;",
         "# file/volume: the slot's own sound (its pool's first track); fallback: the soundgen",
         "# theme that plays with none (kept, with its recipe, for that); pool: the sounds the",
         "# music director shuffles; tracks: every take shipped, whole, with where it may start.",
@@ -571,7 +586,7 @@ def run(root: str, sources: str, picks: dict[str, tuple[str, ...]], kbps: int = 
         rate = kbps_of(slot, kbps, ambient_kbps)
         wanted = [(take, source_name(slot.id, take), provisional, True) for take in takes]
         if takes:  # extras join a pool that has a pick of its own
-            wanted += [(version, "%s_%s" % (slot.id, version), extras_provisional, not extras_provisional)
+            wanted += [(version, source_name(slot.id, version), extras_provisional, not extras_provisional)
                        for version in extras]
         for take, stem, track_provisional, required in wanted:
             source = os.path.join(sources, stem + ".mp4")

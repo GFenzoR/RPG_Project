@@ -202,8 +202,19 @@ class Run(unittest.TestCase):
     def test_the_real_slots_build_their_prompts(self):
         book = music_style.load()
         self.assertEqual(len({slot["id"] for slot in book["slots"]}), len(book["slots"]))
-        for slot in book["slots"]:
+        for slot in book["slots"] + book["versions"]:
             self.assertIn(book["house"], music_style.prompt(book, slot, 1))
+
+    def test_a_version_is_asked_only_by_name(self):
+        book = dict(BOOK, versions=[{"id": "cave_echo", "of": "cave", "text": "A vast cavern."}])
+        self.assertEqual([s["id"] for s in mq.slots_of(book, "")], ["title", "cave"])
+        named = mq.pick(mq.slots_of(book, "cave_echo"), "cave_echo")
+        self.assertEqual([s["id"] for s in named], ["cave_echo"])
+        self.assertEqual(music_style.slot_of(book, "cave_echo")["of"], "cave")
+        # Its one take is asked with its own text and the house style, no variation line.
+        text = music_style.prompt(book, named[0], 1)
+        self.assertTrue(text.startswith("A vast cavern."))
+        self.assertNotIn(book["variation"], text)
 
 
 if __name__ == "__main__":

@@ -246,10 +246,10 @@ El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez q
 (carga perezosa). Los efectos y el ambiente quedan decodificados en memoria; la música se
 transmite (ver abajo).
 
-| Métrica | Presupuesto | Hoy (2026-11-18) |
+| Métrica | Presupuesto | Hoy (2026-11-18; la música, 2026-11-25) |
 |---|---|---|
-| Todos los archivos de `assets/sounds.yaml` | ≤ 16 MiB | ~13,4 MiB (44 archivos; 13,3 MiB de música) |
-| Una pool de música (`music.pools`) | ≤ 8 MiB | Cuevas ~6,0 MiB (7 temas), Puerto ~3,2 MiB (3), las demás ~1 MiB |
+| Todos los archivos de `assets/sounds.yaml` | ≤ 16 MiB | ~15,8 MiB (86 archivos; 15,3 MiB de música): **quedan ~0,2 MiB** |
+| Una pool de música (`music.pools`) | ≤ 8 MiB | Cuevas ~6,0 MiB (7 temas), Puerto ~3,2 MiB (3), Selvaine y Karvask ~2,0 MiB (2 cada una), título y guardián ~1 MiB (1) |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
 | Un tema de música / un loop de ambiente | ≤ 1,5 MiB / ≤ 96 KiB | máx. ~1,1 MiB / ~44 KiB (los del ambiente posicional, ~42 KiB cada uno) |
 | Ambiente posicional (lote 18) | ≤ `voices` (6) loops a la vez, 3 en un teléfono o con animaciones reducidas; los que suenan y 2 más decodificados | 9 loops de 16 s, ~380 KiB en total; ~3 MB de PCM cada uno decodificado: ~24 MB con 6 sonando y 2 guardados, ~15 MB con 3 |
@@ -264,6 +264,17 @@ transmite (ver abajo).
   Puerto y más versiones de cueva. Los loops de ~1 minuto mono a 20 kbps del lote 7 eran
   justo la monotonía que no quiere y sonaban finos. Ahora cada toma entra **entera** (~3 min)
   en **Ogg Opus estéreo**, y el tope pasó de 1,5 MiB a 16 MiB en total, con 8 MiB por pool.
+- **El total está lleno (2026-11-25):** el dueño pidió más temas de los mismos estilos y se
+  pidieron dos versiones por lugar (doce, `versions` de `tools/gemini/music_slots.json`);
+  Gemini entregó siete antes de dejar de dar temas esa noche. Bajo los 16 MiB solo entraron
+  dos (una más para Selvaine y otra para Karvask, que tenían un solo tema); las otras cinco
+  (`title_vigil`, `title_embers`, `town_puerto_dusk`, `cave_echo`, `boss_forge_bellows`)
+  pasan las medidas y esperan en `build/music-gemini/`. Sumarlas son ~5,1 MiB más (~20,9
+  MiB en total; la pool de las cuevas quedaría en ~6,9 MiB, bajo su tope), y las cinco que
+  faltan pedir, otros ~5 MiB. Como nada de la música está en la descarga inicial ni en la caché
+  de la PWA, el total solo pesa en el repo y en la imagen del servidor web: subir
+  `BUDGET.totalBytes` (y esta tabla) es decisión del dueño; después se listan en
+  `picks.json` (`<lugar>_pool`) y se corre `make music-gemini`.
 - **Bitrate medido** (2026-11-18, la toma 1 de Puerto y la 1 de Cuevas contra el AAC de
   Gemini, error por tercio de octava y ancho estéreo): a 24 kbps el códec junta los canales
   (se pierde un cuarto a un tercio del ancho); desde 32 kbps el estéreo queda entero y el

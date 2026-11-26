@@ -2160,6 +2160,27 @@ el punto 5:
     principal (título 1, Puerto 1, 2 y 3, Bosque 1, Volcán 2, Cuevas 1, guardián de la
     forja 1; combate apagado). Cambiar una elección es editar ese archivo y correr
     `make music-gemini`. Cada toma está en "Generado con IA" de `CREDITS.md` con su prompt.
+  - **Más música de los mismos estilos (2026-11-25, rama `feat/more-music`, pedido del
+    dueño):** `music_slots.json` tiene doce versiones (`versions`: dos por lugar, el texto
+    del lugar con otro instrumento, ánimo o tempo) y el importador acepta versiones extra
+    en cualquier lugar (`<lugar>_pool` en `picks.json`). Gemini entregó siete
+    (`build/music-gemini/`: `title_vigil_2`, `title_embers_1`, `town_puerto_dusk_1`,
+    `bosque_mist_1`, `volcan_cinder_1`, `cave_echo_1`, `boss_forge_bellows_1`, todas `.mp4`
+    y dentro de las medidas) y después contestó tres pedidos seguidos con texto y sin tema
+    ("no music generation tool is available"), así que la cola se cortó. Lo que queda:
+    - **Solo dos están en el juego**, provisionales: `bosque_mist` (Selvaine) y
+      `volcan_cinder` (Karvask). El total de audio quedó en ~15,8 de 16 MiB (docs/07
+      "Audio"): para sumar las otras cinco (~5,1 MiB) el dueño tiene que subir
+      `BUDGET.totalBytes` (`tools/soundgen/src/index.ts`) y la tabla de docs/07, listarlas
+      (`"title_pool": ["vigil", "embers"], "town_puerto_pool": ["dusk"], "bosque_pool":
+      ["mist"], "volcan_pool": ["cinder"], "cave_pool": [las seis de antes y "echo"],
+      "boss_forge_pool": ["bellows"]`) y correr `make music-gemini`.
+    - **Faltan pedir cinco:** `python tools/gemini/music_queue.py run --into
+      build/music-gemini --takes 1 --retries 1 --slots
+      bosque_hollow,volcan_ridge,cave_roots,boss_forge_slag` (y `town_puerto_tide`, que ya
+      gastó sus dos pedidos: con `--retries 2`), otro día.
+    - **El dueño no escuchó ninguna:** las que no le gusten se sacan de `Slot.extras` o no
+      se listan.
   - **Director de música (hecho, rama `feat/music-director`, pedido del dueño del
     2026-11-18):** temas enteros en estéreo transmitidos, pools por lugar sin repetir el
     mismo tema dos veces seguidas, arranque en un punto de entrada al azar, memoria por zona,

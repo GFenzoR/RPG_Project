@@ -3429,8 +3429,9 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
 - **Música: el director** (pedido del dueño, 2026-11-18; `client/src/audio/director.ts`,
   `sounds.yaml` `music`). Lo que oye el jugador:
   - **Cada lugar tiene una pool de temas enteros** (~3 minutos cada uno): Puerto alterna sus
-    tres tomas, las cuevas siete versiones, cada isla la suya, el título la suya y el
-    guardián de la forja la suya. Un tema nunca se repite dos veces seguidas y la pool se
+    tres tomas, las cuevas siete versiones, Selvaine y Karvask dos cada una (desde el
+    2026-11-25: una versión más del mismo estilo, provisional hasta que el dueño la
+    escuche), el título la suya y el guardián de la forja la suya. Un tema nunca se repite dos veces seguidas y la pool se
     recorre entera antes de repetir.
   - **Ningún tema empieza por el principio:** arranca en uno de sus puntos de entrada (donde
     empieza una frase, medidos al importarlo), al azar. Bajar a una cueva no suena igual dos
