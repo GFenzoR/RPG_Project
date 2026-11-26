@@ -536,8 +536,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   postura, perseguir y el modo seguro vienen de `Welcome.options` (`GameUi.fightStance`,
   `chase`, `safeMode`): el cliente ya no manda el modo seguro tras el `Welcome`.
 - Modo seguro: `Game.safeMode`/`setSafeMode` (`localStorage` `rpg.safeMode`, activado por
-  defecto, `state/pvp.ts`); se manda tras el `Welcome` solo si está apagado (el servidor
-  empieza activado). Interruptor `data-testid="safe-mode"` en "Modo de combate".
+  defecto, `state/pvp.ts`, solo como valor hasta que llega el `Welcome`); el vigente lo dice
+  `Welcome.options` y se manda solo cuando el jugador cambia el interruptor. Interruptor `data-testid="safe-mode"` en "Modo de combate".
 - `WorldState` suelta el objetivo con `combat.cannot_attack` y con los rechazos `pvp.*`
   (`TARGET_REFUSED`). Un `content_id` llamado `skull` se traduce como `client.skull.<id>`.
 - Guerras: `GuildView.wars` (`state/guild.ts`, `warActions`/`warLine` puros y con tests),
