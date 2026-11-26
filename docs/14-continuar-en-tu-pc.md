@@ -109,13 +109,19 @@ el punto 5:
   sueltan (docs/02 "Oficios", Cocina). Pendiente: sprites propios; por ahora reusan los
   de Dungeon Crawl (CC0: trozo de carne, fresa, cecina), y carne cruda, de ciervo, ancas y
   de cangrejo comparten el mismo trozo. Sin recetas de cocina para las nuevas todavía.
-- **Pisos de edificio dentro del muro (hecho, rama `fix/floor-audit`; el dueño el 2026-11-26:
-  "hay edificios en los que el piso sale hacia afuera del muro")**: `make validate` exige que
-  un suelo `ground.floor: building` (`wooden_floor`) tenga muro, puerta u otro piso en cada
-  lado (docs/03 "Pisos de edificio"); excepciones por el suelo `floor: open` (`dock_planks`).
-  Auditadas las islas: el puesto de pruebas y cuatro huecos de entrada (puerto 2, volcán,
-  bosque) pasaron a `dock_planks`. Pendiente: pisos de piedra de interior (`stone_floor`) no
-  se comprueban, porque el mismo suelo es plaza al aire libre; un suelo de interior propio
+- **Pisos de edificio dentro del muro (rama `fix/floor-audit`; el dueño el 2026-11-26:
+  "hay edificios en los que el piso sale hacia afuera del muro")**. La causa era de dibujo:
+  la casilla del muro lleva el piso del cuarto y la pieza del muro lateral es más angosta
+  que la casilla, así que se veía una franja de piso por fuera en todos los edificios. El
+  renderer ahora parte la casilla del muro (y el umbral de una entrada) y dibuja en cada
+  mitad el suelo de su lado (`groundSplit`, docs/03 "Pisos de edificio"). Revisado en
+  `mapcli render` (puerto, bosque, volcán); **falta verlo en el cliente** (`make e2e` del
+  lote). Además `make validate` exige que un suelo `ground.floor: building`
+  (`wooden_floor`) tenga muro, puerta, entrada (hueco de hasta 3 casillas entre dos muros)
+  u otro piso de edificio en cada lado y esquina; el puesto de pruebas pasó a
+  `dock_planks`. Pendiente: los pisos de piedra de interior (`stone_floor`) no se
+  comprueban, porque el mismo suelo es plaza al aire libre (marcarlo `building` da 1124
+  errores en cuatro islas); un suelo de interior propio los cubriría.
   los cubriría.
 - **Viento por ráfagas (hecho, rama `feat/wind-gusts`; el dueño el 2026-11-26, después de
   jugar los lotes 19 y 20: "el movimiento que le agregaste a las plantas es demasiado,

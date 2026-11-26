@@ -27,8 +27,9 @@ Se ejecuta desde la raíz (`--root` para otra) con
 `node --experimental-strip-types tools/mapcli/src/cli.ts <comando>`; el flag hace falta en
 Node 22.13–22.17 (desde 22.18 los tipos se quitan sin él). `make validate` lo usa así.
 Regla de creación de mapas: el piso de un edificio (`ground.floor: building`) va contenido
-dentro de sus muros o puertas; `validate` da error si sale al exterior. Porches, umbrales,
-muelles y puestos usan `dock_planks` (`floor: open`) (docs/03 "Pisos de edificio").
+dentro de sus muros o puertas; `validate` da error si un lado o una esquina sale al
+exterior. La entrada es un hueco de hasta 3 casillas entre dos muros, con el mismo piso;
+porches, muelles y puestos usan `dock_planks` (docs/03 "Pisos de edificio").
 `mapcli render` es clave para la IA: después de editar, renderiza el área y revisa la
 imagen con la herramienta Read.
 
