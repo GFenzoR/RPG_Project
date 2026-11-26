@@ -20,7 +20,7 @@ import {
   labelStroke,
   subFontPx,
 } from "../src/render/label-style.ts";
-import { ROLE_LINES, fitName, labelMaxWidth, wrapRole } from "../src/render/labels.ts";
+import { ROLE_LINES, fitName, labelMaxWidth, labelsFull, wrapRole } from "../src/render/labels.ts";
 import type { MeasureLine } from "../src/render/labels.ts";
 
 const root = repoRoot();
@@ -245,7 +245,7 @@ describe("creature labels in the interface's sans", () => {
             for (const cat of catalogs) {
               const at = `${id} zoom ${zoom} dpr ${dpr} ${size}`;
               const n = cat[`npc.${id}.name`] ?? "";
-              const fit = fitName(n, px, max, name, false);
+              const fit = fitName(n, px, max, name);
               expect(fit.text, at).toBe(n);
               expect(name(fit.text, fit.fontPx), at).toBeLessThanOrEqual(max);
               expect(fit.fontPx, at).toBeGreaterThanOrEqual(Math.ceil(px * SHRINK_MIN));
@@ -261,18 +261,38 @@ describe("creature labels in the interface's sans", () => {
         }
   });
 
-  it("keeps a monster's name on one line, cut only when even the smaller size is too wide", () => {
+  it("shows a monster's name whole on one line, never cut", () => {
     const name = measurer(LABEL_NAME_WEIGHT);
     const px = labelFontPx(2, 1, "large");
     const max = labelMaxWidth(64, px);
     for (const n of creatureNames()) {
       const fit = fitName(n, px, max, name);
       expect(name(fit.text, fit.fontPx)).toBeLessThanOrEqual(max);
-      // At the fitted desktop zoom no creature of the game is cut.
       expect(fit.text, n).toBe(n);
     }
+    // Even a name longer than the limit (a character made before it) keeps every letter.
     const long = fitName("W".repeat(40), px, max, name);
-    expect(long.text.endsWith("…")).toBe(true);
-    expect(name(long.text, long.fontPx)).toBeLessThanOrEqual(max);
+    expect(long.text).toBe("W".repeat(40));
+  });
+
+  it("fits the longest name the server takes, whole, above the shrink floor at every zoom", () => {
+    const name = measurer(LABEL_NAME_WEIGHT);
+    // Names of the widest lowercase letters, as long as a name may be (16).
+    const worst = ["Mmmmmmmm Wwwwwww", "Wwwwwww Mmmmmmmm", "Ooooooo Dddddddd"];
+    for (const dpr of [1, 1.25, 1.5, 2])
+      for (const zoom of [1, 2, 3, 4])
+        for (const size of ["normal", "large"] as const) {
+          const scale = Math.max(1, Math.round(zoom * dpr));
+          const px = labelFontPx(scale, dpr, size);
+          const max = labelMaxWidth(32 * scale, px);
+          for (const n of worst) {
+            const fit = fitName(n, px, max, name);
+            const at = `${n} zoom ${zoom} dpr ${dpr} ${size}`;
+            expect(fit.text, at).toBe(n);
+            expect(fit.fontPx, at).toBeGreaterThanOrEqual(
+              labelsFull(32 * scale, px) ? Math.ceil(px * SHRINK_MIN) : 1,
+            );
+          }
+        }
   });
 });

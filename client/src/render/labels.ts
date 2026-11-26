@@ -2,8 +2,9 @@
 // how big, and where the blocks go when they crowd.
 //
 // Lines. A player or a monster has one line, its name. A long name first shrinks a little
-// (fitName, down to SHRINK_MIN of its size) and is cut with an ellipsis only past the hard
-// width. An NPC has two: its name and, under it, smaller and paler, what it does
+// (fitName) as far as it takes: a name always shows whole on one line, never cut and never
+// with an ellipsis (owner, 2026-11-26); lengths are bounded instead (CREATURE_NAME_MAX_CHARS).
+// The second line is reserved for what an NPC does. An NPC has two: its name and, under it, smaller and paler, what it does
 // ("Tilde Varga" / "Provisiones": the role text of data/npcs, @rpg/content-schema
 // npcRoleKey). Neither is ever cut: the name shrinks, the role wraps onto a second line
 // by its words (wrapRole); make validate keeps both short enough for that.
@@ -15,7 +16,7 @@
 // line); if it still overlaps, only the ones next to the player stay (on top), the rest
 // hide. What counts is how big the labels are next to a tile: every label shows untouched
 // only when a name is at most a quarter of a tile tall (labelsFull).
-import { SHRINK_MIN, linePitch } from "./label-style.ts";
+import { MIN_NAME_PX, SHRINK_MIN, linePitch } from "./label-style.ts";
 
 /** A tile is at least this many name heights tall when every label shows untouched. */
 export const LABEL_FULL_TILE = 4;
@@ -45,28 +46,22 @@ export interface FittedLine {
 }
 
 /**
- * A name on one line of at most `maxWidth`: as it is when it fits; else smaller, down to
- * SHRINK_MIN of `fontPx`; and only when that is still too wide, cut with an ellipsis at
- * the smallest size. With `cut` false (an NPC) it is never cut: it keeps the smallest size.
+ * A name on ONE line of at most `maxWidth`, always whole: as it is when it fits, else as
+ * small as it takes (never cut, never an ellipsis). Names are bounded in length
+ * (CREATURE_NAME_MAX_CHARS) so that the longest allowed one still fits above SHRINK_MIN of
+ * `fontPx`; a longer one that exists (a character made under an older, longer limit)
+ * keeps shrinking, down to MIN_NAME_PX, instead of losing letters.
  */
 export function fitName(
   name: string,
   fontPx: number,
   maxWidth: number,
   measure: MeasureLine,
-  cut = true,
 ): FittedLine {
   if (measure(name, fontPx) <= maxWidth) return { text: name, fontPx };
-  const min = Math.max(1, Math.ceil(fontPx * SHRINK_MIN));
-  for (let px = fontPx - 1; px >= min; px--)
+  for (let px = fontPx - 1; px > MIN_NAME_PX; px--)
     if (measure(name, px) <= maxWidth) return { text: name, fontPx: px };
-  if (!cut) return { text: name, fontPx: min };
-  const chars = [...name];
-  for (let n = chars.length - 1; n >= 1; n--) {
-    const text = `${chars.slice(0, n).join("").trimEnd()}…`;
-    if (measure(text, min) <= maxWidth) return { text, fontPx: min };
-  }
-  return { text: `${chars[0] ?? ""}…`, fontPx: min };
+  return { text: name, fontPx: Math.min(fontPx, MIN_NAME_PX) };
 }
 
 export interface WrappedRole {

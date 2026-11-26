@@ -392,7 +392,7 @@ auth). Pasado el límite responden `429 rate_limited`.
   en todos lados" que falla (red o error del servidor) conserva la sesión de este equipo,
   como la cookie en la web: se ve el error y se puede reintentar.
 - **Reglas:** email ASCII normalizado a minúsculas; contraseña de 8 a 128 caracteres (argon2id,
-  19 MiB, t=2, p=1). Nombre de personaje de 3 a 20 caracteres, 1–3 palabras de letras
+  19 MiB, t=2, p=1). Nombre de personaje de 3 a 16 caracteres, 1–3 palabras de letras
   ASCII con mayúscula inicial y el resto minúsculas (`Mira`, `Old Tom`), único sin
   distinguir mayúsculas y sin suplantar al staff: se rechaza si, en minúsculas y sin
   espacios, contiene `admin`, `gamemaster`, `moderat`/`moderad`, `soporte`/`support`,

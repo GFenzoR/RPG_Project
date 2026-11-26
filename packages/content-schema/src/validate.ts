@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { isLicenseFile, registeredPacks } from "./credits.ts";
 import { checkIdsLock } from "./ids.ts";
-import { NPC_NAME_MAX_CHARS, NPC_ROLE_MAX_CHARS, npcRoleKey } from "./npc-role.ts";
+import { CREATURE_NAME_MAX_CHARS, NPC_ROLE_MAX_CHARS, npcRoleKey } from "./npc-role.ts";
 import { SCHEMA_DIR, SchemaSet } from "./schemas.ts";
 import type { RefKind, SchemaName, Usage } from "./schemas.ts";
 import { loadYaml, parseYaml, suggest } from "./source.ts";
@@ -2698,6 +2698,7 @@ class Validator {
     }
 
     this.checkNpcRoles(catalogs);
+    this.checkMonsterNames(catalogs);
     // Every key referenced from data/ exists in every language.
     const used = new Set<string>();
     for (const k of this.index.i18nKeys) {
@@ -2751,7 +2752,8 @@ class Validator {
       // A default is not written in the file: count it as used and check it exists.
       if (npc["role"] !== key) this.index.i18nKeys.push({ value: key, path: [], src });
       const lines: [string, number, PathSegment[]][] = [[key, NPC_ROLE_MAX_CHARS, ["role"]]];
-      if (typeof npc["name"] === "string") lines.push([npc["name"], NPC_NAME_MAX_CHARS, ["name"]]);
+      if (typeof npc["name"] === "string")
+        lines.push([npc["name"], CREATURE_NAME_MAX_CHARS, ["name"]]);
       for (const [k, max, path] of lines)
         for (const lang of LANGUAGES) {
           const text = catalogs.get(lang)?.get(k)?.text;
@@ -2763,6 +2765,12 @@ class Validator {
               at,
               `"${text}" (${k}, ${lang}) is longer than ${max} characters: an NPC's label shows its name and its role whole, on two lines`,
             );
+          if (text.includes("…") || text.includes("..."))
+            this.error(
+              src,
+              at,
+              `"${text}" (${k}, ${lang}) has an ellipsis: a label never shows a name or a role cut`,
+            );
           if (path[0] === "name" && text.includes(","))
             this.error(
               src,
@@ -2770,6 +2778,31 @@ class Validator {
               `"${text}" (${k}, ${lang}) says what the NPC does after a comma: that goes in its role, under the name`,
             );
         }
+    }
+  }
+
+  /**
+   * A monster's name is shown whole on one line over its head (docs/17 "Nombres"): at most
+   * CREATURE_NAME_MAX_CHARS characters in every language, so the label can shrink it a
+   * little and never has to cut it.
+   */
+  private checkMonsterNames(catalogs: Map<string, Map<string, { text?: unknown }>>): void {
+    for (const src of this.monsters) {
+      const monster = isObj(src.data) ? src.data : undefined;
+      const key = monster?.["name"];
+      if (typeof key !== "string") continue;
+      for (const lang of LANGUAGES) {
+        const text = catalogs.get(lang)?.get(key)?.text;
+        if (typeof text !== "string") continue;
+        if ([...text].length > CREATURE_NAME_MAX_CHARS)
+          this.error(
+            src,
+            ["name"],
+            `"${text}" (${key}, ${lang}) is longer than ${CREATURE_NAME_MAX_CHARS} characters: a creature's name shows whole on one line`,
+          );
+        if (text.includes("…") || text.includes("..."))
+          this.error(src, ["name"], `"${text}" (${key}, ${lang}) has an ellipsis`);
+      }
     }
   }
 

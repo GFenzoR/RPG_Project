@@ -3,6 +3,7 @@
 // a help line on what a party gives; the "Invitar" button (no party or the leader) with
 // its prompt for a character name; and the invitations to answer. The server decides
 // everything: the buttons only send intents.
+import { CREATURE_NAME_MAX_CHARS } from "@rpg/content-schema/npc-role";
 import type { JSX } from "preact";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
@@ -12,7 +13,7 @@ import { sharedKey, sharingCount } from "../state/party.ts";
 const SHARED_OFF = SharedExperience.OFF;
 
 /** The longest character name (server auth.MaxNameLen). */
-const NAME_MAX = 20;
+const NAME_MAX = CREATURE_NAME_MAX_CHARS;
 
 /**
  * The name field takes the focus when the prompt opens (Preact ignores autoFocus). One

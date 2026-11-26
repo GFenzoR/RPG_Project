@@ -1051,8 +1051,8 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   playwright,
 }) => {
   const errors = watchErrors(page);
-  // 20 characters, the longest name the server takes (auth.MaxNameLen).
-  const name = `Longname ${randomLetters(11).replace(/^./, (c) => c.toUpperCase())}`;
+  // 16 characters, the longest name the server takes (auth.MaxNameLen).
+  const name = `Longname ${randomLetters(7).replace(/^./, (c) => c.toUpperCase())}`;
   const who = await newGuardian(playwright, "Long", name);
   psql([
     databaseUrl,

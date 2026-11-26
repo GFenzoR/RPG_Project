@@ -10,7 +10,7 @@ import {
   stackLabel,
   wrapRole,
 } from "./labels.ts";
-import { SHRINK_MIN, labelFontPx, linePitch, subFontPx } from "./label-style.ts";
+import { MIN_NAME_PX, SHRINK_MIN, labelFontPx, linePitch, subFontPx } from "./label-style.ts";
 import type { LabelBox, MeasureLine } from "./labels.ts";
 import { stackBubbles } from "./bubbles.ts";
 
@@ -110,21 +110,19 @@ describe("fitName", () => {
     expect(fitName(name, 15, 190, mono)).toEqual({ text: name, fontPx: 14 });
   });
 
-  it("cuts only past the hard width, at the smallest size", () => {
+  it("never cuts a name, nor adds an ellipsis: it shrinks as far as it takes", () => {
     const name = "Sir Bartholomew the Long of the Far Shore";
-    const min = Math.ceil(15 * SHRINK_MIN);
-    const out = fitName(name, 15, 112, mono);
-    expect(out.fontPx).toBe(min);
-    expect(out.text.endsWith("…")).toBe(true);
-    expect(mono(out.text, out.fontPx)).toBeLessThanOrEqual(112);
-    // As much of the name as fits: most of the width is used.
-    expect(mono(out.text, min)).toBeGreaterThan(112 - 2 * min);
+    const out = fitName(name, 15, 150, mono);
+    expect(out.text).toBe(name);
+    expect(out.text).not.toContain("…");
+    expect(out.fontPx).toBeLessThan(Math.ceil(15 * SHRINK_MIN));
+    expect(out.fontPx).toBeGreaterThanOrEqual(MIN_NAME_PX);
+    expect(mono(out.text, out.fontPx)).toBeLessThanOrEqual(150);
   });
 
-  it("never cuts an NPC's name", () => {
-    const out = fitName("Casia Hollín de los Registros", 15, 100, mono, false);
-    expect(out.text).toBe("Casia Hollín de los Registros");
-    expect(out.fontPx).toBe(Math.ceil(15 * SHRINK_MIN));
+  it("never goes under the smallest size, still whole", () => {
+    const out = fitName("Casia Hollín de los Registros", 15, 10, mono);
+    expect(out).toEqual({ text: "Casia Hollín de los Registros", fontPx: MIN_NAME_PX });
   });
 });
 

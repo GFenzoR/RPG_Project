@@ -53,7 +53,7 @@ quest.tanner_chitin.step_gather_chitin: "Gisla wants to stitch chitin over stag 
 quest.tanner_chitin.step_gather_heartwood: "Tanning it takes thorn heartwood. Get 4 thorn heartwoods from the thornlings of Nyssaral, the deep forest."
 quest.tanner_chitin.step_deliver: "Take the 8 chitin and the 4 thorn heartwoods to Gisla, the tanner of Ivernel."
 quest.captain_fenders.name: "Fenders that don't burn"
-quest.captain_fenders.step_thin_salamanders: "The salamanders of Vadrek, the slope, spit embers at the porters coming down to the Cinderstead dock. Kill 10 cinder salamanders."
+quest.captain_fenders.step_thin_salamanders: "The salamanders of Vadrek, the slope, spit embers at the porters coming down to the Cinderstead dock. Kill 10 cinder lizards."
 quest.captain_fenders.step_gather_pelts: "The dock's black stones scorch the hulls, and hound pelt does not burn. Get 5 ash hound pelts."
 quest.captain_fenders.step_deliver_pelts: "Take the 5 pelts to Nerea Vado, at the Cinderstead dock."
 quest.smith_ring.name: "The obsidian ring"

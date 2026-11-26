@@ -2,7 +2,7 @@
 export { LANGUAGES, validateContent } from "./validate.ts";
 export type { ValidateOptions, ValidationReport } from "./validate.ts";
 export {
-  NPC_NAME_MAX_CHARS,
+  CREATURE_NAME_MAX_CHARS,
   NPC_ROLE_KINDS,
   NPC_ROLE_MAX_CHARS,
   npcRoleDefaultKey,

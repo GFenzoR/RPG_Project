@@ -13,7 +13,7 @@ const (
 	MaxPasswordLen = 128 // runes; bounds the hashing input
 	MaxEmailLen    = 254
 	MinNameLen     = 3
-	MaxNameLen     = 20
+	MaxNameLen     = 16
 	maxNameWords   = 3
 )
 
@@ -62,7 +62,7 @@ func ValidPassword(p string) bool {
 	return n >= MinPasswordLen && n <= MaxPasswordLen
 }
 
-// ValidCharacterName reports whether name follows the naming rules: 3–20 characters,
+// ValidCharacterName reports whether name follows the naming rules: 3–16 characters,
 // 1–3 words of ASCII letters separated by single spaces, each word capitalized
 // ("Mira", "Old Tom"), and no reserved word. ASCII only avoids look-alike names.
 func ValidCharacterName(name string) bool { return CharacterNameError(name) == nil }

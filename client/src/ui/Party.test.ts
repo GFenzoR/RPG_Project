@@ -1,5 +1,6 @@
 // The party panel renders as a plain function (no hooks): these tests walk its element
 // tree without a DOM and press its buttons with a fake Game.
+import { CREATURE_NAME_MAX_CHARS } from "@rpg/content-schema/npc-role";
 import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
 import { SharedExperience } from "@rpg/protocol";
@@ -160,7 +161,7 @@ describe("PartyInvite", () => {
     const input = byTestId(all, "party-invite-name");
     expect(input?.props["name"]).toBe("name");
     expect(input?.props["type"]).toBe("text");
-    expect(input?.props["maxLength"]).toBe(20);
+    expect(input?.props["maxLength"]).toBe(CREATURE_NAME_MAX_CHARS);
     expect(input?.props["aria-label"]).toBe("client.party.invite_name");
     expect(input?.props["enterKeyHint"]).toBe("send");
     // A stable ref: it focuses the field once, not on every update.

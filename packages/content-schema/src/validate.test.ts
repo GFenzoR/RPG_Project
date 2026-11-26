@@ -1515,6 +1515,9 @@ describe("validator diagnostics", () => {
       expect.stringMatching(
         /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.role, es\) is longer than 28/,
       ),
+      expect.stringMatching(
+        /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.name, en\) is longer than 16/,
+      ),
       expect.stringMatching(/puerto_armorer\.yaml.*\(npc\.puerto_armorer\.name, en\) says what/),
     ]);
   });

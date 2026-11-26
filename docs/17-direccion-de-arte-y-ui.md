@@ -3054,15 +3054,24 @@ y abajo qué es lo que hace (Tilde Varga / Provisiones)".
   CSS. La misma ventana se ve igual al 100 % y al 150 % de escala de Windows.
 - **NPCs en dos líneas** (`render/labels.ts`): la primera el nombre (violeta
   `0xc79bff`), la segunda qué hace, más chica y más pálida (`LABEL_ROLE_COLOR`
-  `0xe4d9f5`). Nunca "…": el nombre de un NPC encoge hasta el 82 % si no entra y no se
+  `0xe4d9f5`). Nunca "…": el nombre encoge si no entra y no se
   corta; el rol, si no entra en el ancho, se parte **por sus palabras** en dos líneas
   (`wrapRole`). El texto del rol es contenido (`role` en `data/npcs`, docs/06 "NPC con
   diálogo de ventana"): el cliente lo saca del bundle de contenido (`npcRoles`,
   `client/vite/content.ts`), sin tocar el protocolo. Los nombres de los NPCs ya no repiten
   el oficio después de una coma ("Tilde Varga, provisiones" → "Tilde Varga").
-- **Nombres largos** de jugadores y monstruos: una sola línea; primero encogen (hasta el
-  82 %, `fitName`) y solo pasado el ancho duro (12 tamaños de letra con espacio, 7,5 cuando
-  los nombres se amontonan) se cortan con "…".
+- **Nombres siempre completos y en una sola línea** (dueño, 2026-11-26: "los nombres nunca se
+  deben mostrar incompletos, con puntos suspensivos; la segunda línea está reservada para el
+  tipo de NPC o título"): `fitName` nunca corta ni añade "…" a ningún nombre (jugador,
+  monstruo ni NPC); si no entra en el ancho de la etiqueta (12 tamaños de letra con espacio,
+  7,5 cuando se amontonan) encoge lo que haga falta, con piso de `MIN_NAME_PX` (6 px). Para
+  que eso siga legible se **acota el largo**: `CREATURE_NAME_MAX_CHARS` = 16
+  (`packages/content-schema/src/npc-role.ts`) es el máximo de un nombre de jugador (servidor
+  `auth.MaxNameLen`, formulario de creación y su pista), de monstruo y de NPC en es y en en;
+  `make validate` falla con la clave que se pasa, y un test de Go exige que servidor y
+  constante coincidan. Los personajes ya creados con más de 16 letras no se renombran:
+  conservan su nombre y se ve entero, algo más chico. El rol del NPC (segunda línea) sigue
+  la regla de arriba y tampoco puede llevar "…" (`make validate` lo comprueba).
 - **Apilado** (`stackLabel`): sobre la barra de vida va la línea del gremio, encima el rol
   y arriba el nombre; la marca PvP queda a la izquierda del nombre y el globo de diálogo
   (UI-11) se apoya sobre el tope del bloque entero, o sea, sobre las dos líneas. Las

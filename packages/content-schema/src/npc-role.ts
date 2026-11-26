@@ -12,9 +12,14 @@ export type NpcRoleKind = (typeof NPC_ROLE_KINDS)[number];
 /** The translation key of a default role (i18n/<lang>/npcs.yaml). */
 export const npcRoleDefaultKey = (kind: NpcRoleKind): string => `npc_role.${kind}`;
 
-/** Longest role text and NPC name, in characters: the label never cuts them (two lines). */
+/**
+ * Longest name a creature shows, in characters: a player's (server auth.MaxNameLen, a Go test
+ * keeps the two equal), a monster's and an NPC's, in every language. The label shows a name
+ * whole on ONE line, never cut and never with an ellipsis; this bound keeps it readable when
+ * it shrinks to fit. Longest role text, in characters: the label never cuts it (two lines).
+ */
+export const CREATURE_NAME_MAX_CHARS = 16;
 export const NPC_ROLE_MAX_CHARS = 28;
-export const NPC_NAME_MAX_CHARS = 22;
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);

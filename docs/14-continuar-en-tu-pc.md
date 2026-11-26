@@ -154,6 +154,16 @@ el punto 5:
     ve hasta que alguno se mueve; se lo sigue eligiendo por lo que asoma, y su nombre y su
     barra se dibujan igual. Si molesta al jugar, la salida es un contorno o un marcador,
     no volver a teñir los cuerpos.
+- **Nombres en una sola línea y de largo acotado (hecho, rama `feat/names-one-line`,
+  2026-11-26; el dueño: "los nombres nunca se deben mostrar incompletos (con puntos
+  suspensivos); hay que limitar el tamaño del nombre de los usuarios"; docs/17 "Nombres
+  siempre completos"):** `fitName` ya no corta ni pone "…"; el máximo de un nombre de
+  personaje baja de 20 a 16 (`auth.MaxNameLen` = `CREATURE_NAME_MAX_CHARS`, formulario y
+  pista de creación) y los nombres de monstruos y NPCs en es y en caben en 16 (`make
+  validate` lo exige). Diez monstruos en español y uno en inglés se acortaron ("saqueador de
+  naufragios" → "saqueador", "cinder salamander" → "cinder lizard"). Pendiente menor: algunos
+  textos de misión en español aún dicen "salamandras de brasa" (el monstruo es ahora
+  "salamandra ígnea"); los personajes viejos con más de 16 letras se ven enteros y más chicos.
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:

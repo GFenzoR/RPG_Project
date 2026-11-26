@@ -323,8 +323,8 @@ acepta en un evento sintético; el pad captura su dedo.
 - Pixel 7 vertical además marca un lobo con un toque y espera golpes (vida que baja).
 - En cada dispositivo, un toque sobre la sacerdotisa de Puerto abre su diálogo (estado
   del cliente y ventana), que entra en pantalla y se cierra con un botón de 44 px.
-- A 1280x800 (escritorio), un nombre de 20 caracteres con experiencia queda cortado con
-  "…" en la placa sobre el orbe de vida y el mapa en 2x (`__rpgClient.scale()`); sin pad
+- A 1280x800 (escritorio), un nombre de 16 caracteres (el máximo) con experiencia se ve
+  entero en la placa sobre el orbe de vida y el mapa en 2x (`__rpgClient.scale()`); sin pad
   ni botones de zoom. Pantalla completa (docs/17 UI-4): el canvas empieza en (0, 0), tiene
   los 1280 px de ancho y termina justo donde empieza la barra de abajo (`hud-bar`); el chat
   queda sobre la barra y nada tapa el final del inventario ni del panel "Apariencia". A 2x

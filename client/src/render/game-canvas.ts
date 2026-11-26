@@ -1373,7 +1373,7 @@ export async function createGameCanvas(
       sprites.set(c.id, s);
     }
     // The language can change during the game (T1.13).
-    // The lines (render/labels.ts): a long name shrinks before it is cut; an NPC shows
+    // The lines (render/labels.ts): a long name shrinks, never cut; an NPC shows
     // what it does under its name, wrapped by its words and never cut. Fitted again only
     // when the text, the size (a zoom) or the room changed.
     const name = nameOf(c);
@@ -1383,7 +1383,7 @@ export async function createGameCanvas(
       s.fitRole = what;
       s.fitPx = namePx;
       s.fitMax = labelMax;
-      const fit = fitName(name, namePx, labelMax, measureName, c.kind !== CreatureKind.NPC);
+      const fit = fitName(name, namePx, labelMax, measureName);
       sizeLine(s.label, fit.fontPx);
       if (s.label.text !== fit.text) s.label.text = fit.text;
       const wrapped = wrapRole(what, subPx, labelMax, measureSub);

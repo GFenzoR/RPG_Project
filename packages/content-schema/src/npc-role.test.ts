@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import {
-  NPC_NAME_MAX_CHARS,
+  CREATURE_NAME_MAX_CHARS,
   NPC_ROLE_KINDS,
   NPC_ROLE_MAX_CHARS,
   npcRoleDefaultKey,
@@ -117,7 +117,7 @@ describe("the NPCs of data/npcs", () => {
         const name = texts[lang]?.[String(npc["name"])] ?? "";
         expect(name, String(npc["id"])).not.toBe("");
         expect(name).not.toContain(",");
-        expect([...name].length).toBeLessThanOrEqual(NPC_NAME_MAX_CHARS);
+        expect([...name].length).toBeLessThanOrEqual(CREATURE_NAME_MAX_CHARS);
       }
   });
 
@@ -128,5 +128,27 @@ describe("the NPCs of data/npcs", () => {
     // She keeps a shop too: the default would call her a merchant.
     expect(npcRoleKind(by("volcan_priest"))).toBe("merchant");
     expect(npcRoleKey(by("volcan_priest"))).toBe("npc_role.healer");
+  });
+});
+
+describe("the monsters of data/monsters", () => {
+  const dir = join(REPO, "data", "monsters");
+  const monsters = readdirSync(dir)
+    .filter((f) => f.endsWith(".yaml"))
+    .map((f) => parseYaml(readFileSync(join(dir, f), "utf8")) as Record<string, unknown>);
+
+  it("are named whole on one line: at most CREATURE_NAME_MAX_CHARS, no ellipsis, in every language", () => {
+    expect(monsters.length).toBeGreaterThanOrEqual(10);
+    for (const lang of LANGUAGES) {
+      const texts = parseYaml(
+        readFileSync(join(REPO, "i18n", lang, "monsters.yaml"), "utf8"),
+      ) as Record<string, string>;
+      for (const m of monsters) {
+        const name = texts[String(m["name"])] ?? "";
+        expect(name, `${String(m["id"])} ${lang}`).not.toBe("");
+        expect([...name].length, `${name} (${lang})`).toBeLessThanOrEqual(CREATURE_NAME_MAX_CHARS);
+        expect(name).not.toContain("…");
+      }
+    }
   });
 });

@@ -117,8 +117,10 @@ const NAME_PX: Readonly<Record<NameSize, { base: number; step: number }>> = {
 /** The lines under the name are this much of it, and never under SUB_MIN_PX CSS px. */
 export const SUB_RATIO = 0.8;
 const SUB_MIN_PX = 9;
-/** A long name shrinks to this much of its size before it is cut (render/labels.ts). */
+/** The role line shrinks to this much of its size before it takes more lines (render/labels.ts). */
 export const SHRINK_MIN = 0.82;
+/** The smallest a name is ever drawn, device px: a name is never cut, it shrinks to here at most. */
+export const MIN_NAME_PX = 6;
 
 const density = (dpr: number): number => (Number.isFinite(dpr) && dpr > 0 ? dpr : 1);
 

@@ -1,6 +1,7 @@
 // Screens of the client: login, sign up, characters (list and creation) and the game.
 // DOM with Preact over the canvas (client/CLAUDE.md): accessible, translatable and easy to
 // drive from Playwright. Every visible text goes through t().
+import { CREATURE_NAME_MAX_CHARS } from "@rpg/content-schema/npc-role";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { DisconnectReason } from "@rpg/protocol";
@@ -431,11 +432,11 @@ function Characters(props: {
               name="name"
               required
               minLength={3}
-              maxLength={20}
+              maxLength={CREATURE_NAME_MAX_CHARS}
               value={name}
               onInput={(e) => setName(e.currentTarget.value)}
             />
-            <small>{t("client.characters.name_hint")}</small>
+            <small>{t("client.characters.name_hint", { max: CREATURE_NAME_MAX_CHARS })}</small>
           </label>
           <label>
             {t("client.characters.vocation")}
