@@ -524,7 +524,7 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   rata, ciervo, jabalí, murciélago), `remains_chitin` (cangrejo, araña, escarabajo,
   reptante), `remains_scales` (salamandra, dragoncillo, sapo), `remains_slag` (los gólems de
   escoria), `remains_bones` (el minero ahogado), `remains_feathers` (la gaviota),
-  `remains_humanoid` (saqueadores, contrabandistas, mineros de obsidiana) y
+  `remains_humanoid` (saqueadores, contrabandistas, mineros renegados) y
   `remains_bramble` (el espinoso). Tiene que ser un item de `kind: container` con
   `pickupable: false` (`make validate` y el arranque del servidor exigen lo mismo); sin
   `corpse`, el monstruo deja `creature_remains`. Los restos duran
@@ -638,7 +638,7 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   se lo dejaría al jugador); y que el item tenga `tradeable: false` y `value: 0` (las copias que alguien
   junte tirándolas al piso no valen nada ni se comercian). Lo usan el sello de la forja del
   custodio (`ch3_warden`) y, desde m4, la tarja de los contrabandistas y el cofre sellado
-  de los reptantes (`ch2_coffer`) y la carta del minero de obsidiana (`ch3_gate`):
+  de los reptantes (`ch2_coffer`) y la carta del minero renegado (`ch3_gate`):
   `make validate` exige `each_player` en todo item de quest que cae de un monstruo, así
   deja de caer cuando la quest terminó.
 - **Comida y `well_fed`:** si algún item tiene `food_ms`, el arranque exige la condición

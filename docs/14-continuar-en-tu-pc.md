@@ -160,10 +160,17 @@ el punto 5:
   siempre completos"):** `fitName` ya no corta ni pone "…"; el máximo de un nombre de
   personaje baja de 20 a 16 (`auth.MaxNameLen` = `CREATURE_NAME_MAX_CHARS`, formulario y
   pista de creación) y los nombres de monstruos y NPCs en es y en caben en 16 (`make
-  validate` lo exige). Diez monstruos en español y uno en inglés se acortaron ("saqueador de
-  naufragios" → "saqueador", "cinder salamander" → "cinder lizard"). Pendiente menor: algunos
-  textos de misión en español aún dicen "salamandras de brasa" (el monstruo es ahora
-  "salamandra ígnea"); los personajes viejos con más de 16 letras se ven enteros y más chicos.
+  validate` lo exige). Diez monstruos en español y uno en inglés se acortaron, con nombres
+  gramaticales ("saqueador de naufragios" → "saqueador", "minero de obsidiana" → "minero
+  renegado", "sabueso de ceniza" → "sabueso cenizo", "dragoncillo de ascua" →
+  "dragoncillo", "custodio de escoria" → "custodio", "cinder salamander" → "cinder
+  lizard"), y las misiones, los diálogos, los items y docs/02 dicen el mismo nombre (un
+  test de `packages/content-schema` exige que cada paso de matar nombre al monstruo como
+  su etiqueta). Los personajes viejos con 17 a 20 letras conservan su nombre: se ven
+  enteros y más chicos, y se los puede seguir invitando al grupo o a una casa
+  (`auth.MaxKnownNameLen` = `KNOWN_NAME_MAX_CHARS` = 20, solo para buscar). Los E2E arman
+  sus nombres con `characterName` de `client/e2e/names.ts`. Falta el e2e completo de la
+  rama (corre en la verificación final del lote).
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:

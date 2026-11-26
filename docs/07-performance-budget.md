@@ -184,12 +184,12 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
 | 15–20 | 14 | ciervo, sapo, espinoso | 13,4k | 188,3k → 343,6k | 9,4 → 17,1 |
 | 20–25 | 14 | contrabandista, reptante | 14,3k | 109,6k → 307,2k | 5,1 → 14,3 |
 | 25–40 | 16 | sabueso, salamandra | 17,6k | 298,7k → 455,3k | 11,3 → 17,2 |
-| 40–50 | 14 | minero de obsidiana, gólem | 20,7k | 169,2k → 475,2k | 5,5 → 15,3 |
+| 40–50 | 14 | minero renegado, gólem | 20,7k | 169,2k → 475,2k | 5,5 → 15,3 |
 | 50–60 | 12 | dragoncillo, custodio | 22,9k | 72,6k → 433,0k | 2,1 → 12,6 |
 | **Total** | **100** | 126 → 253 monstruos | | | **43,4 → 108,6** |
 
 - **Cómo se llegó:** respawns más cortos (gaviota y rata 30 s, cangrejo 35, lobo y
-  murciélago 45, jabalí, araña, ciervo, sabueso, salamandra, minero de obsidiana y gólem
+  murciélago 45, jabalí, araña, ciervo, sabueso, salamandra, minero renegado y gólem
   60, sapo 50, saqueador y escarabajo 70, espinoso y contrabandista 75, dragoncillo 75,
   minero ahogado y reptante 90; el custodio sigue en 1200), más monstruos por spawn y 20
   spawns nuevos (`world/islands/*/spawns.yaml`), separados unos 12–20 casilleros para que

@@ -1403,7 +1403,7 @@ el respaldo del cliente) y cada NPC que es una persona tiene su retrato quieto `
 
 **NPCs y monstruos humanoides** tienen su `look` en `data/npcs` y `data/monsters` (cuerpo,
 piel, pelo, barba y lo que llevan): los 19 NPCs que eran de LPC y el saqueador, el
-contrabandista, el minero de obsidiana y el minero ahogado. Las composiciones de LPC, las
+contrabandista, el minero renegado y el minero ahogado. Las composiciones de LPC, las
 paletas `palettes` de `assets/sprites.yaml` y el pack `assets/vendor/ulpc/` (con sus filas de
 `CREDITS.md` y los textos de `/credits`) salieron: nada los usa. El preset `lpc` de
 spritepack queda (es una capacidad de la herramienta, con sus tests).

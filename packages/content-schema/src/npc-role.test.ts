@@ -152,3 +152,37 @@ describe("the monsters of data/monsters", () => {
     }
   });
 });
+
+describe("the kill steps of data/quests", () => {
+  const dir = join(REPO, "data", "quests");
+  const quests = readdirSync(dir)
+    .filter((f) => f.endsWith(".yaml"))
+    .map((f) => parseYaml(readFileSync(join(dir, f), "utf8")) as Record<string, unknown>);
+  const catalog = (lang: string, file: string): Record<string, string> =>
+    parseYaml(readFileSync(join(REPO, "i18n", lang, file), "utf8")) as Record<string, string>;
+
+  // The journal says "Mata 10 salamandras ígneas" and the label over the monster says
+  // "salamandra ígnea": a monster renamed in monsters.yaml alone left the two apart.
+  it("name the monster as its label does, in every language", () => {
+    let kills = 0;
+    for (const lang of LANGUAGES) {
+      const monsters = catalog(lang, "monsters.yaml");
+      const texts = catalog(lang, "quests.yaml");
+      for (const q of quests)
+        for (const step of (q["steps"] ?? []) as Record<string, unknown>[]) {
+          const kill = (step["complete_when"] as { kill?: { monster?: string } } | undefined)?.kill;
+          if (!kill?.monster) continue;
+          kills++;
+          const name = monsters[`monster.${kill.monster}.name`] ?? "";
+          const text = (texts[String(step["description"])] ?? "").toLowerCase();
+          expect(name, kill.monster).not.toBe("");
+          // Each word of the name, less its last letter (plurals: "cenizo" in "cenizos").
+          for (const word of name.toLowerCase().split(" ").filter((w) => w.length > 3))
+            expect(text, `${String(step["description"])} (${lang}) names "${name}"`).toContain(
+              [...word].slice(0, -1).join(""),
+            );
+        }
+    }
+    expect(kills).toBeGreaterThanOrEqual(10);
+  });
+});
