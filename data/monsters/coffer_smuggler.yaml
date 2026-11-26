@@ -30,6 +30,7 @@ loot:
   - { item: copper_coin, chance: 0.9, count: [10, 40] }
   - { item: smuggler_tally, chance: 0.35, each_player: true } # only while ch2_coffer needs it (m4)
   - { item: ship_biscuit, chance: 0.3, count: [1, 3] }
+  - { item: salted_jerky, chance: 0.25, count: [1, 2] }
   - { item: stagleather_leggings, chance: 0.03 }
   - { item: smuggler_crossbow, chance: 0.02 }
   - { item: bolt, chance: 0.25, count: [2, 6] }

@@ -16,6 +16,7 @@ attacks:
 resistances: { earth: 20, fire: -10 }
 loot:
   - { item: stag_antler, chance: 0.2 }
+  - { item: venison, chance: 0.3 }
   - { item: copper_coin, chance: 0.7, count: [5, 25] }
 tags: [beast, forest, bosque]
 notes: Forest edge near the town, levels 11-13. Passive until hit, flees when hurt; its antlers feed the stag-leather trade.

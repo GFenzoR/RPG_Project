@@ -14,7 +14,8 @@ attacks:
   - { type: melee, min: 0, max: 18, interval_ms: 2000 }
 resistances: { physical: 10, energy: -15, ice: 10 }
 loot:
-  - { item: raw_fish, chance: 0.3, count: [1, 2] }
+  - { item: crab_meat, chance: 0.4, count: [1, 2] }
+  - { item: raw_fish, chance: 0.2 }
   - { item: crab_claw, chance: 0.2 }
   - { item: copper_coin, chance: 0.5, count: [1, 8] }
 tags: [shore, puerto]

@@ -494,3 +494,58 @@ func TestSpeedPerLevelBounds(t *testing.T) {
 		t.Errorf("without the key: speed %d at level 80, want 205", got)
 	}
 }
+
+// TestAnimalFoodDrops (lote 20d): animals and the humans who carry rations drop food,
+// the undead, constructs and elementals never do, and food stays cheap: its expected
+// sale value per kill never beats the coins the same monster drops.
+func TestAnimalFoodDrops(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "data")
+	ms, err := LoadMonsters(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := LoadItems(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	isFood := func(id string) bool {
+		it := items[id]
+		return it != nil && it.Consumable != nil && it.Consumable.FoodMs > 0
+	}
+	hasFood := func(id string) bool {
+		for _, l := range ms[id].Loot {
+			if isFood(l.Item) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, id := range []string{"wolf", "ash_hound", "bramble_stag", "bristleback_boar", "thieving_gull",
+		"mire_toad", "tide_crab", "ember_wyrmling", "cinder_salamander", "thornling",
+		"coffer_smuggler", "wreck_looter", "obsidian_delver"} {
+		if ms[id] == nil || !hasFood(id) {
+			t.Errorf("%s should drop food", id)
+		}
+	}
+	for _, id := range []string{"drowned_miner", "slag_golem", "slagbound_warden"} {
+		if ms[id] != nil && hasFood(id) {
+			t.Errorf("%s (undead, construct or elemental) must not drop food", id)
+		}
+	}
+	for id, m := range ms {
+		var food, coins float64
+		for _, l := range m.Loot {
+			lo, hi := l.CountRange()
+			avg := float64(lo+hi) / 2 * l.Chance
+			switch {
+			case l.Item == "copper_coin":
+				coins += avg
+			case isFood(l.Item):
+				food += avg * float64(items[l.Item].Value)
+			}
+		}
+		if food > coins {
+			t.Errorf("%s: food worth %.2f per kill beats its %.2f coins (kill-and-sell loop)", id, food, coins)
+		}
+	}
+}

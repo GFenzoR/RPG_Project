@@ -36,6 +36,12 @@ sprites:
   tools/felling_axe: { source: vendor/dungeon-crawl/item/weapon/hand_axe2.png }
   tools/smithing_hammer: { source: vendor/dungeon-crawl/UNUSED/weapons/hammer1.png }
   materials/tree_resin: { source: vendor/dungeon-crawl/item/food/lump_of_royal_jelly.png }
+  food/raw_meat: { source: vendor/dungeon-crawl/item/food/chunk.png }
+  food/venison: { source: vendor/dungeon-crawl/item/food/chunk.png }
+  food/frog_legs: { source: vendor/dungeon-crawl/item/food/chunk.png }
+  food/crab_meat: { source: vendor/dungeon-crawl/item/food/chunk.png }
+  food/thorn_berries: { source: vendor/dungeon-crawl/item/food/strawberry.png }
+  food/salted_jerky: { source: vendor/dungeon-crawl/item/food/beef_jerky.png }
   food/roast_boar: { source: vendor/dungeon-crawl/item/food/meat_ration.png }
 
   # Items: Selvaine (T3.6)

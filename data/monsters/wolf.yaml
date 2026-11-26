@@ -16,6 +16,7 @@ attacks:
 resistances: { physical: 0, fire: -10, ice: 10 }
 loot:
   - { item: wolf_pelt, chance: 0.25 }
+  - { item: raw_meat, chance: 0.4, count: [1, 2] }
   - { item: copper_coin, chance: 0.6, count: [1, 8] }
 tags: [beast, puerto]
 corpse: remains_fur

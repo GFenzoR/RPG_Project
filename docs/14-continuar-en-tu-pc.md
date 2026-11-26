@@ -104,6 +104,11 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Comida de monstruos (hecho, rama `feat/animal-food`; el dueño: "algunos monstruos deberían
+  botar comida, especialmente los animales")**: seis comidas nuevas y 13 monstruos que las
+  sueltan (docs/02 "Oficios", Cocina). Pendiente: sprites propios; por ahora reusan los
+  de Dungeon Crawl (CC0: trozo de carne, fresa, cecina), y carne cruda, de ciervo, ancas y
+  de cangrejo comparten el mismo trozo. Sin recetas de cocina para las nuevas todavía.
 - **Viento por ráfagas (hecho, rama `feat/wind-gusts`; el dueño el 2026-11-26, después de
   jugar los lotes 19 y 20: "el movimiento que le agregaste a las plantas es demasiado,
   pareciera que tienen vida o que se están como quemando; tiene que ser un movimiento
