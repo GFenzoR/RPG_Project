@@ -130,7 +130,6 @@ import {
   LABEL_SUB_WEIGHT,
   labelFontPx,
   minNamePx,
-  labelScale,
   labelStroke,
   linePitch,
   markScale,
@@ -847,10 +846,9 @@ export async function createGameCanvas(
     );
 
   let scale = 1;
-  // Screen pixels per font cell of the floating numbers this frame (labelScale), and the
-  // font sizes of the names and of the lines under them, in device pixels: the labels are
-  // rasterised at the size they show (render/label-style.ts labelFontPx).
-  let nameScale = 1;
+  // Font sizes of the names (the floating numbers share it) and of the lines under them,
+  // in device pixels: the labels are rasterised at the size they show
+  // (render/label-style.ts labelFontPx).
   let namePx = 12;
   let nameMinPx = minNamePx(1);
   let subPx = 10;
@@ -1671,7 +1669,6 @@ export async function createGameCanvas(
     const stackLines: LabelLines = { name: 0, role: 0, roleLines: 0, guild: 0 };
     const nameSize = opts.nameSize?.() ?? DEFAULT_NAME_SIZE;
     const dpr = window.devicePixelRatio || 1;
-    nameScale = labelScale(scale, nameSize);
     namePx = labelFontPx(scale, dpr, nameSize);
     nameMinPx = minNamePx(dpr);
     subPx = subFontPx(namePx, dpr);
@@ -1808,7 +1805,7 @@ export async function createGameCanvas(
     if (lit) lightShadows.end();
     world.expire(now);
     drawWalkMark(now, self.pos.z);
-    effects.draw(now, self.pos.z, cam, scale, nameScale);
+    effects.draw(now, self.pos.z, cam, scale, namePx);
     // Caves are dark; the surface takes the sky's colour at dawn, dusk and night, and its
     // lamps, fires and windows glow by how dark it is (render/sky.ts). By day: no pass.
     const cave = isDark(self.pos.z);

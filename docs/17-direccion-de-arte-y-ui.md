@@ -3139,6 +3139,8 @@ y abajo qué es lo que hace (Tilde Varga / Provisiones)".
   reglas de solape de T5.6 cuentan el bloque completo (`nameBlockHeight`) y rigen mientras
   una casilla mida menos de 4 alturas de nombre (`labelsFull`).
 - **Los números flotantes y los globos** siguen en la fuente pixel con su escala entera.
+  (Desde el 2026-11-26, por pedido del dueño, los números de daño y experiencia usan la
+  fuente, el peso y el tamaño de los nombres, `labelFontPx`; los globos no cambian.)
 - **Tests:** `label-style.test.ts` (tamaño entero en px de dispositivo a zoom 1–4 y
   densidad 1, 1,25, 1,5 y 2; más chico que el lote 19; contraste del rol), `labels.test.ts`
   (dos líneas, sin "…" para NPCs, encoger sin cortar nunca, el piso por densidad, apilado con el globo),

@@ -57,7 +57,7 @@ combat:
   skill_attack_divisor: 10
   level_divisor: 4
   shield_block_divisor: 4
-  monster_corpse_ms: 60000    # how long a monster's remains (and its loot) stay
+  monster_corpse_ms: 300000   # how long a monster's remains (and its loot) stay
   # Leash (docs/02-game-design.md, "Monstruos"): a monster's comfort zone is its spawn's
   # radius + monster_leash_tiles (Chebyshev from the spawn's center): it picks targets and
   # always chases within it; beyond it, monster_pursuit decides. A target it does not

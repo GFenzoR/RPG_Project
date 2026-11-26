@@ -14,7 +14,7 @@ import type { Texture } from "pixi.js";
 import { FloatingTextKind } from "@rpg/protocol";
 import { tilePixels } from "@rpg/renderer";
 import type { Atlas, Camera } from "@rpg/renderer";
-import { CANVAS_FONT, CANVAS_FONT_SIZE, CANVAS_TEXT_STROKE } from "./canvas-font.ts";
+import { LABEL_FONT, LABEL_NAME_WEIGHT, labelStroke } from "./label-style.ts";
 import { arrowPose, effectFrame, effectFrames, missileArt, orbFrame } from "./effects.ts";
 import {
   EFFECT_BUFF,
@@ -32,6 +32,9 @@ import {
 } from "../state/world.ts";
 import type { FloatingTextState, WorldState } from "../state/world.ts";
 import type { Translate } from "../i18n/i18n.ts";
+
+/** Size of a floating number until the first draw names the real one, device pixels. */
+const DEFAULT_TEXT_PX = 12;
 
 const COLORS = {
   hit: 0xc01818,
@@ -296,14 +299,14 @@ export class EffectLayer {
     const o = new Text({
       text,
       style: {
-        fontFamily: CANVAS_FONT,
-        fontSize: CANVAS_FONT_SIZE,
+        fontFamily: LABEL_FONT,
+        fontWeight: LABEL_NAME_WEIGHT,
+        fontSize: DEFAULT_TEXT_PX,
         fill,
-        stroke: { color: 0x000000, width: CANVAS_TEXT_STROKE },
+        stroke: { color: 0x000000, width: labelStroke(DEFAULT_TEXT_PX), join: "round" },
       },
       anchor: { x: 0.5, y: 1 },
       roundPixels: true,
-      textureStyle: { scaleMode: "nearest" },
     });
     this.texts.addChild(o);
     return o;
@@ -319,10 +322,10 @@ export class EffectLayer {
 
   /** Draws everything the world keeps on `floor` (call after world.expire(now)). */
   /**
-   * `textScale`: screen pixels per font cell of the floating numbers, the names' scale
-   * (render/label-style.ts labelScale; 1 = the font's grid size).
+   * `textPx`: font size of the floating numbers in device pixels, the names' own
+   * (render/label-style.ts labelFontPx): same font, same weight, never scaled.
    */
-  draw(now: number, floor: number, cam: Camera, scale: number, textScale = 1): void {
+  draw(now: number, floor: number, cam: Camera, scale: number, textPx = DEFAULT_TEXT_PX): void {
     this.frame++;
     const p = tilePixels(cam, this.tileSize);
 
@@ -417,7 +420,11 @@ export class EffectLayer {
         this.numbers.set(f, n);
       }
       n.seen = this.frame;
-      n.obj.scale.set(textScale);
+      const st = n.obj.style;
+      if (st.fontSize !== textPx) {
+        st.fontSize = textPx;
+        st.stroke = { color: 0x000000, width: labelStroke(textPx), join: "round" };
+      }
       const k = Math.min(1, (now - f.start) / FLOATING_TEXT_MS);
       n.obj.position.set(
         Math.round((f.pos.x + 0.5 - cam.x) * p),
