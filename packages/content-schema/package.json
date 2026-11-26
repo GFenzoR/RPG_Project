@@ -6,6 +6,7 @@
   "description": "JSON Schemas and validator for data/ and i18n/ (make validate, make gen-ids).",
   "exports": {
     ".": "./src/index.ts",
+    "./npc-role": "./src/npc-role.ts",
     "./schemas/*": "./schemas/*"
   },
   "scripts": {

@@ -82,6 +82,20 @@ func TestNPCReservedNames(t *testing.T) {
 	}
 }
 
+// The names as i18n/*/npcs.yaml writes them since lote 20b: the name alone, its trade in
+// the role text. One word reserves itself; lower-case words reserve only the whole name.
+func TestNPCReservedNamesWithoutTrades(t *testing.T) {
+	got := auth.NPCReservedNames([]string{
+		"Maren Holt", "Corvo", "Gisla", "Sister Liora", "Hermana Liora", "forge echo",
+		"eco de la forja", "Casia Hollín", "Maren Holt",
+	})
+	want := []string{"Maren Holt", "Maren", "Holt", "Corvo", "Gisla", "Sister Liora", "Liora",
+		"Hermana Liora", "forge echo", "eco de la forja", "Casia Hollín", "Casia", "Hollín"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+
 // Lote 16: a character may not take an NPC's name (its full name or its first name), in
 // any capitals or spacing.
 func TestCharacterNamesCannotCopyNPCs(t *testing.T) {

@@ -23,7 +23,7 @@ import { readBorders } from "@rpg/map-format";
 import { borderItems } from "@rpg/map-format/ops";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 // What an NPC does (its label's second line): the same rule make validate checks.
-import { npcRoleKey } from "../../packages/content-schema/src/npc-role.ts";
+import { npcRoleKey } from "@rpg/content-schema/npc-role";
 import { parseAmbience } from "@rpg/living-world/ambience";
 import { parseLivingWorldData, shadowOf } from "@rpg/living-world/data";
 import { loadCredits } from "./credits.ts";

@@ -21,6 +21,7 @@
     "preact": "10.29.8"
   },
   "devDependencies": {
+    "@rpg/content-schema": "workspace:*",
     "@rpg/map-format": "workspace:*",
     "@rpg/spritepack": "workspace:*",
     "subset-font": "2.9.0",

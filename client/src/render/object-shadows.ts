@@ -22,6 +22,11 @@
 // Cheap (docs/07): shadows are made when their chunk is built and freed when it goes
 // (sprites from a pool, textures the items' own), and placed again only when the sun has
 // moved POSE_STEP or the map changed; a frame in between touches nothing.
+//
+// A silhouette takes its item's texture when it is placed, not every frame: the shadow of
+// an object whose sprite is animated would show the frame it had then until the sun's next
+// step. None casts one today (data/livingworld/shadows.yaml: torch and banner cast none);
+// the day one does, give its entry the item's texture on every update.
 import { Container, Mesh, Sprite, Texture } from "pixi.js";
 import type { MeshGeometry } from "pixi.js";
 import { CAST_SHADOW_TINT } from "@rpg/renderer";

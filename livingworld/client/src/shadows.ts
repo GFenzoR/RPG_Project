@@ -95,7 +95,10 @@ export function parseShadows(raw: unknown): ShadowRules | undefined {
 export function shadowFamilies(families: Readonly<Record<string, unknown>>, id: string): string[] {
   const out: string[] = [];
   for (const word of id.split("_")) {
-    const hit = [word, word.replace(/s$/, "")].find((w) => w.length > 0 && w in families);
+    // Own keys only: "constructor" in {} is true, and no id word is a family for that.
+    const hit = [word, word.replace(/s$/, "")].find(
+      (w) => w.length > 0 && Object.hasOwn(families, w),
+    );
     if (hit !== undefined && !out.includes(hit)) out.push(hit);
   }
   return out;
@@ -107,10 +110,9 @@ export function shadowFamilies(families: Readonly<Record<string, unknown>>, id: 
  * player can pick up) lies flat on the ground and casts none unless `items` names it.
  */
 export function shadowOf(rules: ShadowRules, item: ShadowItem): ObjectShadow | undefined {
-  const own = rules.items[item.id];
-  if (own !== undefined) return own ?? undefined;
+  if (Object.hasOwn(rules.items, item.id)) return rules.items[item.id] ?? undefined;
   if (!item.fixed) return undefined;
   const family = shadowFamilies(rules.families, item.id)[0];
   if (family !== undefined) return rules.families[family] ?? undefined;
-  return rules.kinds[item.kind] ?? undefined;
+  return Object.hasOwn(rules.kinds, item.kind) ? (rules.kinds[item.kind] ?? undefined) : undefined;
 }

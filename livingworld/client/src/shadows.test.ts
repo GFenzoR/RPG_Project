@@ -73,6 +73,16 @@ describe("shadowOf", () => {
     expect(shadowFamilies(RULES.families, "cut_crates_gate")).toEqual(["cut", "crate", "gate"]);
   });
 
+  it("reads only the rules written: a word of Object.prototype is no family, item or kind", () => {
+    expect(shadowFamilies(RULES.families, "constructor_crate")).toEqual(["crate"]);
+    expect(shadowFamilies(RULES.families, "to_string_value_of")).toEqual([]);
+    // Not the "constructor" family (a function, no shadow at all): its kind's.
+    expect(shadowOf(RULES, fixed("constructor_stone"))).toEqual({ cast: "silhouette", length: 1 });
+    expect(shadowOf(RULES, fixed("constructor"))).toEqual({ cast: "silhouette", length: 1 });
+    expect(shadowOf(RULES, fixed("anvil", "toString"))).toBeUndefined();
+    expect(shadowOf(RULES, { id: "valueOf", kind: "tool", fixed: false })).toBeUndefined();
+  });
+
   it("lets an item's own line win over all, either way", () => {
     expect(shadowOf(RULES, fixed("rug"))).toBeUndefined();
     expect(shadowOf(RULES, fixed("bed"))).toEqual({ cast: "silhouette", length: 0.5 });

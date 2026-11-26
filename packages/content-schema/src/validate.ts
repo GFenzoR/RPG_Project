@@ -2838,11 +2838,13 @@ class Validator {
       if (item["pickupable"] !== false && item["kind"] !== "wall") continue;
       const hits: string[] = [];
       for (const word of id.split("_")) {
-        const hit = [word, word.replace(/s$/, "")].find((w) => w.length > 0 && w in families);
+        const hit = [word, word.replace(/s$/, "")].find(
+          (w) => w.length > 0 && Object.hasOwn(families, w),
+        );
         if (hit !== undefined && !hits.includes(hit)) hits.push(hit);
       }
       for (const h of hits) familiesSeen.add(h);
-      if (id in own) continue;
+      if (Object.hasOwn(own, id)) continue;
       const first = hits[0];
       const other = hits.find((h) => castOf(families[h]) !== castOf(families[first ?? ""]));
       if (first !== undefined && other !== undefined)
