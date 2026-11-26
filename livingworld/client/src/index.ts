@@ -98,6 +98,16 @@ export {
 } from "./gait.ts";
 export type { BodyKind, Footfall, Gait, GaitContact, GaitData, WalkSample } from "./gait.ts";
 export { hash01, seededRandom } from "./hash.ts";
+export {
+  MAX_BLOCK_HEIGHT,
+  MAX_SHADOW_LENGTH,
+  MIN_SHADOW_LENGTH,
+  parseObjectShadow,
+  parseShadows,
+  shadowFamilies,
+  shadowOf,
+} from "./shadows.ts";
+export type { ObjectShadow, ShadowCastKind, ShadowItem, ShadowRules } from "./shadows.ts";
 
 /** The containers the client gives it, both in world space (one unit = one sprite pixel). */
 export interface LivingStage {
@@ -202,6 +212,16 @@ export interface LivingWorld {
   applyWear(tiles: readonly WearTile[], replace?: boolean): void;
   /** The sound events of the own player's step onto `to` (footsteps.ts). */
   footstepEvents(to: { x: number; y: number; z: number }): string[];
+  /**
+   * The strips of a map sprite that sways in the wind now (wind-mesh.ts), or undefined for
+   * one drawn as its own still sprite. The client's shadow of a tree is a second mesh on
+   * the same geometry (render/object-shadows.ts), so the crown's shadow sways with the
+   * crown and the trunk's stays. Not to be kept past a change of windVersion: the strips
+   * of a sprite that left the map are destroyed.
+   */
+  windStrips(sprite: PlantSprite): WindMesh | undefined;
+  /** Changes whenever a sprite gets its strips or loses them. */
+  windVersion(): number;
   /** Counts for tests and the debug overlay. */
   stats(): {
     wear: number;
@@ -369,6 +389,8 @@ export function createLivingWorld(
   const field = data.wind?.field;
   /** The strips of each sprite: kept while its sprite lives, so a new chunk makes only its own. */
   const meshes = new Map<PlantSprite, WindMesh>();
+  /** Counts every mesh made or dropped (windVersion). */
+  let meshesVersion = 0;
   let meshesOn = false;
   const around: (Surface | undefined)[] = [];
   /** How hard the wind blows on the plant of tile (x, y): its ground and its neighbours. */
@@ -388,6 +410,7 @@ export function createLivingWorld(
     return exposureOf(field, around, trees, tiles);
   };
   const dropMesh = (sprite: PlantSprite, mesh: WindMesh): void => {
+    meshesVersion++;
     mesh.destroy();
     // The sprite may be gone with its chunk: only one still on the map shows again.
     if (sprite.parent) sprite.visible = true;
@@ -413,6 +436,7 @@ export function createLivingWorld(
     view.zIndex = sprite.zIndex ?? 0;
     sprite.visible = false;
     meshes.set(sprite, mesh);
+    meshesVersion++;
     return mesh;
   };
   /**
@@ -688,6 +712,14 @@ export function createLivingWorld(
 
     footstepEvents(to) {
       return footstepEvents(surfaceAt(to.x, to.y, to.z), data);
+    },
+
+    windStrips(sprite) {
+      return meshes.get(sprite);
+    },
+
+    windVersion() {
+      return meshesVersion;
     },
 
     stats() {

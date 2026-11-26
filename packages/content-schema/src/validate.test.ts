@@ -83,6 +83,7 @@ describe("repository content", () => {
       "livingworld-plants",
       "livingworld-wind",
       "livingworld-wind_sprites",
+      "livingworld-shadows",
       "i18n",
       "ids-lock",
     ];
@@ -713,6 +714,55 @@ describe("validator diagnostics", () => {
     expect(has("contacts") && has("at")).toBe(true);
     expect(has("print")).toBe(true);
     expect(validateContent(REPO).diagnostics.filter((d) => d.file.includes("gaits"))).toEqual([]);
+  });
+
+  it('checks who casts a shadow: kinds, families and items that exist, no family in doubt (livingworld/README.md "Día y noche")', () => {
+    const shadows = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("shadows.yaml"));
+    expect(shadows()).toEqual([]);
+    // A kind no item has, a family no map object is of, an item that does not exist.
+    edit(
+      "data/livingworld/shadows.yaml",
+      "  container: silhouette\n",
+      "  container: silhouette\n  vehicle: silhouette\n",
+    );
+    edit("data/livingworld/shadows.yaml", "  border: none\n", "  border: none\n  carpet: none\n");
+    edit("data/livingworld/shadows.yaml", "  bed: {", "  bedd: {");
+    let out = shadows();
+    expect(out.some((m) => m.includes('no item of data/items has the kind "vehicle"'))).toBe(true);
+    expect(out.some((m) => m.includes('has the word "carpet" in its id'))).toBe(true);
+    expect(out.some((m) => m.includes('unknown item "bedd" (did you mean "bed"?)'))).toBe(true);
+    expect(out).toHaveLength(3);
+    edit("data/livingworld/shadows.yaml", "  vehicle: silhouette\n", "");
+    edit("data/livingworld/shadows.yaml", "  carpet: none\n", "");
+    edit("data/livingworld/shadows.yaml", "  bedd: {", "  bed: {");
+    expect(shadows()).toEqual([]);
+    // Two families that disagree in one id (cut_bush: "cut" lies flat, a "bush" would
+    // stand): the file must say which, under items.
+    edit(
+      "data/livingworld/shadows.yaml",
+      "  border: none\n",
+      "  border: none\n  bush: silhouette\n",
+    );
+    out = shadows();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('"cut_bush" is of the families "cut" and "bush"');
+    edit("data/livingworld/shadows.yaml", "  bed: {", "  cut_bush: none\n  bed: {");
+    expect(shadows()).toEqual([]);
+    // Schema: an unknown cast, then a length out of range.
+    edit("data/livingworld/shadows.yaml", "  wall: block", "  wall: cube");
+    out = shadows();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("kinds.wall");
+    edit("data/livingworld/shadows.yaml", "  wall: cube", "  wall: block");
+    edit(
+      "data/livingworld/shadows.yaml",
+      "remains: { cast: silhouette, length: 0.4 }",
+      "remains: { cast: silhouette, length: 4 }",
+    );
+    out = shadows();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("families.remains");
   });
 
   it('checks the ambience: ambient sounds, items, radius and caps (livingworld/README.md "Ambiente")', () => {

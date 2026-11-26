@@ -208,6 +208,8 @@ class Validator {
   private plants: SourceFile | undefined;
   private wind: SourceFile | undefined;
   private windSprites: SourceFile | undefined;
+  /** data/livingworld/shadows.yaml (checkShadows). */
+  private shadows: SourceFile | undefined;
   /** data/livingworld/gaits.yaml, checked after the monsters and the NPCs. */
   private gaits: SourceFile | undefined;
 
@@ -248,6 +250,7 @@ class Validator {
     this.checkSounds();
     this.checkLivingWorld();
     this.checkPlantWind();
+    this.checkShadows();
     const lockFile = join(dataDir, "ids.lock.yaml");
     const lock = existsSync(lockFile)
       ? this.load(lockFile, "data/ids.lock.yaml", "ids-lock")
@@ -424,6 +427,7 @@ class Validator {
       if (!src || !isObj(src.data)) continue;
       if (name === "ambience") this.checkAmbience(src, src.data);
       if (name === "wind") this.wind = src;
+      if (name === "shadows") this.shadows = src;
       if (name === "wind_sprites") this.windSprites = src;
       if (name === "plants") {
         this.plants = src;
@@ -2753,6 +2757,72 @@ class Validator {
           }
         });
       }
+    }
+  }
+
+  /**
+   * data/livingworld/shadows.yaml (livingworld/README.md "Día y noche"): who casts a shadow
+   * is said by rule, never by a list in code, so the rules must hold: every kind names a
+   * kind some item has, every family a word of some map object's id, every item of `items`
+   * exists, and a map object whose id has two families that disagree (cut_bush: "cut" casts
+   * none, a "bush" family would) has its own line in `items`. The client resolves it with
+   * the same rules (livingworld/client/src/shadows.ts shadowOf).
+   */
+  private checkShadows(): void {
+    const src = this.shadows;
+    if (!src || !isObj(src.data)) return;
+    const table = (key: string): Obj => {
+      const v = (src.data as Obj)[key];
+      return isObj(v) ? v : {};
+    };
+    const kinds = table("kinds");
+    const families = table("families");
+    const own = table("items");
+    const castOf = (v: unknown): string => JSON.stringify(isObj(v) ? v : { cast: v });
+    const kindsSeen = new Set<string>();
+    const familiesSeen = new Set<string>();
+    const ids = new Set<string>();
+    for (const { item } of this.items) {
+      const id = item["id"];
+      if (typeof id !== "string") continue;
+      ids.add(id);
+      if (typeof item["kind"] === "string") kindsSeen.add(item["kind"]);
+      // Only what stands on the map casts by family or kind (shadowOf's `fixed`).
+      if (item["pickupable"] !== false && item["kind"] !== "wall") continue;
+      const hits: string[] = [];
+      for (const word of id.split("_")) {
+        const hit = [word, word.replace(/s$/, "")].find((w) => w.length > 0 && w in families);
+        if (hit !== undefined && !hits.includes(hit)) hits.push(hit);
+      }
+      for (const h of hits) familiesSeen.add(h);
+      if (id in own) continue;
+      const first = hits[0];
+      const other = hits.find((h) => castOf(families[h]) !== castOf(families[first ?? ""]));
+      if (first !== undefined && other !== undefined)
+        this.error(
+          src,
+          ["families", other],
+          `"${id}" is of the families "${first}" and "${other}", which cast different shadows: say which under items (${id}: none, silhouette or block)`,
+        );
+    }
+    for (const kind of Object.keys(kinds))
+      if (!kindsSeen.has(kind))
+        this.error(src, ["kinds", kind], `no item of data/items has the kind "${kind}"`);
+    for (const family of Object.keys(families))
+      if (!familiesSeen.has(family))
+        this.error(
+          src,
+          ["families", family],
+          `no map object (pickupable: false) of data/items has the word "${family}" in its id: drop the family`,
+        );
+    for (const id of Object.keys(own)) {
+      if (ids.has(id)) continue;
+      const hint = suggest(id, [...ids]);
+      this.error(
+        src,
+        ["items", id],
+        `unknown item "${id}"${hint ? ` (did you mean "${hint}"?)` : ""}`,
+      );
     }
   }
 

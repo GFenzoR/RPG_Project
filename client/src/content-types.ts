@@ -1,5 +1,5 @@
 // Shape of the `virtual:rpg-content` module (built by vite/content.ts from data/ and i18n/).
-import type { LivingWorldData } from "@rpg/living-world/data";
+import type { LivingWorldData, ObjectShadow } from "@rpg/living-world/data";
 import type { Look, LookTables, Worn, WornPiece } from "@rpg/renderer/look";
 
 /** An item attribute of data/attributes.yaml: the i18n key of its card line, with {value}. */
@@ -75,6 +75,11 @@ export interface ItemDef {
    * Absent on any other item.
    */
   border?: true;
+  /**
+   * The shadow it casts under the sun and the moon as a map object (docs/17 ART-5,
+   * data/livingworld/shadows.yaml resolved by the Vite plugin). Absent: it casts none.
+   */
+  shadow?: ObjectShadow;
   /**
    * docs/17 ART-8: sprite pixels it raises what is stacked on it and the creature standing
    * there (a table, a crate). Display only. Absent when it raises nothing.

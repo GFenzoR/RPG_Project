@@ -1,0 +1,60 @@
+# What casts a shadow under the sun and the moon (livingworld/README.md "Día y noche",
+# docs/17 ART-5). Owner (2026-11-25): every object with height casts one, trees included,
+# and it follows the sun like the creatures' does. Cosmetic: the server never reads this.
+#
+# A shadow is one of:
+#   none         flat on the ground, or hung on a wall: nothing
+#   silhouette   the object's own drawing laid on the ground from its base
+#   block        the box that fills its tile (walls, gates): a row of them joins into one
+#                continuous shadow
+# or a mapping: { cast: silhouette, length: 0.4 } draws it at that share of its length (a
+# body lying down), { cast: block, height: 32 } gives the box's height in sprite px (default:
+# what the drawing rises over its tile).
+#
+# Who gets what, the first that applies:
+#   items      one item of data/items by its id
+#   families   a word of the item's id (split at "_", singular or plural): cut_bush has
+#              "cut" and "bush"; the first word of the id with a family wins, and
+#              `make validate` asks for an `items` line when two of them disagree
+#   kinds      the item's kind
+# Only objects that stand on the map cast by family or by kind (pickupable: false, and
+# walls): a sword or a coin dropped on the ground lies flat. Anything else casts none.
+kinds:
+  wall: block
+  decoration: silhouette
+  container: silhouette
+
+families:
+  # walls and what closes them
+  gate: block
+  portcullis: block
+  frame: block
+  # bodies lying on the ground
+  remains: { cast: silhouette, length: 0.4 }
+  # flat on the ground
+  border: none
+  stairs: none
+  hole: none
+  spot: none
+  teleport: none
+  plate: none
+  debris: none
+  shards: none
+  rubble: none
+  planks: none
+  cut: none
+  torn: none
+  scroll: none
+  tuft: none
+  grass: none
+  wildflowers: none
+  # hung on a wall or sheer
+  torch: none
+  banner: none
+  web: none
+  ladder: none
+
+items:
+  book_smith_notes: none   # a closed book lying on the ground
+  bed: { cast: silhouette, length: 0.5 }
+  bench: { cast: silhouette, length: 0.6 }

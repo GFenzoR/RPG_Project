@@ -9,6 +9,11 @@ import type { PlantWind, SpriteWind, WindData, WindKind } from "./wind.ts";
 
 import { parseGaits } from "./gait.ts";
 import type { GaitData } from "./gait.ts";
+import { parseShadows } from "./shadows.ts";
+import type { ShadowRules } from "./shadows.ts";
+
+export { shadowOf } from "./shadows.ts";
+export type { ObjectShadow, ShadowRules } from "./shadows.ts";
 import { parseDayNight } from "./sky.ts";
 import type { DayNightData } from "./sky.ts";
 
@@ -97,6 +102,8 @@ export interface LivingWorldData {
   wind?: WindData | undefined;
   /** data/livingworld/gaits.yaml (gait.ts); absent: no footfalls (no prints, no step beat). */
   gaits?: GaitData | undefined;
+  /** data/livingworld/shadows.yaml (shadows.ts); absent: no map object casts a shadow. */
+  shadows?: ShadowRules | undefined;
 }
 
 export const EMPTY_DATA: LivingWorldData = { surfaces: {}, plants: {} };
@@ -127,6 +134,7 @@ export function parseLivingWorldData(
   dayNight?: unknown,
   windSources?: WindSources,
   gaits?: unknown,
+  shadows?: unknown,
 ): LivingWorldData {
   const out: {
     surfaces: Partial<Record<Surface, SurfaceRules>>;
@@ -134,7 +142,10 @@ export function parseLivingWorldData(
     dayNight?: DayNightData;
     wind?: WindData;
     gaits?: GaitData;
+    shadows?: ShadowRules;
   } = { surfaces: {}, plants: {} };
+  const sh = parseShadows(shadows);
+  if (sh) out.shadows = sh;
   const g = parseGaits(gaits);
   if (g) out.gaits = g;
   if (dayNight !== undefined && dayNight !== null) out.dayNight = parseDayNight(dayNight);

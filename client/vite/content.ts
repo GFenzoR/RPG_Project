@@ -23,7 +23,7 @@ import { readBorders } from "@rpg/map-format";
 import { borderItems } from "@rpg/map-format/ops";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
 import { parseAmbience } from "@rpg/living-world/ambience";
-import { parseLivingWorldData } from "@rpg/living-world/data";
+import { parseLivingWorldData, shadowOf } from "@rpg/living-world/data";
 import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
@@ -101,27 +101,37 @@ const readYaml = (file: string): unknown => parse(readFileSync(file, "utf8")) as
  * (wind.yaml and wind_sprites.yaml, joined to the plants by each item's sprite) as the
  * living world uses them.
  */
-function loadLivingWorld(root: string, items: Readonly<Record<number, ItemDef>>): LivingWorldData {
+function loadLivingWorld(root: string, items: Record<number, ItemDef>): LivingWorldData {
   const read = (name: string): unknown => {
     const file = join(root, "data", "livingworld", name);
     return existsSync(file) ? readYaml(file) : undefined;
   };
   const itemSprites: Record<string, string> = {};
   for (const item of Object.values(items)) if (item.sprite) itemSprites[item.id] = item.sprite;
-  return {
-    ...parseLivingWorldData(
-      read("surfaces.yaml"),
-      read("plants.yaml"),
-      read("daynight.yaml"),
-      {
-        wind: read("wind.yaml"),
-        sprites: read("wind_sprites.yaml"),
-        itemSprites,
-      },
-      read("gaits.yaml"),
-    ),
-    ambience: parseAmbience(read("ambience.yaml")),
-  };
+  const data = parseLivingWorldData(
+    read("surfaces.yaml"),
+    read("plants.yaml"),
+    read("daynight.yaml"),
+    {
+      wind: read("wind.yaml"),
+      sprites: read("wind_sprites.yaml"),
+      itemSprites,
+    },
+    read("gaits.yaml"),
+    read("shadows.yaml"),
+  );
+  // Each item's shadow, resolved here once (kind, family, own line): the canvas reads
+  // ItemDef.shadow and knows nothing of the rules.
+  if (data.shadows)
+    for (const item of Object.values(items)) {
+      const shadow = shadowOf(data.shadows, {
+        id: item.id,
+        kind: item.kind ?? "",
+        fixed: item.fixed === true || item.kind === "wall",
+      });
+      if (shadow) item.shadow = shadow;
+    }
+  return { ...data, ambience: parseAmbience(read("ambience.yaml")) };
 }
 
 /** Builds the content module from data/ and i18n/ under root. Throws on unreadable data. */

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/livingworld-shadows.schema.json",
+  "title": "Living world object shadows (data/livingworld/shadows.yaml)",
+  "description": "Which map objects cast a shadow under the sun and the moon, and how (livingworld/README.md \"Día y noche\", docs/17 ART-5): by item, by family (a word of the item's id) and by item kind. The client reads it; the server never does.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kinds", "families"],
+  "$defs": {
+    "cast": { "enum": ["none", "silhouette", "block"] },
+    "shadow": {
+      "oneOf": [
+        { "$ref": "#/$defs/cast" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cast"],
+          "properties": {
+            "cast": { "enum": ["silhouette", "block"] },
+            "length": {
+              "description": "silhouette: the share of its full length the shadow is drawn at.",
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 1.5
+            },
+            "height": {
+              "description": "block: the height of the box, sprite px.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 96
+            }
+          }
+        }
+      ]
+    },
+    "table": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+      "additionalProperties": { "$ref": "#/$defs/shadow" }
+    }
+  },
+  "properties": {
+    "kinds": {
+      "description": "By data/items kind, for objects that stand on the map.",
+      "$ref": "#/$defs/table"
+    },
+    "families": {
+      "description": "By a word of the item's id (split at \"_\", singular or plural).",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9]*$" },
+      "additionalProperties": { "$ref": "#/$defs/shadow" }
+    },
+    "items": {
+      "description": "By item id: wins over the family and the kind.",
+      "$ref": "#/$defs/table"
+    }
+  }
+}
