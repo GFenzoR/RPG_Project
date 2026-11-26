@@ -3064,13 +3064,20 @@ y abajo qué es lo que hace (Tilde Varga / Provisiones)".
   deben mostrar incompletos, con puntos suspensivos; la segunda línea está reservada para el
   tipo de NPC o título"): `fitName` nunca corta ni añade "…" a ningún nombre (jugador,
   monstruo ni NPC); si no entra en el ancho de la etiqueta (12 tamaños de letra con espacio,
-  7,5 cuando se amontonan) encoge lo que haga falta, con piso de `MIN_NAME_PX` (6 px). Para
+  7,5 cuando se amontonan) encoge lo que haga falta, con piso de `minNamePx(dpr)` (`NAME_MIN_PX`, 9 px CSS: en
+  px de dispositivo según la densidad, para que mida lo mismo a la vista al 100 % y al
+  200 %; un nombre que ni así entra se dibuja entero y más ancho que su lugar). Con todas
+  las etiquetas a la vista, el nombre más largo permitido queda en `SHRINK_MIN` (82 %) o
+  más; amontonadas (zoom 1), los nombres del juego entran y solo uno de 16 letras de las
+  más anchas llega al piso (`client/vite/canvas-font.test.ts`). Para
   que eso siga legible se **acota el largo**: `CREATURE_NAME_MAX_CHARS` = 16
   (`packages/content-schema/src/npc-role.ts`) es el máximo de un nombre de jugador (servidor
   `auth.MaxNameLen`, formulario de creación y su pista), de monstruo y de NPC en es y en en;
   `make validate` falla con la clave que se pasa, y un test de Go exige que servidor y
   constante coincidan. Los personajes ya creados con más de 16 letras no se renombran:
-  conservan su nombre y se ve entero, algo más chico. El rol del NPC (segunda línea) sigue
+  conservan su nombre, se ve entero y algo más chico, y se los sigue encontrando por
+  nombre (invitar al grupo, invitado de una casa: `auth.MaxKnownNameLen` =
+  `KNOWN_NAME_MAX_CHARS` = 20, solo para buscar un personaje, nunca para crearlo). El rol del NPC (segunda línea) sigue
   la regla de arriba y tampoco puede llevar "…" (`make validate` lo comprueba).
 - **Apilado** (`stackLabel`): sobre la barra de vida va la línea del gremio, encima el rol
   y arriba el nombre; la marca PvP queda a la izquierda del nombre y el globo de diálogo
@@ -3080,7 +3087,7 @@ y abajo qué es lo que hace (Tilde Varga / Provisiones)".
 - **Los números flotantes y los globos** siguen en la fuente pixel con su escala entera.
 - **Tests:** `label-style.test.ts` (tamaño entero en px de dispositivo a zoom 1–4 y
   densidad 1, 1,25, 1,5 y 2; más chico que el lote 19; contraste del rol), `labels.test.ts`
-  (dos líneas, sin "…" para NPCs, encoger antes de cortar, apilado con el globo),
+  (dos líneas, sin "…" para NPCs, encoger sin cortar nunca, el piso por densidad, apilado con el globo),
   `packages/content-schema/src/npc-role.test.ts` y `validate.test.ts` (todo NPC de `data/`
   termina con un rol en es y en). E2E: `100-*` (el instructor a 2x y 1x, de cerca, y la
   plaza de Thimblewick con sus NPCs a 1x y 2x), `101-*` (monstruos a 2x y 4x).

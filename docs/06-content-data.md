@@ -659,9 +659,21 @@ el rol por defecto de lo que el NPC ofrece, el primero de esta lista que tenga
 | `train_skill` | `npc_role.trainer` | Entrenamiento / Training |
 | `start_quest` | `npc_role.quest_giver` | Encargos / Errands |
 `make validate` falla si un NPC no termina con un rol (no ofrece nada de la lista y no
-declara `role`), si el rol pasa de 28 caracteres o el nombre de 22 en algún idioma (el
-cartel nunca los corta: el rol se parte en dos líneas por sus palabras), o si el nombre
-dice el oficio después de una coma ("Tilde Varga, provisiones": eso va en `role`).
+declara `role`), si el rol pasa de 28 caracteres o el nombre de 16 en algún idioma (el
+cartel nunca los corta: el rol se parte en dos líneas por sus palabras), si el nombre o el
+rol llevan puntos suspensivos ("…" o "..."), o si el nombre dice el oficio después de una
+coma ("Tilde Varga, provisiones": eso va en `role`).
+
+**Nombres de criaturas: 16 caracteres, enteros y sin "…".** El nombre de un monstruo
+(`name` de `data/monsters`, en `i18n/<idioma>/monsters.yaml`) y el de un NPC se muestran
+enteros en una sola línea sobre la criatura, nunca cortados (docs/17 "Nombres siempre
+completos"). Por eso `make validate` falla, con el archivo y la clave, si alguno pasa de
+`CREATURE_NAME_MAX_CHARS` (16, `packages/content-schema/src/npc-role.ts`) en es o en en, o
+si lleva puntos suspensivos. Es el mismo máximo de un nombre de personaje (`auth.MaxNameLen`
+del servidor; un test de Go exige que coincidan). Al acortar un nombre, que quede en buen
+español ("sabueso cenizo", no "sabueso ceniza") y cambia en el mismo commit los textos que
+lo nombran: un test de `packages/content-schema` (`npc-role.test.ts`) exige que cada paso
+de matar de `data/quests` nombre al monstruo como su etiqueta, en los dos idiomas.
 
 Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de
 `data/npcs/puerto_provisioner.yaml`). Los archivos reales son la referencia completa.

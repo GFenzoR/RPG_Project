@@ -931,7 +931,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   más nuevos, 6 s, sin tomar clicks.
 - Nombres a zoom 1x (`render/labels.ts`): prioridad propio → objetivo → más cercano; si
   se pisa, pierde la línea del gremio, sube una línea o se oculta (salvo propio, objetivo o
-  a 1 casilla); nombres de más de 12 caracteres se acortan con "…". Desde
+  a 1 casilla). Un nombre nunca se acorta ni lleva "…" (dueño, 2026-11-26): si no entra,
+  se dibuja más chico (`fitName`; ver "Nombres nítidos y NPCs en dos líneas"). Desde
   `feat/name-labels` las reglas rigen mientras `zoom < 2 × labelScale` (`labelsFull`): con
   nombres grandes, a cualquier zoom (ver "La fuente del canvas").
 - Hotbar: con poco ancho muestra los slots enteros que entran, con flechas ‹ › de 44 px y
@@ -1350,8 +1351,11 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   el rol y el gremio ya no usan la fuente pixel ni `labelScale`: son Alegreya Sans
   (`LABEL_FONT`, 700 el nombre, 500 las líneas de abajo) rasterizada al tamaño que se ve en
   px de dispositivo (`labelFontPx(zoom, devicePixelRatio, tamaño)`, `subFontPx`,
-  `labelStroke`), con el `Text` a escala 1. `render/labels.ts`: `fitName` (encoge hasta
-  `SHRINK_MIN` antes de cortar; un NPC nunca se corta), `wrapRole` (el rol del NPC en una o
+  `labelStroke`), con el `Text` a escala 1. `render/labels.ts`: `fitName` (el nombre siempre entero en
+  una línea: nunca se corta ni lleva "…"; si no entra, encoge hasta el piso `minNamePx(dpr)`,
+  9 px CSS, y si aun así no entra se dibuja más ancho que su lugar. Con todas las etiquetas
+  a la vista, el nombre más largo permitido, `CREATURE_NAME_MAX_CHARS` = 16, queda en
+  `SHRINK_MIN` o más), `wrapRole` (el rol del NPC en una o
   dos líneas por palabras, sin "…"), `stackLabel` (gremio, rol, nombre, y el tope donde se
   apoya el globo), `labelsFull(tilePx, fontPx)` y `placeLabels(boxes, tilePx, fontPx)`. El
   rol sale de `content.npcRoles` (`vite/content.ts`, `npcRoleKey` de
