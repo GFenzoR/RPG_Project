@@ -18,9 +18,17 @@ import {
   templeReach,
 } from "./doors.ts";
 import type { DoorWorld, TempleReach } from "./doors.ts";
+import { floorLeaks } from "./floors.ts";
 import { disconnectedFloors, onHouseEdge } from "./houses.ts";
 import { borderItems, borderPieces, hasBorders } from "./ops/borders.ts";
-import { CHUNK_SIZE, formatPos, houseContains, rectContains, rectsOverlap } from "./types.ts";
+import {
+  CHUNK_SIZE,
+  chunkKey,
+  formatPos,
+  houseContains,
+  rectContains,
+  rectsOverlap,
+} from "./types.ts";
 import type { Chunk, Island, Portal, Position, Rect, World } from "./types.ts";
 
 export interface MapReport {
@@ -263,6 +271,7 @@ class WorldValidator {
 
     this.checkChunks(island, floors);
     this.checkBorders(island);
+    this.checkFloors(island);
 
     const spawnsFile = `${dir}/spawns.yaml`;
     for (const [i, s] of island.spawns.entries()) {
@@ -566,6 +575,23 @@ class WorldValidator {
           [i],
           `no_logout zone "${z.id}" covers a house (logout is safe inside)`,
         );
+    }
+  }
+
+  /** A building floor tile open to the outside: the room leaks past its walls (floors.ts). */
+  private checkFloors(island: Island): void {
+    const dir = this.dirOf(island);
+    for (const l of floorLeaks(island, this.tiles, this.content)) {
+      const c = island.chunks.get(
+        chunkKey(l.pos.z, Math.floor(l.pos.x / CHUNK_SIZE), Math.floor(l.pos.y / CHUNK_SIZE)),
+      );
+      const file = c ? chunkFile(dir, c) : `${dir}/island.yaml`;
+      this.err(
+        file,
+        ["ground"],
+        `building floor at ${formatPos(l.pos)} opens to ${l.facing} on its ${l.side} side with no wall or door: pull the floor in or extend the wall (docs/03 "Pisos de edificio")`,
+        l.pos,
+      );
     }
   }
 

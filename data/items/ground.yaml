@@ -1,4 +1,4 @@
-# Basic grounds: ground.speed is the terrain cost in % (100 = normal), ground.surface what it is made of (livingworld/README.md).
+# Basic grounds: ground.speed is the terrain cost in % (100 = normal), ground.surface what it is made of (livingworld/README.md), ground.floor: building marks a room floor whose sides the map validator wants closed by walls or doors (docs/03).
 - id: grass
   kind: ground
   sprite: ground/grass
@@ -63,7 +63,7 @@
   kind: ground
   sprite: ground/wooden_floor
   name: item.wooden_floor.name
-  ground: { walkable: true, speed: 100, surface: wood }
+  ground: { walkable: true, speed: 100, surface: wood, floor: building }
 
 # Volcanic grounds (Karvask, T5.5). Each walks like the ground it replaced on the
 # island, so the hunting pace T5.5 was balanced with holds: ash like the dirt of the ash
