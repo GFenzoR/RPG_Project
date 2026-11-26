@@ -8,19 +8,10 @@
 // Sizes come from `measure` and a fixed line height, never from Text.width: the layout is
 // the same in the tests (no canvas) and in the game.
 import { CanvasTextMetrics, Container, Graphics, Text, TextStyle } from "pixi.js";
-import { BUBBLE_WIDTH, SpeechBubbles, bubbleAlpha, stackBubbles, wrapBubble } from "./bubbles.ts";
+import { SpeechBubbles, bubbleAlpha, bubbleMetrics, stackBubbles, wrapBubble } from "./bubbles.ts";
+import type { BubbleMetrics } from "./bubbles.ts";
 import type { Bubble, BubbleBox, BubbleStyle } from "./bubbles.ts";
-import { CANVAS_FONT, CANVAS_FONT_SIZE } from "./canvas-font.ts";
-
-/** Height of a line of bubble text, px. */
-export const BUBBLE_LINE_H = 13;
-/** Padding inside the box, px. */
-const PAD_X = 5;
-const PAD_Y = 3;
-/** px between two messages of a stack. */
-const MESSAGE_GAP = 3;
-/** Height of the tail under the box, px. */
-const TAIL = 4;
+import { LABEL_FONT } from "./label-style.ts";
 
 /** Colours of each kind of bubble: a yell is warm with a thick edge, a whisper faint. */
 const LOOK: Readonly<
@@ -58,15 +49,17 @@ export class BubbleLayer {
   private readonly styles: Record<BubbleStyle, TextStyle>;
   private readonly measure: (s: string) => number;
   private readonly boxes: BubbleBox[] = [];
+  private m: BubbleMetrics = bubbleMetrics(1);
 
   /** `measure`: a line's width in px (the canvas font's metrics by default). */
   constructor(measure?: (s: string, style: TextStyle) => number) {
     const style = (s: BubbleStyle): TextStyle =>
       new TextStyle({
-        fontFamily: CANVAS_FONT,
-        fontSize: CANVAS_FONT_SIZE,
+        fontFamily: LABEL_FONT,
+        fontWeight: "600",
+        fontSize: this.m.fontPx,
         fill: LOOK[s].text,
-        lineHeight: BUBBLE_LINE_H,
+        lineHeight: this.m.lineH,
         align: "center",
       });
     this.styles = {
@@ -80,9 +73,25 @@ export class BubbleLayer {
     this.measure = (s) => m(s, this.styles.say);
   }
 
+  /**
+   * The screen's pixel density: the sizes follow it (bubbleMetrics). A change (the window
+   * moved to another monitor) drops what is shown, a few seconds of text at most.
+   */
+  setDensity(dpr: number): void {
+    const next = bubbleMetrics(dpr);
+    if (next.fontPx === this.m.fontPx && next.width === this.m.width) return;
+    this.clear();
+    this.m = next;
+    for (const st of Object.values(this.styles)) {
+      st.fontSize = next.fontPx;
+      st.lineHeight = next.lineH;
+    }
+    CanvasTextMetrics.clearMetrics();
+  }
+
   /** A creature said `text` (already the player's language): wrap it and stack it. */
   say(speaker: number, style: BubbleStyle, text: string, now: number): void {
-    const lines = wrapBubble(text, BUBBLE_WIDTH, this.measure);
+    const lines = wrapBubble(text, this.m.width, this.measure);
     if (lines.length === 0) return;
     this.board.add(speaker, style, text, lines, now);
   }
@@ -118,7 +127,7 @@ export class BubbleLayer {
         x: at.x,
         y: at.top,
         width,
-        height: height + TAIL,
+        height: height + this.m.tail,
         self: at.self,
         distance: at.distance,
       });
@@ -173,23 +182,24 @@ export class BubbleLayer {
     list: readonly Bubble[],
     now: number,
   ): { width: number; height: number } {
+    const m = this.m;
     const live = new Set<number>();
     let textW = 0;
     let textH = 0;
     for (const b of list) {
       live.add(b.id);
       for (const line of b.lines) textW = Math.max(textW, this.measure(line));
-      textH += b.lines.length * BUBBLE_LINE_H;
+      textH += b.lines.length * m.lineH;
     }
-    textH += MESSAGE_GAP * Math.max(0, list.length - 1);
+    textH += m.gap * Math.max(0, list.length - 1);
     for (const [bid, text] of s.texts) {
       if (live.has(bid)) continue;
       text.destroy();
       s.texts.delete(bid);
     }
-    const width = Math.ceil(textW) + 2 * PAD_X;
-    const height = textH + 2 * PAD_Y;
-    let y = -(TAIL + height) + PAD_Y;
+    const width = Math.ceil(textW) + 2 * m.padX;
+    const height = textH + 2 * m.padY;
+    let y = -(m.tail + height) + m.padY;
     let alpha = 0;
     for (const b of list) {
       let text = s.texts.get(b.id);
@@ -207,13 +217,13 @@ export class BubbleLayer {
       text.alpha = a;
       alpha = Math.max(alpha, a);
       text.position.set(0, y);
-      y += b.lines.length * BUBBLE_LINE_H + MESSAGE_GAP;
+      y += b.lines.length * m.lineH + m.gap;
     }
     const newest = list[list.length - 1];
     const style = newest?.style ?? "say";
-    const key = `${width}x${height}:${style}`;
+    const key = `${width}x${height}:${m.tail}:${style}`;
     if (s.drawn !== key) {
-      drawBox(s.box, width, height, style);
+      drawBox(s.box, width, height, m.tail, style);
       s.drawn = key;
     }
     s.box.alpha = alpha;
@@ -222,13 +232,19 @@ export class BubbleLayer {
 }
 
 /** The rounded box with its tail, the tail's tip at (0, 0). */
-function drawBox(g: Graphics, width: number, height: number, style: BubbleStyle): void {
+function drawBox(
+  g: Graphics,
+  width: number,
+  height: number,
+  tail: number,
+  style: BubbleStyle,
+): void {
   const look = LOOK[style];
   const left = -Math.round(width / 2);
-  const top = -(TAIL + height);
+  const top = -(tail + height);
   g.clear();
   g.roundRect(left, top, width, height, 3)
     .fill({ color: look.fill, alpha: look.fillAlpha })
     .stroke({ color: look.edge, width: look.edgeWidth, alignment: 1 });
-  g.poly([-TAIL, -TAIL, TAIL, -TAIL, 0, 0]).fill({ color: look.fill, alpha: look.fillAlpha });
+  g.poly([-tail, -tail, tail, -tail, 0, 0]).fill({ color: look.fill, alpha: look.fillAlpha });
 }

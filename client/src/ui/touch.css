@@ -293,7 +293,7 @@ body.picking-item [data-drop] {
 .touch-menu[data-pointer="mouse"] .touch-menu-action {
   min-height: 30px;
   padding: 0 10px;
-  font-size: 14px;
+  font-size: 15px;
 }
 .touch-menu-title {
   display: flex;

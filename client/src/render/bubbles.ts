@@ -11,8 +11,41 @@ import { MessageKind } from "@rpg/protocol";
 /** How a bubble looks and lasts: the channel it was said on. */
 export type BubbleStyle = "say" | "yell" | "whisper" | "npc";
 
-/** The widest line of a bubble's text, px (the canvas font at 11 px). */
-export const BUBBLE_WIDTH = 150;
+/** The widest line of a bubble's text, CSS px (about 30 characters of the 13 px font). */
+export const BUBBLE_WIDTH = 180;
+/** The bubble text, CSS px: 2 more than the 11 px of lote 19 (owner, 2026-11-26). */
+export const BUBBLE_FONT_CSS_PX = 13;
+
+/** Every size of a bubble in device pixels (the canvas backing store is device pixels). */
+export interface BubbleMetrics {
+  fontPx: number;
+  lineH: number;
+  padX: number;
+  padY: number;
+  gap: number;
+  tail: number;
+  width: number;
+}
+
+/**
+ * The bubble's sizes on a screen of `dpr` device pixels per CSS pixel: the text is
+ * rasterised at the size it shows (whole device pixels, never scaled), so it is as crisp
+ * at 125 % or 150 % display scaling as at 100 % and looks the same size.
+ */
+export function bubbleMetrics(dpr: number): BubbleMetrics {
+  const d = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  const px = (css: number): number => Math.round(css * d);
+  const fontPx = px(BUBBLE_FONT_CSS_PX);
+  return {
+    fontPx,
+    lineH: Math.round(fontPx * 1.15),
+    padX: px(6),
+    padY: px(3),
+    gap: px(3),
+    tail: px(4),
+    width: px(BUBBLE_WIDTH),
+  };
+}
 /** Lines of one message at most; a longer one ends with an ellipsis. */
 export const BUBBLE_LINES = 4;
 /** Messages of one speaker shown at once; a new one drops the oldest. */

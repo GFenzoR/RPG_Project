@@ -255,6 +255,9 @@ el punto 5:
     de entrar": al entrar al juego gana el guardado en la cuenta.
   - **Probarlo a mano en dos navegadores** (o navegador y app de escritorio): cambiar
     postura, volumen, ventanas y hotkeys en uno y entrar en el otro.
+- **Texto de la UI +1 px, globos +2 px, Enter para el chat, inventario compacto (hecho, rama
+  `feat/ui-text-and-chat`; docs/17 "Texto de la interfaz, globos y chat"):** falta revisar en el e2e
+  que ninguna ventana se corte a 1280x720 y 1920x1080 con la raíz en 17 px.
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:

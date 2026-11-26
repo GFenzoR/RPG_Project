@@ -11,6 +11,7 @@ import type { Translate } from "../i18n/i18n.ts";
 import { formatChat } from "../state/messages.ts";
 import { chatFilter, tabChannel } from "../state/chat.ts";
 import type { ChatTab } from "../state/chat.ts";
+import { chatFocusAction, enterIsFree } from "../state/chat-focus.ts";
 
 const CHANNELS: { channel: ChatChannel; key: string }[] = [
   { channel: ChatChannel.SAY, key: "client.chat.channel.say" },
@@ -58,6 +59,35 @@ export function ChatPanel(props: {
   }, [tab]);
   const lines = chatFilter(props.ui.chat, tab);
   const list = useRef<HTMLUListElement>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const textRef = useRef(text);
+  textRef.current = text;
+  // Enter with nothing focused puts the cursor in the chat line (state/chat-focus.ts);
+  // keys already used by the game, a window or a focused button are left alone.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const el = field.current;
+      if (!el || e.target === el) return;
+      const action = chatFocusAction({
+        key: e.key,
+        inChat: false,
+        claimed: e.defaultPrevented || !enterIsFree(document.activeElement),
+        text: textRef.current,
+        modified: e.repeat || e.ctrlKey || e.altKey || e.metaKey,
+      });
+      if (action !== "focus" || el.offsetParent === null) return;
+      e.preventDefault();
+      el.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const send = (): void => {
+    if (text.trim() === "") return;
+    props.game?.say(text, channel);
+    setText("");
+    field.current?.blur();
+  };
   const last = lines[lines.length - 1];
   // Keep the newest line in view.
   useEffect(() => {
@@ -78,8 +108,7 @@ export function ChatPanel(props: {
         data-testid="say"
         onSubmit={(e) => {
           e.preventDefault();
-          props.game?.say(text, channel);
-          setText("");
+          send();
         }}
       >
         <select
@@ -96,6 +125,7 @@ export function ChatPanel(props: {
         </select>
         <input
           type="text"
+          ref={field}
           aria-label={t("client.say.label")}
           maxLength={props.content.chat.maxLength}
           value={text}
@@ -103,6 +133,20 @@ export function ChatPanel(props: {
           enterKeyHint="send"
           autoComplete="off"
           onInput={(e) => setText(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            const action = chatFocusAction({
+              key: e.key,
+              inChat: true,
+              claimed: false,
+              text: e.currentTarget.value,
+              modified: e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.isComposing,
+            });
+            if (action === "blur") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+            // "send": the form's submit does it (and gives the focus back).
+          }}
           onFocus={(e) => {
             const el = e.currentTarget;
             setTimeout(() => el.scrollIntoView({ block: "nearest" }), KEYBOARD_SETTLE_MS);

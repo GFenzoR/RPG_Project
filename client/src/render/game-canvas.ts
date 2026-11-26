@@ -1594,6 +1594,7 @@ export async function createGameCanvas(
       speech.say(said.speakerId, style, text, now);
     }
     if (!on) speech.clear();
+    speech.setDensity(window.devicePixelRatio || 1);
     speech.draw(anchors, now);
     anchors.clear();
   };

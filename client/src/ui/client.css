@@ -83,7 +83,8 @@
   color: var(--ui-text);
 }
 html {
-  font-size: calc(100% * var(--ui-text-scale, 1));
+  /* 17 px (was 16): the owner asked for every UI font 1 pt bigger, 2026-11-26. */
+  font-size: calc(17px * var(--ui-text-scale, 1));
 }
 html,
 body,
@@ -965,7 +966,7 @@ form .link.back {
 .inventory .cells {
   display: grid;
   grid-template-columns: repeat(5, 36px);
-  gap: 3px;
+  gap: 1px; /* thin: the owner found the cells too far apart (2026-11-26) */
   justify-content: start;
 }
 /* A slot is a well cut in the stone: dark, sunk, an iron rim (docs/17 UI-2). */
@@ -3636,6 +3637,7 @@ body.picking-item .map-hint {
   .inventory .cells,
   .inventory .container.docked .cells {
     grid-template-columns: repeat(auto-fill, 44px);
+    gap: 2px;
   }
   .inventory .cells .slot {
     width: 44px;
@@ -3951,7 +3953,7 @@ button.credits-link {
 
 /* ---- The item card (docs/17 UI-6): menu, tooltip and shop ---------------------------- */
 .item-card {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 19px;
   color: var(--ui-text);
 }
@@ -3973,7 +3975,7 @@ button.credits-link {
 .card-name {
   font-family: var(--ui-font-title);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--ui-text);
 }
 .card-name.quest,
@@ -4043,7 +4045,7 @@ button.credits-link {
 }
 .card-marks li {
   color: var(--ui-warn);
-  font-size: 12px;
+  font-size: 13px;
 }
 /* An atlas icon at 2x: a box twice its size, the icon scaled pixel by pixel. */
 .big-icon {
@@ -4123,13 +4125,13 @@ button.credits-link {
 }
 .item-card.tip {
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 18px;
   color: var(--ui-item-stat);
 }
 .item-card.tip .card-name {
   display: block;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--ui-item-plain);
 }
 .item-card.tip .card-name.quest {

@@ -2075,7 +2075,7 @@ su cabeza, para que la conversación se sienta natural.
   (ver docs/14).
 - **Cómo se ve:** una caja oscura redondeada con una colita hacia la cabeza, justo sobre
   el nombre (sobre la barra de vida si el nombre está oculto a zoom 1), en la fuente del
-  canvas (Pixelify Sans 11 px, UI-3) con líneas de 13 px. Decir: pergamino sobre marrón;
+  canvas (Pixelify Sans 11 px hasta 2026-11-26; ver "Texto y chat" abajo) con líneas de 13 px. Decir: pergamino sobre marrón;
   gritar: naranja con borde de 2 px y dura 1,5 veces más; susurrar: azul gris, caja más
   transparente y dura 0,8 veces; NPC: verde pálido. La fuente es de píxel: un grito no se
   agranda (se vería borroso), se distingue por color, borde y duración.
@@ -2103,6 +2103,27 @@ su cabeza, para que la conversación se sienta natural.
   con `Text.width`); `game-canvas.ts` pone la capa entre los nombres y los números
   flotantes y la ancla al nombre; `WorldState.takeSpeech` guarda lo dicho (hasta
   `SPEECH_QUEUE`, 16) hasta el frame siguiente. Hook E2E `__rpgClient.bubbles()`.
+
+### Texto de la interfaz, globos y chat (hecho, 2026-11-26, rama `feat/ui-text-and-chat`)
+Pedidos del dueño tras jugar los lotes 19 y 20:
+- **Fuentes de la UI +1 px.** La raíz pasó de 16 a 17 px (`html { font-size: calc(17px * var(--ui-text-scale)) }`
+  en `ui/client.css`): todo lo que está en `rem` sube a la vez y la opción de tamaño de texto
+  (90 % a 130 %) sigue multiplicando. Los pocos `font-size` en px fijos (tarjeta de objeto,
+  pisos del minimapa, contador de la barra, menú táctil) subieron 1 px a mano. La fuente es la
+  misma (Alegreya Sans, vectorial), solo cambia el tamaño: la definición no se pierde.
+- **Globos +2 px y nítidos.** El texto del globo es de 13 px CSS (antes 11), la sans de la
+  interfaz en 600 (no la pixel, que fuera de su grilla de 11 px se veía borrosa), rasterizada
+  al tamaño que se ve en píxeles de dispositivo con la regla de los nombres
+  (`bubbleMetrics(dpr)` en `render/bubbles.ts`: fuente, interlínea, relleno y ancho escalan con
+  la densidad, enteros). El ancho de ajuste de línea subió de 150 a 180 px.
+- **Enter y el chat.** Enter sin nada con foco enfoca la línea del chat; Enter con texto la
+  envía y devuelve el foco al juego; Enter con la línea vacía o Escape también lo devuelven. Así
+  se escribe y se camina sin tocar el mouse. Enter no actúa si lo usa otro elemento (un botón, un
+  campo, un `select`) o si el juego o una ventana ya lo consumieron. Máquina pura en
+  `state/chat-focus.ts` (con tests), conectada en `ui/Chat.tsx`.
+- **Inventario más compacto.** El espacio entre casillas (mochila, bolsillos, contenedores) pasó
+  de 3 a 1 px; en pantallas táctiles queda en 2 px con casillas de 44 px. El maniquí del equipo
+  mantiene 2 px (`DOLL_GAP`, par, para que los íconos caigan en píxeles enteros).
 
 ### Minimapa (hecho, 2026-11-23, rama `feat/minimap`)
 Pedido del dueño: un minimapa como el de Tibia (la mecánica: explorar para verlo), con los
