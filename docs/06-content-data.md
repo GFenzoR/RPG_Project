@@ -1772,17 +1772,30 @@ toca al contenido:
     kind: ground
     ground: { walkable: true, speed: 160, surface: sand }
   ```
-- **`data/livingworld/surfaces.yaml`** (`livingworld-surfaces.schema.json`), por superficie:
-  `footprints` (ms que dura una huella sin viento; 0 o ausente: ninguna), `wind` (desgaste
-  extra por ms en una ráfaga), `dust` (polvo al correr), `ripple` (anillos en el agua),
-  `tint` (`#rrggbb` de huellas y polvo), `sound` (evento `step.self.<sound>` de
-  `assets/sounds.yaml`; por defecto el nombre de la superficie) y `critters` (`bird`,
-  `butterfly`, `firefly`, `fish`). `make validate` exige que toda superficie que usa un suelo
-  esté descrita.
+- **`data/livingworld/surfaces.yaml`** (`livingworld-surfaces.schema.json`). Arriba, dos
+  bloques obligatorios:
+  - `prints`: qué borra las huellas en todas partes (una huella no tiene tiempo de vida;
+    `livingworld/README.md` "Huellas: qué las borra"): `still` (fuerza del viento bajo la
+    que no se toca ninguna), `fade_ms` (lo que tarda en desvanecerse una que pasó el tope),
+    `tread_px` (a qué distancia el pie de otra criatura la pisa) y `waves` (`period_ms`,
+    una ola cada tanto; `reach_tiles`, hasta dónde sube la más grande; `lag_ms` por
+    casilla a lo largo de la costa; `wash_ms`, lo que tarda en borrarla);
+  - `steps`: cómo suenan los pasos del jugador: `volume` (**el** volumen de los pasos, un
+    factor sobre el `volume` de cada toma de `assets/sounds.yaml`: se baja aquí), `jitter`
+    (cambio de tono al azar por paso) y `left` / `right` (`pitch` y `gain` de cada pie).
+  Y por superficie (`surfaces`): `prints` (deja huellas, y qué las borra: `wind`, parte
+  borrada por segundo con viento de fuerza 1 sobre `still`; `waves`, las olas del agua
+  vecina; `tread`, parte que borra el pie de otra criatura; ausente: no deja huellas),
+  `dust` (polvo al correr), `ripple` (anillos en el agua), `tint` (`#rrggbb` de huellas y
+  polvo), `sound` (evento `step.self.<sound>` de `assets/sounds.yaml`; por defecto el
+  nombre de la superficie) y `critters` (`bird`, `butterfly`, `firefly`, `fish`).
+  `make validate` exige que toda superficie que usa un suelo esté descrita. El campo de
+  antes, `footprints: <ms>`, ya no existe (el esquema lo rechaza).
 - **`data/livingworld/gaits.yaml`** (`livingworld-gaits.schema.json`; cliente): cómo anda
   cada cuerpo, para que huellas, ondas, polvo y sonido del paso salgan en cada pisada de la
   animación. `view.depth`, `slide_px`, `gaits` (por nombre: `print` = `feet` | `paw` |
-  `big_paw` | `dot` | `trail`, `stance`, `reach`, `rise`, `scale`, `depth` y `contacts`,
+  `big_paw` | `dot` | `trail`, `stance`, `reach`, `rise`, `scale`, `depth`, `print_spread`
+  (px que la huella se dibuja hacia el lado de su pie, para que se vean las dos hileras) y `contacts`,
   una lista de `{ at, side, along }` con `at` de 0 a 1 en el ciclo de caminar), `defaults`
   (`humanoid`, `beast`, `big_beast`, `flying`) y `creatures` (id de monstruo o NPC → andar).
   `make validate` exige andares que existan y criaturas de `data/`. Un monstruo nuevo no
@@ -1913,7 +1926,9 @@ la superficie bajo ese pie en `data/livingworld/surfaces.yaml`) antes de `step.s
 suena como `step.self`.
 Cada `sound` (`grass`, `tall_grass`, `dirt`, `sand`, `wet_sand`, `ash`,
 `stone`, `wood`, `snow`, `mud`, `water`) tiene tres tomas (`step_<sound>_<1-3>`, recetas de
-`tools/soundgen/src/steps.ts`) y su evento lista las tres: suena una al azar. Todas salen a
+`tools/soundgen/src/steps.ts`) y su evento lista las tres: suena una distinta de la
+anterior, con el tono y el volumen del pie que pisa (`steps` de
+`data/livingworld/surfaces.yaml`, que también tiene el volumen de todos los pasos). Todas salen a
 la misma sonoridad y llevan el mismo volumen bajo (0,15; el `step` de reserva, 0,12): el
 paso queda de fondo.
 

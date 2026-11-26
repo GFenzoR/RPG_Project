@@ -183,15 +183,25 @@ el punto 5:
     emisor (se oye una fragua a través de un muro).
   - **E2E:** el test de sonido de `e2e/game.spec.ts` espera la brisa del pasto (y no las
     olas) en el templo de la isla del E2E; lo corre el lote al final.
-- **Nombres más grandes y legibles (hecho, rama `feat/name-labels`; el dueño el 2026-11-23:
-  "los nombres deben ser más grandes", el violeta de los NPCs no se leía; docs/17 "Hecho:
-  nombres más grandes y legibles"):** los nombres, gremios, marcas PvP y números flotantes
-  escalan con el zoom en pasos enteros (grande por defecto, normal en Opciones → Interfaz)
-  y los colores tienen contraste ≥ 4,5:1 contra el contorno. Falta que el dueño lo mire en
-  su pantalla: si a 1x (la app a 960x700) los quiere más grandes, `labelScale` daría 2 desde
-  zoom 1 con "Grande" (a 1x un nombre ocuparía 2/3 de casilla de alto y se ocultarían más
-  por solapes). El muro que se vuelve translúcido delante del jugador (ART-3) tiene ahora su
-  E2E (`102-wall-fade-own-player`).
+- **Nombres nítidos y NPCs en dos líneas (hecho, rama `feat/labels-and-steps`, 2026-11-25;
+  antes `feat/name-labels`, lote 19; el dueño: "la fuente se ve muy pixeleada y ahora está
+  muy grande", "los NPC muestran su nombre y después unos puntos suspensivos; dos líneas:
+  el nombre y abajo qué hace"; docs/17 "Hecho: nombres nítidos y los NPCs en dos líneas"):**
+  los nombres se rasterizan al tamaño exacto en píxeles de dispositivo (Alegreya Sans con
+  contorno, 12/15/18/21 px CSS a zoom 1 a 4; "Normal" 10 a 16), los NPCs muestran su rol
+  (`role` en `data/npcs`, con rol por defecto según lo que ofrecen) y nada de "…" para
+  ellos. Queda:
+  - **Que el dueño lo mire en su pantalla** (Windows al 125 % o 150 % incluido): el tamaño
+    se eligió sobre una lámina sin el juego corriendo; se ajusta en `NAME_PX` de
+    `client/src/render/label-style.ts` (base y paso por zoom) y `SUB_RATIO` (el rol).
+  - **Los textos de rol** los escribí yo ("Provisiones", "Jefa del puerto", "Guardiana de
+    los registros"...; los sacerdotes usan el por defecto "Bendiciones y sanación"): el
+    dueño puede cambiarlos en `i18n/*/npcs.yaml` (`npc.<id>.role`, máximo 28 caracteres).
+    Los nombres de NPC ya no llevan el oficio tras una coma (también en la ventana de
+    diálogo).
+  - **Números flotantes y globos** siguen en la fuente pixel escalada; si también se ven
+    pixelados, el mismo cambio (`labelFontPx`) sirve para ellos.
+  - **E2E** (lo corre el lote al final): `100-*` y `101-*` de `sandbox.spec.ts`.
 - **Ventanas que cambian de tamaño desde las cuatro esquinas (hecho, rama
   `feat/window-resize`; el dueño el 2026-11-23: "como en Ragnarok Online"; docs/17 UI-5,
   §7 "Hecho: cambiar el tamaño desde las cuatro esquinas"):** solo las esquinas (los bordes
@@ -495,9 +505,23 @@ el punto 5:
       por la playa de Thimblewick; la playa es angosta (5 casillas de arena en fila), así
       que la diagonal solo se captura si hay tres casillas seguidas. La captura sin
       navegador (`livingworld/client/scripts/footfall-shot.ts`) ya muestra las 4 direcciones.
-    - **El sonido ahora da dos golpes por casilla** caminando al este u oeste (uno por
-      pie; 1,15 al norte o al sur): que el dueño lo escuche; si cansa, se baja el volumen
-      de `step` en `assets/sounds.yaml` o se suena un pie de cada dos.
+    - **Los dos pies (hecho, rama `feat/labels-and-steps`, 2026-11-25; el dueño: "solo al
+      pie derecho, pareciera que está cojeando", "se marcan de uno de los dos pies"):**
+      las huellas van en dos hileras (`print_spread`), cada pie suena con su voz y nunca
+      se repite la toma, y el volumen es un número (`steps.volume`, 0,7). Queda que el
+      dueño lo escuche: son dos golpes por casilla al este u oeste, 3,5 al norte o al sur
+      y 4 en diagonal (lo que da la animación); si cansa, bajar `steps.volume` en
+      `data/livingworld/surfaces.yaml` (no en `sounds.yaml`). Se revisó contra la mezcla
+      por números (0,105 contra 0,7 de la música, 0,8 de un golpe y 0,15 de la capa de
+      ambiente más baja), no de oído.
+    - **Huellas que borra el viento o la ola (hecho, misma rama; el dueño: "en la arena
+      no debiesen borrarse después de un rato necesariamente; es según el viento o según
+      las olas"):** sin tiempo de vida; `livingworld/README.md` "Huellas: qué las borra".
+      Queda mirarlo en el juego (capturas `99k` a `99n` del E2E "sandbox footprints": el
+      rastro antes y después de una ráfaga, y en la arena mojada antes y después de una
+      ola) y afinar a gusto `prints.wind` de cada superficie, `prints.still` y `waves`
+      (`surfaces.yaml`). No hay lluvia (gancho `FootprintSim.rain`), la ola no se dibuja
+      subiendo por la arena, y la marca de los dos pies es el mismo sprite.
     - **Descalzo o con botas:** la misma marca (no era barato: pide leer el calzado
       visible de cada criatura y un sprite más).
     - **Criaturas dibujadas a mano (Gemini):** usan los contactos de su tipo de cuerpo por
@@ -510,9 +534,11 @@ el punto 5:
     `tools/soundgen/src/steps.ts` en `assets/livingworld/sounds/steps/`, niveladas a la
     misma sonoridad y a volumen 0,15 (el `step` de reserva bajó de 0,25 a 0,12). Sin ffmpeg
     en el PATH se encodaron con el de `imageio-ffmpeg` (el de `tools/gemini`). Queda: que el
-    dueño las escuche (el nivel se ajusta con `volume` en `sounds.yaml`); y en el cliente,
-    no repetir la misma toma dos pasos seguidos y variar un poco el tono (hoy la toma sale
-    al azar entre las tres).
+    dueño las escuche: el nivel de todas se ajusta con `steps.volume` de
+    `data/livingworld/surfaces.yaml` (0,7 desde `feat/labels-and-steps`, que también hizo
+    que la toma no se repita y varíe el tono). Si pasto, tierra y piedra le siguen sonando
+    parecidos, son las recetas de `tools/soundgen/src/steps.ts` las que hay que separar
+    más (un test ya exige que cada superficie del mapa real toque sus propios archivos).
   - **Día y noche (hecho, rama `feat/day-night-shadows`):** reloj del servidor, luz,
     lámparas, luna y sombras proyectadas (`livingworld/README.md` "Día y noche"). Queda:
     - **Sombras de los objetos (hecho, 2026-11-25, rama `feat/object-shadows`):** todo

@@ -2989,6 +2989,21 @@ y abajo qué es lo que hace (Tilde Varga / Provisiones)".
   termina con un rol en es y en). E2E: `100-*` (el instructor a 2x y 1x, de cerca, y la
   plaza de Thimblewick con sus NPCs a 1x y 2x), `101-*` (monstruos a 2x y 4x).
 
+### Hecho: los dos pies y huellas que borra el viento (2026-11-25, rama `feat/labels-and-steps`)
+Pedido del dueño después de jugar: el paso sonaba "solo al pie derecho", las marcas eran
+"de uno de los dos pies", todos los suelos sonaban igual y las huellas de la arena se
+borraban por reloj. Detalle en `livingworld/README.md` ("Los dos pies" y "Huellas: qué las
+borra"); en corto:
+- las huellas del pie izquierdo y del derecho se dibujan en dos hileras (antes caían en una
+  fila caminando al este u oeste, por el aplastado de la vista 3/4);
+- cada pie suena con su voz (unos puntos de tono y volumen de diferencia), nunca la misma
+  toma dos veces seguidas, y el volumen de todos los pasos es un número
+  (`steps.volume` de `data/livingworld/surfaces.yaml`, 0,7 sobre 0,15);
+- el sonido es el del suelo bajo ese pie, con un test que recorre el mapa real;
+- una huella no tiene tiempo de vida: la borra el viento según lo expuesto del lugar (en
+  la playa abierta, desde barlovento; al abrigo dura hasta el tope), la ola siguiente en
+  la arena mojada, o el pie de otra criatura; las más viejas se desvanecen al pasar el tope.
+
 ### Cadáveres (hecho, 2026-11-23, rama `feat/corpse-names`)
 Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo el nombre.
 - **De qué sale:** `tools/spritegen/src/recipes/corpses.ts` hace `corpses/<monstruo>`
