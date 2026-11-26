@@ -20,7 +20,8 @@ export const meta = {
 //     wt: 'pi',                   // worktree under .wt/ (2-3 letters: Windows MAX_PATH)
 //     from: 'feat/x',             // optional: start from another item's branch (it then waits for it)
 //     risk: 'high' | 'server' | 'content' | 'client' | 'docs',
-//     model: 'sonnet',            // optional: a cheaper model for a mechanical item (default: the session's)
+//     model: 'inherit',           // optional: the session's model for a hard item (default: sonnet)
+//   started: ISO time of the launch (for the token check of the verify step)
 //     brief: '...',               // goal, files and docs to read, constraints, done criteria
 //   }],
 // }
@@ -67,6 +68,14 @@ Never push, never open PRs, never call gh, never use git stash. Do NOT launch su
 // instead of being cut (the watcher estimates the 5-hour window from the local transcripts).
 const USAGE = `Usage limit care: commit every finished step at once (a small Conventional Commit; lint may still be pending then, fix it in the next commit), so a cut run loses nothing. Before you start, and after each commit, run: node "C:/Users/fenzo/.claude/tools/usage-watch.cjs" --json . If its verdict starts with STOP, wait for the reset before going on: until node "C:/Users/fenzo/.claude/tools/usage-watch.cjs" --json | grep -qv '"verdict":"STOP'; do sleep 240; done (run it with a 10 minute timeout and repeat it until it returns). If the watcher fails, ignore it and go on.`
 
+// Token care (measured 2026-11-26: 27% of the spend was the context re-written to cache after a wait
+// of more than 5 minutes, 64% came from requests with more than 150k of context).
+const LEAN = `Token care, mandatory:
+- Never wait more than 4 minutes on one command. Anything longer (make test, make lint, make validate, e2e, big go test) runs in the background into a log file (cmd > /abs/path.log 2>&1 &) and you check it every 3 minutes with one tiny command (tail -3 of the log, or grep -c FAIL), never with a long blocking call.
+- Read little: grep first, then Read only the line range you need; never cat a whole log or a big file; from logs take tail or grep. Look at few screenshots, only the ones that decide something.
+- Keep your own context small: no re-reading files you already read, no dumping diffs; git diff --stat first.`
+const TARGETED = 'Tests in this stage: run only what covers your change (the vitest files or the one package you touched, the go packages you touched, eslint/prettier/tsc on changed files, make validate if data or maps changed). Do NOT run the full make lint test validate: the stack stage runs it once.'
+
 const WT = (it) => `Your worktree is ${REPO}\\.wt\\${it.wt} (branch ${it.branch}). If it already exists, an earlier run of this task was cut: reuse it, look at git status / git log / git diff and keep the good work. Otherwise create it from ${REPO}: git worktree add .wt/${it.wt} -b ${it.branch} ${it.from || BASE}. Work ONLY there (cd into it in every Bash call, absolute paths with that prefix); pnpm install --frozen-lockfile first.`
 
 const IMPL = {
@@ -83,14 +92,16 @@ const DONE = {
 function implement(it) {
   return run(`${RULES}
 ${WT(it)}
-Do NOT use Docker, servers, make e2e or make test-integration: the batch runs them once at the end. Use make lint, make test, make validate, go test, vitest, mapcli/spritegen previews (review images with Read).
+Do NOT use Docker, servers, make e2e or make test-integration: the batch runs them once at the end. Use targeted go test and vitest, mapcli/spritegen previews (review few images with Read).
+${LEAN}
+${TARGETED}
 ${USAGE}
-Done for this stage: the change + tests that fail without it + docs (Spanish) + docs/14 "Pendientes conocidos" adjusted + make lint test validate green + small Conventional Commits. ${ATTR}
+Done for this stage: the change + tests that fail without it + docs (Spanish) + docs/14 "Pendientes conocidos" adjusted + the targeted tests green + small Conventional Commits. ${ATTR}
 
 TASK:
 ${it.brief}
 
-Answer (structured): ok, touches_server (server/, proto/ or .github/ changed), summary (Spanish, PR-ready: what changed, decisions, tests, results, pending), e2e_notes (what the final e2e/screenshot review should look at).`, { label: `impl:${it.slug}`, phase: 'Implement', schema: IMPL, ...(it.model ? { model: it.model } : {}) })
+Answer (structured): ok, touches_server (server/, proto/ or .github/ changed), summary (Spanish, PR-ready: what changed, decisions, tests, results, pending), e2e_notes (what the final e2e/screenshot review should look at).`, { label: `impl:${it.slug}`, phase: 'Implement', schema: IMPL, ...(it.model === 'inherit' ? {} : { model: it.model || 'sonnet' }) })
 }
 
 const reviewPrompt = (it, round) => `${RULES}
@@ -107,8 +118,9 @@ Answer in Spanish: BLOCKING / IMPORTANT / MINOR with file:line and fix, or "nada
 function fix(it, review, label) {
   return run(`${RULES}
 ${WT(it)}
-Apply this code review to your branch (the work is already committed there). Fix every BLOCKING and IMPORTANT finding (verify it first; explain any you reject) and the cheap MINOR ones, each with a test that fails without the fix. make lint test validate green; commit. ${ATTR} No Docker, no e2e.
+Apply this code review to your branch (the work is already committed there). Fix every BLOCKING and IMPORTANT finding (verify it first; explain any you reject) and the cheap MINOR ones, each with a test that fails without the fix. ${TARGETED} Commit. ${ATTR} No Docker, no e2e.
 ${USAGE}
+${LEAN}
 Review:
 ${review}`, { label, phase: 'Review', schema: DONE })
 }
@@ -142,7 +154,8 @@ function stack(r, it) {
     if (it.from && it.from !== BASE && !stacked.includes(it.from)) return { slug: it.slug, ok: false, summary: `No se apiló: su base ${it.from} no quedó en la pila.` }
     const base = prev
     const out = await run(`${RULES}
-Rebase the local branch ${it.branch} (worktree ${REPO}\\.wt\\${it.wt}; cd into it in every Bash call) onto ${base}: git rebase ${base}. If a rebase is already in progress or the tree is dirty, an earlier run was cut: finish it. Resolve conflicts keeping both sides' intent (lists in data/i18n/docs/sprites/CREDITS: union; ids: make gen-ids; generated code: make gen / make sprites; migrations: unique increasing numbers). Then make lint test validate green (no Docker, no e2e: the batch runs them once at the end). Commit any fix. ${ATTR}
+Rebase the local branch ${it.branch} (worktree ${REPO}\\.wt\\${it.wt}; cd into it in every Bash call) onto ${base}: git rebase ${base}. If a rebase is already in progress or the tree is dirty, an earlier run was cut: finish it. Resolve conflicts keeping both sides' intent (lists in data/i18n/docs/sprites/CREDITS: union; ids: make gen-ids; generated code: make gen / make sprites; migrations: unique increasing numbers). ${LEAN}
+Then make lint test validate green (no Docker, no e2e: the batch runs them once at the end). Commit any fix. ${ATTR}
 Answer (structured): ok (rebased and green), summary (Spanish: conflicts and how you resolved them).`, { label: `stack:${it.slug}`, phase: 'Stack', schema: DONE, model: 'sonnet', effort: 'low' })
     if (out && out.ok) { prev = it.branch; stacked.push(it.branch) }
     return { slug: it.slug, ok: !!(out && out.ok), summary: `${r.impl.summary}\n\n${r.notes}\n\nApilado: ${out ? out.summary : '(falló)'}`, e2e_notes: r.impl.e2e_notes }
@@ -175,11 +188,13 @@ Answer in Spanish: BLOCKING / IMPORTANT / MINOR (file:line, scenario, fix), or s
   verify = await run(`${RULES}
 You close the batch "${NAME}". From ${REPO} create the worktree: git worktree add .wt/vf -b ${NAME}/verify ${tip} (if .wt/vf exists, an earlier run was cut: reuse it). Work only there; pnpm install --frozen-lockfile.
 ${USAGE}
+${LEAN}
 1. Apply the BLOCKING and IMPORTANT findings of the final review below (verify each; explain rejects) and cheap MINOR ones, with tests. Commit. ${ATTR}
 2. Before Docker: the owner may be playing with 'make play' (a gameserver.exe and Vite on :8080/:5173 started from ${REPO}). Never stop it. For every PID that 'netstat -ano | grep LISTENING | grep -E ":(8080|5173) "' shows, read where it runs from: powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'ProcessId=<PID>' | Format-List ExecutablePath,CommandLine". One whose path or command line is under ${REPO}\\.wt\\vf was left by a cut run of this same step: stop it (taskkill //PID <PID> //F). Any other is the owner's: wait in a loop (check every 2 min, up to 8 h) until it is gone. If it is still there after 8 h, stop: no Docker, no step 3 or 4; answer ok=false with a summary that says the fixes of step 1 are committed and the verification waits for the owner to close 'make play' (resume this step then). Then you are the only agent with Docker and ports. If docker info fails: powershell -NoProfile -Command "Start-Process 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'", poll, make db-up. Fresh database rpg_e2e_${NAME} (DROP IF EXISTS + CREATE via docker exec ... psql -U postgres); DATABASE_URL and TEST_DATABASE_URL = postgres://postgres:postgres@localhost:5432/rpg_e2e_${NAME}.
 3. make lint, make test, make validate, make test-integration, make e2e — all full, the only e2e of the batch. Fix until green (never weaken tests; a flaky test gets its cause found and fixed). Review with Read the screenshots the items point at:
 ${notes}
 4. taskkill //IM gameserver.exe //F, DROP the database, stop the Vite servers you started, then docker desktop stop and wsl --shutdown.
+5. Last: run node "C:/Users/fenzo/.claude/tools/usage-lote-check.cjs" --since ${args.started || '1970-01-01'} and copy its first two output lines verbatim at the top of your summary (it says OK or ALERT about the token use of this batch).
 Final review:
 ${finalReview}
 Answer (structured): ok (all green and committed), summary (Spanish, PR-ready: final review findings applied/rejected, real results of each make, screenshots reviewed, pending).`, { label: 'verify', phase: 'Verify', schema: DONE })
