@@ -4,6 +4,8 @@
 // the item's id: a new barrel or sign casts with nothing written), then one item's own word.
 // Pure and free of Pixi: the client's Vite plugin resolves each item's shadow at build time
 // (client/vite/content.ts) and the canvas draws it (client/src/render/object-shadows.ts).
+import { parseLightShadows } from "./light-shadows.ts";
+import type { LightShadowRules } from "./light-shadows.ts";
 
 /**
  * How an object casts: `silhouette`, its own drawing laid on the ground from its base (a
@@ -29,6 +31,8 @@ export interface ShadowRules {
   kinds: Readonly<Record<string, ObjectShadow | null>>;
   families: Readonly<Record<string, ObjectShadow | null>>;
   items: Readonly<Record<string, ObjectShadow | null>>;
+  /** `lights`: the shadows lamps and fires cast (light-shadows.ts); absent: none. */
+  lights?: LightShadowRules;
 }
 
 /** What shadowOf reads of an item of data/items. */
@@ -81,11 +85,14 @@ export function parseShadows(raw: unknown): ShadowRules | undefined {
     }
     return out;
   };
-  return {
+  const out: ShadowRules = {
     kinds: table(raw["kinds"]),
     families: table(raw["families"]),
     items: table(raw["items"]),
   };
+  const lights = parseLightShadows(raw["lights"]);
+  if (lights) out.lights = lights;
+  return out;
 }
 
 /**

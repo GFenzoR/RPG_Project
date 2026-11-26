@@ -122,6 +122,17 @@ export {
   shadowOf,
 } from "./shadows.ts";
 export type { ObjectShadow, ShadowCastKind, ShadowItem, ShadowRules } from "./shadows.ts";
+export {
+  DEFAULT_LIGHT_SHADOWS,
+  LIGHT_STRIDE,
+  SIDE_BOTH,
+  SIDE_IN,
+  SIDE_OUT,
+  lightBreath,
+  lightCast,
+  parseLightShadows,
+} from "./light-shadows.ts";
+export type { LightCast, LightShadowRules } from "./light-shadows.ts";
 
 /** The containers the client gives it, both in world space (one unit = one sprite pixel). */
 export interface LivingStage {
