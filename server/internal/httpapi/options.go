@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"mime"
@@ -50,7 +52,20 @@ func (a *api) optionsLimited(next authedFunc) authedFunc {
 
 type optionsJSON struct {
 	Options *accountopts.Doc `json:"options"`
+	// Account tells one account from another on a shared browser: the client does not
+	// fill a document with what another account left in localStorage. A tag, not the id.
+	Account string `json:"account"`
 }
+
+// optionsTag is the tag of an account in optionsJSON: stable, and of no use to the API.
+func optionsTag(accountID int64) string {
+	sum := sha256.Sum256([]byte("rpg-account-options:" + strconv.FormatInt(accountID, 10)))
+	return hex.EncodeToString(sum[:8])
+}
+
+// optionsStripes bounds the locks that make a save's read, merge and write one step per
+// account (the game server is one process: docs/01).
+const optionsStripes = 64
 
 // getOptions answers the account's document, the empty one ({"v":1}) if it never saved.
 // A stored document this server no longer accepts (an older schema) reads as empty: the
@@ -67,10 +82,12 @@ func (a *api) getOptions(w http.ResponseWriter, r *http.Request, accountID int64
 			doc = d
 		}
 	}
-	writeJSON(w, http.StatusOK, optionsJSON{Options: doc})
+	writeJSON(w, http.StatusOK, optionsJSON{Options: doc, Account: optionsTag(accountID)})
 }
 
-// saveOptions replaces the account's document with the one in the body. Like decode
+// saveOptions replaces the account's document with the one in the body, except the
+// sections of the device classes the body does not bring, which stay as stored (a save
+// speaks for its own kind of screen: accountopts.KeepMissingDevices). Like decode
 // (Content-Type application/json: no cross-site form can send it), with the document's
 // own size limit and schema.
 func (a *api) saveOptions(w http.ResponseWriter, r *http.Request, accountID int64) {
@@ -94,6 +111,24 @@ func (a *api) saveOptions(w http.ResponseWriter, r *http.Request, accountID int6
 		writeError(w, http.StatusBadRequest, "bad_request")
 		return
 	}
+	// Two saves of one account (the computer and the phone) must not interleave between
+	// the read and the write.
+	lock := &a.optionsLocks[uint64(accountID)%optionsStripes]
+	lock.Lock()
+	defer lock.Unlock()
+	stored, err := a.cfg.Options.AccountOptions(r.Context(), accountID)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	if stored != nil {
+		// A stored document this server no longer accepts has nothing worth keeping.
+		if old, err := accountopts.Parse(stored); err == nil {
+			doc.KeepMissingDevices(old)
+		}
+	}
+	// With the kept sections the document may not fit any more: refused, like one sent
+	// too large.
 	canon, err := doc.Canonical()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request")

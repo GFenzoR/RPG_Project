@@ -162,6 +162,26 @@ func (d *Doc) Canonical() ([]byte, error) {
 	return out, nil
 }
 
+// KeepMissingDevices copies into d the device sections of stored that d does not bring.
+// A save only speaks for the kind of screen it comes from: a page open for hours on the
+// computer knows nothing of what the phone saved since, and must not write its old copy
+// of the phone's section back. A section the save does bring (even an empty one) replaces
+// the stored one.
+func (d *Doc) KeepMissingDevices(stored *Doc) {
+	if stored == nil {
+		return
+	}
+	for class, dev := range stored.Devices {
+		if _, sent := d.Devices[class]; sent || dev == nil {
+			continue
+		}
+		if d.Devices == nil {
+			d.Devices = make(map[string]*Device, len(stored.Devices))
+		}
+		d.Devices[class] = dev
+	}
+}
+
 // Empty is the document of an account that never saved one.
 func Empty() *Doc { return &Doc{V: Version} }
 

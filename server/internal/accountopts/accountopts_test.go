@@ -143,3 +143,46 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+// A save speaks for its own kind of screen: the sections it does not bring stay as stored.
+func TestKeepMissingDevices(t *testing.T) {
+	parse := func(raw string) *accountopts.Doc {
+		t.Helper()
+		d, err := accountopts.Parse([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	stored := `{"v":1,"lang":"es","devices":{"desktop":{"zoom":2},"touch":{"zoom":4,"touch_pad":true}}}`
+	for name, c := range map[string]struct{ sent, want string }{
+		"its own section replaces, the other stays": {
+			`{"v":1,"lang":"en","devices":{"desktop":{"zoom":3}}}`,
+			`{"v":1,"lang":"en","devices":{"desktop":{"zoom":3},"touch":{"touch_pad":true,"zoom":4}}}`,
+		},
+		"an empty section still replaces": {
+			`{"v":1,"devices":{"desktop":{}}}`,
+			`{"v":1,"devices":{"desktop":{},"touch":{"touch_pad":true,"zoom":4}}}`,
+		},
+		"no sections: both stay": {
+			`{"v":1,"lang":"en"}`,
+			`{"v":1,"lang":"en","devices":{"desktop":{"zoom":2},"touch":{"touch_pad":true,"zoom":4}}}`,
+		},
+		"both sent: nothing kept": {
+			`{"v":1,"devices":{"desktop":{"zoom":5},"touch":{"zoom":6}}}`,
+			`{"v":1,"devices":{"desktop":{"zoom":5},"touch":{"zoom":6}}}`,
+		},
+	} {
+		d := parse(c.sent)
+		d.KeepMissingDevices(parse(stored))
+		if got, _ := d.Canonical(); string(got) != c.want {
+			t.Errorf("%s:\n got %s\nwant %s", name, got, c.want)
+		}
+	}
+	d := parse(`{"v":1,"lang":"en"}`)
+	d.KeepMissingDevices(nil)
+	d.KeepMissingDevices(accountopts.Empty())
+	if got, _ := d.Canonical(); string(got) != `{"v":1,"lang":"en"}` {
+		t.Errorf("nothing stored: %s", got)
+	}
+}

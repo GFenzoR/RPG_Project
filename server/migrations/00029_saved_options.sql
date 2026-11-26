@@ -10,10 +10,13 @@ ALTER TABLE characters
 
 -- The interface options of an account (docs/05 "Opciones de la cuenta"): one small JSON
 -- document the server validates and rewrites in canonical form before storing it (never
--- the bytes the client sent). 16 KiB at most, like the API.
+-- the bytes the client sent). The API accepts 16 KiB of JSON text; as JSONB a document
+-- of many small window places takes about twice that (each key and number carries its
+-- own header), so the table's cap is 64 KiB: a backstop, never the limit a valid
+-- document meets.
 CREATE TABLE account_options (
     account_id BIGINT PRIMARY KEY REFERENCES accounts (id) ON DELETE CASCADE,
-    doc        JSONB NOT NULL CHECK (jsonb_typeof(doc) = 'object' AND pg_column_size(doc) <= 32768),
+    doc        JSONB NOT NULL CHECK (jsonb_typeof(doc) = 'object' AND pg_column_size(doc) <= 65536),
     updated_at TIMESTAMPTZ NOT NULL
 );
 

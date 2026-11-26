@@ -2,7 +2,9 @@ package httpapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -52,7 +54,7 @@ func TestAccountOptionsRoundTrip(t *testing.T) {
 	// Never saved: the empty document.
 	w := h.do(req{method: "GET", path: optionsPath, token: ana})
 	expect(t, w, http.StatusOK, "")
-	if got := strings.TrimSpace(w.Body.String()); got != `{"options":{"v":1}}` {
+	if got := optionsOf(t, w); got != `{"v":1}` {
 		t.Fatalf("empty options = %s", got)
 	}
 
@@ -65,7 +67,7 @@ func TestAccountOptionsRoundTrip(t *testing.T) {
 	}
 	w = h.do(req{method: "GET", path: optionsPath, cookie: ana})
 	expect(t, w, http.StatusOK, "")
-	if got := strings.TrimSpace(w.Body.String()); got != `{"options":`+canon+`}` {
+	if got := optionsOf(t, w); got != canon {
 		t.Fatalf("read back %s", got)
 	}
 	if cc := w.Header().Get("Cache-Control"); cc != "no-store" {
@@ -76,9 +78,18 @@ func TestAccountOptionsRoundTrip(t *testing.T) {
 	}
 
 	// Another account neither sees nor replaces it.
+	anaTag := optionsTagOf(t, w)
 	w = h.do(req{method: "GET", path: optionsPath, token: bob})
-	if got := strings.TrimSpace(w.Body.String()); got != `{"options":{"v":1}}` {
+	if got := optionsOf(t, w); got != `{"v":1}` {
 		t.Fatalf("another account reads %s", got)
+	}
+	// The tag tells the accounts apart on a shared browser, is stable, and is not the id.
+	bobTag := optionsTagOf(t, w)
+	if anaTag == "" || bobTag == "" || anaTag == bobTag || anaTag == "1" || bobTag == "2" {
+		t.Fatalf("account tags %q and %q", anaTag, bobTag)
+	}
+	if again := optionsTagOf(t, h.do(req{method: "GET", path: optionsPath, token: ana})); again != anaTag {
+		t.Fatalf("the tag changed: %q, then %q", anaTag, again)
 	}
 	expect(t, h.do(req{method: "POST", path: optionsPath, token: bob, body: `{"v":1,"lang":"es"}`}), http.StatusNoContent, "")
 	if got := string(opts.docs[1]); got != canon {
@@ -88,8 +99,58 @@ func TestAccountOptionsRoundTrip(t *testing.T) {
 	// A stored document this server does not accept reads as empty, never as it is.
 	opts.docs[1] = []byte(`{"v":1,"lang":"<script>"}`)
 	w = h.do(req{method: "GET", path: optionsPath, token: ana})
-	if got := strings.TrimSpace(w.Body.String()); got != `{"options":{"v":1}}` {
+	if got := optionsOf(t, w); got != `{"v":1}` {
 		t.Fatalf("a junk row is served: %s", got)
+	}
+	// And a save over it keeps nothing of it.
+	expect(t, h.do(req{method: "POST", path: optionsPath, token: ana, body: `{"v":1,"lang":"es"}`}), http.StatusNoContent, "")
+	if got := string(opts.docs[1]); got != `{"v":1,"lang":"es"}` {
+		t.Fatalf("saved over a junk row: %s", got)
+	}
+}
+
+// optionsOf and optionsTagOf read the two fields of the GET's answer.
+func optionsOf(t *testing.T, w *httptest.ResponseRecorder) string {
+	t.Helper()
+	var out struct {
+		Options json.RawMessage `json:"options"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("answer %q: %v", w.Body.String(), err)
+	}
+	return string(out.Options)
+}
+
+func optionsTagOf(t *testing.T, w *httptest.ResponseRecorder) string {
+	t.Helper()
+	var out struct {
+		Account string `json:"account"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("answer %q: %v", w.Body.String(), err)
+	}
+	return out.Account
+}
+
+// A page open for hours on the computer saves with the copy of the phone's section it
+// read at its login (or with none): what the phone saved since stays.
+func TestAccountOptionsSaveKeepsTheOtherDeviceClass(t *testing.T) {
+	h, opts, ana, _ := optionsHarness(t, httpapi.RateLimit{})
+	save := func(body string) {
+		t.Helper()
+		expect(t, h.do(req{method: "POST", path: optionsPath, token: ana, body: body}), http.StatusNoContent, "")
+	}
+	save(`{"v":1,"lang":"es","devices":{"desktop":{"zoom":2}}}`)
+	save(`{"v":1,"lang":"es","devices":{"touch":{"zoom":4,"touch_pad":true}}}`) // the phone
+	save(`{"v":1,"lang":"en","devices":{"desktop":{"zoom":3}}}`)                // the computer, later
+	const want = `{"v":1,"lang":"en","devices":{"desktop":{"zoom":3},"touch":{"touch_pad":true,"zoom":4}}}`
+	if got := string(opts.docs[1]); got != want {
+		t.Fatalf("stored %s\n  want %s", got, want)
+	}
+	// A screen that put its zoom back to fitted says so with its empty section.
+	save(`{"v":1,"lang":"en","devices":{"desktop":{}}}`)
+	if got := string(opts.docs[1]); got != `{"v":1,"lang":"en","devices":{"desktop":{},"touch":{"touch_pad":true,"zoom":4}}}` {
+		t.Fatalf("after the empty section: %s", got)
 	}
 }
 
@@ -119,8 +180,14 @@ func TestAccountOptionsRejects(t *testing.T) {
 		t.Errorf("a rejected document was stored: %v", opts.docs)
 	}
 	// Only GET and POST exist (the desktop app's bridge sends nothing else).
-	if w := h.do(req{method: "PUT", path: optionsPath, token: ana, body: `{"v":1}`}); w.Code == http.StatusNoContent || w.Code == http.StatusOK {
-		t.Errorf("PUT accepted: %d", w.Code)
+	for _, method := range []string{"PUT", "PATCH", "DELETE"} {
+		w := h.do(req{method: method, path: optionsPath, token: ana, body: `{"v":1,"lang":"en"}`})
+		if w.Code != http.StatusNotFound && w.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s: status %d, want 404 or 405", method, w.Code)
+		}
+	}
+	if len(opts.docs) != 0 {
+		t.Errorf("a method that does not exist stored a document: %v", opts.docs)
 	}
 }
 

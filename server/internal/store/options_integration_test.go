@@ -4,10 +4,12 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/GFenzoR/RPG_Project/server/internal/accountopts"
 	"github.com/GFenzoR/RPG_Project/server/internal/store"
 	"github.com/GFenzoR/RPG_Project/server/internal/store/storetest"
 )
@@ -86,9 +88,14 @@ func TestSavedOptionsMigration(t *testing.T) {
 	if doc, err := st.AccountOptions(ctx, other); err != nil || doc != nil {
 		t.Fatalf("another account reads %q, %v", doc, err)
 	}
-	huge := `{"v":1,"lang":"` + strings.Repeat("x", 40000) + `"}`
+	// The largest document the API accepts (16 KiB of window places, the densest JSONB
+	// there is in the schema) fits the table's cap.
+	if err := st.SaveAccountOptions(ctx, acc, fullestOptions(t), now); err != nil {
+		t.Fatalf("a valid document of the largest size is refused by the table: %v", err)
+	}
+	huge := `{"v":1,"lang":"` + strings.Repeat("x", 100000) + `"}`
 	if err := st.SaveAccountOptions(ctx, acc, []byte(huge), now); err == nil {
-		t.Fatal("a 40 kB document accepted by the table")
+		t.Fatal("a 100 kB document accepted by the table")
 	}
 	if err := st.SaveAccountOptions(ctx, acc, []byte(`[1]`), now); err == nil {
 		t.Fatal("a document that is not an object accepted by the table")
@@ -96,4 +103,30 @@ func TestSavedOptionsMigration(t *testing.T) {
 	if err := st.MigrateDownAll(ctx); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// fullestOptions is a valid document as close to accountopts.MaxBytes as window places
+// get: both device classes, every window with its six fields.
+func fullestOptions(t *testing.T) []byte {
+	t.Helper()
+	var best []byte
+	for n := 1; n <= accountopts.MaxWindows; n++ {
+		var places []string
+		for i := range n {
+			places = append(places, fmt.Sprintf(`"w%d":{"open":true,"collapsed":false,"x":%d,"y":-%d,"w":7,"h":9}`, i, i, i))
+		}
+		p := strings.Join(places, ",")
+		dev := `{"touch_pad":true,"zoom":2,"minimap":{"open":true,"scale":2},"windows":{"v":3,"z":[],"win":{` + p + `},"others":{` + p + `}}}`
+		doc, err := accountopts.Parse([]byte(`{"v":1,"devices":{"desktop":` + dev + `,"touch":` + dev + `}}`))
+		if err != nil {
+			break // over MaxBytes
+		}
+		if best, err = doc.Canonical(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(best) < accountopts.MaxBytes*3/4 {
+		t.Fatalf("the fullest document is only %d bytes", len(best))
+	}
+	return best
 }
