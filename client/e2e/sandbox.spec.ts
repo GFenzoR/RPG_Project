@@ -1243,13 +1243,15 @@ test("sandbox light shadows: indoors, underground and by a lamp at night", async
 
     // The square of Puerto at night, by a lamp post.
     await tp(3167, 6391, 7);
-    expect((await lit())?.shadows).toBe(0); // noon: lamps cast nothing under the sun
+    // Noon: lamps cast nothing under the sun. Only the own player is asked: `shadows` also
+    // counts whoever stands under a roof in the server's window (the priestess between the
+    // temple's braziers, past the left edge of the screen), lit at any hour.
+    await expect.poll(async () => (await lit())?.selfLit, { timeout: 10_000 }).toBe(false);
+    expect((await lit())?.selfIndoor).toBe(false);
     await command("/time moon 4");
     await command("/time night");
     await say.blur();
-    await expect
-      .poll(async () => (await lit())?.shadows ?? 0, { timeout: 10_000 })
-      .toBeGreaterThan(0);
+    await expect.poll(async () => (await lit())?.selfLit, { timeout: 10_000 }).toBe(true);
     expect((await lit())?.selfContact).toBe(0);
     await shot(page, "99l-light-square-night-lamp");
   } finally {

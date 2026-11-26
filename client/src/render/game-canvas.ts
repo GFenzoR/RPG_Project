@@ -293,6 +293,11 @@ export interface LightShadowHook {
   selfIndoor: boolean;
   /** Opacity of the own player's contact ellipse (0: none, it casts a shadow). */
   selfContact: number;
+  /**
+   * Whether a lamp, torch or fire casts the own player's shadow now. `shadows` counts every
+   * creature in the server's window, also one under a roof past the edge of the screen.
+   */
+  selfLit: boolean;
 }
 
 export interface SkyHook {
@@ -784,6 +789,8 @@ export async function createGameCanvas(
   let lit = false;
   let litOpen = 0;
   let sunAlpha = 0;
+  /** What `shade` answered for the own player in the last frame (the E2E hook). */
+  let selfShade = 0;
   /**
    * The shadows of a body at tile (x, y) this frame: sets its contact ellipse and answers
    * whether the sun casts (1), a light does (2), both (3) or none (0). After a 2 or a 3
@@ -1690,6 +1697,7 @@ export async function createGameCanvas(
         s.figure.opacity = see;
         // No sun under a roof: there, underground and at night the lights cast instead.
         const shaded = shade(s.figure, p.x, p.y);
+        if (c.id === world.selfId) selfShade = shaded;
         animateBody(
           s.figure,
           stateOf(c.id, now),
@@ -2231,6 +2239,7 @@ export async function createGameCanvas(
         objectShadows: lightShadows.root.visible ? litObjects.count : 0,
         selfIndoor: me ? view.indoorAt(me.pos.x, me.pos.y) : false,
         selfContact: sprites.get(world.selfId)?.figure?.contactAlpha ?? 0,
+        selfLit: lightShadows.root.visible && (selfShade & 2) !== 0,
       };
     },
     sky() {

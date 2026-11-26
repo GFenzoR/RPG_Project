@@ -4162,10 +4162,12 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
   const foot = { x: tree.cx - t / 4, y: tree.cy + t / 4, width: t / 2, height: t / 4 };
   const sky = () => page.evaluate(() => window.__rpgClient?.sky());
   // Every tree in view casts, and the crowns' shadows sway with the crowns.
+  // The own player first: while its body fades in (the 300 ms after it appears) it casts
+  // no shadow yet and stands on its ellipse.
+  await expect.poll(async () => (await sky())?.selfContact, { timeout: 10_000 }).toBe(false);
   const windy = await sky();
   expect(windy?.casters).toBeGreaterThanOrEqual(tree.count);
   expect(windy?.swayingShadows).toBeGreaterThan(0);
-  expect(windy?.selfContact).toBe(false);
   const frames = async (clip: typeof crown, n: number): Promise<number> => {
     const seen = new Set<string>();
     for (let i = 0; i < n; i++) {
