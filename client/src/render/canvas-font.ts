@@ -1,6 +1,7 @@
-// The pixel font of the game canvas (docs/17 UI-3): creature names, guild lines and the
-// floating numbers are Pixelify Sans (OFL, assets/vendor/font-pixelifysans/), served like
-// the UI fonts by vite/fonts.ts and declared in ui/fonts.css.
+// The pixel font of the game canvas (docs/17 UI-3): the floating numbers and the speech
+// bubbles are Pixelify Sans (OFL, assets/vendor/font-pixelifysans/), served like the UI
+// fonts by vite/fonts.ts and declared in ui/fonts.css. The names over creatures were too
+// until 2026-11-25; they are now the interface's sans (render/label-style.ts).
 //
 // Its outlines are drawn on a grid of 1/11 em (capitals 7 cells tall, lower case 5): at
 // 11 px a cell is a screen pixel, so the strokes are one pixel thick and the rows of a
@@ -37,6 +38,12 @@ export interface CanvasFontOptions {
   setTimer?: (fn: () => void, ms: number) => unknown;
   /** Called once if the font loads after the wait gave up: re-measure what was drawn. */
   onLate?: () => void;
+  /**
+   * The CSS font to ask for (default: the pixel font). The names are set in the
+   * interface's sans (render/label-style.ts LABEL_FONT_FAMILY): the canvas waits for its
+   * weights the same way.
+   */
+  font?: string;
 }
 
 /**
@@ -60,7 +67,7 @@ export function loadCanvasFont(
     setTimer(() => settle(false), opts.waitMs ?? CANVAS_FONT_WAIT_MS);
     let loading: Promise<unknown>;
     try {
-      loading = fonts.load(`${CANVAS_FONT_SIZE}px "${CANVAS_FONT_FAMILY}"`);
+      loading = fonts.load(opts.font ?? `${CANVAS_FONT_SIZE}px "${CANVAS_FONT_FAMILY}"`);
     } catch {
       settle(false);
       return;

@@ -106,16 +106,33 @@ import {
   zoomScale,
 } from "./zoom.ts";
 import type { ZoomRange, ZoomView } from "./zoom.ts";
+import { loadCanvasFont } from "./canvas-font.ts";
 import {
-  CANVAS_FONT,
-  CANVAS_FONT_SIZE,
-  CANVAS_TEXT_STROKE,
-  loadCanvasFont,
-} from "./canvas-font.ts";
-import { SHORT_NAME_CHARS, labelText, placeLabels } from "./labels.ts";
-import { DEFAULT_NAME_SIZE, LABEL_COLORS, LABEL_OUTLINE, labelScale } from "./label-style.ts";
+  fitName,
+  labelMaxWidth,
+  nameBlockHeight,
+  placeLabels,
+  stackLabel,
+  wrapRole,
+} from "./labels.ts";
+import {
+  DEFAULT_NAME_SIZE,
+  LABEL_COLORS,
+  LABEL_FONT,
+  LABEL_FONT_FAMILY,
+  LABEL_NAME_WEIGHT,
+  LABEL_OUTLINE,
+  LABEL_ROLE_COLOR,
+  LABEL_SUB_WEIGHT,
+  labelFontPx,
+  labelScale,
+  labelStroke,
+  linePitch,
+  markScale,
+  subFontPx,
+} from "./label-style.ts";
 import type { NameSize } from "./label-style.ts";
-import type { LabelBox } from "./labels.ts";
+import type { LabelBox, LabelLines } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
 import type { Gesture } from "../input/gestures.ts";
 import { LeftPress, mapPress } from "../input/mouse.ts";
@@ -166,6 +183,7 @@ const COLORS = {
   player: LABEL_COLORS.player,
   monster: LABEL_COLORS.monster,
   npc: LABEL_COLORS.npc,
+  role: LABEL_ROLE_COLOR,
   guild: LABEL_COLORS.guild,
   marker: 0xffffff,
   outline: 0x101010,
@@ -205,14 +223,26 @@ export function figureRect(
 
 /** What GameCanvas.labels reports (E2E). */
 export interface LabelsShown {
-  /** Screen pixels per font cell of the names, and the map scale. */
-  scale: number;
+  /**
+   * The names' font size in device pixels (render/label-style.ts labelFontPx), the map
+   * scale and the screen's device pixels per CSS pixel.
+   */
+  fontPx: number;
   zoom: number;
+  dpr: number;
   shown: {
     id: number;
+    /** The name as drawn (one line) and the size it is rasterised at, device px. */
     text: string;
+    fontPx: number;
+    /** What an NPC does, under its name: its lines ("" for a player or a monster). */
+    role: string;
+    roleFontPx: number;
     fill: number;
+    /** The Text's own scale: always 1 (never a blown-up raster). */
     scale: number;
+    /** Top of the whole label, where a speech bubble sits (page px). */
+    top: number;
     /** Page px. */
     x: number;
     y: number;
@@ -481,8 +511,19 @@ interface CreatureSprite {
   shape: Graphics;
   frame: Graphics;
   label: Text;
+  /** What an NPC does, under its name (docs/17 UI-3); empty for the rest. */
+  role: Text;
   /** The guild name, between the name and the health bar (T5.1); empty = hidden. */
   guild: Text;
+  /** What the lines were fitted for (fitted again only when one changes). */
+  fitName: string;
+  fitRole: string;
+  fitPx: number;
+  fitMax: number;
+  /** The sizes the lines are drawn at (render/labels.ts stackLabel). */
+  lines: LabelLines;
+  /** Top of the label as drawn last, canvas px (the E2E hook). */
+  top: number;
   /** The PvP mark left of the name (T5.2): its sprite, or shapes without one (drawSkull). */
   skull: Container;
   drawnSkull: Skull;
@@ -523,6 +564,14 @@ export async function createGameCanvas(
   const [atlas] = await Promise.all([
     Atlas.load(new URL("/atlas/", document.baseURI).href),
     loadCanvasFont(document.fonts, { onLate: () => redrawLabels() }),
+    // The names' font (render/label-style.ts), in the weights of the name and of the
+    // lines under it.
+    ...[LABEL_NAME_WEIGHT, LABEL_SUB_WEIGHT].map((w) =>
+      loadCanvasFont(document.fonts, {
+        onLate: () => redrawLabels(),
+        font: `${w} 16px "${LABEL_FONT_FAMILY}"`,
+      }),
+    ),
   ]);
   const T = atlas.tileSize;
   const app = new Application();
@@ -750,8 +799,54 @@ export async function createGameCanvas(
     );
 
   let scale = 1;
-  // Screen pixels per font cell of the names this frame (render/label-style.ts labelScale).
+  // Screen pixels per font cell of the floating numbers this frame (labelScale), and the
+  // font sizes of the names and of the lines under them, in device pixels: the labels are
+  // rasterised at the size they show (render/label-style.ts labelFontPx).
   let nameScale = 1;
+  let namePx = 12;
+  let subPx = 10;
+  let labelMax = 144;
+  // Line widths, measured with a 2D context of the names' font (kept: a name is measured
+  // once per size, not per frame).
+  const measureCtx = document.createElement("canvas").getContext("2d");
+  const widths = new Map<string, number>();
+  const measurer =
+    (weight: string) =>
+    (text: string, px: number): number => {
+      const key = `${weight}|${px}|${text}`;
+      let w = widths.get(key);
+      if (w === undefined) {
+        if (widths.size > 2000) widths.clear();
+        if (measureCtx) {
+          measureCtx.font = `${weight} ${px}px ${LABEL_FONT}`;
+          w = measureCtx.measureText(text).width + labelStroke(px);
+        } else w = text.length * px * 0.55;
+        widths.set(key, w);
+      }
+      return w;
+    };
+  const measureName = measurer(LABEL_NAME_WEIGHT);
+  const measureSub = measurer(LABEL_SUB_WEIGHT);
+  /** Sets a label line to `px`: its outline and line height follow. */
+  const sizeLine = (text: Text, px: number): void => {
+    const st = text.style;
+    if (st.fontSize === px) return;
+    st.fontSize = px;
+    st.lineHeight = linePitch(px);
+    // The outline keeps its colour (a name effect's, render/cosmetics.ts) at the new width.
+    const k: unknown = st.stroke;
+    const color =
+      typeof k === "object" && k !== null && "color" in k && typeof k.color === "number"
+        ? k.color
+        : LABEL_OUTLINE;
+    st.stroke = { color, width: labelStroke(px), join: "round" };
+  };
+  /** What an NPC does (its role's text, @rpg/content-schema npcRoleKey), "" for the rest. */
+  const roleOf = (c: CreatureState): string => {
+    if (c.kind !== CreatureKind.NPC) return "";
+    const key = content.npcRoles?.[c.contentId];
+    return key ? t(key) : "";
+  };
   let cam: Camera = { x: 0, y: 0, zoom: 1 };
   // The zoom the player chose (undefined = the fitted view) and what the map's box
   // allows; `scale` is the one drawn.
@@ -1179,33 +1274,35 @@ export async function createGameCanvas(
       body.addChild(frame); // the target frame goes over the body
       const bar = new Graphics();
       labels.addChild(bar);
-      const label = new Text({
-        text: nameOf(c),
-        style: {
-          fontFamily: CANVAS_FONT,
-          fontSize: CANVAS_FONT_SIZE,
-          fill: colorOf(c),
-          stroke: { color: LABEL_OUTLINE, width: CANVAS_TEXT_STROKE },
-          ...look?.name,
-        },
-        anchor: { x: 0.5, y: 1 },
-        roundPixels: true,
-        // Scaled by whole numbers (labelScale): every font cell an exact square of pixels.
-        textureStyle: { scaleMode: "nearest" },
+      // Rasterised at the size it shows, in device pixels, and drawn 1:1 on whole pixels
+      // (never scaled): sharp at any zoom and pixel density (render/label-style.ts).
+      const line = (text: string, weight: string, px: number, fill: number, more?: object): Text =>
+        new Text({
+          text,
+          style: {
+            fontFamily: LABEL_FONT,
+            fontWeight: weight as "500" | "700",
+            fontSize: px,
+            lineHeight: linePitch(px),
+            align: "center",
+            fill,
+            stroke: { color: LABEL_OUTLINE, width: labelStroke(px), join: "round" },
+            ...more,
+          },
+          anchor: { x: 0.5, y: 1 },
+          roundPixels: true,
+          textureStyle: { scaleMode: "nearest" },
+        });
+      // A name effect (T5.7) brings its fill, the outline's colour and a glow.
+      const fx = look?.name;
+      const label = line("", LABEL_NAME_WEIGHT, namePx, fx?.fill ?? colorOf(c), {
+        ...(fx ? { stroke: { ...fx.stroke, width: labelStroke(namePx), join: "round" } } : {}),
+        ...(fx?.dropShadow ? { dropShadow: fx.dropShadow } : {}),
       });
       labels.addChild(label);
-      const guild = new Text({
-        text: c.guild,
-        style: {
-          fontFamily: CANVAS_FONT,
-          fontSize: CANVAS_FONT_SIZE,
-          fill: COLORS.guild,
-          stroke: { color: LABEL_OUTLINE, width: CANVAS_TEXT_STROKE },
-        },
-        anchor: { x: 0.5, y: 1 },
-        roundPixels: true,
-        textureStyle: { scaleMode: "nearest" },
-      });
+      const role = line("", LABEL_SUB_WEIGHT, subPx, COLORS.role);
+      labels.addChild(role);
+      const guild = line(c.guild, LABEL_SUB_WEIGHT, subPx, COLORS.guild);
       labels.addChild(guild);
       const skull = new Container();
       labels.addChild(skull);
@@ -1214,7 +1311,14 @@ export async function createGameCanvas(
         shape,
         frame,
         label,
+        role,
         guild,
+        fitName: "",
+        fitRole: "",
+        fitPx: 0,
+        fitMax: 0,
+        lines: { name: namePx, role: subPx, roleLines: 0, guild: subPx },
+        top: 0,
         skull,
         drawnSkull: Skull.UNSPECIFIED,
         figure,
@@ -1239,9 +1343,30 @@ export async function createGameCanvas(
       sprites.set(c.id, s);
     }
     // The language can change during the game (T1.13).
-    // Shortened at small zoom (T5.6, render/labels.ts); the zoom follows the window size.
-    const name = labelText(nameOf(c), scale, SHORT_NAME_CHARS, nameScale);
-    if (s.label.text !== name) s.label.text = name;
+    // The lines (render/labels.ts): a long name shrinks before it is cut; an NPC shows
+    // what it does under its name, wrapped by its words and never cut. Fitted again only
+    // when the text, the size (a zoom) or the room changed.
+    const name = nameOf(c);
+    const what = roleOf(c);
+    if (s.fitName !== name || s.fitRole !== what || s.fitPx !== namePx || s.fitMax !== labelMax) {
+      s.fitName = name;
+      s.fitRole = what;
+      s.fitPx = namePx;
+      s.fitMax = labelMax;
+      const fit = fitName(name, namePx, labelMax, measureName, c.kind !== CreatureKind.NPC);
+      sizeLine(s.label, fit.fontPx);
+      if (s.label.text !== fit.text) s.label.text = fit.text;
+      const wrapped = wrapRole(what, subPx, labelMax, measureSub);
+      sizeLine(s.role, wrapped.fontPx);
+      const roleText = wrapped.lines.join("\n");
+      if (s.role.text !== roleText) s.role.text = roleText;
+      s.role.visible = wrapped.lines.length > 0;
+      sizeLine(s.guild, subPx);
+      s.lines.name = fit.fontPx;
+      s.lines.role = wrapped.fontPx;
+      s.lines.roleLines = wrapped.lines.length;
+      s.lines.guild = subPx;
+    }
     if (s.guild.text !== c.guild) s.guild.text = c.guild;
     if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull, markTexture(c.skull));
     s.drawnSkull = c.skull;
@@ -1256,14 +1381,18 @@ export async function createGameCanvas(
   redrawLabels = (): void => {
     CanvasTextMetrics.clearMetrics();
     speech.refresh();
+    widths.clear();
     for (const s of sprites.values()) {
+      s.fitPx = 0; // measured with the fallback: fit the lines again
       s.label.style.update();
+      s.role.style.update();
       s.guild.style.update();
     }
   };
 
   const dropLabels = (s: CreatureSprite): void => {
     s.label.destroy();
+    s.role.destroy();
     s.guild.destroy();
     s.skull.destroy();
     s.bar.destroy();
@@ -1471,7 +1600,15 @@ export async function createGameCanvas(
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
-    nameScale = labelScale(scale, opts.nameSize?.() ?? DEFAULT_NAME_SIZE);
+    const stackLines: LabelLines = { name: 0, role: 0, roleLines: 0, guild: 0 };
+    const nameSize = opts.nameSize?.() ?? DEFAULT_NAME_SIZE;
+    const dpr = window.devicePixelRatio || 1;
+    nameScale = labelScale(scale, nameSize);
+    namePx = labelFontPx(scale, dpr, nameSize);
+    subPx = subFontPx(namePx, dpr);
+    labelMax = labelMaxWidth(T * scale, namePx);
+    const mark = markScale(namePx);
+    const labelGap = Math.max(1, Math.round(namePx / 11));
     react(now);
     depart(now);
     for (const c of world.creatures.values()) {
@@ -1526,21 +1663,23 @@ export async function createGameCanvas(
       const barTop = Math.round(head.y) - BAR_H * scale;
       s.bar.position.set(Math.round(head.x), barTop);
       s.bar.scale.set(scale);
-      // Names, guild lines and skulls grow with the zoom in whole steps (docs/17 UI-3).
-      s.label.scale.set(nameScale);
-      s.guild.scale.set(nameScale);
-      s.skull.scale.set(nameScale);
+      // The names are drawn at their own size (docs/17 UI-3: never a scaled raster); the
+      // skull, pixel art, grows in whole steps with them.
+      s.skull.scale.set(mark);
       const hasGuild = c.guild !== "";
       const hasSkull = s.drawnSkull !== Skull.UNSPECIFIED;
       boxes.push({
         id: c.id,
         x: Math.round(head.x),
-        y: barTop - nameScale,
+        y: barTop - labelGap,
         width:
-          Math.max(s.label.width, hasGuild ? s.guild.width : 0) +
-          (hasSkull ? (MARK_BOX.w + 2) * nameScale : 0),
-        nameHeight: s.label.height,
-        guildHeight: hasGuild ? s.guild.height : 0,
+          Math.max(
+            s.label.width,
+            s.lines.roleLines > 0 ? s.role.width : 0,
+            hasGuild ? s.guild.width : 0,
+          ) + (hasSkull ? (MARK_BOX.w + 2) * mark : 0),
+        nameHeight: nameBlockHeight(s.lines),
+        guildHeight: hasGuild ? linePitch(s.lines.guild) : 0,
         self: c.id === world.selfId,
         target: c.id === world.target,
         distance: Math.max(Math.abs(c.pos.x - self.pos.x), Math.abs(c.pos.y - self.pos.y)),
@@ -1549,32 +1688,37 @@ export async function createGameCanvas(
     view.revealBehind(reveal, revealRow, now);
     // Names, guild lines and skulls (T5.6): at small zoom neighbours would overlap, so
     // render/labels.ts drops guild lines and lifts or hides the labels of far creatures.
-    const placements = placeLabels(boxes, scale, nameScale);
+    const placements = placeLabels(boxes, T * scale, namePx);
     for (const b of boxes) {
       const s = sprites.get(b.id);
       const at = placements.get(b.id);
       if (!s || !at) continue;
       s.label.visible = at.show;
+      s.role.visible = at.show && s.lines.roleLines > 0;
       s.guild.visible = at.show && at.guild;
       s.skull.visible = at.show;
-      const bottom = b.y - at.lift;
-      if (s.guild.visible) {
-        // The guild name goes right above the bar and the player's name above it.
-        s.guild.position.set(b.x, bottom);
-        s.label.position.set(b.x, bottom - Math.round(s.guild.height));
-      } else {
-        s.label.position.set(b.x, bottom);
-      }
+      // From the bar up (render/labels.ts stackLabel): the guild line, an NPC's role and,
+      // on top, the name; all on whole pixels.
+      stackLines.name = s.lines.name;
+      stackLines.role = s.lines.role;
+      stackLines.roleLines = s.lines.roleLines;
+      stackLines.guild = s.guild.visible ? s.lines.guild : 0;
+      const stack = stackLabel(b.y - at.lift, stackLines);
+      s.guild.position.set(b.x, stack.guild);
+      s.role.position.set(b.x, stack.role);
+      s.label.position.set(b.x, stack.name);
+      s.top = stack.top;
       if (s.drawnSkull !== Skull.UNSPECIFIED) {
         s.skull.position.set(
-          Math.round(s.label.x - s.label.width / 2 - (MARK_HALF + 2) * nameScale),
-          Math.round(s.label.y - s.label.height / 2),
+          Math.round(s.label.x - s.label.width / 2 - (MARK_HALF + 2) * mark),
+          Math.round(stack.name - linePitch(s.lines.name) / 2),
         );
       }
-      // docs/17 UI-11: a speech bubble goes right over the name (or the bar, without one).
+      // docs/17 UI-11: a speech bubble goes right over the name, the top line of the
+      // label (or over the bar, without one).
       anchors.set(b.id, {
         x: b.x,
-        top: at.show ? Math.round(s.label.y - s.label.height) - 1 : b.y,
+        top: at.show ? stack.top - 1 : b.y,
         self: b.self,
         distance: b.distance,
       });
@@ -1980,15 +2124,19 @@ export async function createGameCanvas(
         shown.push({
           id,
           text: s.label.text,
+          fontPx: s.lines.name,
+          role: s.lines.roleLines > 0 ? s.role.text : "",
+          roleFontPx: s.lines.role,
           fill: Number(s.label.style.fill),
           scale: s.label.scale.x,
+          top: r.top + s.top * k,
           x: r.left + b.x * k,
           y: r.top + b.y * k,
           width: b.width * k,
           height: b.height * k,
         });
       }
-      return { scale: nameScale, zoom: scale, shown };
+      return { fontPx: namePx, zoom: scale, dpr: window.devicePixelRatio || 1, shown };
     },
     wallFade(x, y) {
       return { alphas: view.wallAlphaAt(x, y), copies: hiddenShown };

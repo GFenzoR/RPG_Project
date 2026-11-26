@@ -390,6 +390,12 @@ export interface ClientContent {
    * fixtures can leave it out.
    */
   npcSprites?: Record<string, string>;
+  /**
+   * The translation key of what each NPC does (data/npcs id → "npc.puerto_provisioner.role"):
+   * its own `role`, or the default of what it offers (@rpg/content-schema npcRoleKey). The
+   * second line of its label (docs/17 UI-3). Optional so fixtures can leave it out.
+   */
+  npcRoles?: Record<string, string>;
   /** data/outfits.yaml in file order (T0.5). Optional so fixtures can leave it out. */
   outfits?: OutfitDef[];
   /**

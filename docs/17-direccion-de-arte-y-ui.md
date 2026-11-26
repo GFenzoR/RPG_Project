@@ -1647,7 +1647,8 @@ recortar y pasar a woff2 con su nombre.
 | Logo, pantalla de muerte, subida de nivel | Grenze Gotisch | `ofl/grenzegotisch` | `GrenzeGotisch[wght].ttf` |
 | Texto de interfaz (listas, botones, chat) | Alegreya Sans | `ofl/alegreyasans` | `AlegreyaSans-Regular.ttf`, `-Italic`, `-Medium`, `-Bold` |
 | Diálogos de NPC, descripciones, libros | Alegreya | `ofl/alegreya` | `Alegreya[wght].ttf`, `Alegreya-Italic[wght].ttf` |
-| Canvas: nombres, números de daño | Pixelify Sans | `ofl/pixelifysans` | `PixelifySans[wght].ttf` |
+| Canvas: números de daño, globos de diálogo | Pixelify Sans | `ofl/pixelifysans` | `PixelifySans[wght].ttf` |
+| Canvas: nombres sobre las criaturas (desde el 2026-11-25) | Alegreya Sans 700 y 500 | `ofl/alegreyasans` | los de la interfaz |
 
 - **Alternativas** (también OFL):
   - Spectral (`ofl/spectral`), para cuerpo.
@@ -2936,6 +2937,57 @@ color de algunos NPCs no se leían (el violeta `0x7d4fb0` sobre el contorno negr
   2092,2090, justo al norte del muro sur del templo, la pieza de 2092,2091 baja de 1 (alfa
   < 0,5), la de 2099,2091 no, y no se dibuja ninguna copia pálida del jugador
   (`102-wall-fade-own-player`, de cerca en `102b-...-close`).
+
+### Hecho: nombres nítidos y los NPCs en dos líneas (2026-11-25, rama `feat/labels-and-steps`)
+El dueño, después de jugar el lote 19: "la fuente que agrandaste de los nombres se ve muy
+pixeleada y ahora está muy grande; déjala más definida y achícala un poco", y "los NPC
+muestran su nombre y después unos puntos suspensivos; en vez de eso, dos líneas: el nombre
+y abajo qué es lo que hace (Tilde Varga / Provisiones)".
+- **Por qué se veía pixelada:** el nombre era la fuente pixel de 11 px rasterizada una vez
+  y agrandada 2x o 3x con muestreo al más cercano (la sección de arriba): cada celda de la
+  letra era un bloque de 2 o 3 px. Era nítido "como pixel art", pero a ese tamaño se leía
+  como una letra de baja resolución.
+- **Regla de resolución** (`client/src/render/label-style.ts`, `labelFontPx`): el nombre se
+  rasteriza **al tamaño exacto al que se ve, en píxeles de dispositivo**, y el `Text` nunca
+  se escala (escala 1, posición en px enteros). El canvas ya tiene su backing store en
+  píxeles de dispositivo, así que la letra es tan nítida como la pantalla a cualquier zoom
+  y con cualquier `devicePixelRatio` (Windows al 125 % o 150 % incluido). Al cambiar el zoom
+  cambia el `fontSize` y Pixi vuelve a rasterizar; no hay textura por frame. La fuente es
+  Alegreya Sans (la de la interfaz, OFL): negrita 700 para el nombre, 500 para las líneas
+  de abajo, con contorno negro redondeado de ~1/4,5 del tamaño (mínimo 2 px).
+- **Tamaño** (elegido mirando una lámina con los cuatro zooms a densidad 1, 1,25, 1,5 y 2,
+  al lado del nombre del lote 19): sigue al zoom que ve el jugador (px CSS por px de
+  sprite = zoom del mapa / `devicePixelRatio`, entre 1 y 4) y se pasa a px de dispositivo:
+  | Zoom visto | 1 | 2 | 3 | 4 |
+  |---|---|---|---|---|
+  | Grande (por defecto), px CSS | 12 | 15 | 18 | 21 |
+  | Normal, px CSS | 10 | 12 | 14 | 16 |
+  | Lote 19 (fuente pixel escalada), alto de la letra | 11 | 22 | 22 | 33 |
+  Las líneas de abajo (rol del NPC, gremio) miden el 80 % del nombre y nunca menos de 9 px
+  CSS. La misma ventana se ve igual al 100 % y al 150 % de escala de Windows.
+- **NPCs en dos líneas** (`render/labels.ts`): la primera el nombre (violeta
+  `0xc79bff`), la segunda qué hace, más chica y más pálida (`LABEL_ROLE_COLOR`
+  `0xe4d9f5`). Nunca "…": el nombre de un NPC encoge hasta el 82 % si no entra y no se
+  corta; el rol, si no entra en el ancho, se parte **por sus palabras** en dos líneas
+  (`wrapRole`). El texto del rol es contenido (`role` en `data/npcs`, docs/06 "NPC con
+  diálogo de ventana"): el cliente lo saca del bundle de contenido (`npcRoles`,
+  `client/vite/content.ts`), sin tocar el protocolo. Los nombres de los NPCs ya no repiten
+  el oficio después de una coma ("Tilde Varga, provisiones" → "Tilde Varga").
+- **Nombres largos** de jugadores y monstruos: una sola línea; primero encogen (hasta el
+  82 %, `fitName`) y solo pasado el ancho duro (12 tamaños de letra con espacio, 7,5 cuando
+  los nombres se amontonan) se cortan con "…".
+- **Apilado** (`stackLabel`): sobre la barra de vida va la línea del gremio, encima el rol
+  y arriba el nombre; la marca PvP queda a la izquierda del nombre y el globo de diálogo
+  (UI-11) se apoya sobre el tope del bloque entero, o sea, sobre las dos líneas. Las
+  reglas de solape de T5.6 cuentan el bloque completo (`nameBlockHeight`) y rigen mientras
+  una casilla mida menos de 4 alturas de nombre (`labelsFull`).
+- **Los números flotantes y los globos** siguen en la fuente pixel con su escala entera.
+- **Tests:** `label-style.test.ts` (tamaño entero en px de dispositivo a zoom 1–4 y
+  densidad 1, 1,25, 1,5 y 2; más chico que el lote 19; contraste del rol), `labels.test.ts`
+  (dos líneas, sin "…" para NPCs, encoger antes de cortar, apilado con el globo),
+  `packages/content-schema/src/npc-role.test.ts` y `validate.test.ts` (todo NPC de `data/`
+  termina con un rol en es y en). E2E: `100-*` (el instructor a 2x y 1x, de cerca, y la
+  plaza de Thimblewick con sus NPCs a 1x y 2x), `101-*` (monstruos a 2x y 4x).
 
 ### Cadáveres (hecho, 2026-11-23, rama `feat/corpse-names`)
 Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo el nombre.

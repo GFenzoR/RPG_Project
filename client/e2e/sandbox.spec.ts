@@ -587,11 +587,13 @@ test("sandbox living world: cut the vines by hand, push both boulders, the portc
   expect(errors).toEqual([]);
 });
 
-// docs/17 UI-3 (owner, 2026-11-23): the names over creatures grow with the map zoom in whole
-// steps (large by default, normal in Options → Interface) and their colours read on the
-// black outline; and ART-3: a wall piece just south of the own player fades, the player
-// keeps its colours (no pale copy over the map).
-test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in front of the player fades", async ({
+// docs/17 UI-3 (owner, 2026-11-23 and 2026-11-25): the names over creatures are drawn at
+// the screen's own resolution (a font size in device pixels per zoom, never a blown-up
+// raster), a little smaller than the 2x pixel font of lote 19, in colours that read on the
+// black outline; an NPC shows what it does on a second line under its name, never "…";
+// and ART-3: a wall piece just south of the own player fades, the player keeps its colours
+// (no pale copy over the map).
+test("sandbox: sharp names at 1x, 2x and 4x, NPCs with their role on a second line; a wall in front of the player fades", async ({
   page,
   playwright,
 }) => {
@@ -661,38 +663,91 @@ test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in fro
     return shown.find((s) => ids.includes(s.id));
   };
 
-  // The temple, by the instructor (an NPC), at the fitted 2x: large names, 2 px per cell.
+  // The temple, by the instructor (an NPC), at 2x: a 15 px name drawn 1:1 (the page's
+  // devicePixelRatio is 1 here) and, under it, what she does, smaller.
   await standsOn(2095, 2086, 7);
   await zoomTo(2);
-  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.scale).toBe(2);
+  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.fontPx).toBe(15);
   const npc2 = await labelOf("npcs", "pruebas_trainer");
   expect(npc2?.fill).toBe(0xc79bff); // render/label-style.ts LABEL_COLORS.npc
+  expect(npc2?.scale).toBe(1); // rasterised at its size, not scaled
+  expect(npc2?.text).not.toContain("…");
+  expect(npc2?.text).not.toContain(",");
+  expect(npc2?.role ?? "").not.toBe("");
+  expect(npc2?.role).not.toContain("…");
+  expect(npc2?.roleFontPx ?? 99).toBeLessThan(npc2?.fontPx ?? 0);
+  // The label's top (where a speech bubble would sit) is above both lines.
+  expect(npc2?.top ?? 0).toBeLessThanOrEqual((npc2?.y ?? 0) + 4);
+  expect((await labels())?.dpr).toBe(1);
   await shot(page, "100-names-2x-npc");
+  const close = async (name: string, x: number, y: number): Promise<void> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    const k = await scale();
+    if (!p) throw new Error("no tile on screen");
+    await page.screenshot({
+      path: join(shots, `${name}.png`),
+      clip: {
+        x: Math.max(0, p.x - 4 * 32 * k),
+        y: Math.max(0, p.y - 3 * 32 * k),
+        width: 9 * 32 * k,
+        height: 5 * 32 * k,
+      },
+    });
+  };
+  // Cut round the instructor: the letters' edges, to judge the sharpness.
+  await close("100a-names-2x-npc-close", 2093, 2085);
 
-  // 1x: one cell per pixel, as before; half as tall.
+  // 1x: 12 px, smaller with the map.
   await zoomTo(1);
-  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.scale).toBe(1);
+  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.fontPx).toBe(12);
   const npc1 = await labelOf("npcs", "pruebas_trainer");
-  expect(npc1?.height ?? 0).toBeLessThan((npc2?.height ?? 0) * 0.6);
+  expect(npc1?.height ?? 0).toBeLessThan(npc2?.height ?? 0);
+  expect(npc1?.role.split(/\s+/).join(" ")).toBe(npc2?.role.split(/\s+/).join(" "));
   await shot(page, "100b-names-1x-npc");
+  await close("100c-names-1x-npc-close", 2093, 2085);
 
-  // The rats' pen (weak: they cannot kill the guardian meanwhile): monster names at 2x and
-  // at 4x (3 px per cell).
+  // The square, between the temple's instructor and the merchant at her stall: the town
+  // with its NPCs at 1x and at 2x.
+  const square = await page.evaluate(() => {
+    const c = window.__rpgClient;
+    for (let y = 2093; y <= 2097; y++)
+      for (let x = 2088; x <= 2093; x++) if (c?.walkable(x, y, 7)) return { x, y };
+    return undefined;
+  });
+  if (square) {
+    await tp(square.x, square.y, 7);
+    await expect
+      .poll(async () => (await labelOf("npcs", "pruebas_merchant"))?.role ?? "", {
+        timeout: 20_000,
+      })
+      .not.toBe("");
+    await shot(page, "100d-names-1x-town");
+    await zoomTo(2);
+    await shot(page, "100e-names-2x-town");
+    await close("100f-names-2x-merchant-close", 2086, 2100);
+  }
+
+  // The rats' pen (weak: they cannot kill the guardian meanwhile): monster names, one line,
+  // at 2x and at 4x (21 px).
   await zoomTo(2);
   await tp(2080, 2081, 7);
   await expect
     .poll(async () => (await labelOf("monsters", "bilge_rat"))?.fill, { timeout: 20_000 })
     .toBe(0xff4f5e); // LABEL_COLORS.monster
+  expect((await labelOf("monsters", "bilge_rat"))?.role).toBe("");
   await shot(page, "101-names-2x-monsters");
   await zoomTo(4);
-  await expect.poll(async () => (await labels())?.scale).toBe(3);
+  await expect.poll(async () => (await labels())?.fontPx).toBe(21);
   await shot(page, "101b-names-4x-monsters");
 
-  // Options → Interface → "Name size": normal at 4x is 2 px per cell.
+  // Options → Interface → "Name size": normal at 4x is 16 px.
   await openWindow(page, "options");
   await page.getByTestId("name-size").selectOption("normal");
   await closeWindow(page, "options");
-  await expect.poll(async () => (await labels())?.scale).toBe(2);
+  await expect.poll(async () => (await labels())?.fontPx).toBe(16);
   expect(await page.evaluate(() => localStorage.getItem("rpg.name-size"))).toBe("normal");
   await shot(page, "101c-names-normal-4x-monsters");
   await page.evaluate(() => localStorage.removeItem("rpg.name-size"));

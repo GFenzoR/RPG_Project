@@ -22,6 +22,8 @@ import { fileURLToPath } from "node:url";
 import { readBorders } from "@rpg/map-format";
 import { borderItems } from "@rpg/map-format/ops";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
+// What an NPC does (its label's second line): the same rule make validate checks.
+import { npcRoleKey } from "../../packages/content-schema/src/npc-role.ts";
 import { parseAmbience } from "@rpg/living-world/ambience";
 import { parseLivingWorldData, shadowOf } from "@rpg/living-world/data";
 import { loadCredits } from "./credits.ts";
@@ -249,6 +251,7 @@ export function loadClientContent(root: string): ClientContent {
     if (typeof m["sprite"] === "string") monsters[m["id"]] = m["sprite"];
   }
   const npcs: Record<string, string> = {};
+  const npcRoles: Record<string, string> = {};
   const ndir = join(root, "data", "npcs");
   for (const file of readdirSync(ndir)
     .filter((f) => f.endsWith(".yaml"))
@@ -256,6 +259,8 @@ export function loadClientContent(root: string): ClientContent {
     const n = readYaml(join(ndir, file));
     if (!isObj(n) || typeof n["id"] !== "string") continue;
     if (typeof n["sprite"] === "string") npcs[n["id"]] = n["sprite"];
+    const role = npcRoleKey(n);
+    if (role) npcRoles[n["id"]] = role;
   }
   const outfits = loadOutfits(root);
   const looks = loadLooks(root);
@@ -348,6 +353,7 @@ export function loadClientContent(root: string): ClientContent {
     // keeps the first topic.
     dialogTopics: dialogTopics(root).topics,
     npcSprites: npcs,
+    npcRoles,
     outfits,
     ...(looks ? { looks } : {}),
     ...(lookOptions ? { lookOptions } : {}),
