@@ -136,12 +136,35 @@ async function tileClient(page: Page, x: number, y: number): Promise<{ x: number
   return p;
 }
 
-/** What is on top at a point of the page: "CANVAS" when a tap there reaches the map. */
-const hitAt = (page: Page, p: { x: number; y: number }): Promise<string> =>
-  page.evaluate(({ a, b }) => document.elementFromPoint(a, b)?.tagName ?? "", {
-    a: p.x,
-    b: p.y,
-  });
+/**
+ * What is on top at a point of the page: "CANVAS" when a tap there reaches the map (the
+ * game's canvas: the unfolded minimap draws on a canvas of its own, "MINIMAP"). With
+ * `reach`, also what is on top that many CSS px around the point, the first thing that is
+ * not the map: Chromium aims a tap that lands next to a button at the button (touch
+ * adjustment), so a tile beside the folded minimap opens the minimap instead.
+ */
+const hitAt = (page: Page, p: { x: number; y: number }, reach = 0): Promise<string> =>
+  page.evaluate(
+    ({ a, b, r }) => {
+      const at = (x: number, y: number): string => {
+        const el = document.elementFromPoint(x, y);
+        if (!el) return "";
+        if (el.tagName !== "CANVAS") return el.tagName;
+        return el.closest('[data-testid="game-canvas"]') ? "CANVAS" : "MINIMAP";
+      };
+      const steps = r > 0 ? [0, -r, r] : [0];
+      for (const dy of steps)
+        for (const dx of steps) {
+          const hit = at(a + dx, b + dy);
+          if (hit !== "CANVAS") return hit;
+        }
+      return "CANVAS";
+    },
+    { a: p.x, b: p.y, r: reach },
+  );
+
+/** A finger's reach, CSS px: nothing but the map this close to a tap meant for the map. */
+const TAP_REACH = 24;
 
 /** Taps a map tile; fails if something over the map (a window, the pad) would take it. */
 const tapTile = async (page: Page, x: number, y: number): Promise<void> => {
@@ -624,14 +647,15 @@ async function tapWolf(page: Page, prefix: string): Promise<void> {
             Math.max(Math.abs(b.x - me.x), Math.abs(b.y - me.y)),
         );
         // The folded minimap sits over the map's top-left corner (its 44 px button): a
-        // wolf under it cannot be tapped. Take the nearest one that can; wolves move, so
+        // wolf under it, or within a finger of it (the tap would go to the button and
+        // unfold the minimap over the wolves), cannot be tapped. Take the nearest one that can; wolves move, so
         // with none, wait for one to walk out. The point checked is the point tapped: the
         // camera follows the walking player, so the same tile is elsewhere a moment later.
         let near: (typeof drawn)[number] | undefined;
         let at = { x: 0, y: 0 };
         for (const w of drawn) {
           const p = await tileClient(page, w.x, w.y);
-          if ((await hitAt(page, p)) !== "CANVAS") continue;
+          if ((await hitAt(page, p, TAP_REACH)) !== "CANVAS") continue;
           near = w;
           at = p;
           break;

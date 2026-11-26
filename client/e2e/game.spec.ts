@@ -4233,11 +4233,27 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
   // The strips are back (the next gust moves them; it is not waited for again).
   await expect.poll(async () => (await sky())?.swayingShadows ?? 0).toBeGreaterThan(0);
 
-  // The thick of the forest: the screen with the most trees of the island.
+  // The thick of the forest: the screen with the most trees of the island. Its thornlings
+  // kill even this character in a couple of minutes, and the gust the shots wait for can be
+  // that far away: the wait is here in the plaza (a front's time at a tile does not depend
+  // on who looks), and the character goes when the front is a few seconds from the forest.
+  const coming = await gust(4221, 6071, 0.5);
+  if (!coming) throw new Error("no strong gust on its way to the forest");
+  await page.waitForTimeout(Math.max(0, coming.at - 5000));
   const say = page.getByTestId("say").getByRole("textbox");
   await say.fill("/tp 4221 6071 7");
   await say.press("Enter");
-  await arrived(page, 4221, 6071);
+  // /tp puts the character beside the tile when a thornling stands on it.
+  await expect
+    .poll(
+      async () => {
+        const s = await self(page);
+        return s ? Math.max(Math.abs(s.x - 4221), Math.abs(s.y - 6071)) : Infinity;
+      },
+      { timeout: 20_000 },
+    )
+    .toBeLessThanOrEqual(2);
+  const stood = await self(page);
   await say.blur();
   await page.waitForTimeout(600);
   const forest = await trees();
@@ -4324,7 +4340,7 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
   await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
   await shot(page, "127-shadows-forest-noon");
   // Still standing in the forest: every shot above was of it.
-  expect(await self(page)).toMatchObject({ x: 4221, y: 6071 });
+  expect(await self(page)).toMatchObject({ x: stood?.x, y: stood?.y });
   await expect(page.getByTestId("death-screen")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
