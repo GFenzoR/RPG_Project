@@ -4085,11 +4085,14 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
     }
   });
   const { email, password, name } = await newGuardian(playwright, "Breeze");
-  // In Ivernel's plaza, by the druid's grove; staff, to /tp into the thick of the forest.
+  // In Ivernel's plaza, by the druid's grove; staff, to /tp into the thick of the forest,
+  // where the thornlings live: level 200 with its health full (the server caps it), so they
+  // do not kill it before the last shot. At level 15 it died half way and the shots of the
+  // forest through the day were of the temple it woke in.
   psql([
     databaseUrl,
     "-c",
-    `UPDATE characters SET town = 'bosque', level = 15, experience = 35280, pos_x = 4175, pos_y = 6110, pos_z = 7 WHERE name = '${name}';
+    `UPDATE characters SET town = 'bosque', level = 200, experience = 95042400, health = 1000000, pos_x = 4175, pos_y = 6110, pos_z = 7 WHERE name = '${name}';
      UPDATE accounts SET role = 'gm' WHERE email = lower('${email}')`,
   ]);
   await enterGame(page, email, password);
@@ -4270,5 +4273,8 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
   }
   await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
   await shot(page, "127-shadows-forest-noon");
+  // Still standing in the forest: every shot above was of it.
+  expect(await self(page)).toMatchObject({ x: 4221, y: 6071 });
+  await expect(page.getByTestId("death-screen")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
