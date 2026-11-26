@@ -2,6 +2,7 @@ package content
 
 import (
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -395,4 +396,66 @@ func TestReachWithinTheView(t *testing.T) {
 		return
 	}
 	t.Fatal("no resource in data/items")
+}
+
+// TestRepoMovementSpeed pins the owner's walking numbers of 2026-11-26 (docs/02
+// "Movimiento"): a level 1 player walks 15 % faster than the 500 ms a tile it took, and
+// 0.2 % faster per level, with no cap.
+func TestRepoMovementSpeed(t *testing.T) {
+	data := filepath.Join("..", "..", "..", "data")
+	b, err := LoadBalance(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vocs, err := LoadVocations(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mv := b.Movement
+	if mv.SpeedPerLevelPct != 0.2 {
+		t.Errorf("speed_per_level_pct = %v, want 0.2", mv.SpeedPerLevelPct)
+	}
+	stepMs := func(speed int) float64 { return math.Ceil(float64(mv.BaseStepMs) * 100 / float64(speed)) }
+	for id, v := range vocs {
+		// All the growth is the balance's: a vocation adds no points per level.
+		if v.PerLevel.Speed != 0 {
+			t.Errorf("%s: per_level.speed %d, want 0 (movement.speed_per_level_pct)", id, v.PerLevel.Speed)
+		}
+		base := v.AtLevel(1).Speed
+		if got := mv.LevelSpeed(base, 1); got != base {
+			t.Errorf("%s: level 1 speed %d, want its start speed %d", id, got, base)
+		}
+		// 500 ms a tile before (1000 × 100 / 205, in whole ticks): 15 % faster is 434.8.
+		if ms := stepMs(base); math.Abs(500/ms-1.15) > 0.005 {
+			t.Errorf("%s: %v ms a tile at level 1, want 500 / 1.15", id, ms)
+		}
+		prev := base
+		for level := 2; level <= b.Experience.MaxLevel; level++ {
+			got := mv.LevelSpeed(v.AtLevel(level).Speed, level)
+			want := float64(base) * (1 + 0.002*float64(level-1))
+			if got < prev || math.Abs(float64(got)-want) > 0.5 {
+				t.Fatalf("%s: level %d speed %d, want %.2f (the level before: %d)", id, level, got, want, prev)
+			}
+			prev = got
+		}
+	}
+}
+
+func TestSpeedPerLevelBounds(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "data", "balance.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const line = "speed_per_level_pct: 0.2"
+	if !strings.Contains(string(raw), line) {
+		t.Fatalf("balance.yaml has no %q", line)
+	}
+	for _, bad := range []string{"-0.1", "5.1"} {
+		if _, err := ParseBalance([]byte(strings.Replace(string(raw), line, "speed_per_level_pct: "+bad, 1))); err == nil {
+			t.Errorf("speed_per_level_pct %s: no error", bad)
+		}
+	}
+	if got := (Movement{}).LevelSpeed(205, 80); got != 205 {
+		t.Errorf("without the key: speed %d at level 80, want 205", got)
+	}
 }

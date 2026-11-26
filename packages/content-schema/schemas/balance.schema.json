@@ -34,6 +34,12 @@
         "base_step_ms": {
           "$ref": "common.schema.json#/$defs/positiveInt"
         },
+        "speed_per_level_pct": {
+          "description": "Percent of its vocation's speed a player gains per level over the first (docs/02 \"Movimiento\"). Optional: 0 without it.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
+        },
         "diagonal_cost": {
           "description": "Times a straight step a diagonal one lasts and weighs in paths (docs/02 \"Movimiento\"): √2 for one speed in every direction, 2 at most.",
           "type": "number",

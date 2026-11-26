@@ -652,3 +652,24 @@ func (w *World) StaticCount(pos world.Pos) int { return w.staticCount(pos) }
 
 // InviteLimitsForTest returns how many accounts have a party invitation limit kept.
 func (w *World) InviteLimitsForTest() int { return len(w.inviteTAT) }
+
+// PaceTicks returns the ticks each of n back-to-back steps of ms milliseconds waits
+// (move.go pace; tests only).
+func PaceTicks(ms int64, n int) []game.Tick {
+	var pc pace
+	var now game.Tick
+	out := make([]game.Tick, n)
+	for i := range out {
+		out[i] = pc.ticks(now, ms)
+		now += out[i]
+	}
+	return out
+}
+
+// PaceAfterStop returns the ticks of a step of ms milliseconds and of one that starts a
+// tick after it ended (tests only).
+func PaceAfterStop(ms int64) (first, second game.Tick) {
+	var pc pace
+	first = pc.ticks(0, ms)
+	return first, pc.ticks(first+1, ms)
+}

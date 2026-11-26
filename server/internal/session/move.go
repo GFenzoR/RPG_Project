@@ -294,34 +294,50 @@ func (w *World) flushTurns(ctx *game.TickContext) {
 	w.turnHeld = kept
 }
 
-// StepTicks returns how many ticks a step onto ground costs at speed: a straight one
-// base_step_ms × terrain% / speed, rounded up to whole ticks (at least one); a diagonal
-// one that many ticks × diagonal_cost, rounded to the nearest tick (never fewer than the
-// straight step). Rounding the diagonal from the straight ticks, not up from its own
-// milliseconds, keeps both directions at one speed per tile of distance (with √2, a
-// 10-tick straight step is a 14-tick diagonal, not 15). A one-tick straight step is the
-// exception: √2 would round back to one tick and the diagonal would cover √2 times the
-// distance per tick, so a diagonal that costs more than a straight step lasts two there.
-// CreatureMove.duration_ms is this many ticks; the client predicts the same
-// (state/step-time.ts stepMs).
-func (w *World) StepTicks(ground uint16, speed int, diagonal bool) game.Tick {
+// StepMs returns how long a step onto ground lasts at speed, in milliseconds: a straight
+// one base_step_ms × terrain% / speed, rounded up to the millisecond and never under one
+// tick; a diagonal one that × diagonal_cost (in thousandths, rounded to the nearest
+// millisecond, never less than the straight step), so with √2 every direction covers its
+// distance at one speed. The four straight directions cost the same: nothing here knows
+// north from east. It is CreatureMove.duration_ms, and what the client predicts
+// (state/step-time.ts stepMs) and draws: a step is not rounded to whole ticks, so a speed
+// a few points higher is a walk that much faster (docs/05 "Caminar").
+func (w *World) StepMs(ground uint16, speed int, diagonal bool) int64 {
 	terrain := int64(world.DefaultGroundSpeed)
 	if gs := w.m.GroundSpeeds(); int(ground) < len(gs) && gs[ground] != 0 {
 		terrain = int64(gs[ground])
 	}
 	num := int64(w.mv.BaseStepMs) * terrain // ms × speed
 	den := int64(max(speed, 1))
-	ms := (num + den - 1) / den
-	tickMs := game.TickDuration.Milliseconds()
-	ticks := max((ms+tickMs-1)/tickMs, 1)
+	ms := max((num+den-1)/den, game.TickDuration.Milliseconds())
 	if diagonal {
-		straight := ticks
-		ticks = max((straight*w.diag+500)/1000, straight)
-		if straight == 1 && w.diag > 1000 {
-			ticks = 2
-		}
+		ms = max((ms*w.diag+500)/1000, ms)
 	}
-	return game.Tick(ticks)
+	return ms
+}
+
+// pace turns the milliseconds of a creature's steps into the whole ticks the loop waits
+// for each. The part of a tick a step did not wait is owed by the next one of the same
+// walk (a step that starts the tick the one before ends), so a walk of n steps of ms
+// milliseconds takes n × ms, less than one tick short, whatever ms is: a 435 ms step is
+// 8, 9, 9, 8, 9... ticks. A step after a stop starts from nothing owed.
+type pace struct {
+	owed int64     // ms of the walk's steps not waited yet: 0 to one tick, exclusive
+	at   game.Tick // the tick the last step ends
+}
+
+// ticks returns how many ticks the step of ms milliseconds starting at now waits (at
+// least one).
+func (pc *pace) ticks(now game.Tick, ms int64) game.Tick {
+	if pc.at != now {
+		pc.owed = 0
+	}
+	tickMs := game.TickDuration.Milliseconds()
+	total := ms + pc.owed
+	n := max(total/tickMs, 1)
+	pc.owed = max(total-n*tickMs, 0)
+	pc.at = now + game.Tick(n)
+	return game.Tick(n)
 }
 
 // moveSystem advances every walking player whose previous step has finished.
@@ -394,9 +410,9 @@ func (w *World) stepPlayer(ctx *game.TickContext, p *Player) {
 		p.stopWalk()
 	}
 	ground, _, _ := w.m.Tile(to)
-	ticks := w.StepTicks(ground, p.speed, d.Diagonal())
-	p.readyAt = ctx.Tick + ticks
-	w.move(p, to, d, ticks, pt != nil, seq)
+	ms := w.StepMs(ground, p.speed, d.Diagonal())
+	p.readyAt = ctx.Tick + p.pace.ticks(ctx.Tick, ms)
+	w.move(p, to, d, ms, pt != nil, seq)
 	// A step resets the idle time but is not a timed action for the bot detection: its
 	// pace is the server's (a held key walks as evenly as a script).
 	p.lastAction, p.idleWarned = ctx.Tick, false
@@ -436,9 +452,9 @@ func (w *World) reroute(p *Player) bool {
 // the FullMapView of the other end replaces its view, so the edge of this floor and the
 // creatures that leave it would be bytes it throws away. seq is the Walk.seq of a
 // keyboard step (0 otherwise): only p's own CreatureMove carries it.
-func (w *World) move(p *Player, to world.Pos, d world.Direction, ticks game.Tick, through bool, seq uint32) {
+func (w *World) move(p *Player, to world.Pos, d world.Direction, ms int64, through bool, seq uint32) {
 	from := p.pos
-	durMs := uint32(ticks.Duration().Milliseconds())
+	durMs := uint32(ms)
 	w.unindex(p)
 	p.pos, p.dir = to, d
 	w.index(p)

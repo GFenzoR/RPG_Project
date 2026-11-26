@@ -45,9 +45,11 @@ type Player struct {
 
 	// Walking: queue[qhead:] are the steps left; readyAt is the first tick at which
 	// the next step may start (the current step's duration has elapsed).
+	// pace is the part of a tick the walk still owes (move.go).
 	queue   []world.Direction
 	qhead   int
 	readyAt game.Tick
+	pace    pace
 	// dest is where a WalkPath ends; reroutes around creatures aim at it.
 	dest    world.Pos
 	hasDest bool
@@ -617,8 +619,8 @@ func (w *World) join(ctx *game.TickContext, c Character, client Client) {
 		maxHealth:  stats.Health,
 		maxMana:    stats.Mana,
 		capacity:   stats.Capacity,
-		speed:      max(stats.Speed, 1),
-		baseSpeed:  max(stats.Speed, 1),
+		speed:      w.mv.LevelSpeed(stats.Speed, c.Level),
+		baseSpeed:  w.mv.LevelSpeed(stats.Speed, c.Level),
 		dir:        world.South,
 		stance:     c.Options.stance(),
 		chase:      c.Options.Chase,

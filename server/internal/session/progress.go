@@ -237,7 +237,8 @@ func (w *World) gainExperienceBonus(p *Player, xp, bonus int64) {
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PlayerStats{PlayerStats: w.stats(p)}})
 }
 
-// setLevel moves p to a higher level: maximums, capacity and speed follow the vocation,
+// setLevel moves p to a higher level: maximums, capacity and speed follow the vocation
+// (the speed with the level's movement.speed_per_level_pct, content.Movement.LevelSpeed),
 // and current health and mana grow by what the maximums grew.
 func (w *World) setLevel(p *Player, level int) {
 	from := p.level
@@ -248,7 +249,7 @@ func (w *World) setLevel(p *Player, level int) {
 	p.maxHealth, p.maxMana, p.capacity = now.Health+p.gear.health, now.Mana+p.gear.mana, now.Capacity
 	p.health = min(max(p.health+now.Health-old.Health, 1), p.maxHealth)
 	p.mana = min(max(p.mana+now.Mana-old.Mana, 0), p.maxMana)
-	p.baseSpeed = max(now.Speed, 1)
+	p.baseSpeed = w.mv.LevelSpeed(now.Speed, level)
 	w.refreshSpeed(holder{p: p}) // with its speed conditions (T3.2)
 	w.healthBar(p, pct)
 	p.emit(systemMsg(msgLevelUp,

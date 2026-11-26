@@ -119,8 +119,10 @@ type Monster struct {
 	maxHealth int
 	state     AIState
 	target    *Player
-	// readyAt is the first tick at which the next step may start.
+	// readyAt is the first tick at which the next step may start; pace, the part of a
+	// tick its walk still owes (move.go).
 	readyAt game.Tick
+	pace    pace
 	// nextAttack is the first tick of each attack's next round (kind.attacks order: its
 	// own, then each phase's attacks_add).
 	nextAttack []game.Tick
@@ -1342,13 +1344,13 @@ func (w *World) fleeStep(m *Monster, threat world.Pos, in tileSquare) (world.Dir
 func (w *World) stepMonster(ctx *game.TickContext, m *Monster, d world.Direction) {
 	to, _ := m.pos.Step(d)
 	ground, _, _ := w.m.Tile(to)
-	ticks := w.StepTicks(ground, m.speed, d.Diagonal())
-	m.readyAt = ctx.Tick + ticks
+	ms := w.StepMs(ground, m.speed, d.Diagonal())
+	m.readyAt = ctx.Tick + m.pace.ticks(ctx.Tick, ms)
 	from := m.pos
 	w.munindex(m)
 	m.pos, m.dir = to, d
 	w.mindex(m)
-	w.observeMove(nil, m, from, to, posMsg(from), posMsg(to), uint32(ticks.Duration().Milliseconds()))
+	w.observeMove(nil, m, from, to, posMsg(from), posMsg(to), uint32(ms))
 	w.trailMonsterStep(to) // the living world's trail wear (trailwear.go)
 }
 
