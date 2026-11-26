@@ -611,23 +611,45 @@ el punto 5:
         mataban a mitad de camino y el test pasaba igual): ahora entra con nivel 200 y
         el test exige que termine de pie en el bosque. Números en docs/07: 60 fps y 6
         draw calls. Dos cosas que se ven mal y quedan:
-        - **Sol dentro de un edificio visto de lejos:** una habitación cuyo muro más
-          lejano queda fuera de la ventana del servidor (a 12 filas o más, o 17 columnas)
-          cuenta como aire libre "hasta ver su último muro" (`indoorTiles`), así que desde
-          la plaza de Thimblewick (2095,2095) el piso del templo muestra la sombra de sus
-          muros y la del vano (`99d`, `99d2`), y desaparecen al dar un paso al norte
-          (comprobado con capturas desde 2095, 2094, 2093 y 2092). Arreglo posible: una
-          zona `indoor` en el mapa, o recordar los muros ya vistos.
+        - **Sol dentro de un edificio visto de lejos (arreglado, 2026-11-26, rama
+          `feat/light-shadows`):** los techos ya no se adivinan con lo que está a la
+          vista: los calcula el build sobre `world/` entero (`client/vite/roofs.ts`,
+          docs/17 "Sombras de las luces y bajo techo fiable"). Falta mirarlo en la
+          captura `99i-light-temple-from-square` del E2E final.
         - **La sombra de un muro fino arranca separada de él:** la sombra de bloque sale
           del borde de la casilla, y el dibujo de un muro vertical ocupa solo el medio
           (20 de 64 px a 2x): quedan unos 11 px de sprite de pasto al sol entre el muro
           y su sombra (`99d2`, al este del templo). Arreglo: que el bloque use el ancho
           del dibujo de la pieza y no la casilla.
-      - **"Bajo techo" es una heurística** (los mapas no tienen techos): casillas
-        encerradas por muros, con vanos de hasta 3 casillas, hasta 400 casillas. Un
-        edificio con un vano más ancho o un patio chico amurallado se leen mal (uno con
-        sol adentro, el otro sin sombras). Si molesta: marcar el interior en el mapa
-        (una zona `indoor`), que es un cambio de formato.
+      - **"Bajo techo" sigue siendo una regla, ahora sobre el mapa entero** (los mapas
+        no tienen techos): casillas encerradas por muros, con vanos de hasta 3
+        casillas, hasta 400 casillas, calculadas en el build. Un edificio con un vano
+        más ancho o un patio chico amurallado se leen mal (uno con sol adentro, el otro
+        sin sombras). Si molesta: marcar el interior en el mapa (una zona `indoor`),
+        que es un cambio de formato. Un muro que cambie en el servidor sin un build
+        nuevo del cliente (hoy no pasa: el mapa se despliega con el cliente) dejaría el
+        techo viejo. El build cuenta como muro un item `kind: wall` o con
+        `joins_walls`; el canvas, la pieza de muro del atlas: hoy coinciden.
+      - **Sombras de las luces (hecho, 2026-11-26, rama `feat/light-shadows`)**, docs/17
+        "Sombras de las luces". Queda:
+        - **Mirar las capturas del E2E** (`99h` a `99l` de `e2e/sandbox.spec.ts`): el
+          test se escribió sin poder correrlo (el lote corre el E2E una vez al final).
+          Usa `/tp` a casillas de Puerto elegidas del mapa sin verlas (templo
+          3160,6386; sótano 3134,6315,8 junto a una antorcha; plaza 3167,6391 junto a
+          un farol): si alguna no es pisable, cambiarla por una vecina.
+        - **Thimblewick no tiene lámparas** (solo la fragua y el fogón del oeste): su
+          templo y sus tiendas muestran la elipse tenue y ninguna sombra. Si el dueño
+          quiere ver sombras ahí, poner braseros o faroles con `mapcli`.
+        - **Ventanas iluminadas y velas no dan luz** (sus sprites no tienen `light`).
+        - **Los muros no proyectan sombra de las luces** (solo criaturas y objetos
+          `silhouette`), y una luz no es tapada por un muro dentro de su mismo lado
+          (dos habitaciones de un mismo edificio comparten sus luces).
+        - **Dos luces opuestas a igual distancia** se cancelan (una sombra corta bajo
+          los pies) en vez de dar dos sombras: es una sola sombra mezclada por criatura.
+        - **En el borde del alcance** las capas de un muñeco llevan alfa y se suman un
+          poco donde se pisan (un instante, con poca opacidad).
+        - **La pasada de filtro extra** no se midió en pantalla (docs/07 tiene solo el
+          lado JS): mirar los fps de noche en una plaza con faroles.
       - **Bajo techo no se ven huellas ni ondas del mundo vivo:** el suelo de adentro se
         dibuja encima de `groundOverlay` para tapar las sombras, y tapa también eso.
         Hoy los interiores son de madera y piedra (sin huellas); un interior de arena o

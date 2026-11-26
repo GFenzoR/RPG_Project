@@ -1160,3 +1160,100 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
   await around("99n-wet-sand-after-wave", wetEnd.x - 1, wetEnd.y);
   expect(errors).toEqual([]);
 });
+
+// The shadows of lamps and fires (docs/17 "Sombras de las luces", owner 2026-11-26): under a
+// roof there is no sun shadow, whatever is in view; by a brazier indoors, by a torch
+// underground and by a lamp post at night the own player casts a shadow away from the light
+// and has no contact ellipse; where no light reaches (the temple of Thimblewick, which has
+// no lamps) the ellipse stays, much fainter.
+test("sandbox light shadows: indoors, underground and by a lamp at night", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Farolero");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas', level = 200 WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const say = page.getByTestId("say").getByRole("textbox");
+  const command = async (text: string): Promise<void> => {
+    await say.fill(text);
+    await say.press("Enter");
+    await page.waitForTimeout(300);
+  };
+  const lit = () => page.evaluate(() => window.__rpgClient?.lightShadows());
+  const tp = async (x: number, y: number, z: number): Promise<void> => {
+    await command(`/tp ${x} ${y} ${z}`);
+    await expect
+      .poll(async () => {
+        const s = await page.evaluate(() => window.__rpgClient?.self());
+        return s ? `${s.x},${s.y},${s.z}` : "";
+      }, SLOW)
+      .toBe(`${x},${y},${z}`);
+    await say.blur();
+    await page.waitForTimeout(500);
+  };
+
+  try {
+    await command("/time speed 0");
+    await command("/time noon");
+    await say.blur();
+    // The temple of Thimblewick has no lamps: under its roof, no shadow at all and the
+    // faint ellipse under the feet.
+    await expect.poll(async () => (await lit())?.selfIndoor, { timeout: 10_000 }).toBe(true);
+    const unlit = await lit();
+    expect(unlit?.shadows).toBe(0);
+    expect(unlit?.selfContact).toBeGreaterThan(0);
+    expect(unlit?.selfContact).toBeLessThan(0.5);
+    await shot(page, "99h-light-temple-unlit");
+
+    // From the square the temple is only half in view: its floor must show no sun shadow
+    // (pending 1 of lote 20b). Looked at in the screenshot.
+    await tp(2095, 2095, 7);
+    await shot(page, "99i-light-temple-from-square");
+
+    // The temple of Puerto, between its two braziers, at noon: a shadow from the braziers
+    // and no ellipse.
+    await tp(3160, 6386, 7);
+    await expect
+      .poll(async () => (await lit())?.shadows ?? 0, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    const temple = await lit();
+    expect(temple?.selfIndoor).toBe(true);
+    expect(temple?.selfContact).toBe(0);
+    await shot(page, "99j-light-temple-braziers");
+
+    // Underground, by a wall torch of the cellars of Puerto.
+    await tp(3134, 6315, 8);
+    await expect
+      .poll(async () => (await lit())?.shadows ?? 0, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    expect((await lit())?.selfContact).toBe(0);
+    await shot(page, "99k-light-underground-torch");
+
+    // The square of Puerto at night, by a lamp post.
+    await tp(3167, 6391, 7);
+    expect((await lit())?.shadows).toBe(0); // noon: lamps cast nothing under the sun
+    await command("/time moon 4");
+    await command("/time night");
+    await say.blur();
+    await expect
+      .poll(async () => (await lit())?.shadows ?? 0, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    expect((await lit())?.selfContact).toBe(0);
+    await shot(page, "99l-light-square-night-lamp");
+  } finally {
+    await command("/time noon");
+    await command("/time speed 0");
+  }
+  expect(errors).toEqual([]);
+});

@@ -45,13 +45,48 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "reach": { "description": "Times the glow's radius a light casts shadows.", "type": "number", "minimum": 0.5, "maximum": 4 },
-        "alpha": { "description": "Opacity of those shadows.", "type": "number", "minimum": 0, "maximum": 1 },
-        "min_length": { "description": "Length at the light's foot, heights of the caster.", "type": "number", "minimum": 0, "maximum": 3 },
-        "max_length": { "description": "Length at the edge of the reach.", "type": "number", "minimum": 0, "maximum": 3 },
-        "fade": { "description": "Last share of the reach over which the shadow fades.", "type": "number", "minimum": 0.05, "maximum": 1 },
-        "breathe": { "description": "How much they breathe with the flame, share of alpha.", "type": "number", "minimum": 0, "maximum": 0.5 },
-        "unlit_contact": { "description": "Share of the contact ellipse left where nothing casts a shadow.", "type": "number", "minimum": 0, "maximum": 1 }
+        "reach": {
+          "description": "Times the glow's radius a light casts shadows.",
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 4
+        },
+        "alpha": {
+          "description": "Opacity of those shadows.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_length": {
+          "description": "Length at the light's foot, heights of the caster.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "max_length": {
+          "description": "Length at the edge of the reach.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "fade": {
+          "description": "Last share of the reach over which the shadow fades.",
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 1
+        },
+        "breathe": {
+          "description": "How much they breathe with the flame, share of alpha.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5
+        },
+        "unlit_contact": {
+          "description": "Share of the contact ellipse left where nothing casts a shadow.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     },
     "kinds": {

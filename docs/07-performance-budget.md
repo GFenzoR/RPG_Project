@@ -394,6 +394,18 @@ decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
   (`CastShadows.begin`/`part`/`end`: textura, ancla, posición, skew y escala de cada
   sprite) cuesta ~0,035 ms por frame en Node en la PC del dueño (2026-11-24), el 0,2 % de
   un frame de 16,6 ms; `cast-shadows.test.ts` lo vigila con un tope holgado de 2 ms.
+- Cliente, sombras de las luces (docs/17 "Sombras de las luces", 2026-11-26): una segunda
+  capa igual (`CastShadows` en `MapView.litOverlay`: sprites de pool, texturas de la
+  criatura, **una** pasada de `AlphaFilter` más, solo mientras alguna sombra de luz se
+  dibuja; a mediodía al aire libre, ninguna). Por criatura y frame se recorren las luces
+  del mapa en vista (`lightCast`, sin crear nada; la lista de luces se rearma solo cuando
+  cambia el mapa). Las de los objetos (`LitObjectShadows`) se colocan cuando cambia el
+  mapa o la noche (16 pasos), no por frame. A lo sumo las 2 luces más cercanas pesan.
+  **Medido solo del lado JS:** 100 criaturas contra 40 luces, ~0,042 ms por frame en Node
+  en la PC del dueño (2026-11-26), el 0,25 % de un frame. La pasada de filtro extra y los
+  fps en pantalla quedan para el E2E final del lote.
+- Cliente, techos: `ClientContent.roofs` son tramos `[y, x, largo]` por piso, calculados en
+  el build; al cargar se pasan a un `Set` por piso (una vez).
   **Sin medir contra este presupuesto, el lado GPU:** el pedido era "un sprite más por
   criatura visible" y se hizo uno por capa (hasta 540 con 60 jugadores en vista) más la
   pasada del filtro, casi del tamaño de la pantalla, y de noche se suma el mapa de luz.

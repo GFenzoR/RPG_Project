@@ -631,7 +631,11 @@ describe("the roofs of world/ (client/vite/roofs.ts, docs/17 'Bajo techo')", () 
   const at = (x: number, y: number, z = 7): boolean => {
     const runs = roofs[String(z)] ?? [];
     for (let i = 0; i + 2 < runs.length; i += 3)
-      if (runs[i] === y && x >= (runs[i + 1] as number) && x < (runs[i + 1] as number) + (runs[i + 2] as number))
+      if (
+        runs[i] === y &&
+        x >= (runs[i + 1] as number) &&
+        x < (runs[i + 1] as number) + (runs[i + 2] as number)
+      )
         return true;
     return false;
   };

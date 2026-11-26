@@ -1831,6 +1831,16 @@ toca al contenido:
   metadata de viento (aquí, por su sprite, o en `plants.yaml`) o un `wind: none`
   explícito, que un árbol declarado a mano diga su `pivot` y que cada sprite del archivo
   lo use algún item (`livingworld/README.md` "Viento").
+- **`data/livingworld/shadows.yaml` → `lights`** (2026-11-26; cliente): las sombras que
+  proyectan lámparas, antorchas y fuegos bajo techo, bajo tierra y de noche (docs/17
+  "Sombras de las luces"). Qué item da luz y hasta dónde brilla sigue siendo `light` de su
+  sprite en `assets/sprites.yaml` (`tiles`, radio en casillas); aquí va cómo son las
+  sombras: `reach` (0,5 a 4: veces el radio hasta donde proyecta), `alpha` (0 a 1),
+  `min_length` y `max_length` (0 a 3, en alturas del que proyecta: al pie de la luz y en el
+  borde), `fade` (0,05 a 1: la última parte del alcance donde se apaga), `breathe` (0 a
+  0,5: cuánto respira con la llama) y `unlit_contact` (0 a 1: qué queda de la elipse de
+  contacto donde nada proyecta sombra). Todo opcional; sin `lights` no hay sombras de luz
+  y la elipse queda como antes.
 - **`data/livingworld/shadows.yaml`** (`livingworld-shadows.schema.json`; cliente): qué
   objeto del mapa proyecta sombra bajo el sol y la luna, y cómo (docs/17 "Sombras de los
   objetos", `livingworld/README.md` "Sombras de los objetos"). Cada entrada es `none`,

@@ -123,7 +123,13 @@ describe("parseLightShadows and lightBreath", () => {
       max_length: 0.5,
       unlit_contact: 0.2,
     });
-    expect(got).toMatchObject({ reach: 2, alpha: 1, minLength: 1, maxLength: 1, unlitContact: 0.2 });
+    expect(got).toMatchObject({
+      reach: 2,
+      alpha: 1,
+      minLength: 1,
+      maxLength: 1,
+      unlitContact: 0.2,
+    });
   });
 
   it("breathes a little around 1, and not at all with breathe 0", () => {

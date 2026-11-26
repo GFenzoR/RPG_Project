@@ -354,6 +354,19 @@ el renderer del cliente dibuja:
 Sin `daynight.yaml` no hay `WorldClock` ni cielo; antes del primer `WorldClock` (o con un
 servidor viejo) el cliente dibuja el mediodía.
 
+### Sombras de las luces
+
+Pedido del dueño (2026-11-26): bajo techo la sombra sigue a la luz del edificio, no al sol.
+`client/src/light-shadows.ts` (puro, sin Pixi, con tests): `lightCast(reglas, luces, x, y,
+lado, out)` da el vector de la sombra (este y norte, por px de altura, como el del sol) y
+su fuerza para quien está en esa casilla; `parseLightShadows` lee `lights` de
+`data/livingworld/shadows.yaml`; `lightBreath` es el respiro de la llama (dos senos, del
+reloj del frame). Las luces llegan en una lista plana (`LIGHT_STRIDE`: x, y, radio, lado:
+`SIDE_OUT`, `SIDE_IN`, `SIDE_BOTH`). Mezcla las dos más cercanas con pesos `n1 - n3` y
+`n2 - n3` (la cercanía de cada una menos la de la tercera) sobre `n1 + n2`: continua cuando
+dos luces cambian de puesto, que es lo que evita el salto. Determinista y sin asignar nada.
+Dirección de arte en docs/17 "Sombras de las luces"; costo en docs/07.
+
 ### Sombras de los objetos
 
 Pedido del dueño (2026-11-25): la sombra dinámica "para todos los objetos, incluidos los
@@ -593,6 +606,8 @@ Los únicos archivos fuera de `livingworld/` que pueden importarlo:
   `WorldClock` al entrar, cada `sync_seconds` y tras un `/time` del staff)
 - `client/src/render/sky.ts`: el cielo de cada frame (el reloj del servidor llevado
   adelante, la luz, las lámparas, la sombra del sol o de la luna, la noche de los bichos)
+- `client/src/render/light-shadows.ts`: las sombras de lámparas, antorchas y fuegos (las
+  luces del `MapView`, de qué lado del techo está cada una, y la capa que las dibuja)
 <!-- glue:end -->
 
 El ambiente lo usa `client/src/game.ts` a través de `client/src/audio/ambience.ts`

@@ -98,7 +98,7 @@ export function loadRoofs(
     const runs: number[] = [];
     for (const y of [...rows.keys()].sort((a, b) => a - b)) {
       const xs = (rows.get(y) as number[]).sort((a, b) => a - b);
-      for (let i = 0; i < xs.length; ) {
+      for (let i = 0; i < xs.length;) {
         let j = i + 1;
         while (j < xs.length && xs[j] === (xs[j - 1] as number) + 1) j++;
         runs.push(y, xs[i] as number, j - i);

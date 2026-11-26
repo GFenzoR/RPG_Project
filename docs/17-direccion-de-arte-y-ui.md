@@ -730,6 +730,53 @@ objetos, incluidos los árboles".
   `99f-daynight-new-moon` y `99g-daynight-dawn`. **Pendiente mirarlas** en el E2E final del lote (docs/14): la
   revisión visual de esta rama se hizo sobre una vista previa local, sin capturas
   guardadas.
+#### Sombras de las luces y bajo techo fiable (hecho, 2026-11-26, rama `feat/light-shadows`)
+Pedido del dueño tras jugar los lotes 19 y 20: "dentro de los edificios no deberíamos tener
+la sombra del sol, sino que se debe guiar por la iluminación del mismo edificio o de la
+fuente de luz más cercana; tiene que ser dinámico, porque si no se ve como que nada tiene
+techo. Saca la sombra redonda cuando hay otra fuente de luz, y cuando no hay fuente de luz
+déjala mucho más tenue; que el personaje no se vea flotando".
+- **Bajo techo ya no depende de lo que se ve.** Las casillas techadas las calcula el build
+  del cliente sobre `world/` entero (`client/vite/roofs.ts`, con la misma regla
+  `indoorTiles`: suelo encerrado por muros, vanos de hasta 3 casillas, hasta 400 casillas)
+  y van en el contenido (`ClientContent.roofs`, tramos por piso). `MapView` las toma
+  (`roofs`) en vez de adivinar con las casillas que mandó el servidor: un edificio visto
+  desde afuera, con su muro del fondo fuera de la ventana, es techo igual (era el
+  pendiente 1 del lote 20b: desde la plaza de Thimblewick el piso del templo mostraba la
+  sombra de sus muros). Sin ese dato (el editor, un fixture) queda la adivinanza de antes.
+  No hizo falta una zona `indoor` en el formato de mapa.
+- **Sombras de las luces** (`client/src/render/light-shadows.ts`, cuentas en
+  `livingworld/client/src/light-shadows.ts`): bajo techo, bajo tierra y al aire libre de
+  noche, cada criatura y cada objeto con altura (los `silhouette` de `shadows.yaml`; los
+  muros no: taparían la habitación) cerca de una luz proyecta su sombra en dirección
+  contraria a la luz. Dan luz los items cuyo sprite tiene `light` en `assets/sprites.yaml`
+  (antorcha de pared, brasero, farol, fogón, fragua: los mismos que brillan en el mapa de
+  luz, con el mismo radio); cómo se ven sus sombras es `lights` de
+  `data/livingworld/shadows.yaml`. Una luz alcanza `reach` veces su radio; la sombra es
+  corta al pie de la luz (`min_length`) y larga en el borde (`max_length`), y se apaga en
+  el último `fade` del alcance. Entre luces se mezclan **las dos más cercanas**, cada una
+  pesada por cuánto más cerca está que la tercera: el peso de una luz es cero en el
+  instante en que cambia de puesto con la siguiente, así la sombra nunca salta al caminar
+  entre faroles (un test camina entre cuatro y mide cada paso). La llama hace respirar la
+  capa (`breathe`, 6 %); con "Animaciones reducidas" queda quieta.
+- **Cada luz de su lado:** un fogón bajo techo no proyecta sombras en la calle ni un farol
+  de la calle adentro de una casa; una antorcha en el muro de un edificio alumbra los dos
+  lados. Bajo techo las luces proyectan también de día; al aire libre, según lo oscuro que
+  esté (`Sky.lamps`: nada a mediodía, todo de noche), y conviven con la sombra de la luna.
+- **Capa:** un segundo `CastShadows` (los mismos sprites de pool y un solo `AlphaFilter`)
+  en `MapView.litOverlay`, sobre los pisos de adentro (que tapan las sombras del sol) y
+  bajo los items. Cada criatura apunta la suya (`CastShadows.aim`: dirección y fuerza
+  propias). En el tramo donde la sombra se apaga, las capas de un muñeco llevan alfa y se
+  suman un poco donde se pisan: se aceptó, dura un instante y con poca opacidad.
+- **Elipse de contacto:** ninguna mientras se dibuje cualquier sombra proyectada (sol,
+  luna o luz; `contactOf`). Sin ninguna (bajo techo sin lámparas, cueva sin antorchas,
+  noche sin luna lejos de un farol) queda, mucho más tenue (`unlit_contact`, 40 % de la de
+  antes), en la línea de los pies.
+- **Queda** (docs/14): el templo de Thimblewick no tiene lámparas (ahí se ve la elipse
+  tenue, sin sombra); las ventanas iluminadas y las velas no dan luz todavía (no tienen
+  `light`); la sombra de un muro fino sigue arrancando separada de él (pendiente 2 del
+  lote 20b, sin tocar).
+
 ## 3. Animación de criaturas y personajes (ANI)
 
 ### ANI-1 Direcciones
