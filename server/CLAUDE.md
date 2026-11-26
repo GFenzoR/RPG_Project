@@ -559,6 +559,9 @@ server/
   del cliente. Las de interfaz son el documento de `internal/accountopts` (esquema cerrado:
   un campo nuevo se valida ahí y se declara en `OPTIONS`; el test del cliente compara los
   dos) por `httpapi/options.go`; nunca guardes los bytes del cliente, solo `Canonical()`.
+  Un guardado conserva las secciones `devices.<clase>` que no trae (`KeepMissingDevices`).
+  El cliente mínimo es 0.2.0 (`gateway.DefaultMinClientVersion`): el primero que lee
+  `Welcome.options`.
 
 - **Minimapa** (`session/minimap.go`, `explore`, docs/02 y docs/05 "Minimapa"): lo explorado
   es `Player.explored` (`explore.Map`, bits por sector de 32x32, solo crecen), cargado con

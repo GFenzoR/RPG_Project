@@ -529,9 +529,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   cuenta"):** toda opción o interruptor nuevo se declara en `OPTIONS` de
   `state/saved-options.ts` con dónde se guarda (`character`, `account`, `device-class` o
   `session` con su motivo); `saved-options.test.ts` falla si aparece una clave `rpg.*` de
-  `localStorage` o un mensaje `Set*` sin declarar. Lo que guarda una opción toma su
+  `localStorage` o un mensaje `Set*` sin declarar (solo ve eso: un interruptor que viaja en
+  otro mensaje o vive en el estado de una pantalla se declara a mano). Lo que guarda una opción toma su
   storage de `optionStorage()` (`state/option-storage.ts`), nunca `window.localStorage`
-  directo: así el cambio llega a la cuenta (`OptionsSync`, 2 s después del último). Una
+  directo: así el cambio llega a la cuenta (`OptionsSync`, 2 s después del último; queda
+  anotado en `rpg.optsUnsent` hasta que el servidor lo confirma, y lo anotado gana en el
+  siguiente login). Una opción que dice algo de los personajes de la cuenta lleva
+  `personal: true` (no se rellena con lo que dejó otra cuenta). Una
   opción de interfaz nueva necesita además su campo en `server/internal/accountopts`. La
   postura, perseguir y el modo seguro vienen de `Welcome.options` (`GameUi.fightStance`,
   `chase`, `safeMode`): el cliente ya no manda el modo seguro tras el `Welcome`.

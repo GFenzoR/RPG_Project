@@ -91,7 +91,10 @@ personaje).
   libre: toda cadena es un enum, un id `[a-z0-9_.-]` o un nombre de personaje (letras,
   espacios, `'`, `-`), así que nada de él puede ser marcado; se guarda la forma canónica que
   arma el servidor, no los bytes recibidos, y la tabla repite el tope de tamaño; se sirve
-  como `application/json` con `no-store`; límite propio de guardados por cuenta. El cliente
+  como `application/json` con `no-store`; límite propio de guardados por cuenta. El `GET`
+  da además una etiqueta de la cuenta (hash, no el id) con la que el cliente evita subir a
+  una cuenta las misiones seguidas y las barras de hechizos que otra dejó en el mismo
+  navegador (nombres de sus personajes). El cliente
   vuelve a validar cada valor antes de escribirlo en `localStorage` y nunca lo interpreta
   como HTML (Preact escribe texto; nada de `innerHTML`). Tests: `accountopts_test.go`
   (rechazos, estabilidad, fuzz), `httpapi/options_test.go` (auth, otra cuenta, CSRF,

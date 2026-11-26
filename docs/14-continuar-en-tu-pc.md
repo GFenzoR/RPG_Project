@@ -220,13 +220,35 @@ el punto 5:
   va en `session.GameOptions`, `characters.opt_*` y `Welcome.options`. El registro es
   `OPTIONS` de `client/src/state/saved-options.ts`: `saved-options.test.ts` falla si aparece
   una clave `rpg.*` de `localStorage` o un mensaje `Set*` del protocolo sin declarar, o un
-  campo del documento que el esquema del servidor no tiene (y al revés). Queda:
+  campo del documento que el esquema del servidor no tiene (y al revés). El test **solo ve
+  esas dos cosas**: un interruptor que viaja en otro mensaje (la experiencia compartida del
+  grupo va en `PartyAction`) o una elección que vive solo en el estado de una pantalla se
+  declaran a mano. Tras la revisión del lote: un cambio que no llegó a enviarse (pestaña
+  cerrada antes de 2 s, `POST` fallido) queda anotado y gana en el siguiente login; cada
+  guardado lleva solo la sección de su clase de dispositivo y el servidor conserva las
+  otras; lo que otra cuenta dejó en el navegador no se sube (docs/05 "Opciones de la
+  cuenta"). Queda:
+  - **El cliente pasa a 0.2.0 y el servidor ya no acepta 0.1.x** (`-min-client-version`,
+    por defecto `0.2.0`): un cliente anterior ignora `Welcome.options` y mostraría el modo
+    seguro activado con el servidor teniéndolo apagado. **Hay que volver a armar la app de
+    escritorio** (el build web va dentro del exe); una vieja recibe "cliente
+    desactualizado" al entrar al mundo.
+  - **Quitar una opción no se propaga del todo:** volver al zoom ajustado o dejar de seguir
+    una misión la borra del servidor, pero otro navegador de la misma clase que todavía la
+    tenga la vuelve a subir en su próximo login. Si molesta, la salida es guardar "sin
+    valor" explícito en el documento.
+  - **La espera al entrar al juego** es de 2 s como mucho: con un servidor más lento que
+    eso el juego abre con las ventanas locales y el login las reemplaza por debajo.
+  - **El tope de la tabla** (`account_options`, 64 KiB de JSONB) no se pudo medir sin
+    Postgres en esta pasada: `store/options_integration_test.go` guarda ahora el documento
+    válido más grande; correr `make test-integration` con la base levantada.
   - **La migración 00029** puede chocar de número con otra rama del lote: si pasa, se
     renumera la que entre después (`migrations/embed_test.go` lo detecta).
   - **Un jugador que tenía el modo seguro apagado** en su navegador lo encuentra activado
     la primera vez (el servidor no sabía de esa elección): lo apaga una vez y queda.
-  - **Dos dispositivos abiertos a la vez** con la misma cuenta: gana el último que guarda
-    el documento entero. Si molesta, la salida es mezclar por campo en el servidor.
+  - **Dos dispositivos de la misma clase abiertos a la vez** (dos PC) con la misma cuenta:
+    gana el último que guarda. PC y teléfono no se pisan: cada uno guarda su sección. Si
+    molesta, la salida es mezclar por campo en el servidor.
   - **El idioma elegido en el sitio público** (otra página) no cuenta como "elegido antes
     de entrar": al entrar al juego gana el guardado en la cuenta.
   - **Probarlo a mano en dos navegadores** (o navegador y app de escritorio): cambiar

@@ -156,7 +156,7 @@ cuerpo máximo 4 KiB, campos desconocidos rechazados. Respuestas con `Cache-Cont
 | `GET /api/characters` | token | — | `200 {characters: [{id, name, vocation, level, look?}], max_characters}` (2026-11-23: `look` es el aspecto guardado, `{sex, body, skin, hair, hair_color, beard}`, ausente mientras el juego no le eligió uno; `max_characters` es el tope por cuenta, con el que la pantalla de personajes deshabilita "Crear personaje nuevo") |
 | `POST /api/characters` | token | `{name, vocation, look?}` | `201 {character: {id, name, vocation, level}}` |
 | `POST /api/play` | token | `{character_id}` | `200 {session_token, expires_at}` (vive 60 s, un uso) |
-| `GET /api/account/options` | token | — | `200 {options}`: las opciones de interfaz de la cuenta ("Opciones de la cuenta", abajo); `{"v":1}` si nunca guardó |
+| `GET /api/account/options` | token | — | `200 {options, account}`: las opciones de interfaz de la cuenta ("Opciones de la cuenta", abajo); `{"v":1}` si nunca guardó |
 | `POST /api/account/options` | token | el documento | `204`; `400 bad_request` (no pasa el esquema), `413 too_large` (más de 16 KiB), `415`, `429` |
 | `GET /healthz` | — | — | `200 {status: "ok"}` / `503` si Postgres no responde (el ping se guarda 1 s contado desde que termina, y los pedidos que llegan durante un ping esperan ese mismo resultado: muchos pedidos cuestan un ping por segundo aunque la base esté lenta) |
 | `GET /api/status` | — | — | `200 {online, players, version}` (T4.3, público) |
@@ -187,9 +187,19 @@ Las opciones de **juego** de cada personaje van por el protocolo del juego ("Opc
 guardadas", más abajo). La tabla de qué se guarda dónde está en
 `14-continuar-en-tu-pc.md` ("Opciones guardadas").
 
-- `GET` devuelve el documento de la cuenta de la sesión; `POST` lo reemplaza entero. No hay
-  id de cuenta en el pedido: sale de la sesión (`authed`), nunca del cliente. Es `POST` y no
-  `PUT` porque el puente de la app de escritorio solo deja pasar `GET` y `POST`.
+- `GET` devuelve el documento de la cuenta de la sesión; `POST` lo reemplaza, **salvo las
+  secciones `devices.<clase>` que el pedido no trae**, que quedan como estaban
+  (`Doc.KeepMissingDevices`): un guardado habla por su tipo de pantalla. Una pestaña abierta
+  hace horas en el PC no sabe lo que el teléfono guardó después, y no debe pisarlo con su
+  copia vieja. Una sección que sí viene, aunque sea vacía (`{"desktop":{}}`), reemplaza la
+  guardada: así se borra una opción de esa pantalla. La lectura, la mezcla y la escritura
+  de una cuenta van de a una (`optionsLocks`). Si con las secciones conservadas el
+  documento pasa los 16 KiB, se rechaza (`400`). No hay id de cuenta en el pedido: sale de
+  la sesión (`authed`), nunca del cliente. Es `POST` y no `PUT` porque el puente de la app
+  de escritorio solo deja pasar `GET` y `POST`.
+- `account` en la respuesta del `GET` es una etiqueta estable de la cuenta (un hash, no el
+  id; no sirve para nada en la API): el cliente la recuerda junto al caché para no rellenar
+  una cuenta con lo que otra dejó en el mismo navegador.
 - **Esquema cerrado, versión 1** (`accountopts.Doc`): una clave desconocida en cualquier
   nivel, un tipo equivocado, un valor fuera de su enum o rango, datos después del
   documento o más de 16 KiB (`accountopts.MaxBytes`) lo rechazan entero. No hay texto
@@ -218,8 +228,10 @@ guardadas", más abajo). La tabla de qué se guarda dónde está en
   táctil) se guarda una vez para `desktop` (puntero fino) y otra para `touch` (teléfono o
   tablet, puntero grueso). Lo demás es de la cuenta.
 - **Lo guardado nunca son los bytes del cliente:** el servidor decodifica, valida y vuelve a
-  codificar en forma canónica (`Doc.Canonical`); la tabla además limita el tamaño. Un
-  documento guardado que el servidor ya no acepta se lee como vacío.
+  codificar en forma canónica (`Doc.Canonical`); la tabla además limita el tamaño (64 KiB
+  de JSONB: un documento válido de 16 KiB de texto ocupa cerca del doble como JSONB, así
+  que el tope de la tabla es un respaldo y no el límite que encuentra un documento
+  válido). Un documento guardado que el servidor ya no acepta se lee como vacío.
 - **Límites:** sesión obligatoria; `Content-Type: application/json` (frena formularios
   cross-site, como el resto de la API); 20 guardados de ráfaga y uno cada 3 s por cuenta
   (`DefaultOptionsRateLimit`, `429` con `Retry-After`), aparte del límite por cuenta de
@@ -231,9 +243,28 @@ guardadas", más abajo). La tabla de qué se guarda dónde está en
   y si el resultado difiere de lo guardado, se manda. Una excepción: lo que el jugador
   eligió en esa misma página antes de entrar (el idioma o el volumen en la pantalla de
   login) es su elección más nueva y gana. Después, cada cambio se manda 2 s después del
-  último (`SAVE_DELAY_MS`), conservando las secciones de las otras clases de dispositivo.
-  Al salir de la cuenta deja de mandar. Dos dispositivos abiertos a la vez: gana el último
-  que guarda (documento entero), aceptado así.
+  último (`SAVE_DELAY_MS`) con la sección de su propia clase de dispositivo y nada de las
+  otras. Al salir de la cuenta deja de mandar.
+  - **Lo que no llegó a enviarse no se pierde:** cada clave cambiada queda anotada en
+    `localStorage` (`rpg.optsUnsent`) hasta que el servidor confirma el guardado. Si la
+    pestaña o la app se cierra antes de los 2 s, o el `POST` falla (sin red, `429`), en el
+    siguiente login el valor local de esas claves gana, igual que lo elegido antes de
+    entrar (también su ausencia: una opción que el jugador quitó sigue quitada). Además lo
+    pendiente sale al cerrar la página (`pagehide`, `fetch` con `keepalive`) y un guardado
+    fallido se reintenta solo a los 10 s, 30 s, 1, 2 y 5 min (`RETRY_DELAYS_MS`); después
+    espera al próximo cambio o login.
+  - **Otra cuenta en el mismo navegador:** si la etiqueta `account` del `GET` no es la del
+    caché (`rpg.optsOwner`), las anotaciones de la otra cuenta se descartan y sus opciones
+    personales (`track` y `hotkeys`: nombres de personajes, misiones, hechizos) se borran
+    del navegador en vez de subirse. Lo demás (volumen, ventanas, tamaños) es del
+    navegador y sí rellena.
+  - **Entrar al juego** espera hasta 2 s a que el login traiga las opciones
+    (`OptionsSync.ready`), para que el juego no abra con las ventanas que el login está
+    por reemplazar.
+  - **Límites conocidos:** dos dispositivos de la **misma** clase abiertos a la vez: gana
+    el último que guarda. Quitar una opción (volver al zoom ajustado, dejar de seguir una
+    misión) la borra del servidor, pero otro navegador de la misma clase que todavía la
+    tenga la vuelve a subir en su próximo login ("lo local rellena").
 
 `POST /api/auth/register` acepta además `lang` (idioma del email de verificación). El
 cliente solo lo manda si `GET /api/auth/config` dice `email: true`: los servidores
