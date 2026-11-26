@@ -403,6 +403,21 @@ dibujan lo mismo; nada cambia en el mapa ni en el servidor):
     queda para el editor de mapas y `mapcli render`, que no tienen hora;
   - la **sombra de contacto** de una criatura solo se dibuja donde no hay sombra
     proyectada (bajo tierra, bajo techo, noche sin luna): nunca las dos juntas.
+  - el **halo del objetivo** (hecho, 2026-11-26; el dueño: "un halo rojo en el piso, que se
+    vea que está en el piso y que en ciertas partes lo tape el sprite del enemigo"): la
+    criatura que el jugador ataca lleva un anillo rojo (`--ui-life-300`, con relleno
+    `--ui-life-500` al 28 %) achatado como la sombra de contacto (`CONTACT_FLAT`), centrado
+    en su línea de pies (la `stance` del atlas, `CreatureBody.stand`) y 6 px más ancho que
+    su elipse de contacto, así que crece con la base de la criatura. Vive en el contenedor
+    de la criatura **debajo** de su figura (`render/target-halo.ts`): el sprite tapa la
+    parte de atrás del anillo y, como el contenedor se intercala con los items por fila
+    (`placeEntity`), lo que esté delante de la criatura tapa el frente. Late despacio
+    (1,8 s, alfa 0,6 a 1,0); con "Animaciones reducidas" queda quieto. Sigue a la criatura
+    al caminar (se coloca cada cuadro). Un `Graphics` por criatura marcada, que solo se
+    redibuja si cambia su tamaño. **Reemplazó** el marco cuadrado rojo que se dibujaba
+    encima del sprite; no había otro marcador de "seguida" ni de "hover" sobre el cuerpo
+    (el hover es el texto de `hoverText` y el seguimiento no dibuja nada), así que no queda
+    ninguno que distinguir.
 
 ### ART-6 Paleta y valores
 - **Paleta maestra:** si se integra LPC, la de LPC Revised (~170 colores) es la referencia.

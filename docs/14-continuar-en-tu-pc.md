@@ -134,6 +134,12 @@ el punto 5:
   - **E2E:** el test del viento y el de las huellas ahora esperan una ráfaga real (hasta
     un par de minutos en el peor caso); si resultan lentos, bajar `every_s` solo en el
     arnés pide un contenido de prueba aparte, que hoy no hay.
+- **Halo rojo del objetivo (hecho, rama `feat/target-halo`; el dueño el 2026-11-26; docs/17
+  ART-5 "halo del objetivo"):** anillo plano en el piso bajo el monstruo atacado, tapado en
+  parte por su sprite y por lo que esté delante; late despacio y queda quieto con "Animaciones
+  reducidas". Reemplazó el marco cuadrado. Sin cambios de servidor. Queda **mirar la captura
+  `07d-target-halo` del E2E** (que se lea sobre pasto y arena, y con el lobo caminando) y
+  ajustar `HALO_*` en `client/src/render/target-halo.ts` si es mucho o poco.
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:

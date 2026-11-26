@@ -81,6 +81,7 @@ import type { StepVoice } from "./living.ts";
 import type { Gait } from "./living.ts";
 import { CastShadows, contactShare } from "./cast-shadows.ts";
 import { ObjectShadows } from "./object-shadows.ts";
+import { TargetHalo } from "./target-halo.ts";
 import type { ObjectShadowHint } from "./object-shadows.ts";
 import { NIGHT_PLAYER_LIGHT, SkyView, dimmed, litSurface } from "./sky.ts";
 import type { ParticleView } from "./particles.ts";
@@ -188,7 +189,6 @@ const COLORS = {
   guild: LABEL_COLORS.guild,
   marker: 0xffffff,
   outline: 0x101010,
-  target: 0xff2020,
   barBack: 0x101010,
   barHigh: 0x30c030,
   barMid: 0xe0c020,
@@ -372,6 +372,8 @@ export interface GameCanvas {
   footfalls(): FootfallHook;
   /** E2E: the facing creature `id` was last drawn in, and whether its figure has eight. */
   drawnFacing(id: number): { facing: string; eight: boolean } | undefined;
+  /** The creatures showing the target halo now (the E2E: one at most, the target). */
+  haloIds(): number[];
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
@@ -535,7 +537,8 @@ function drawSkull(g: Container, mark: Skull, art: Texture | undefined): void {
 interface CreatureSprite {
   body: Container;
   shape: Graphics;
-  frame: Graphics;
+  /** The red ring on the ground under the attacked target (render/target-halo.ts). */
+  halo: TargetHalo;
   label: Text;
   /** What an NPC does, under its name (docs/17 UI-3); empty for the rest. */
   role: Text;
@@ -573,7 +576,6 @@ interface CreatureSprite {
   bar: Graphics;
   drawnDir: number;
   drawnHealth: number;
-  drawnTarget: boolean;
 }
 
 export async function createGameCanvas(
@@ -1275,13 +1277,6 @@ export async function createGameCanvas(
     s.drawnHealth = pct;
   };
 
-  const drawFrame = (s: CreatureSprite, on: boolean): void => {
-    s.frame.clear();
-    if (on)
-      s.frame.rect(1, 1, T - 2, T - 2).stroke({ width: 2, color: COLORS.target, alignment: 1 });
-    s.drawnTarget = on;
-  };
-
   const spriteOf = (c: CreatureState, now: number): CreatureSprite => {
     let s = sprites.get(c.id);
     const isPlayer = c.kind === CreatureKind.PLAYER;
@@ -1295,8 +1290,9 @@ export async function createGameCanvas(
     if (!s) {
       const look = isPlayer ? playerLook(c.cosmetics, content, colorOf(c)) : undefined;
       const shape = new Graphics();
-      const frame = new Graphics();
+      const halo = new TargetHalo();
       const body = new Container({ label: `creature ${c.id}` });
+      body.addChild(halo.graphic); // on the ground: the figure and the shape cover it
       body.addChild(shape);
       const person = personOf(c, look);
       const doll = person && dollOf(person.look, person.dressed, person.tint);
@@ -1308,7 +1304,6 @@ export async function createGameCanvas(
         figure = clips ? new CreatureBody(clips, T, look?.tint) : undefined;
       }
       if (figure) body.addChild(figure.root);
-      body.addChild(frame); // the target frame goes over the body
       const bar = new Graphics();
       labels.addChild(bar);
       // Rasterised at the size it shows, in device pixels, and drawn 1:1 on whole pixels
@@ -1346,7 +1341,7 @@ export async function createGameCanvas(
       s = {
         body,
         shape,
-        frame,
+        halo,
         label,
         role,
         guild,
@@ -1375,7 +1370,6 @@ export async function createGameCanvas(
         bar,
         drawnDir: -1,
         drawnHealth: -1,
-        drawnTarget: false,
       };
       sprites.set(c.id, s);
     }
@@ -1410,8 +1404,14 @@ export async function createGameCanvas(
     const facing = world.facing(c, now);
     if (s.drawnDir !== facing) drawShape(s, c, facing);
     if (s.drawnHealth !== c.health) drawBar(s, c.health);
-    const targeted = world.target === c.id;
-    if (s.drawnTarget !== targeted) drawFrame(s, targeted);
+    // The target's halo (render/target-halo.ts): under the body, on its feet's line.
+    s.halo.update(
+      world.target === c.id
+        ? (s.figure?.stand() ?? { x: T / 2, y: T - 4, width: T - 8 })
+        : undefined,
+      now,
+      reducedMotion(),
+    );
     return s;
   };
 
@@ -1485,7 +1485,7 @@ export async function createGameCanvas(
     }
     dropLabels(s);
     sprites.delete(id);
-    s.frame.clear();
+    s.halo.update(undefined, now, false);
     if (style === "fall") startDeath(state, now);
     else startVanish(state, now);
     ghosts.push({ id, body: s.body, figure: s.figure, state, dir });
@@ -2222,6 +2222,9 @@ export async function createGameCanvas(
         contacts: [...sprites.values()].filter((sp) => sp.figure?.contactShown).length,
         selfContact: sprites.get(world.selfId)?.figure?.contactShown === true,
       };
+    },
+    haloIds() {
+      return [...sprites].filter(([, sp]) => sp.halo.graphic.visible).map(([id]) => id);
     },
     drawnFacing(id) {
       const st = animStates.get(id);

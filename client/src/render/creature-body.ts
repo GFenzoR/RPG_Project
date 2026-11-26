@@ -330,6 +330,12 @@ export class CreatureBody {
     return this.baseY - this.footingOf(dir).foot;
   }
 
+  /** Where its feet stand now (the facing drawn): its container's px, and how wide. */
+  stand(): { x: number; y: number; width: number } {
+    const f = this.footingOf(this.drawnDir);
+    return { x: this.baseX + f.cx * this.drawnFlip, y: this.baseY - f.foot, width: f.width };
+  }
+
   /** The contact ellipse under the feet of the facing drawn, as wide as they stand. */
   private placeContact(poseX: number, k: number): void {
     const sh = this.shadow;

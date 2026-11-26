@@ -298,6 +298,8 @@ export interface ClientTestHooks {
    * it is drawn in eight facings; undefined before its first frame.
    */
   drawnFacing(): { facing: string; eight: boolean } | undefined;
+  /** Ids of the creatures drawn with the red target halo on the ground (docs/17). */
+  haloIds(): number[];
   walkable(x: number, y: number, z: number): boolean;
   tileToClient(x: number, y: number): { x: number; y: number };
   scale(): number;
@@ -2219,6 +2221,7 @@ export class Game {
       },
       walkable: (x, y, z) => world.free(x, y, z),
       drawnFacing: () => canvas.drawnFacing(world.selfId),
+      haloIds: () => canvas.haloIds(),
       tileToClient: (x, y) => canvas.tileToClient(x, y),
       scale: () => canvas.scale,
       zoom: () => canvas.zoom,

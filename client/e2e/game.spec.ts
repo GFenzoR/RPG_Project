@@ -593,6 +593,14 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
     })
     .toBeGreaterThan(0);
   await shot(page, "07-combat");
+  // The target wears the red halo on the ground (docs/17), and nobody else does: a close-up
+  // of the wolf shows the ring under its feet, covered in part by its own sprite.
+  expect(await page.evaluate(() => window.__rpgClient?.haloIds())).toEqual([target]);
+  const marked = await page.evaluate(
+    (id) => window.__rpgClient?.monsters().find((m) => m.id === id),
+    target,
+  );
+  if (marked) await closeShot(page, "07d-target-halo", marked);
   // A9: the server says who attacks whom (docs/17 ANI-7): a CreatureAttack of the player
   // at its wolf or of the wolf. Without those events the client still plays poses, guessed
   // from the effects and projectiles (an older server), so the poses alone prove nothing.
