@@ -146,6 +146,12 @@ export function Hotbar(props: {
   };
 
   const name = (id: string): string => t(`spell.${id}.name`);
+  // What a cast costs (data/spells.yaml): on the slot, in its tooltip and in the picker.
+  const manaOf = (id: string): number => props.content.spells.find((s) => s.id === id)?.mana ?? 0;
+  const withMana = (id: string): string => {
+    const mana = manaOf(id);
+    return mana > 0 ? t("client.hotbar.mana", { name: name(id), mana }) : name(id);
+  };
   const prev = slider && (
     <button
       type="button"
@@ -206,7 +212,7 @@ export function Hotbar(props: {
                 <option value="">{t("client.hotbar.none")}</option>
                 {props.content.spells.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {name(s.id)}
+                    {withMana(s.id)}
                   </option>
                 ))}
               </select>
@@ -219,12 +225,17 @@ export function Hotbar(props: {
                   id
                     ? left > 0
                       ? t("client.hotbar.cooldown", { name: name(id) })
-                      : name(id)
+                      : withMana(id)
                     : undefined
                 }
                 onClick={() => id && game?.castSpell(id)}
               >
                 <span class="key">{key}</span>
+                {id && manaOf(id) > 0 && (
+                  <span class="mana" data-mana={manaOf(id)}>
+                    {manaOf(id)}
+                  </span>
+                )}
                 <span class="spell">{id ? name(id) : t("client.hotbar.empty")}</span>
                 {left > 0 && <span class="cd" style={{ height: `${Math.round(left * 100)}%` }} />}
                 {id && flashes(cast, id, now) && (
