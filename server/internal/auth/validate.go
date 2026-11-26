@@ -14,7 +14,11 @@ const (
 	MaxEmailLen    = 254
 	MinNameLen     = 3
 	MaxNameLen     = 16
-	maxNameWords   = 3
+	// MaxKnownNameLen is the longest name a character may already have: the ones made
+	// before MaxNameLen came down from 20 keep theirs, so a name typed to find a
+	// character (a house guest, a party invitation) may be this long.
+	MaxKnownNameLen = 20
+	maxNameWords    = 3
 )
 
 // Character names must not pose as staff or the game itself. reservedNameParts are
@@ -70,8 +74,15 @@ func ValidCharacterName(name string) bool { return CharacterNameError(name) == n
 // CharacterNameError says why name breaks the naming rules: ErrReservedName when it has a
 // reserved word or part, whatever its capitals ("GM Tester"), else ErrInvalidName when it
 // breaks the rest of them (ValidCharacterName); nil for a valid name.
-func CharacterNameError(name string) error {
-	if len(name) < MinNameLen || len(name) > MaxNameLen {
+func CharacterNameError(name string) error { return nameError(name, MaxNameLen) }
+
+// KnownCharacterName reports whether name may be the name of a character that exists: the
+// rules of ValidCharacterName, but up to MaxKnownNameLen characters. Use it for a name that
+// looks a character up, never for one that makes a character.
+func KnownCharacterName(name string) bool { return nameError(name, MaxKnownNameLen) == nil }
+
+func nameError(name string, maxLen int) error {
+	if len(name) < MinNameLen || len(name) > maxLen {
 		return ErrInvalidName
 	}
 	words := strings.Split(name, " ")

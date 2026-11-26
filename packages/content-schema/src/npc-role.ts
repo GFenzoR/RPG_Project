@@ -19,6 +19,12 @@ export const npcRoleDefaultKey = (kind: NpcRoleKind): string => `npc_role.${kind
  * it shrinks to fit. Longest role text, in characters: the label never cuts it (two lines).
  */
 export const CREATURE_NAME_MAX_CHARS = 16;
+/**
+ * Longest name a character may already have (server auth.MaxKnownNameLen, kept equal by the
+ * same Go test): the ones made before the bound came down from 20 keep theirs, so a field
+ * that looks a character up by name (party invitation, house guest) takes this many.
+ */
+export const KNOWN_NAME_MAX_CHARS = 20;
 export const NPC_ROLE_MAX_CHARS = 28;
 
 type Obj = Record<string, unknown>;

@@ -121,12 +121,17 @@ func TestNameBoundMatchesTheLabel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := regexp.MustCompile(`CREATURE_NAME_MAX_CHARS = (\d+);`).FindSubmatch(raw)
-	if m == nil {
-		t.Fatal("CREATURE_NAME_MAX_CHARS not found in npc-role.ts")
-	}
-	if got, _ := strconv.Atoi(string(m[1])); got != MaxNameLen {
-		t.Errorf("CREATURE_NAME_MAX_CHARS = %d, auth.MaxNameLen = %d: they must be equal", got, MaxNameLen)
+	for name, want := range map[string]int{
+		"CREATURE_NAME_MAX_CHARS": MaxNameLen,
+		"KNOWN_NAME_MAX_CHARS":    MaxKnownNameLen,
+	} {
+		m := regexp.MustCompile(name + ` = (\d+);`).FindSubmatch(raw)
+		if m == nil {
+			t.Fatalf("%s not found in npc-role.ts", name)
+		}
+		if got, _ := strconv.Atoi(string(m[1])); got != want {
+			t.Errorf("%s = %d, the server's limit is %d: they must be equal", name, got, want)
+		}
 	}
 	// The hints players read say the same number.
 	for _, lang := range []string{"es", "en"} {
@@ -143,5 +148,28 @@ func TestNameBoundMatchesTheLabel(t *testing.T) {
 	long := strings.Repeat("a", MaxNameLen+1)
 	if ValidCharacterName(strings.ToUpper(long[:1]) + long[1:]) {
 		t.Errorf("a %d-letter name must be refused", MaxNameLen+1)
+	}
+}
+
+// A name that looks a character up may be as long as names once were: the characters made
+// under the limit of 20 keep theirs.
+func TestKnownCharacterName(t *testing.T) {
+	cases := map[string]bool{
+		"Mira":                  true,
+		"Abcdefghijklmnop":      true,  // 16
+		"Abcdefghijklmnopq":     true,  // 17: refused for a new character
+		"Abcdefghijklmnopqrst":  true,  // 20
+		"Abcdefghijklmnopqrstu": false, // 21
+		"Al":                    false,
+		"mira":                  false,
+		"Admin Bob":             false,
+	}
+	for name, want := range cases {
+		if got := KnownCharacterName(name); got != want {
+			t.Errorf("KnownCharacterName(%q) = %v, want %v", name, got, want)
+		}
+	}
+	if ValidCharacterName("Abcdefghijklmnopq") {
+		t.Error("a 17-letter name must not make a character")
 	}
 }

@@ -939,7 +939,7 @@ func (w *World) houseGuest(ctx *game.TickContext, p *Player, h *house, name stri
 	name = strings.TrimSpace(name)
 	i := slices.IndexFunc(h.guests, func(g string) bool { return strings.EqualFold(g, name) })
 	switch {
-	case add && !auth.ValidCharacterName(name):
+	case add && !auth.KnownCharacterName(name):
 		p.emit(systemMsg(msgHouseGuestBad))
 		return
 	case add && i >= 0, !add && i < 0:

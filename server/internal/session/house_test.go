@@ -288,7 +288,14 @@ func TestHouseDoorsGuestsAndExpel(t *testing.T) {
 	if evs := h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "x"})); !hasKey(evs, "house.guest_bad_name") {
 		t.Fatalf("bad guest name: %v", systemKeys(evs))
 	}
-	h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "Eva"}))
+	// A character made before names were bounded to 16 keeps its name of up to 20, and may
+	// still be a guest; nothing longer ever existed.
+	if evs := h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "Evangelina Del Montes"})); !hasKey(evs, "house.guest_bad_name") {
+		t.Fatalf("a 21-letter guest name: %v", systemKeys(evs))
+	}
+	if evs := h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "Evangelina Del Monte"})); hasKey(evs, "house.guest_bad_name") {
+		t.Fatalf("a 20-letter guest name was refused: %v", systemKeys(evs))
+	}
 	if evs := h.send(cl, houseCmd(&pb.HouseGuestAdd{Name: "Fede"})); !hasKey(evs, "house.guests_full") {
 		t.Fatalf("third guest: %v", systemKeys(evs))
 	}
