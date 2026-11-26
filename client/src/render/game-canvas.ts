@@ -9,8 +9,9 @@
 // whole scales (render/zoom.ts: pinch, the +/- buttons, Ctrl+wheel): the canvas stays cut
 // to the map's box and centred on the own creature.
 // docs/17: a click on a tall creature's head picks it (ART-2, render/creature-hits.ts); a
-// creature mostly hidden by a taller one in front is drawn again see-through; what stands on
-// a table or a crate is raised (ART-8); ambient particles drift over the map (ART-7, A13,
+// creature behind another one is simply covered by it, never drawn again over it (no copy,
+// no tint: two bodies that overlap keep their own colours); what stands on a table or a
+// crate is raised (ART-8); ambient particles drift over the map (ART-7, A13,
 // render/particles.ts).
 import {
   Application,
@@ -74,7 +75,6 @@ import type { BodyLayer } from "./creature-body.ts";
 import { dollSprites, dressPlayer, wornFromVisible } from "./look.ts";
 import type { Dressed } from "./look.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
-import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
 import { bodyKindOf, creatureGait, kicksUp, mountLivingWorld, newWalkSample } from "./living.ts";
 import type { StepVoice } from "./living.ts";
@@ -198,10 +198,6 @@ const COLORS = {
 /** Health bar size in sprite pixels. */
 const BAR_W = 26;
 const BAR_H = 4;
-
-/** A creature hidden by a taller one in front of it (07-combat): drawn again like that. */
-const HIDDEN_ALPHA = 0.55;
-const HIDDEN_TINT = 0xffe2c8;
 
 /**
  * The rectangle (world units) a creature's figure covers: its body sprite, anchored at the
@@ -339,10 +335,9 @@ export interface GameCanvas {
    */
   labels(): LabelsShown;
   /**
-   * E2E (docs/17 ART-3): the alpha of each wall piece on tile (x, y) of the own floor, and
-   * how many translucent copies of hidden creatures were drawn this frame.
+   * E2E (docs/17 ART-3): the alpha of each wall piece on tile (x, y) of the own floor.
    */
-  wallFade(x: number, y: number): { alphas: number[]; copies: number };
+  wallFade(x: number, y: number): { alphas: number[] };
   /** Zooms `steps` whole scales in (+) or out (-), within the range (the +/- buttons). */
   zoomBy(steps: number): void;
   /**
@@ -677,55 +672,9 @@ export async function createGameCanvas(
   /** Reduced motion (Options or the system, state/ui-prefs.ts): no particles. */
   const reducedMotion = (): boolean =>
     document.documentElement.dataset["motion"] === "reduced" || (motionQuery?.matches ?? false);
-  // Where each creature was drawn this frame (ART-2): clicks on heads, hidden creatures.
+  // Where each creature was drawn this frame (ART-2): clicks on heads.
   const drawnBoxes = new DrawnBoxes();
-  // Creatures mostly hidden by a taller one in front: a see-through copy over the map, from
-  // a pool that only grows.
-  const hiddenLayer = new Container({ label: "hidden creatures" });
-  const hiddenPool: Sprite[] = [];
-  let hiddenShown = 0;
-  const showHidden = (box: DrawnBox): void => {
-    const s = sprites.get(box.id);
-    if (!s?.figure || s.figure.opacity < 1) return;
-    showCopy(s.body, s.figure);
-  };
-  /** The see-through copy of a body's sprite (`figure.sprite`, in `body`), from the pool. */
-  const showCopy = (body: Container, figure: CreatureBody): void => {
-    const fig = figure.sprite;
-    let copy = hiddenPool[hiddenShown];
-    if (!copy) {
-      copy = new Sprite({
-        anchor: { x: 0.5, y: 1 },
-        alpha: HIDDEN_ALPHA,
-        tint: HIDDEN_TINT,
-        roundPixels: true,
-      });
-      hiddenPool.push(copy);
-      hiddenLayer.addChild(copy);
-    }
-    hiddenShown++;
-    copy.texture = fig.texture;
-    copy.position.set(body.x + fig.x, body.y + fig.y);
-    copy.scale.copyFrom(fig.scale);
-    copy.skew.copyFrom(fig.skew);
-    copy.alpha = HIDDEN_ALPHA * figure.alpha; // a body fading in, falling or shimmering away
-    copy.visible = true;
-  };
-  /**
-   * A body falling dead or shimmering away (a ghost) mostly hidden by a creature in front
-   * (a wolf killed right north of the mage that killed it): its see-through copy too.
-   */
-  const ghostBox: DrawnBox = { id: 0, x: 0, bottom: 0, top: 0, order: 0 };
-  const showHiddenGhost = (g: { body: Container; figure: CreatureBody }): void => {
-    const x = g.body.x / T;
-    const y = g.body.y / T;
-    ghostBox.x = x;
-    ghostBox.bottom = y + 1;
-    ghostBox.top = y - g.figure.lift / T;
-    ghostBox.order = entityZIndex(Math.round(x), Math.round(y));
-    if (drawnBoxes.covered(ghostBox)) showCopy(g.body, g.figure);
-  };
-  view.overlay.addChild(particles.view, hiddenLayer);
+  view.overlay.addChild(particles.view);
   // The living world (livingworld/README.md, render/living.ts): footprints on the ground
   // overlay, plants that bend, ripples, leaves and critters; nothing with reduced motion.
   // The day and night (livingworld/README.md "Día y noche", render/sky.ts): the world clock
@@ -1772,12 +1721,6 @@ export async function createGameCanvas(
     // half (CreatureBody.castShadow): it does not vanish the moment a creature dies.
     drawGhosts(now, casting, outdoorContact);
     if (casting) castShadows.end();
-    // A creature mostly hidden by a taller one in front (a wolf right north of a player),
-    // and a body falling or shimmering away behind one.
-    hiddenShown = 0;
-    drawnBoxes.forEachHidden(showHidden);
-    for (const g of ghosts) showHiddenGhost(g);
-    for (let i = hiddenShown; i < hiddenPool.length; i++) (hiddenPool[i] as Sprite).visible = false;
     world.expire(now);
     drawWalkMark(now, self.pos.z);
     effects.draw(now, self.pos.z, cam, scale, nameScale);
@@ -2176,7 +2119,7 @@ export async function createGameCanvas(
       return { fontPx: namePx, zoom: scale, dpr: window.devicePixelRatio || 1, shown };
     },
     wallFade(x, y) {
-      return { alphas: view.wallAlphaAt(x, y), copies: hiddenShown };
+      return { alphas: view.wallAlphaAt(x, y) };
     },
     zoomBy(steps) {
       choose(stepZoom(scale, steps, range));

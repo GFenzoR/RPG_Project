@@ -300,7 +300,7 @@ export class CreatureBody {
     this.stacked = d;
   }
 
-  /** The alpha the body was last drawn with: its see-through copies follow it. */
+  /** The alpha the body was last drawn with. */
   get alpha(): number {
     return this.drawnAlpha;
   }

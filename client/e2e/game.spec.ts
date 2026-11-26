@@ -53,7 +53,7 @@ const CLOSE_H = 7;
  * clips for the first 20 s, then any; the whole page. A fall: late in it (its last
  * FALL_SHOT_MS, when the effect of the blow that killed it is ending), and a close-up of
  * CLOSE_W x CLOSE_H tiles round it, so the body is big in the shot (a body behind a taller
- * creature also shows as a see-through copy). Returns what it saw on that frame (Caught).
+ * creature is covered by it). Returns what it saw on that frame (Caught).
  */
 async function shotPose(
   page: Page,

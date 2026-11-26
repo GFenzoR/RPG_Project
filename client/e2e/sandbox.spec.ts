@@ -752,15 +752,15 @@ test("sandbox: sharp names at 1x, 2x and 4x, NPCs with their role on a second li
   await shot(page, "101c-names-normal-4x-monsters");
   await page.evaluate(() => localStorage.removeItem("rpg.name-size"));
 
-  // ART-3: just north of the temple's south wall (its piece at 2092,2091), the piece fades
-  // and no pale copy of the player is drawn; a piece of the same wall far away does not.
+  // ART-3: just north of the temple's south wall (its piece at 2092,2091), the piece
+  // fades; a piece of the same wall far away does not.
   await zoomTo(2);
   await tp(2092, 2090, 7);
   expect(await page.evaluate(() => window.__rpgClient?.walkable(2092, 2091, 7))).toBe(false);
   await expect
     .poll(async () => {
       const f = await page.evaluate(() => window.__rpgClient?.wallFade(2092, 2091));
-      return f && f.alphas.length > 0 && f.alphas.every((a) => a < 0.5) && f.copies === 0;
+      return f && f.alphas.length > 0 && f.alphas.every((a) => a < 0.5);
     })
     .toBe(true);
   const far = await page.evaluate(() => window.__rpgClient?.wallFade(2099, 2091));

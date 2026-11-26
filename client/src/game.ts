@@ -309,8 +309,8 @@ export interface ClientTestHooks {
   view(): { server: ViewTiles; shown: ViewTiles };
   /** The names over creatures drawn now (docs/17 UI-3; GameCanvas.labels). */
   labels(): LabelsShown | undefined;
-  /** Wall pieces on (x, y) of the own floor and the translucent copies (docs/17 ART-3). */
-  wallFade(x: number, y: number): { alphas: number[]; copies: number } | undefined;
+  /** Wall pieces on (x, y) of the own floor (docs/17 ART-3). */
+  wallFade(x: number, y: number): { alphas: number[] } | undefined;
   /** The battle list as [id, contentId, health %]. */
   battle(): { id: number; contentId: string; health: number }[];
   target(): number | undefined;
