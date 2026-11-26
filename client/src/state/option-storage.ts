@@ -20,7 +20,11 @@ function make(): void {
   }
   storage = base ? watchedStorage(base, (key) => sync?.changed(key)) : undefined;
   sync = new OptionsSync(
-    { get: accountApi.options, put: accountApi.saveOptions },
+    {
+      get: accountApi.options,
+      put: accountApi.saveOptions,
+      putLeaving: accountApi.saveOptionsLeaving,
+    },
     storage,
     deviceClass(),
     {
@@ -28,6 +32,9 @@ function make(): void {
       clear: (h) => window.clearTimeout(h as number | undefined),
     },
   );
+  // The tab closes or the app quits before the save's delay: what waits goes out now.
+  const leaving = sync;
+  window.addEventListener("pagehide", () => leaving.leaving());
 }
 
 /** A screen driven by a finger (phone, tablet) or by a mouse. */

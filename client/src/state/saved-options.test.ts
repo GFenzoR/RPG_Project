@@ -5,8 +5,11 @@ import { describe, expect, it } from "vitest";
 import {
   DEVICE_CLASSES,
   OPTIONS,
+  OWNER_KEY,
   OptionsSync,
+  RETRY_DELAYS_MS,
   SAVE_DELAY_MS,
+  UNSENT_KEY,
   applyDoc,
   docFromStorage,
   emptyDoc,
@@ -15,7 +18,7 @@ import {
   stable,
   watchedStorage,
 } from "./saved-options.ts";
-import type { OptionsApi, OptionsDoc } from "./saved-options.ts";
+import type { AccountOptions, OptionsApi, OptionsDoc } from "./saved-options.ts";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
@@ -331,28 +334,48 @@ class FakeTimers {
   }
 }
 
+/** The server: a save replaces the document but keeps the device sections it lacks. */
 class FakeApi implements OptionsApi {
   doc: OptionsDoc = emptyDoc();
+  account: string | undefined = "tag-ana";
   puts: OptionsDoc[] = [];
-  fail = false;
-  get = (): Promise<OptionsDoc> =>
-    this.fail ? Promise.reject(new Error("offline")) : Promise.resolve(this.doc);
+  /** How many of the puts were made as the page went away. */
+  leavings = 0;
+  fail: Error | undefined;
+  /** The GET waits for this (a slow server). */
+  gate: Promise<void> = Promise.resolve();
+  get = async (): Promise<AccountOptions> => {
+    await this.gate;
+    if (this.fail) throw this.fail;
+    return { options: this.doc, account: this.account };
+  };
   put = (doc: OptionsDoc): Promise<void> => {
-    if (this.fail) return Promise.reject(new Error("offline"));
+    if (this.fail) return Promise.reject(this.fail);
     this.puts.push(doc);
-    this.doc = doc;
+    const kept = (this.doc["devices"] ?? {}) as Record<string, unknown>;
+    const sent = (doc["devices"] ?? {}) as Record<string, unknown>;
+    this.doc = { ...doc, devices: { ...kept, ...sent } };
     return Promise.resolve();
+  };
+  putLeaving = (doc: OptionsDoc): Promise<void> => {
+    this.leavings++;
+    return this.put(doc);
   };
 }
 
+const OFFLINE = new Error("offline");
+
 const settle = async (): Promise<void> => {
-  for (let i = 0; i < 5; i++) await Promise.resolve();
+  for (let i = 0; i < 30; i++) await Promise.resolve();
 };
 
-function setup(values: Record<string, string>, device: "desktop" | "touch" = "desktop") {
+function setup(
+  values: Record<string, string>,
+  device: "desktop" | "touch" = "desktop",
+  base: MemoryStorage = storageWith(values),
+) {
   const api = new FakeApi();
   const timers = new FakeTimers();
-  const base = storageWith(values);
   const holder: { sync?: OptionsSync } = {};
   const storage = watchedStorage(base, (key) => holder.sync?.changed(key));
   const sync = new OptionsSync(api, storage, device, timers);
@@ -368,7 +391,9 @@ describe("OptionsSync", () => {
     expect(base.getItem("rpg.lang")).toBe("es");
     expect(base.getItem("rpg.chat-opacity")).toBe("40");
     expect(base.getItem("rpg.controls")).toBe("classic");
-    expect(api.puts).toEqual([{ v: 1, lang: "es", chat_opacity: 40, controls: "classic" }]);
+    expect(api.puts).toEqual([
+      { v: 1, lang: "es", chat_opacity: 40, controls: "classic", devices: { desktop: {} } },
+    ]);
   });
 
   it("sends nothing when the browser adds nothing", async () => {
@@ -400,21 +425,220 @@ describe("OptionsSync", () => {
     expect(timers.delays.every((d) => d === SAVE_DELAY_MS)).toBe(true);
     timers.run();
     await settle();
-    expect(api.puts).toEqual([{ v: 1, chat_opacity: 75, hotkeys: { guardian: ["arc_bolt"] } }]);
+    expect(api.puts).toEqual([
+      { v: 1, chat_opacity: 75, hotkeys: { guardian: ["arc_bolt"] }, devices: { desktop: {} } },
+    ]);
     storage.removeItem("rpg.zoom"); // nothing really changed
     timers.run();
     await settle();
     expect(api.puts.length).toBe(1);
   });
 
-  it("keeps the other device classes' sections when it saves", async () => {
-    const { api, timers, storage, sync } = setup({}, "touch");
-    api.doc = { v: 1, devices: { desktop: { zoom: 4 } } };
+  it("saves its own device section only: a long session never writes the other back", async () => {
+    const { api, timers, storage, sync } = setup({ "rpg.zoom": "3" });
+    api.doc = { v: 1, devices: { desktop: { zoom: 3 }, touch: { zoom: 4 } } };
     await sync.login();
-    storage.setItem("rpg.zoom", "2");
+    expect(api.puts).toEqual([]);
+    // Hours later the phone has saved its own section; this page never heard of it.
+    api.doc = { v: 1, devices: { desktop: { zoom: 3 }, touch: { zoom: 2, touch_pad: true } } };
+    storage.setItem("rpg.chat-opacity", "70");
     timers.run();
     await settle();
-    expect(api.doc).toEqual({ v: 1, devices: { desktop: { zoom: 4 }, touch: { zoom: 2 } } });
+    expect(api.puts).toEqual([{ v: 1, chat_opacity: 70, devices: { desktop: { zoom: 3 } } }]);
+    expect(api.doc["devices"]).toEqual({
+      desktop: { zoom: 3 },
+      touch: { zoom: 2, touch_pad: true },
+    });
+  });
+
+  it("says an option of its device section was unset with the empty section", async () => {
+    const { api, timers, storage, sync } = setup({ "rpg.zoom": "3" });
+    api.doc = { v: 1, devices: { desktop: { zoom: 3 } } };
+    await sync.login();
+    storage.removeItem("rpg.zoom"); // back to the fitted zoom
+    timers.run();
+    await settle();
+    expect(api.puts).toEqual([{ v: 1, devices: { desktop: {} } }]);
+  });
+
+  it("a change the page never sent wins at the next login", async () => {
+    const first = setup({ "rpg.chat-opacity": "40", "rpg.zoom": "3", "rpg.lang": "es" });
+    first.api.doc = { v: 1, lang: "es", chat_opacity: 40, devices: { desktop: { zoom: 3 } } };
+    await first.sync.login();
+    first.storage.setItem("rpg.chat-opacity", "70");
+    first.storage.removeItem("rpg.zoom");
+    // The tab closes before the save's delay: nothing was sent.
+    expect(first.api.puts).toEqual([]);
+
+    // The next start of the same browser: a new page, the same localStorage.
+    const next = setup({}, "desktop", first.base);
+    next.api.doc = { v: 1, lang: "en", chat_opacity: 40, devices: { desktop: { zoom: 3 } } };
+    await next.sync.login();
+    expect(next.base.getItem("rpg.chat-opacity")).toBe("70");
+    expect(next.base.getItem("rpg.zoom")).toBeNull();
+    expect(next.base.getItem("rpg.lang")).toBe("en"); // not changed here: the server wins
+    expect(next.api.puts).toEqual([
+      { v: 1, lang: "en", chat_opacity: 70, devices: { desktop: {} } },
+    ]);
+    // Confirmed: the marks are gone, and from now on the server wins again.
+    expect(next.base.getItem(UNSENT_KEY)).toBeNull();
+    const later = setup({}, "desktop", first.base);
+    later.api.doc = { v: 1, lang: "en", chat_opacity: 55, devices: { desktop: {} } };
+    await later.sync.login();
+    expect(later.base.getItem("rpg.chat-opacity")).toBe("55");
+  });
+
+  it("a save that failed is tried again after a wait, and wins at the next login", async () => {
+    const { api, timers, base, storage, sync } = setup({});
+    api.doc = { v: 1, chat_opacity: 40 };
+    await sync.login();
+    api.fail = OFFLINE;
+    storage.setItem("rpg.chat-opacity", "70");
+    timers.run();
+    await settle();
+    expect(api.puts).toEqual([]);
+    expect(JSON.parse(base.getItem(UNSENT_KEY) ?? "[]")).toEqual(["rpg.chat-opacity"]);
+    // Tried again on its own, later each time, a bounded number of times.
+    for (const wait of RETRY_DELAYS_MS) {
+      expect(timers.delays.at(-1)).toBe(wait);
+      expect(timers.pending.size).toBe(1);
+      timers.run();
+      await settle();
+    }
+    expect(timers.pending.size).toBe(0);
+    expect(api.puts).toEqual([]);
+
+    // The page closes without ever reaching the server: the next login sends it.
+    const next = setup({}, "desktop", base);
+    next.api.doc = { v: 1, chat_opacity: 40 };
+    await next.sync.login();
+    expect(next.base.getItem("rpg.chat-opacity")).toBe("70");
+    expect(next.api.doc["chat_opacity"]).toBe(70);
+  });
+
+  it("the retry sends it when the server is back", async () => {
+    const { api, timers, base, storage, sync } = setup({});
+    await sync.login();
+    api.fail = OFFLINE;
+    storage.setItem("rpg.chat-opacity", "70");
+    timers.run();
+    await settle();
+    api.fail = undefined;
+    expect(timers.delays.at(-1)).toBe(RETRY_DELAYS_MS[0]);
+    timers.run();
+    await settle();
+    expect(api.doc["chat_opacity"]).toBe(70);
+    expect(base.getItem(UNSENT_KEY)).toBeNull();
+    expect(timers.pending.size).toBe(0);
+  });
+
+  it("sends what waits at once when the page goes away", async () => {
+    const { api, timers, storage, sync } = setup({});
+    await sync.login();
+    sync.leaving(); // nothing waits
+    expect(api.puts).toEqual([]);
+    storage.setItem("rpg.chat-opacity", "70");
+    sync.leaving();
+    // Started before the handler returns (fetch keepalive), not after the delay.
+    expect(api.leavings).toBe(1);
+    expect(api.puts).toEqual([{ v: 1, chat_opacity: 70, devices: { desktop: {} } }]);
+    expect(timers.pending.size).toBe(0);
+    await settle();
+    sync.leaving();
+    expect(api.puts.length).toBe(1);
+  });
+
+  it("what the login writes to localStorage is not a change of the player", async () => {
+    const { api, timers, base, sync } = setup({});
+    api.doc = { v: 1, lang: "es", hotkeys: { guardian: ["arc_bolt"] } };
+    expect(await sync.login()).toBe(true);
+    expect(base.getItem(UNSENT_KEY)).toBeNull();
+    expect(timers.pending.size).toBe(0);
+    expect(api.puts).toEqual([]);
+  });
+
+  it("does not fill an account with what another one left in the browser", async () => {
+    const left = {
+      "rpg.track": JSON.stringify({ Ana: "bounty_crawlers" }),
+      "rpg.hotkeys.guardian": JSON.stringify(["arc_bolt"]),
+      "rpg.controls": "classic",
+      "rpg.chat-opacity": "70",
+      [UNSENT_KEY]: JSON.stringify(["rpg.chat-opacity"]),
+      [OWNER_KEY]: "tag-ana",
+    };
+    // Bob logs in on Ana's browser.
+    const bob = setup(left);
+    bob.api.account = "tag-bob";
+    bob.api.doc = { v: 1, chat_opacity: 40 };
+    expect(await bob.sync.login()).toBe(true);
+    expect(bob.api.doc["track"]).toBeUndefined();
+    expect(bob.api.doc["hotkeys"]).toBeUndefined();
+    expect(bob.base.getItem("rpg.track")).toBeNull();
+    expect(bob.base.getItem("rpg.hotkeys.guardian")).toBeNull();
+    expect(bob.api.doc["chat_opacity"]).toBe(40); // Ana's unsent change is not his
+    expect(bob.api.doc["controls"]).toBe("classic"); // nothing personal: it fills
+    expect(bob.base.getItem(OWNER_KEY)).toBe("tag-bob");
+    // His own choices stay his at the next login.
+    bob.storage.setItem("rpg.hotkeys.guardian", JSON.stringify(["ember_ring"]));
+    bob.timers.run();
+    await settle();
+    bob.sync.logout();
+    await bob.sync.login();
+    expect(bob.base.getItem("rpg.hotkeys.guardian")).toBe(JSON.stringify(["ember_ring"]));
+
+    // Ana on her own browser: everything fills as before.
+    const ana = setup(left);
+    ana.api.doc = { v: 1, chat_opacity: 40 };
+    await ana.sync.login();
+    expect(ana.api.doc["track"]).toEqual({ Ana: "bounty_crawlers" });
+    expect(ana.api.doc["hotkeys"]).toEqual({ guardian: ["arc_bolt"] });
+    expect(ana.api.doc["chat_opacity"]).toBe(70);
+  });
+
+  it("a server without the route (404) leaves the browser alone", async () => {
+    const { api, timers, base, storage, sync } = setup({ "rpg.lang": "en" });
+    api.fail = Object.assign(new Error("api 404 not_found"), { status: 404, code: "not_found" });
+    expect(await sync.login()).toBe(false);
+    storage.setItem("rpg.chat-opacity", "70");
+    sync.leaving();
+    await sync.flush();
+    await settle();
+    expect(timers.pending.size).toBe(0); // nothing is sent, nothing is retried
+    expect(api.puts).toEqual([]);
+    expect(base.getItem("rpg.lang")).toBe("en");
+    expect(base.getItem("rpg.chat-opacity")).toBe("70");
+  });
+
+  it("ready waits for the login under way, up to a limit", async () => {
+    const { api, timers, base, sync } = setup({ "rpg.zoom": "5" });
+    let done = false;
+    await sync.ready(2000); // no login: at once
+    api.doc = { v: 1, devices: { desktop: { zoom: 2 } } };
+    let open: () => void = () => undefined;
+    api.gate = new Promise((resolve) => (open = resolve));
+    const login = sync.login();
+    void sync.ready(2000).then(() => (done = true));
+    await settle();
+    expect(done).toBe(false); // the game does not open on the values about to be replaced
+    expect(timers.delays).toEqual([2000]);
+    open();
+    await settle();
+    expect(done).toBe(true);
+    expect(base.getItem("rpg.zoom")).toBe("2");
+    expect(timers.pending.size).toBe(0);
+    await login;
+
+    // A server that does not answer: the limit lets the player in.
+    const slow = setup({});
+    slow.api.gate = new Promise(() => undefined);
+    void slow.sync.login();
+    let late = false;
+    void slow.sync.ready(2000).then(() => (late = true));
+    await settle();
+    expect(late).toBe(false);
+    slow.timers.run();
+    await settle();
+    expect(late).toBe(true);
   });
 
   it("sends nothing before the login nor after the logout", async () => {
@@ -442,21 +666,21 @@ describe("OptionsSync", () => {
 
   it("an unreachable server changes nothing and a later change tries again", async () => {
     const { api, timers, base, storage, sync } = setup({ "rpg.lang": "en" });
-    api.fail = true;
+    api.fail = OFFLINE;
     expect(await sync.login()).toBe(false);
     expect(base.getItem("rpg.lang")).toBe("en");
-    api.fail = false;
+    api.fail = undefined;
     api.doc = { v: 1, lang: "es" };
     expect(await sync.login()).toBe(true);
-    api.fail = true;
+    api.fail = OFFLINE;
     storage.setItem("rpg.chat-opacity", "70");
     timers.run();
     await settle();
-    api.fail = false;
+    api.fail = undefined;
     storage.setItem("rpg.chat-opacity", "75");
     timers.run();
     await settle();
-    expect(api.doc).toEqual({ v: 1, lang: "es", chat_opacity: 75 });
+    expect(api.doc).toEqual({ v: 1, lang: "es", chat_opacity: 75, devices: { desktop: {} } });
   });
 
   it("ignores a document that is not version 1", async () => {

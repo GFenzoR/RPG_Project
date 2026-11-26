@@ -64,6 +64,9 @@ export interface AppProps {
   onOptionsSynced?: (() => void) | undefined;
 }
 
+/** The longest entering the game waits for the account's saved options (a slow server). */
+const OPTIONS_WAIT_MS = 2000;
+
 /** Heartbeat of the HTTP session while playing: well under the server's 30 min idle timeout. */
 const KEEPALIVE_MS = 5 * 60 * 1000;
 
@@ -176,8 +179,14 @@ function Screens({
             lang={locale}
             notice={notice}
             onPlay={(character, sessionToken) => {
-              setNotice(undefined);
-              setScreen({ name: "game", character, sessionToken });
+              // The game reads its options (the windows, the zoom) as it opens: not before
+              // the account's saved ones are in, when the login is still fetching them.
+              void optionsSync()
+                .ready(OPTIONS_WAIT_MS)
+                .then(() => {
+                  setNotice(undefined);
+                  setScreen({ name: "game", character, sessionToken });
+                });
             }}
             onLoggedOut={toLogin}
           />

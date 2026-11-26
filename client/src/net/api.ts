@@ -4,7 +4,7 @@
 // call goes through Rust (net/desktop.ts), which keeps the token in memory for the run.
 // The game never keeps the login (lote 17): nothing here stores a token.
 import { desktopApi, isDesktop } from "./desktop.ts";
-import type { OptionsDoc } from "../state/saved-options.ts";
+import type { AccountOptions, OptionsDoc } from "../state/saved-options.ts";
 import type { Look } from "@rpg/renderer/look";
 
 export interface Character {
@@ -51,6 +51,7 @@ async function send(
   method: string,
   path: string,
   body?: unknown,
+  leaving = false,
 ): Promise<{ status: number; data: unknown }> {
   if (isDesktop()) {
     try {
@@ -65,6 +66,8 @@ async function send(
     res = await fetch(path, {
       method,
       credentials: "same-origin",
+      // A request made while the page goes away (pagehide) is finished by the browser.
+      ...(leaving ? { keepalive: true } : {}),
       headers: body === undefined ? {} : { "Content-Type": "application/json" },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
@@ -81,8 +84,8 @@ async function send(
   return { status: res.status, data };
 }
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const { status, data } = await send(method, path, body);
+async function call<T>(method: string, path: string, body?: unknown, leaving = false): Promise<T> {
+  const { status, data } = await send(method, path, body, leaving);
   if (status < 200 || status > 299) {
     const err = (data as { error?: { code?: unknown; detail?: unknown } } | undefined)?.error;
     throw new ApiError(
@@ -253,9 +256,11 @@ export const accountApi = {
   /** Lote 17: heartbeat while playing, so the session does not go idle. */
   keepalive: (): Promise<void> => call("POST", "/api/auth/keepalive"),
   /** The account's interface options document (docs/05 "Opciones de la cuenta"). */
-  options: (): Promise<OptionsDoc> =>
-    call<{ options: OptionsDoc }>("GET", "/api/account/options").then((r) => r.options),
+  options: (): Promise<AccountOptions> => call("GET", "/api/account/options"),
   saveOptions: (doc: OptionsDoc): Promise<void> => call("POST", "/api/account/options", doc),
+  /** The same save while the page goes away: the browser finishes it (fetch keepalive). */
+  saveOptionsLeaving: (doc: OptionsDoc): Promise<void> =>
+    call("POST", "/api/account/options", doc, true),
 };
 
 /** OAuth login and linked identities (T2.1, docs/05 "OAuth"). */

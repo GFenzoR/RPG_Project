@@ -13,7 +13,15 @@
 // - "session": on purpose not saved (with the reason).
 // localStorage stays as the cache every screen reads at once (and all there is before the
 // login). At login the server wins and the local values fill what the server lacks
-// (mergeDocs); afterwards each change is sent a moment later (OptionsSync).
+// (mergeDocs), except what this browser changed and could not send yet (the tab closed
+// before the save, the server did not answer): those keys are marked in localStorage
+// and the local value wins for them. Afterwards each change is sent a moment later
+// (OptionsSync), and at once when the page goes away.
+//
+// The registry holds what is kept in localStorage or set with a Set* message of the
+// protocol: the guard test sees those two. A switch that travels in another message, or
+// a choice that only lives in a screen's state, has to be added by hand (as "session"
+// with its reason when it is not saved).
 //
 // The server validates the document with a closed schema (server/internal/accountopts);
 // the codecs below only ever build values it accepts, and what comes back is checked
@@ -43,7 +51,17 @@ export interface OptionDef {
   message?: string;
   /** Why a "session" entry is not saved. */
   reason?: string;
+  /**
+   * Says something about the account's characters (their names, their spells): never
+   * filled from what another account left in this browser.
+   */
+  personal?: boolean;
 }
+
+/** The saved keys this browser changed and the server has not confirmed (a JSON list). */
+export const UNSENT_KEY = "rpg.optsUnsent";
+/** The tag of the account the cached options belong to (GET /api/account/options). */
+export const OWNER_KEY = "rpg.optsOwner";
 
 const ID = /^[a-z0-9][a-z0-9_.-]{0,63}$/;
 const NAME = /^[\p{L} '-]{1,32}$/u;
@@ -287,6 +305,7 @@ export const OPTIONS: readonly OptionDef[] = [
     keyed: true,
     field: "hotkeys",
     codec: hotkeysCodec,
+    personal: true,
   },
   {
     id: "tracked_quest",
@@ -294,6 +313,7 @@ export const OPTIONS: readonly OptionDef[] = [
     storageKey: "rpg.track",
     field: "track",
     codec: trackCodec,
+    personal: true,
   },
   // ---- per kind of screen ----
   {
@@ -343,6 +363,18 @@ export const OPTIONS: readonly OptionDef[] = [
     storageKey: "rpg.lastEmail",
     reason:
       "the email the login form starts with on this browser: it exists before any account is known",
+  },
+  {
+    id: "unsent_options_note",
+    persistence: "session",
+    storageKey: UNSENT_KEY,
+    reason: "the sync's own note: which saved keys this browser still has to send",
+  },
+  {
+    id: "options_owner_note",
+    persistence: "session",
+    storageKey: OWNER_KEY,
+    reason: "the sync's own note: the account the options cached in this browser belong to",
   },
   {
     id: "chat_channel",
@@ -489,9 +521,18 @@ export function isSavedKey(key: string): boolean {
   return saved.some((o) => (o.keyed ? key.startsWith(o.storageKey) : key === o.storageKey));
 }
 
+/** What GET /api/account/options answers. */
+export interface AccountOptions {
+  options: OptionsDoc;
+  /** Tells this account from another one on the same browser; an older server has none. */
+  account?: string | undefined;
+}
+
 export interface OptionsApi {
-  get(): Promise<OptionsDoc>;
+  get(): Promise<AccountOptions>;
   put(doc: OptionsDoc): Promise<void>;
+  /** The same save, started so that it outlives the page (fetch keepalive). */
+  putLeaving?(doc: OptionsDoc): Promise<void>;
 }
 
 export interface SyncTimers {
@@ -502,19 +543,72 @@ export interface SyncTimers {
 /** How long after the last change the options are sent. */
 export const SAVE_DELAY_MS = 2000;
 
+/** The waits before each new try of a save that failed; after the last, the next change. */
+export const RETRY_DELAYS_MS: readonly number[] = [10_000, 30_000, 60_000, 120_000, 300_000];
+
+function remove(storage: Store, key: string): void {
+  try {
+    storage.removeItem(key);
+  } catch {
+    // blocked storage: nothing to forget
+  }
+}
+
+/** `doc` without the fields of the storage keys in `keys` (of `device`'s section). */
+function without(doc: OptionsDoc, keys: ReadonlySet<string>, device: DeviceClass): OptionsDoc {
+  if (keys.size === 0) return doc;
+  const out = JSON.parse(JSON.stringify(doc)) as OptionsDoc;
+  const devices = isObject(out["devices"]) ? out["devices"] : {};
+  const dev = isObject(devices[device]) ? devices[device] : {};
+  for (const o of saved) {
+    const home = o.persistence === "device-class" ? dev : out;
+    if (!o.keyed) {
+      if (keys.has(o.storageKey)) Reflect.deleteProperty(home, o.field);
+      continue;
+    }
+    const map = home[o.field];
+    if (!isObject(map)) continue;
+    for (const k of keys)
+      if (k.startsWith(o.storageKey)) Reflect.deleteProperty(map, k.slice(o.storageKey.length));
+  }
+  return out;
+}
+
 /**
- * Keeps the account's document and this browser's localStorage in step: login() merges
- * (server wins, local fills) and changed() sends this browser's values a moment after
- * the last change. Before login() and after logout() nothing is sent. Failures are
- * silent: localStorage still has everything, and the next change or login tries again.
+ * Keeps the account's document and this browser's localStorage in step.
+ *
+ * login() merges: the server wins and the local values fill what it lacks, except the
+ * keys this browser changed and never got confirmed (marked in UNSENT_KEY: the tab closed
+ * before the save, or the save failed) and the ones chosen on this page before the
+ * login, where the local value (or its absence) wins. What another account left in this
+ * browser is not trusted: its marks are dropped and its personal options removed.
+ *
+ * changed() sends this browser's values a moment after the last change; a save that
+ * fails is tried again after a wait, and leaving() sends what waits when the page goes
+ * away. A save carries this device class's section only: the server keeps the others
+ * (a page open for hours knows nothing of what the phone saved since). Before login()
+ * and after logout() nothing is sent.
  */
 export class OptionsSync {
-  /** The document the server has, as far as this page knows; undefined = not logged in. */
-  private server: OptionsDoc | undefined;
+  /**
+   * What the server has of this browser's part of the document (the account's fields and
+   * this device class's section), as far as this page knows; undefined = not logged in.
+   */
+  private sent: OptionsDoc | undefined;
   private timer: unknown;
   private epoch = 0;
   /** Saved keys written on this page before the login: the player's newest choices. */
   private readonly early = new Set<string>();
+  /** The sync itself is writing localStorage: those writes are not the player's. */
+  private applying = false;
+  /** Counts the player's changes: a save confirms the marks only if none came meanwhile. */
+  private changes = 0;
+  /** Saves that failed in a row since the last change. */
+  private failures = 0;
+  /** One save at a time, in order. */
+  private busy: Promise<void> = Promise.resolve();
+  /** The login under way, until the account's options are in localStorage. */
+  private entering: Promise<unknown> | undefined;
 
   constructor(
     private readonly api: OptionsApi,
@@ -525,94 +619,214 @@ export class OptionsSync {
 
   /** After a login: returns true when localStorage changed (the screens reload it). */
   async login(): Promise<boolean> {
-    const storage = this.storage;
-    if (!storage) return false;
-    if (this.server) {
+    if (!this.storage) return false;
+    if (this.sent) {
       // Already in step with this account (back from the game): only send what waits.
       this.timers.clear(this.timer);
       this.timer = undefined;
       await this.flush();
       return false;
     }
-    const epoch = ++this.epoch;
-    let server: OptionsDoc;
-    try {
-      const got: unknown = await this.api.get();
-      server = isObject(got) && got["v"] === 1 ? (got as OptionsDoc) : emptyDoc();
-    } catch {
-      return false; // offline or an older server: localStorage goes on alone
-    }
-    if (epoch !== this.epoch) return false;
-    // The server wins and this browser fills what it lacks; but what the player chose on
-    // this very page before logging in (the language or the volume on the login screen)
-    // is newer than anything saved, so it wins over both.
-    const early = this.early;
-    const chosen = docFromStorage(
-      {
-        get length() {
-          return storage.length;
-        },
-        key: (i) => storage.key(i),
-        getItem: (k) => (early.has(k) ? storage.getItem(k) : null),
-        setItem: () => undefined,
-        removeItem: () => undefined,
-      },
-      this.device,
-    );
-    const merged = mergeDocs(chosen, mergeDocs(server, docFromStorage(storage, this.device)));
-    early.clear();
-    const changed = applyDoc(merged, storage, this.device);
-    this.server = server;
-    await this.send(merged);
+    const run = this.enter(this.storage);
+    this.entering = run;
+    const { changed, doc } = await run;
+    if (this.entering === run) this.entering = undefined;
+    if (doc) await this.push(doc);
     return changed;
   }
 
-  /** The player logged out: stop sending (the next account must not get these values). */
+  /**
+   * Resolves once the login under way has put the account's options in localStorage (at
+   * once when none is), or after `maxMs`: a screen that reads its options when it opens
+   * (the game's windows) waits for this, so it never starts from the values the login is
+   * about to replace.
+   */
+  ready(maxMs: number): Promise<void> {
+    const entering = this.entering;
+    if (!entering) return Promise.resolve();
+    return new Promise((resolve) => {
+      const cap = this.timers.set(resolve, maxMs);
+      void entering.then(() => {
+        this.timers.clear(cap);
+        resolve();
+      });
+    });
+  }
+
+  /** The GET and the merge of a login; `doc` is what the server should have afterwards. */
+  private async enter(storage: Store): Promise<{ changed: boolean; doc?: OptionsDoc }> {
+    const epoch = ++this.epoch;
+    let got: unknown;
+    try {
+      got = await this.api.get();
+    } catch {
+      return { changed: false }; // offline or an older server: localStorage goes on alone
+    }
+    if (epoch !== this.epoch) return { changed: false };
+    const answer = isObject(got) ? got : {};
+    const options = answer["options"];
+    const server = isObject(options) && options["v"] === 1 ? (options as OptionsDoc) : emptyDoc();
+    const account = answer["account"];
+    let unsent = this.unsent(storage);
+    let changed = false;
+    this.applying = true;
+    try {
+      if (typeof account === "string" && account !== "") {
+        const owner = get(storage, OWNER_KEY);
+        if (owner !== null && owner !== account) {
+          // Another account used this browser: what it could not send is not this one's,
+          // and neither are its characters' quests and bars.
+          unsent = new Set();
+          for (const o of saved) {
+            if (!o.personal) continue;
+            for (const k of o.keyed ? keysWith(storage, o.storageKey) : [o.storageKey])
+              if (!this.early.has(k) && get(storage, k) !== null) {
+                remove(storage, k);
+                changed = true;
+              }
+          }
+        }
+        this.note(storage, OWNER_KEY, account);
+      }
+      // The local value (or its absence) is the truth for what the player chose here and
+      // the server never confirmed, and for what was chosen on this very page before
+      // logging in (the language or the volume on the login screen).
+      const chosen = new Set([...unsent, ...this.early]);
+      this.early.clear();
+      this.mark(storage, chosen);
+      const merged = mergeDocs(
+        without(server, chosen, this.device),
+        docFromStorage(storage, this.device),
+      );
+      if (applyDoc(merged, storage, this.device)) changed = true;
+      this.sent = this.own(server);
+      return { changed, doc: this.own(merged) };
+    } finally {
+      this.applying = false;
+    }
+  }
+
+  /**
+   * The player logged out: stop sending. The marks of what was not sent stay for this
+   * account's next login; another account's login drops them (enter).
+   */
   logout(): void {
     this.epoch++;
-    this.server = undefined;
+    this.sent = undefined;
+    this.entering = undefined;
     this.early.clear();
+    this.failures = 0;
     this.timers.clear(this.timer);
     this.timer = undefined;
   }
 
-  /** A saved key was written: send the document once the changes stop. */
+  /** A saved key was written: mark it and send the document once the changes stop. */
   changed(key?: string): void {
-    if (!this.server) {
+    if (this.applying) return;
+    this.changes++;
+    if (key !== undefined && this.storage) {
+      const unsent = this.unsent(this.storage);
+      if (!unsent.has(key)) this.mark(this.storage, unsent.add(key));
+    }
+    if (!this.sent) {
       if (key !== undefined) this.early.add(key);
       return;
     }
+    this.failures = 0;
+    this.schedule(SAVE_DELAY_MS);
+  }
+
+  /** Sends now what a pending change would send later. */
+  flush(): Promise<void> {
+    return this.push();
+  }
+
+  /**
+   * The page is going away (pagehide): what waits is sent at once, in a way that outlives
+   * the page. If it does not arrive, the marks make the local values win at the next login.
+   */
+  leaving(): void {
+    if (this.timer === undefined) return;
+    this.timers.clear(this.timer);
+    this.timer = undefined;
+    void this.save(undefined, true);
+  }
+
+  private schedule(ms: number): void {
     this.timers.clear(this.timer);
     this.timer = this.timers.set(() => {
       this.timer = undefined;
       void this.flush();
-    }, SAVE_DELAY_MS);
+    }, ms);
   }
 
-  /** Sends now what a pending change would send later. */
-  async flush(): Promise<void> {
-    const { storage, server } = this;
-    if (!storage || !server) return;
-    // This browser's values replace the account's, except the other device classes'
-    // sections, which only their own screens know.
-    const local = docFromStorage(storage, this.device);
-    const devices = {
-      ...(isObject(server["devices"]) ? server["devices"] : {}),
-      ...(isObject(local["devices"]) ? local["devices"] : {}),
-    };
-    const next: OptionsDoc = { ...local };
-    if (Object.keys(devices).length > 0) next["devices"] = devices;
-    await this.send(next);
+  private push(doc?: OptionsDoc): Promise<void> {
+    const run = this.busy.then(() => this.save(doc));
+    this.busy = run;
+    return run;
   }
 
-  private async send(doc: OptionsDoc): Promise<void> {
-    if (!this.server || stable(doc) === stable(this.server)) return;
-    const epoch = this.epoch;
+  /** Sends `doc` (by default what localStorage holds now) unless the server has it. */
+  private async save(given?: OptionsDoc, leaving = false): Promise<void> {
+    const { storage } = this;
+    if (!storage || !this.sent) return;
+    const doc = given ?? this.own(docFromStorage(storage, this.device));
+    const mark = this.changes;
+    if (stable(doc) !== stable(this.sent)) {
+      const epoch = this.epoch;
+      try {
+        if (leaving && this.api.putLeaving) await this.api.putLeaving(doc);
+        else await this.api.put(doc);
+      } catch {
+        // Rate limited, offline, refused: the marks stay, and it is tried again later.
+        if (epoch === this.epoch) this.retry();
+        return;
+      }
+      if (epoch !== this.epoch) return;
+      this.sent = doc;
+      this.failures = 0;
+    }
+    // The server has everything, unless the player changed something meanwhile.
+    if (mark === this.changes) remove(storage, UNSENT_KEY);
+  }
+
+  private retry(): void {
+    if (this.timer !== undefined) return; // a newer change already waits
+    const wait = RETRY_DELAYS_MS[this.failures];
+    if (wait === undefined) return; // given up until the next change or login
+    this.failures++;
+    this.schedule(wait);
+  }
+
+  /** This browser's part of a document: the account's fields and its own device section. */
+  private own(doc: OptionsDoc): OptionsDoc {
+    const devices = isObject(doc["devices"]) ? doc["devices"] : {};
+    const mine = devices[this.device];
+    // Always its section, even empty: that is how the server learns an option was unset.
+    return { ...doc, devices: { [this.device]: isObject(mine) ? mine : {} } };
+  }
+
+  /** The saved keys marked as not confirmed by the server. */
+  private unsent(storage: Store): Set<string> {
+    const raw = get(storage, UNSENT_KEY);
+    const list = raw === null ? undefined : parse(raw);
+    return new Set(
+      Array.isArray(list)
+        ? list.filter((k): k is string => typeof k === "string" && isSavedKey(k)).slice(0, 64)
+        : [],
+    );
+  }
+
+  private mark(storage: Store, keys: ReadonlySet<string>): void {
+    if (keys.size === 0) remove(storage, UNSENT_KEY);
+    else this.note(storage, UNSENT_KEY, JSON.stringify([...keys].sort()));
+  }
+
+  private note(storage: Store, key: string, value: string): void {
     try {
-      await this.api.put(doc);
-      if (epoch === this.epoch) this.server = doc;
+      if (storage.getItem(key) !== value) storage.setItem(key, value);
     } catch {
-      // Rate limited, offline, refused: keep what the server had; a later change retries.
+      // Private mode or full storage: the note lasts for this page only.
     }
   }
 }
