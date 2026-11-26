@@ -21,58 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type FightStance int32
-
-const (
-	FightStance_FIGHT_STANCE_UNSPECIFIED FightStance = 0
-	FightStance_FIGHT_STANCE_OFFENSIVE   FightStance = 1
-	FightStance_FIGHT_STANCE_BALANCED    FightStance = 2
-	FightStance_FIGHT_STANCE_DEFENSIVE   FightStance = 3
-)
-
-// Enum value maps for FightStance.
-var (
-	FightStance_name = map[int32]string{
-		0: "FIGHT_STANCE_UNSPECIFIED",
-		1: "FIGHT_STANCE_OFFENSIVE",
-		2: "FIGHT_STANCE_BALANCED",
-		3: "FIGHT_STANCE_DEFENSIVE",
-	}
-	FightStance_value = map[string]int32{
-		"FIGHT_STANCE_UNSPECIFIED": 0,
-		"FIGHT_STANCE_OFFENSIVE":   1,
-		"FIGHT_STANCE_BALANCED":    2,
-		"FIGHT_STANCE_DEFENSIVE":   3,
-	}
-)
-
-func (x FightStance) Enum() *FightStance {
-	p := new(FightStance)
-	*p = x
-	return p
-}
-
-func (x FightStance) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (FightStance) Descriptor() protoreflect.EnumDescriptor {
-	return file_game_v1_client_proto_enumTypes[0].Descriptor()
-}
-
-func (FightStance) Type() protoreflect.EnumType {
-	return &file_game_v1_client_proto_enumTypes[0]
-}
-
-func (x FightStance) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use FightStance.Descriptor instead.
-func (FightStance) EnumDescriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{0}
-}
-
 type ChatChannel int32
 
 const (
@@ -120,11 +68,11 @@ func (x ChatChannel) String() string {
 }
 
 func (ChatChannel) Descriptor() protoreflect.EnumDescriptor {
-	return file_game_v1_client_proto_enumTypes[1].Descriptor()
+	return file_game_v1_client_proto_enumTypes[0].Descriptor()
 }
 
 func (ChatChannel) Type() protoreflect.EnumType {
-	return &file_game_v1_client_proto_enumTypes[1]
+	return &file_game_v1_client_proto_enumTypes[0]
 }
 
 func (x ChatChannel) Number() protoreflect.EnumNumber {
@@ -133,7 +81,7 @@ func (x ChatChannel) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ChatChannel.Descriptor instead.
 func (ChatChannel) EnumDescriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{1}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{0}
 }
 
 // PartyAction is what a PartyCommand asks for (T3.3).
@@ -200,11 +148,11 @@ func (x PartyAction) String() string {
 }
 
 func (PartyAction) Descriptor() protoreflect.EnumDescriptor {
-	return file_game_v1_client_proto_enumTypes[2].Descriptor()
+	return file_game_v1_client_proto_enumTypes[1].Descriptor()
 }
 
 func (PartyAction) Type() protoreflect.EnumType {
-	return &file_game_v1_client_proto_enumTypes[2]
+	return &file_game_v1_client_proto_enumTypes[1]
 }
 
 func (x PartyAction) Number() protoreflect.EnumNumber {
@@ -213,7 +161,7 @@ func (x PartyAction) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PartyAction.Descriptor instead.
 func (PartyAction) EnumDescriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{2}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{1}
 }
 
 // GuildAction is what a GuildCommand asks for (T5.1, docs/02 "Gremios"). Members are
@@ -306,11 +254,11 @@ func (x GuildAction) String() string {
 }
 
 func (GuildAction) Descriptor() protoreflect.EnumDescriptor {
-	return file_game_v1_client_proto_enumTypes[3].Descriptor()
+	return file_game_v1_client_proto_enumTypes[2].Descriptor()
 }
 
 func (GuildAction) Type() protoreflect.EnumType {
-	return &file_game_v1_client_proto_enumTypes[3]
+	return &file_game_v1_client_proto_enumTypes[2]
 }
 
 func (x GuildAction) Number() protoreflect.EnumNumber {
@@ -319,7 +267,7 @@ func (x GuildAction) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GuildAction.Descriptor instead.
 func (GuildAction) EnumDescriptor() ([]byte, []int) {
-	return file_game_v1_client_proto_rawDescGZIP(), []int{3}
+	return file_game_v1_client_proto_rawDescGZIP(), []int{2}
 }
 
 // ClientMessage is the only thing a client WebSocket frame carries (max 4 KB).
@@ -4875,12 +4823,7 @@ const file_game_v1_client_proto_rawDesc = "" +
 	"\asectors\x18\x02 \x03(\rR\asectors\"'\n" +
 	"\n" +
 	"TrackQuest\x12\x19\n" +
-	"\bquest_id\x18\x01 \x01(\tR\aquestId*~\n" +
-	"\vFightStance\x12\x1c\n" +
-	"\x18FIGHT_STANCE_UNSPECIFIED\x10\x00\x12\x1a\n" +
-	"\x16FIGHT_STANCE_OFFENSIVE\x10\x01\x12\x19\n" +
-	"\x15FIGHT_STANCE_BALANCED\x10\x02\x12\x1a\n" +
-	"\x16FIGHT_STANCE_DEFENSIVE\x10\x03*\xbb\x01\n" +
+	"\bquest_id\x18\x01 \x01(\tR\aquestId*\xbb\x01\n" +
 	"\vChatChannel\x12\x1c\n" +
 	"\x18CHAT_CHANNEL_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10CHAT_CHANNEL_SAY\x10\x01\x12\x15\n" +
@@ -4932,77 +4875,77 @@ func file_game_v1_client_proto_rawDescGZIP() []byte {
 	return file_game_v1_client_proto_rawDescData
 }
 
-var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_game_v1_client_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_game_v1_client_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
 var file_game_v1_client_proto_goTypes = []any{
-	(FightStance)(0),            // 0: game.v1.FightStance
-	(ChatChannel)(0),            // 1: game.v1.ChatChannel
-	(PartyAction)(0),            // 2: game.v1.PartyAction
-	(GuildAction)(0),            // 3: game.v1.GuildAction
-	(*ClientMessage)(nil),       // 4: game.v1.ClientMessage
-	(*Hello)(nil),               // 5: game.v1.Hello
-	(*Walk)(nil),                // 6: game.v1.Walk
-	(*WalkPath)(nil),            // 7: game.v1.WalkPath
-	(*StopWalk)(nil),            // 8: game.v1.StopWalk
-	(*Turn)(nil),                // 9: game.v1.Turn
-	(*SetTarget)(nil),           // 10: game.v1.SetTarget
-	(*SetSafeMode)(nil),         // 11: game.v1.SetSafeMode
-	(*SetFightMode)(nil),        // 12: game.v1.SetFightMode
-	(*CastSpell)(nil),           // 13: game.v1.CastSpell
-	(*UseItem)(nil),             // 14: game.v1.UseItem
-	(*UseItemOn)(nil),           // 15: game.v1.UseItemOn
-	(*MoveItem)(nil),            // 16: game.v1.MoveItem
-	(*LookAt)(nil),              // 17: game.v1.LookAt
-	(*Say)(nil),                 // 18: game.v1.Say
-	(*DialogChoose)(nil),        // 19: game.v1.DialogChoose
-	(*TradeRequest)(nil),        // 20: game.v1.TradeRequest
-	(*TradeOffer)(nil),          // 21: game.v1.TradeOffer
-	(*TradeAccept)(nil),         // 22: game.v1.TradeAccept
-	(*TradeCancel)(nil),         // 23: game.v1.TradeCancel
-	(*MarketCommand)(nil),       // 24: game.v1.MarketCommand
-	(*MarketBrowse)(nil),        // 25: game.v1.MarketBrowse
-	(*MarketCreate)(nil),        // 26: game.v1.MarketCreate
-	(*MarketCancel)(nil),        // 27: game.v1.MarketCancel
-	(*MarketAccept)(nil),        // 28: game.v1.MarketAccept
-	(*MarketWithdraw)(nil),      // 29: game.v1.MarketWithdraw
-	(*MarketClose)(nil),         // 30: game.v1.MarketClose
-	(*HouseCommand)(nil),        // 31: game.v1.HouseCommand
-	(*HouseRent)(nil),           // 32: game.v1.HouseRent
-	(*HouseExtend)(nil),         // 33: game.v1.HouseExtend
-	(*HouseLeave)(nil),          // 34: game.v1.HouseLeave
-	(*HouseGuestAdd)(nil),       // 35: game.v1.HouseGuestAdd
-	(*HouseGuestRemove)(nil),    // 36: game.v1.HouseGuestRemove
-	(*HouseGuildAccess)(nil),    // 37: game.v1.HouseGuildAccess
-	(*HouseTransferOffer)(nil),  // 38: game.v1.HouseTransferOffer
-	(*HouseTransferCancel)(nil), // 39: game.v1.HouseTransferCancel
-	(*HouseTransferAccept)(nil), // 40: game.v1.HouseTransferAccept
-	(*HouseEnter)(nil),          // 41: game.v1.HouseEnter
-	(*HouseExit)(nil),           // 42: game.v1.HouseExit
-	(*HouseClose)(nil),          // 43: game.v1.HouseClose
-	(*Ping)(nil),                // 44: game.v1.Ping
-	(*Logout)(nil),              // 45: game.v1.Logout
-	(*CloseContainer)(nil),      // 46: game.v1.CloseContainer
-	(*NpcTalk)(nil),             // 47: game.v1.NpcTalk
-	(*ShopBuy)(nil),             // 48: game.v1.ShopBuy
-	(*ShopSell)(nil),            // 49: game.v1.ShopSell
-	(*PartyCommand)(nil),        // 50: game.v1.PartyCommand
-	(*GuildCommand)(nil),        // 51: game.v1.GuildCommand
-	(*Craft)(nil),               // 52: game.v1.Craft
-	(*Refine)(nil),              // 53: game.v1.Refine
-	(*ReportPlayer)(nil),        // 54: game.v1.ReportPlayer
-	(*PresenceAnswer)(nil),      // 55: game.v1.PresenceAnswer
-	(*TutorialSkip)(nil),        // 56: game.v1.TutorialSkip
-	(*EquipCosmetic)(nil),       // 57: game.v1.EquipCosmetic
-	(*UnequipCosmetic)(nil),     // 58: game.v1.UnequipCosmetic
-	(*SetLook)(nil),             // 59: game.v1.SetLook
-	(*StashCommand)(nil),        // 60: game.v1.StashCommand
-	(*StashDeposit)(nil),        // 61: game.v1.StashDeposit
-	(*StashWithdraw)(nil),       // 62: game.v1.StashWithdraw
-	(*StashClose)(nil),          // 63: game.v1.StashClose
-	(*MinimapRequest)(nil),      // 64: game.v1.MinimapRequest
-	(*TrackQuest)(nil),          // 65: game.v1.TrackQuest
-	(*PushObject)(nil),          // 66: game.v1.PushObject
-	(Direction)(0),              // 67: game.v1.Direction
+	(ChatChannel)(0),            // 0: game.v1.ChatChannel
+	(PartyAction)(0),            // 1: game.v1.PartyAction
+	(GuildAction)(0),            // 2: game.v1.GuildAction
+	(*ClientMessage)(nil),       // 3: game.v1.ClientMessage
+	(*Hello)(nil),               // 4: game.v1.Hello
+	(*Walk)(nil),                // 5: game.v1.Walk
+	(*WalkPath)(nil),            // 6: game.v1.WalkPath
+	(*StopWalk)(nil),            // 7: game.v1.StopWalk
+	(*Turn)(nil),                // 8: game.v1.Turn
+	(*SetTarget)(nil),           // 9: game.v1.SetTarget
+	(*SetSafeMode)(nil),         // 10: game.v1.SetSafeMode
+	(*SetFightMode)(nil),        // 11: game.v1.SetFightMode
+	(*CastSpell)(nil),           // 12: game.v1.CastSpell
+	(*UseItem)(nil),             // 13: game.v1.UseItem
+	(*UseItemOn)(nil),           // 14: game.v1.UseItemOn
+	(*MoveItem)(nil),            // 15: game.v1.MoveItem
+	(*LookAt)(nil),              // 16: game.v1.LookAt
+	(*Say)(nil),                 // 17: game.v1.Say
+	(*DialogChoose)(nil),        // 18: game.v1.DialogChoose
+	(*TradeRequest)(nil),        // 19: game.v1.TradeRequest
+	(*TradeOffer)(nil),          // 20: game.v1.TradeOffer
+	(*TradeAccept)(nil),         // 21: game.v1.TradeAccept
+	(*TradeCancel)(nil),         // 22: game.v1.TradeCancel
+	(*MarketCommand)(nil),       // 23: game.v1.MarketCommand
+	(*MarketBrowse)(nil),        // 24: game.v1.MarketBrowse
+	(*MarketCreate)(nil),        // 25: game.v1.MarketCreate
+	(*MarketCancel)(nil),        // 26: game.v1.MarketCancel
+	(*MarketAccept)(nil),        // 27: game.v1.MarketAccept
+	(*MarketWithdraw)(nil),      // 28: game.v1.MarketWithdraw
+	(*MarketClose)(nil),         // 29: game.v1.MarketClose
+	(*HouseCommand)(nil),        // 30: game.v1.HouseCommand
+	(*HouseRent)(nil),           // 31: game.v1.HouseRent
+	(*HouseExtend)(nil),         // 32: game.v1.HouseExtend
+	(*HouseLeave)(nil),          // 33: game.v1.HouseLeave
+	(*HouseGuestAdd)(nil),       // 34: game.v1.HouseGuestAdd
+	(*HouseGuestRemove)(nil),    // 35: game.v1.HouseGuestRemove
+	(*HouseGuildAccess)(nil),    // 36: game.v1.HouseGuildAccess
+	(*HouseTransferOffer)(nil),  // 37: game.v1.HouseTransferOffer
+	(*HouseTransferCancel)(nil), // 38: game.v1.HouseTransferCancel
+	(*HouseTransferAccept)(nil), // 39: game.v1.HouseTransferAccept
+	(*HouseEnter)(nil),          // 40: game.v1.HouseEnter
+	(*HouseExit)(nil),           // 41: game.v1.HouseExit
+	(*HouseClose)(nil),          // 42: game.v1.HouseClose
+	(*Ping)(nil),                // 43: game.v1.Ping
+	(*Logout)(nil),              // 44: game.v1.Logout
+	(*CloseContainer)(nil),      // 45: game.v1.CloseContainer
+	(*NpcTalk)(nil),             // 46: game.v1.NpcTalk
+	(*ShopBuy)(nil),             // 47: game.v1.ShopBuy
+	(*ShopSell)(nil),            // 48: game.v1.ShopSell
+	(*PartyCommand)(nil),        // 49: game.v1.PartyCommand
+	(*GuildCommand)(nil),        // 50: game.v1.GuildCommand
+	(*Craft)(nil),               // 51: game.v1.Craft
+	(*Refine)(nil),              // 52: game.v1.Refine
+	(*ReportPlayer)(nil),        // 53: game.v1.ReportPlayer
+	(*PresenceAnswer)(nil),      // 54: game.v1.PresenceAnswer
+	(*TutorialSkip)(nil),        // 55: game.v1.TutorialSkip
+	(*EquipCosmetic)(nil),       // 56: game.v1.EquipCosmetic
+	(*UnequipCosmetic)(nil),     // 57: game.v1.UnequipCosmetic
+	(*SetLook)(nil),             // 58: game.v1.SetLook
+	(*StashCommand)(nil),        // 59: game.v1.StashCommand
+	(*StashDeposit)(nil),        // 60: game.v1.StashDeposit
+	(*StashWithdraw)(nil),       // 61: game.v1.StashWithdraw
+	(*StashClose)(nil),          // 62: game.v1.StashClose
+	(*MinimapRequest)(nil),      // 63: game.v1.MinimapRequest
+	(*TrackQuest)(nil),          // 64: game.v1.TrackQuest
+	(*PushObject)(nil),          // 65: game.v1.PushObject
+	(Direction)(0),              // 66: game.v1.Direction
+	(FightStance)(0),            // 67: game.v1.FightStance
 	(*ActionTarget)(nil),        // 68: game.v1.ActionTarget
 	(*ItemLocation)(nil),        // 69: game.v1.ItemLocation
 	(MarketSide)(0),             // 70: game.v1.MarketSide
@@ -5011,51 +4954,51 @@ var file_game_v1_client_proto_goTypes = []any{
 	(*BodyLook)(nil),            // 73: game.v1.BodyLook
 }
 var file_game_v1_client_proto_depIdxs = []int32{
-	5,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
-	6,  // 1: game.v1.ClientMessage.walk:type_name -> game.v1.Walk
-	7,  // 2: game.v1.ClientMessage.walk_path:type_name -> game.v1.WalkPath
-	8,  // 3: game.v1.ClientMessage.stop_walk:type_name -> game.v1.StopWalk
-	9,  // 4: game.v1.ClientMessage.turn:type_name -> game.v1.Turn
-	10, // 5: game.v1.ClientMessage.set_target:type_name -> game.v1.SetTarget
-	12, // 6: game.v1.ClientMessage.set_fight_mode:type_name -> game.v1.SetFightMode
-	13, // 7: game.v1.ClientMessage.cast_spell:type_name -> game.v1.CastSpell
-	14, // 8: game.v1.ClientMessage.use_item:type_name -> game.v1.UseItem
-	15, // 9: game.v1.ClientMessage.use_item_on:type_name -> game.v1.UseItemOn
-	16, // 10: game.v1.ClientMessage.move_item:type_name -> game.v1.MoveItem
-	17, // 11: game.v1.ClientMessage.look_at:type_name -> game.v1.LookAt
-	18, // 12: game.v1.ClientMessage.say:type_name -> game.v1.Say
-	19, // 13: game.v1.ClientMessage.dialog_choose:type_name -> game.v1.DialogChoose
-	20, // 14: game.v1.ClientMessage.trade_request:type_name -> game.v1.TradeRequest
-	21, // 15: game.v1.ClientMessage.trade_offer:type_name -> game.v1.TradeOffer
-	22, // 16: game.v1.ClientMessage.trade_accept:type_name -> game.v1.TradeAccept
-	23, // 17: game.v1.ClientMessage.trade_cancel:type_name -> game.v1.TradeCancel
-	44, // 18: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
-	45, // 19: game.v1.ClientMessage.logout:type_name -> game.v1.Logout
-	46, // 20: game.v1.ClientMessage.close_container:type_name -> game.v1.CloseContainer
-	47, // 21: game.v1.ClientMessage.npc_talk:type_name -> game.v1.NpcTalk
-	48, // 22: game.v1.ClientMessage.shop_buy:type_name -> game.v1.ShopBuy
-	49, // 23: game.v1.ClientMessage.shop_sell:type_name -> game.v1.ShopSell
-	50, // 24: game.v1.ClientMessage.party_command:type_name -> game.v1.PartyCommand
-	52, // 25: game.v1.ClientMessage.craft:type_name -> game.v1.Craft
-	54, // 26: game.v1.ClientMessage.report_player:type_name -> game.v1.ReportPlayer
-	55, // 27: game.v1.ClientMessage.presence_answer:type_name -> game.v1.PresenceAnswer
-	56, // 28: game.v1.ClientMessage.tutorial_skip:type_name -> game.v1.TutorialSkip
-	51, // 29: game.v1.ClientMessage.guild_command:type_name -> game.v1.GuildCommand
-	11, // 30: game.v1.ClientMessage.set_safe_mode:type_name -> game.v1.SetSafeMode
-	24, // 31: game.v1.ClientMessage.market_command:type_name -> game.v1.MarketCommand
-	31, // 32: game.v1.ClientMessage.house_command:type_name -> game.v1.HouseCommand
-	57, // 33: game.v1.ClientMessage.equip_cosmetic:type_name -> game.v1.EquipCosmetic
-	58, // 34: game.v1.ClientMessage.unequip_cosmetic:type_name -> game.v1.UnequipCosmetic
-	53, // 35: game.v1.ClientMessage.refine:type_name -> game.v1.Refine
-	59, // 36: game.v1.ClientMessage.set_look:type_name -> game.v1.SetLook
-	60, // 37: game.v1.ClientMessage.stash_command:type_name -> game.v1.StashCommand
-	66, // 38: game.v1.ClientMessage.push_object:type_name -> game.v1.PushObject
-	64, // 39: game.v1.ClientMessage.minimap_request:type_name -> game.v1.MinimapRequest
-	65, // 40: game.v1.ClientMessage.track_quest:type_name -> game.v1.TrackQuest
-	67, // 41: game.v1.Walk.dir:type_name -> game.v1.Direction
-	67, // 42: game.v1.WalkPath.steps:type_name -> game.v1.Direction
-	67, // 43: game.v1.Turn.dir:type_name -> game.v1.Direction
-	0,  // 44: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
+	4,  // 0: game.v1.ClientMessage.hello:type_name -> game.v1.Hello
+	5,  // 1: game.v1.ClientMessage.walk:type_name -> game.v1.Walk
+	6,  // 2: game.v1.ClientMessage.walk_path:type_name -> game.v1.WalkPath
+	7,  // 3: game.v1.ClientMessage.stop_walk:type_name -> game.v1.StopWalk
+	8,  // 4: game.v1.ClientMessage.turn:type_name -> game.v1.Turn
+	9,  // 5: game.v1.ClientMessage.set_target:type_name -> game.v1.SetTarget
+	11, // 6: game.v1.ClientMessage.set_fight_mode:type_name -> game.v1.SetFightMode
+	12, // 7: game.v1.ClientMessage.cast_spell:type_name -> game.v1.CastSpell
+	13, // 8: game.v1.ClientMessage.use_item:type_name -> game.v1.UseItem
+	14, // 9: game.v1.ClientMessage.use_item_on:type_name -> game.v1.UseItemOn
+	15, // 10: game.v1.ClientMessage.move_item:type_name -> game.v1.MoveItem
+	16, // 11: game.v1.ClientMessage.look_at:type_name -> game.v1.LookAt
+	17, // 12: game.v1.ClientMessage.say:type_name -> game.v1.Say
+	18, // 13: game.v1.ClientMessage.dialog_choose:type_name -> game.v1.DialogChoose
+	19, // 14: game.v1.ClientMessage.trade_request:type_name -> game.v1.TradeRequest
+	20, // 15: game.v1.ClientMessage.trade_offer:type_name -> game.v1.TradeOffer
+	21, // 16: game.v1.ClientMessage.trade_accept:type_name -> game.v1.TradeAccept
+	22, // 17: game.v1.ClientMessage.trade_cancel:type_name -> game.v1.TradeCancel
+	43, // 18: game.v1.ClientMessage.ping:type_name -> game.v1.Ping
+	44, // 19: game.v1.ClientMessage.logout:type_name -> game.v1.Logout
+	45, // 20: game.v1.ClientMessage.close_container:type_name -> game.v1.CloseContainer
+	46, // 21: game.v1.ClientMessage.npc_talk:type_name -> game.v1.NpcTalk
+	47, // 22: game.v1.ClientMessage.shop_buy:type_name -> game.v1.ShopBuy
+	48, // 23: game.v1.ClientMessage.shop_sell:type_name -> game.v1.ShopSell
+	49, // 24: game.v1.ClientMessage.party_command:type_name -> game.v1.PartyCommand
+	51, // 25: game.v1.ClientMessage.craft:type_name -> game.v1.Craft
+	53, // 26: game.v1.ClientMessage.report_player:type_name -> game.v1.ReportPlayer
+	54, // 27: game.v1.ClientMessage.presence_answer:type_name -> game.v1.PresenceAnswer
+	55, // 28: game.v1.ClientMessage.tutorial_skip:type_name -> game.v1.TutorialSkip
+	50, // 29: game.v1.ClientMessage.guild_command:type_name -> game.v1.GuildCommand
+	10, // 30: game.v1.ClientMessage.set_safe_mode:type_name -> game.v1.SetSafeMode
+	23, // 31: game.v1.ClientMessage.market_command:type_name -> game.v1.MarketCommand
+	30, // 32: game.v1.ClientMessage.house_command:type_name -> game.v1.HouseCommand
+	56, // 33: game.v1.ClientMessage.equip_cosmetic:type_name -> game.v1.EquipCosmetic
+	57, // 34: game.v1.ClientMessage.unequip_cosmetic:type_name -> game.v1.UnequipCosmetic
+	52, // 35: game.v1.ClientMessage.refine:type_name -> game.v1.Refine
+	58, // 36: game.v1.ClientMessage.set_look:type_name -> game.v1.SetLook
+	59, // 37: game.v1.ClientMessage.stash_command:type_name -> game.v1.StashCommand
+	65, // 38: game.v1.ClientMessage.push_object:type_name -> game.v1.PushObject
+	63, // 39: game.v1.ClientMessage.minimap_request:type_name -> game.v1.MinimapRequest
+	64, // 40: game.v1.ClientMessage.track_quest:type_name -> game.v1.TrackQuest
+	66, // 41: game.v1.Walk.dir:type_name -> game.v1.Direction
+	66, // 42: game.v1.WalkPath.steps:type_name -> game.v1.Direction
+	66, // 43: game.v1.Turn.dir:type_name -> game.v1.Direction
+	67, // 44: game.v1.SetFightMode.stance:type_name -> game.v1.FightStance
 	68, // 45: game.v1.CastSpell.target:type_name -> game.v1.ActionTarget
 	69, // 46: game.v1.UseItem.from:type_name -> game.v1.ItemLocation
 	69, // 47: game.v1.UseItemOn.from:type_name -> game.v1.ItemLocation
@@ -5063,40 +5006,40 @@ var file_game_v1_client_proto_depIdxs = []int32{
 	69, // 49: game.v1.MoveItem.from:type_name -> game.v1.ItemLocation
 	69, // 50: game.v1.MoveItem.to:type_name -> game.v1.ItemLocation
 	69, // 51: game.v1.LookAt.from:type_name -> game.v1.ItemLocation
-	1,  // 52: game.v1.Say.channel:type_name -> game.v1.ChatChannel
+	0,  // 52: game.v1.Say.channel:type_name -> game.v1.ChatChannel
 	69, // 53: game.v1.TradeRequest.item:type_name -> game.v1.ItemLocation
 	69, // 54: game.v1.TradeOffer.item:type_name -> game.v1.ItemLocation
-	25, // 55: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
-	26, // 56: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
-	27, // 57: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
-	28, // 58: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
-	29, // 59: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
-	30, // 60: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
+	24, // 55: game.v1.MarketCommand.browse:type_name -> game.v1.MarketBrowse
+	25, // 56: game.v1.MarketCommand.create:type_name -> game.v1.MarketCreate
+	26, // 57: game.v1.MarketCommand.cancel:type_name -> game.v1.MarketCancel
+	27, // 58: game.v1.MarketCommand.accept:type_name -> game.v1.MarketAccept
+	28, // 59: game.v1.MarketCommand.withdraw:type_name -> game.v1.MarketWithdraw
+	29, // 60: game.v1.MarketCommand.close:type_name -> game.v1.MarketClose
 	70, // 61: game.v1.MarketCreate.side:type_name -> game.v1.MarketSide
 	71, // 62: game.v1.MarketCreate.mods:type_name -> game.v1.ItemMods
 	71, // 63: game.v1.MarketAccept.mods:type_name -> game.v1.ItemMods
-	32, // 64: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
-	33, // 65: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
-	34, // 66: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
-	35, // 67: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
-	36, // 68: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
-	37, // 69: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
-	38, // 70: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
-	39, // 71: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
-	40, // 72: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
-	43, // 73: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
-	41, // 74: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
-	42, // 75: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
-	2,  // 76: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
-	3,  // 77: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
+	31, // 64: game.v1.HouseCommand.rent:type_name -> game.v1.HouseRent
+	32, // 65: game.v1.HouseCommand.extend:type_name -> game.v1.HouseExtend
+	33, // 66: game.v1.HouseCommand.leave:type_name -> game.v1.HouseLeave
+	34, // 67: game.v1.HouseCommand.guest_add:type_name -> game.v1.HouseGuestAdd
+	35, // 68: game.v1.HouseCommand.guest_remove:type_name -> game.v1.HouseGuestRemove
+	36, // 69: game.v1.HouseCommand.guild_access:type_name -> game.v1.HouseGuildAccess
+	37, // 70: game.v1.HouseCommand.transfer_offer:type_name -> game.v1.HouseTransferOffer
+	38, // 71: game.v1.HouseCommand.transfer_cancel:type_name -> game.v1.HouseTransferCancel
+	39, // 72: game.v1.HouseCommand.transfer_accept:type_name -> game.v1.HouseTransferAccept
+	42, // 73: game.v1.HouseCommand.close:type_name -> game.v1.HouseClose
+	40, // 74: game.v1.HouseCommand.enter:type_name -> game.v1.HouseEnter
+	41, // 75: game.v1.HouseCommand.exit:type_name -> game.v1.HouseExit
+	1,  // 76: game.v1.PartyCommand.action:type_name -> game.v1.PartyAction
+	2,  // 77: game.v1.GuildCommand.action:type_name -> game.v1.GuildAction
 	72, // 78: game.v1.Craft.station:type_name -> game.v1.Position
 	72, // 79: game.v1.Refine.station:type_name -> game.v1.Position
 	69, // 80: game.v1.Refine.item:type_name -> game.v1.ItemLocation
 	71, // 81: game.v1.Refine.mods:type_name -> game.v1.ItemMods
 	73, // 82: game.v1.SetLook.look:type_name -> game.v1.BodyLook
-	61, // 83: game.v1.StashCommand.deposit:type_name -> game.v1.StashDeposit
-	62, // 84: game.v1.StashCommand.withdraw:type_name -> game.v1.StashWithdraw
-	63, // 85: game.v1.StashCommand.close:type_name -> game.v1.StashClose
+	60, // 83: game.v1.StashCommand.deposit:type_name -> game.v1.StashDeposit
+	61, // 84: game.v1.StashCommand.withdraw:type_name -> game.v1.StashWithdraw
+	62, // 85: game.v1.StashCommand.close:type_name -> game.v1.StashClose
 	69, // 86: game.v1.StashDeposit.from:type_name -> game.v1.ItemLocation
 	71, // 87: game.v1.StashWithdraw.mods:type_name -> game.v1.ItemMods
 	88, // [88:88] is the sub-list for method output_type
@@ -5192,7 +5135,7 @@ func file_game_v1_client_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_client_proto_rawDesc), len(file_game_v1_client_proto_rawDesc)),
-			NumEnums:      4,
+			NumEnums:      3,
 			NumMessages:   62,
 			NumExtensions: 0,
 			NumServices:   0,

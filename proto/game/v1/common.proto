@@ -149,3 +149,12 @@ message BodyLook {
   // old server: the client draws the male body.
   string sex = 6;
 }
+
+// FightStance is how a player fights (docs/02 "Combate"): the client asks for one
+// (SetFightMode) and the server sends back the saved one (Welcome.options).
+enum FightStance {
+  FIGHT_STANCE_UNSPECIFIED = 0;
+  FIGHT_STANCE_OFFENSIVE = 1;
+  FIGHT_STANCE_BALANCED = 2;
+  FIGHT_STANCE_DEFENSIVE = 3;
+}

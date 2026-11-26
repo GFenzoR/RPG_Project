@@ -7810,7 +7810,7 @@ var File_game_v1_server_proto protoreflect.FileDescriptor
 
 const file_game_v1_server_proto_rawDesc = "" +
 	"\n" +
-	"\x14game/v1/server.proto\x12\agame.v1\x1a\x14game/v1/client.proto\x1a\x14game/v1/common.proto\x1a\x19game/v1/livingworld.proto\"Q\n" +
+	"\x14game/v1/server.proto\x12\agame.v1\x1a\x14game/v1/common.proto\x1a\x19game/v1/livingworld.proto\"Q\n" +
 	"\vServerBatch\x12\x12\n" +
 	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12.\n" +
 	"\x06events\x18\x02 \x03(\v2\x16.game.v1.ServerMessageR\x06events\"\xbc\x19\n" +
@@ -8765,7 +8765,6 @@ func file_game_v1_server_proto_init() {
 	if File_game_v1_server_proto != nil {
 		return
 	}
-	file_game_v1_client_proto_init()
 	file_game_v1_common_proto_init()
 	file_game_v1_livingworld_proto_init()
 	file_game_v1_server_proto_msgTypes[1].OneofWrappers = []any{

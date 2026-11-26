@@ -95,13 +95,6 @@ message SetTarget {
   uint32 creature_id = 1;
 }
 
-enum FightStance {
-  FIGHT_STANCE_UNSPECIFIED = 0;
-  FIGHT_STANCE_OFFENSIVE = 1;
-  FIGHT_STANCE_BALANCED = 2;
-  FIGHT_STANCE_DEFENSIVE = 3;
-}
-
 // SetSafeMode turns the safe mode on or off (T5.2, docs/02 "PvP"). With it on (the
 // default; the server saves it per character, docs/05 "Opciones guardadas") the player cannot attack a player whom it
 // would be unjustified to attack, and its area spells skip those players. The client sends

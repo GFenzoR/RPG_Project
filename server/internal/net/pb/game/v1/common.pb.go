@@ -212,6 +212,60 @@ func (MarketSide) EnumDescriptor() ([]byte, []int) {
 	return file_game_v1_common_proto_rawDescGZIP(), []int{2}
 }
 
+// FightStance is how a player fights (docs/02 "Combate"): the client asks for one
+// (SetFightMode) and the server sends back the saved one (Welcome.options).
+type FightStance int32
+
+const (
+	FightStance_FIGHT_STANCE_UNSPECIFIED FightStance = 0
+	FightStance_FIGHT_STANCE_OFFENSIVE   FightStance = 1
+	FightStance_FIGHT_STANCE_BALANCED    FightStance = 2
+	FightStance_FIGHT_STANCE_DEFENSIVE   FightStance = 3
+)
+
+// Enum value maps for FightStance.
+var (
+	FightStance_name = map[int32]string{
+		0: "FIGHT_STANCE_UNSPECIFIED",
+		1: "FIGHT_STANCE_OFFENSIVE",
+		2: "FIGHT_STANCE_BALANCED",
+		3: "FIGHT_STANCE_DEFENSIVE",
+	}
+	FightStance_value = map[string]int32{
+		"FIGHT_STANCE_UNSPECIFIED": 0,
+		"FIGHT_STANCE_OFFENSIVE":   1,
+		"FIGHT_STANCE_BALANCED":    2,
+		"FIGHT_STANCE_DEFENSIVE":   3,
+	}
+)
+
+func (x FightStance) Enum() *FightStance {
+	p := new(FightStance)
+	*p = x
+	return p
+}
+
+func (x FightStance) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FightStance) Descriptor() protoreflect.EnumDescriptor {
+	return file_game_v1_common_proto_enumTypes[3].Descriptor()
+}
+
+func (FightStance) Type() protoreflect.EnumType {
+	return &file_game_v1_common_proto_enumTypes[3]
+}
+
+func (x FightStance) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FightStance.Descriptor instead.
+func (FightStance) EnumDescriptor() ([]byte, []int) {
+	return file_game_v1_common_proto_rawDescGZIP(), []int{3}
+}
+
 // Position is a tile in the global world space: x, y in [0, 65535], z (floor) in
 // [0, 15], floor 7 = sea level, lower numbers are higher up.
 type Position struct {
@@ -1039,7 +1093,12 @@ const file_game_v1_common_proto_rawDesc = "" +
 	"MarketSide\x12\x1b\n" +
 	"\x17MARKET_SIDE_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10MARKET_SIDE_SELL\x10\x01\x12\x13\n" +
-	"\x0fMARKET_SIDE_BUY\x10\x02BFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
+	"\x0fMARKET_SIDE_BUY\x10\x02*~\n" +
+	"\vFightStance\x12\x1c\n" +
+	"\x18FIGHT_STANCE_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16FIGHT_STANCE_OFFENSIVE\x10\x01\x12\x19\n" +
+	"\x15FIGHT_STANCE_BALANCED\x10\x02\x12\x1a\n" +
+	"\x16FIGHT_STANCE_DEFENSIVE\x10\x03BFZDgithub.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1;gamev1b\x06proto3"
 
 var (
 	file_game_v1_common_proto_rawDescOnce sync.Once
@@ -1053,30 +1112,31 @@ func file_game_v1_common_proto_rawDescGZIP() []byte {
 	return file_game_v1_common_proto_rawDescData
 }
 
-var file_game_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_game_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_game_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_game_v1_common_proto_goTypes = []any{
 	(Direction)(0),        // 0: game.v1.Direction
 	(EquipmentSlot)(0),    // 1: game.v1.EquipmentSlot
 	(MarketSide)(0),       // 2: game.v1.MarketSide
-	(*Position)(nil),      // 3: game.v1.Position
-	(*ContainerSlot)(nil), // 4: game.v1.ContainerSlot
-	(*ItemLocation)(nil),  // 5: game.v1.ItemLocation
-	(*ActionTarget)(nil),  // 6: game.v1.ActionTarget
-	(*ItemStack)(nil),     // 7: game.v1.ItemStack
-	(*ItemMods)(nil),      // 8: game.v1.ItemMods
-	(*LocalizedText)(nil), // 9: game.v1.LocalizedText
-	(*TextParam)(nil),     // 10: game.v1.TextParam
-	(*BodyLook)(nil),      // 11: game.v1.BodyLook
+	(FightStance)(0),      // 3: game.v1.FightStance
+	(*Position)(nil),      // 4: game.v1.Position
+	(*ContainerSlot)(nil), // 5: game.v1.ContainerSlot
+	(*ItemLocation)(nil),  // 6: game.v1.ItemLocation
+	(*ActionTarget)(nil),  // 7: game.v1.ActionTarget
+	(*ItemStack)(nil),     // 8: game.v1.ItemStack
+	(*ItemMods)(nil),      // 9: game.v1.ItemMods
+	(*LocalizedText)(nil), // 10: game.v1.LocalizedText
+	(*TextParam)(nil),     // 11: game.v1.TextParam
+	(*BodyLook)(nil),      // 12: game.v1.BodyLook
 }
 var file_game_v1_common_proto_depIdxs = []int32{
-	3,  // 0: game.v1.ItemLocation.pos:type_name -> game.v1.Position
+	4,  // 0: game.v1.ItemLocation.pos:type_name -> game.v1.Position
 	1,  // 1: game.v1.ItemLocation.slot:type_name -> game.v1.EquipmentSlot
-	4,  // 2: game.v1.ItemLocation.container:type_name -> game.v1.ContainerSlot
-	3,  // 3: game.v1.ActionTarget.pos:type_name -> game.v1.Position
-	8,  // 4: game.v1.ItemStack.mods:type_name -> game.v1.ItemMods
-	10, // 5: game.v1.LocalizedText.params:type_name -> game.v1.TextParam
-	7,  // 6: game.v1.TextParam.item:type_name -> game.v1.ItemStack
+	5,  // 2: game.v1.ItemLocation.container:type_name -> game.v1.ContainerSlot
+	4,  // 3: game.v1.ActionTarget.pos:type_name -> game.v1.Position
+	9,  // 4: game.v1.ItemStack.mods:type_name -> game.v1.ItemMods
+	11, // 5: game.v1.LocalizedText.params:type_name -> game.v1.TextParam
+	8,  // 6: game.v1.TextParam.item:type_name -> game.v1.ItemStack
 	7,  // [7:7] is the sub-list for method output_type
 	7,  // [7:7] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
@@ -1110,7 +1170,7 @@ func file_game_v1_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_common_proto_rawDesc), len(file_game_v1_common_proto_rawDesc)),
-			NumEnums:      3,
+			NumEnums:      4,
 			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,

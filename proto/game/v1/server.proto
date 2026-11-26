@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package game.v1;
 
-import "game/v1/client.proto";
 import "game/v1/common.proto";
 import "game/v1/livingworld.proto";
 
