@@ -530,6 +530,75 @@ export function wallTiles(
   return out;
 }
 
+// ---- the ground under a wall ---------------------------------------------------------------
+// A wall stands on the line between two grounds, and its piece is thinner than its tile: with
+// the tile painted whole as the room's floor, the floor showed past the wall, outside the
+// building. So the tile of a wall is split down the middle: each half facing a neighbour with
+// another ground (and no wall) shows that neighbour's ground, the floor stays on the inner
+// half and the wall hides the seam. The threshold of a doorway (an open tile in a straight
+// gap of up to DOORWAY_TILES between two walls) is split the same way across the gap.
+
+/** The widest gap in a wall that is a doorway and not open ground, tiles. */
+export const DOORWAY_TILES = 3;
+
+/**
+ * Which halves of tile (x, y) show the neighbour's ground instead of its own: WALL_N |
+ * WALL_E | WALL_S | WALL_W bits, 0 for nearly every tile. `groundAt` and `wallAt` read any
+ * tile (the neighbour chunks too).
+ */
+export function groundSplit(
+  x: number,
+  y: number,
+  groundAt: (x: number, y: number) => string | null | undefined,
+  wallAt: (x: number, y: number) => boolean,
+): number {
+  const own = groundAt(x, y);
+  if (typeof own !== "string") return 0;
+  const other = (dx: number, dy: number): boolean => {
+    const g = groundAt(x + dx, y + dy);
+    return typeof g === "string" && g !== own && !wallAt(x + dx, y + dy);
+  };
+  const mask =
+    (other(0, -1) ? WALL_N : 0) |
+    (other(1, 0) ? WALL_E : 0) |
+    (other(0, 1) ? WALL_S : 0) |
+    (other(-1, 0) ? WALL_W : 0);
+  if (mask === 0 || wallAt(x, y)) return mask;
+  /** How many tiles to the first wall along (dx, dy), 0 when none is near. */
+  const toWall = (dx: number, dy: number): number => {
+    for (let d = 1; d <= DOORWAY_TILES; d++) if (wallAt(x + dx * d, y + dy * d)) return d;
+    return 0;
+  };
+  const gap = (dx: number, dy: number): boolean => {
+    const a = toWall(-dx, -dy);
+    const b = a > 0 ? toWall(dx, dy) : 0;
+    return b > 0 && a + b - 1 <= DOORWAY_TILES;
+  };
+  let across = 0;
+  if (mask & (WALL_N | WALL_S) && gap(1, 0)) across |= WALL_N | WALL_S;
+  if (mask & (WALL_E | WALL_W) && gap(0, 1)) across |= WALL_E | WALL_W;
+  return mask & across;
+}
+
+/** The half of a tile a groundSplit bit covers, in fractions of the tile. */
+export function splitHalf(bit: number): { x: number; y: number; w: number; h: number } {
+  if (bit === WALL_N) return { x: 0, y: 0, w: 1, h: 0.5 };
+  if (bit === WALL_S) return { x: 0, y: 0.5, w: 1, h: 0.5 };
+  if (bit === WALL_E) return { x: 0.5, y: 0, w: 0.5, h: 1 };
+  return { x: 0, y: 0, w: 0.5, h: 1 };
+}
+
+/** The neighbour a groundSplit bit faces. */
+export function splitSide(bit: number): { dx: number; dy: number } {
+  if (bit === WALL_N) return { dx: 0, dy: -1 };
+  if (bit === WALL_S) return { dx: 0, dy: 1 };
+  if (bit === WALL_E) return { dx: 1, dy: 0 };
+  return { dx: -1, dy: 0 };
+}
+
+/** The four groundSplit bits, in drawing order. */
+export const SPLIT_BITS: readonly number[] = [WALL_N, WALL_E, WALL_S, WALL_W];
+
 /** ART-8: what is stacked on raising items never rises more than this, sprite pixels. */
 export const MAX_ELEVATION = 24;
 
@@ -562,8 +631,6 @@ export const CELL_WALL = 1;
 export const CELL_UNKNOWN = 2;
 /** How far beyond a chunk's edge indoorTiles looks for the way out, tiles. */
 export const INDOOR_REACH = 16;
-/** The widest gap in a wall that is a doorway and not open ground, tiles. */
-export const DOORWAY_TILES = 3;
 /** Walled ground bigger than this is a courtyard under the sky, not a room, tiles. */
 export const MAX_INDOOR_AREA = 400;
 

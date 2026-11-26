@@ -713,3 +713,56 @@ describe("MapView indoors", () => {
     expect(layer(v, 2).alpha).toBe(CAST_SHADOW_ALPHA);
   });
 });
+
+// The floor of a room never shows past its wall (tile-art.ts groundSplit).
+describe("MapView ground under a wall", () => {
+  const grass = Texture.WHITE;
+  const boards = new Texture({ source: Texture.WHITE.source });
+  const wallArt: TileArt<Texture> = {
+    base: Texture.WHITE,
+    ms: 250,
+    sync: "world",
+    joinsWalls: true,
+    light: 0,
+    anchorX: 1,
+    wall: Array.from({ length: 16 }, () => Texture.WHITE),
+  };
+
+  it("draws the outer half of a wall's tile with the ground outside", () => {
+    // Boards from x = 4 on, the wall on their first column: grass lies to its west.
+    const ground = new Array<string | null>(32 * 32).fill("grass");
+    const items: { x: number; y: number; stack: string[] }[] = [];
+    for (let y = 0; y < 32; y++) {
+      for (let x = 4; x < 32; x++) ground[y * 32 + x] = "boards";
+      items.push({ x: 4, y, stack: ["wall"] });
+    }
+    const chunks = new Map<string, ChunkData>([["7/0/0", { ground, items }]]);
+    const v = new MapView({
+      source: { chunk: (z, cx, cy) => chunks.get(`${z}/${cx}/${cy}`) },
+      texture: (id) => (id === "boards" ? boards : grass),
+      art: (id) => (id === "wall" ? wallArt : undefined),
+      tileSize: T,
+      floor: 7,
+    });
+    v.render({ x: 0, y: 0, zoom: 1 }, { width: 2048, height: 1024 });
+    const sprites = (layer(v, 0).children[0] as Container).children as Sprite[];
+    // One half per wall tile, and nothing else: 32 x 32 grounds and 32 halves.
+    expect(sprites).toHaveLength(32 * 32 + 32);
+    const on = sprites.filter((s) => s.x === 4 * T && s.y === 6 * T);
+    expect(on).toHaveLength(2);
+    const [whole, half] = on as [Sprite, Sprite];
+    expect(whole.texture).toBe(boards);
+    expect([whole.width, whole.height]).toEqual([T, T]);
+    // The west half, over the boards, cut from the grass.
+    expect([half.width, half.height]).toEqual([T / 2, T]);
+    expect(half.texture.source).toBe(grass.source);
+    expect(half.texture.frame.width).toBe(grass.frame.width / 2);
+    expect(half.texture.frame.height).toBe(grass.frame.height);
+    expect(half.tint).toBe(whole.tint);
+    expect(sprites.indexOf(half)).toBeGreaterThan(sprites.indexOf(whole));
+    // The same half texture serves every wall tile.
+    const other = sprites.filter((s) => s.x === 4 * T && s.y === 7 * T)[1] as Sprite;
+    expect(other.texture).toBe(half.texture);
+    v.destroy();
+  });
+});
