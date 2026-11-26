@@ -113,7 +113,7 @@ el punto 5:
   "hay edificios en los que el piso sale hacia afuera del muro")**: `make validate` exige que
   un suelo `ground.floor: building` (`wooden_floor`) tenga muro, puerta u otro piso en cada
   lado (docs/03 "Pisos de edificio"); excepciones por el suelo `floor: open` (`dock_planks`).
-  Auditadas las 5 islas: el puesto de pruebas y cinco huecos de entrada (puerto 2, volcán,
+  Auditadas las islas: el puesto de pruebas y cuatro huecos de entrada (puerto 2, volcán,
   bosque) pasaron a `dock_planks`. Pendiente: pisos de piedra de interior (`stone_floor`) no
   se comprueban, porque el mismo suelo es plaza al aire libre; un suelo de interior propio
   los cubriría.
