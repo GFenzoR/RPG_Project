@@ -6,7 +6,9 @@
 // pieces on it (tile art `flat`: they lie inside their tile, so a creature whose sprite
 // reaches over the next tile is never cut by that tile's fringe), then the cast shadows of
 // trees and buildings (translucent), then the item stacks tile by tile in global row-major
-// order (across chunk borders), bottom to top. Items bigger than a tile are anchored at the
+// order (across chunk borders), bottom to top. With `indoors` (the game client, on floors
+// under the sky), the ground of the tiles walls close in is drawn after the shadows instead
+// of before them: the sun's shadows of walls, trees and creatures never show under a roof. Items bigger than a tile are anchored at the
 // bottom-right corner of their tile (or centred on it, tile art anchor bc) and extend up,
 // over the tiles before them: a wall piece (32x64, docs/17 ART-3) puts its top over the
 // tile behind it and hides what stands there.
@@ -27,6 +29,10 @@ import type { Texture } from "pixi.js";
 import { CHUNK_TILES, tilePixels, visibleChunks } from "./camera.ts";
 import type { Camera, ViewSize } from "./camera.ts";
 import {
+  CELL_OPEN,
+  CELL_UNKNOWN,
+  CELL_WALL,
+  INDOOR_REACH,
   MAX_ELEVATION,
   PARTICLE_KINDS,
   frameAt,
@@ -35,6 +41,7 @@ import {
   groundDecal,
   groundLook,
   groundTone,
+  indoorTiles,
   lookOf,
   stackElevation,
   tileHash,
@@ -86,6 +93,12 @@ export interface MapViewOptions {
   /** Sprite pixels per tile (the atlas tileSize). */
   tileSize: number;
   floor: number;
+  /**
+   * Floors whose buildings keep the sun out (docs/17 ART-5): on them the ground of the tiles
+   * indoors (tile-art.ts indoorTiles) is drawn over the ground overlay and the cast shadows,
+   * so no sun shadow shows in there, and indoorAt answers. Absent: no floor (the editor).
+   */
+  indoors?: ((floor: number) => boolean) | undefined;
 }
 
 /** A sprite that plays frames (an animated ground or item). */
@@ -103,6 +116,12 @@ interface Animated {
 interface CachedChunk {
   data: ChunkData;
   ground: Container;
+  /** The ground of its indoor tiles (drawn over the shadows), when it has any. */
+  roofed: Container | undefined;
+  /** Which of its tiles are indoors (indoorTiles), null when none or not asked. */
+  indoor: Uint8Array | null;
+  /** The chunks that mask was read from, as they were. */
+  indoorDeps: { cx: number; cy: number; data: ChunkData | undefined }[];
   shadows: Container | undefined;
   items: Sprite[];
   /** Global tile x, y and item id of each of `items` (same order): forEachItemSprite. */
@@ -185,6 +204,7 @@ export class MapView {
     isRenderGroup: true,
     alpha: CAST_SHADOW_ALPHA,
   });
+  private readonly indoorLayer = new Container({ label: "indoor ground", isRenderGroup: true });
   private readonly itemLayer = new Container({
     label: "items",
     isRenderGroup: true,
@@ -197,6 +217,9 @@ export class MapView {
   private readonly texture: TextureLookup;
   private readonly art: ArtLookup | undefined;
   private readonly elevation: ElevationLookup | undefined;
+  private readonly indoors: ((floor: number) => boolean) | undefined;
+  /** Open, wall or unknown for each tile of a chunk object (indoorTiles). */
+  private readonly cells = new WeakMap<ChunkData, Uint8Array>();
   private floorZ: number;
   /** Every animated sprite of the cached chunks; rebuilt when chunks come or go. */
   private animated: Animated[] = [];
@@ -217,12 +240,14 @@ export class MapView {
     this.texture = opts.texture;
     this.art = opts.art;
     this.elevation = opts.elevation;
+    this.indoors = opts.indoors;
     this.tileSize = opts.tileSize;
     this.floorZ = opts.floor;
     this.world.addChild(
       this.groundLayer,
       this.groundOverlay,
       this.shadowLayer,
+      this.indoorLayer,
       this.itemLayer,
       this.overlay,
     );
@@ -269,7 +294,7 @@ export class MapView {
         const key = `${cx},${cy}`;
         const data = this.source.chunk(this.floorZ, cx, cy);
         const cached = this.cache.get(key);
-        if (cached && (cached.data !== data || this.depsChanged(cached))) this.drop(key);
+        if (cached && (cached.data !== data || this.depsChanged(cached, cx, cy))) this.drop(key);
         if (!data) continue;
         wanted.add(key);
         if (!this.cache.has(key)) {
@@ -326,12 +351,27 @@ export class MapView {
   }
 
   /**
+   * Whether tile (x, y) of the current floor is indoors: closed in by walls, on a floor the
+   * `indoors` option names (false without it, and for tiles of chunks not built). No sun
+   * shadow shows there: the caller gives a creature standing on it none.
+   */
+  indoorAt(x: number, y: number): boolean {
+    if (x < 0 || y < 0) return false;
+    const c = this.cache.get(`${Math.floor(x / CHUNK_TILES)},${Math.floor(y / CHUNK_TILES)}`);
+    return c?.indoor?.[(y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES)] === 1;
+  }
+
+  /**
    * How strong the baked cast shadows of trees and buildings are, 0..1 of
    * CAST_SHADOW_ALPHA: the client's day and night fades them with the sun (cheap: one
    * alpha on their layer). 1 by default; the editor never changes it.
    */
   set castShadowStrength(k: number) {
-    this.shadowLayer.alpha = CAST_SHADOW_ALPHA * Math.min(1, Math.max(0, k));
+    const a = CAST_SHADOW_ALPHA * Math.min(1, Math.max(0, k));
+    this.shadowLayer.alpha = a;
+    // At 0 the layer is not drawn at all: the client casts every object's shadow itself
+    // (render/object-shadows.ts), so nothing has two.
+    this.shadowLayer.visible = a > 0;
   }
 
   get castShadowStrength(): number {
@@ -424,8 +464,10 @@ export class MapView {
 
   /**
    * Calls fn for every item sprite of the built chunks (not the flat border pieces): its
-   * global tile, item id (the source's key, see ChunkData) and sprite. The caller may skew or nudge a sprite (the living
-   * world's plants) but must not keep it past the next version change.
+   * global tile, item id (the source's key, see ChunkData) and sprite. The caller may skew or
+   * nudge a sprite, or hide it and draw its own view in its place (same parent, position and
+   * zIndex, sorted after it: the living world's plants in the wind), but must not keep it
+   * past the next version change.
    */
   forEachItemSprite(fn: (x: number, y: number, id: string, sprite: Sprite) => void): void {
     for (const c of this.cache.values()) {
@@ -520,9 +562,66 @@ export class MapView {
     return out;
   }
 
-  private depsChanged(c: CachedChunk): boolean {
+  private depsChanged(c: CachedChunk, cx: number, cy: number): boolean {
     for (const d of c.deps) if (this.source.chunk(this.floorZ, d.cx, d.cy) !== d.data) return true;
+    // A neighbour the indoor tiles were read from changed: only a change of the mask itself
+    // (a wall built or seen, never an item dropped there) redraws the chunk.
+    let moved = false;
+    for (const d of c.indoorDeps)
+      if (this.source.chunk(this.floorZ, d.cx, d.cy) !== d.data) moved = true;
+    if (!moved) return false;
+    const now = this.indoorOf(cx, cy, c.data);
+    if (!sameBytes(now.mask, c.indoor)) return true;
+    c.indoorDeps = now.deps;
     return false;
+  }
+
+  private cellsOf(data: ChunkData): Uint8Array {
+    let cells = this.cells.get(data);
+    if (!cells) {
+      cells = new Uint8Array(CHUNK_TILES * CHUNK_TILES);
+      const walls = this.wallsOf(data);
+      for (let i = 0; i < cells.length; i++) {
+        const g = data.ground[i];
+        cells[i] =
+          walls[i] === 1 ? CELL_WALL : g === null || g === undefined ? CELL_UNKNOWN : CELL_OPEN;
+      }
+      this.cells.set(data, cells);
+    }
+    return cells;
+  }
+
+  /** The indoor tiles of chunk (cx, cy) on a floor that has them, and the chunks read. */
+  private indoorOf(
+    cx: number,
+    cy: number,
+    data: ChunkData,
+  ): { mask: Uint8Array | null; deps: CachedChunk["indoorDeps"] } {
+    if (!this.indoors?.(this.floorZ)) return NO_INDOOR;
+    const deps: CachedChunk["indoorDeps"] = [];
+    const around: (Uint8Array | undefined)[] = [];
+    for (let oy = -1; oy <= 1; oy++)
+      for (let ox = -1; ox <= 1; ox++) {
+        if (ox === 0 && oy === 0) {
+          around.push(this.cellsOf(data));
+          continue;
+        }
+        const ncx = cx + ox;
+        const ncy = cy + oy;
+        const d = ncx < 0 || ncy < 0 ? undefined : this.source.chunk(this.floorZ, ncx, ncy);
+        deps.push({ cx: ncx, cy: ncy, data: d });
+        around.push(d ? this.cellsOf(d) : undefined);
+      }
+    const mask = indoorTiles(CHUNK_TILES, INDOOR_REACH, (x, y) => {
+      const ox = x < 0 ? 0 : x >= CHUNK_TILES ? 2 : 1;
+      const oy = y < 0 ? 0 : y >= CHUNK_TILES ? 2 : 1;
+      const cells = around[oy * 3 + ox];
+      if (!cells) return CELL_UNKNOWN;
+      const lx = x - (ox - 1) * CHUNK_TILES;
+      const ly = y - (oy - 1) * CHUNK_TILES;
+      return cells[ly * CHUNK_TILES + lx] ?? CELL_UNKNOWN;
+    });
+    return { mask, deps };
   }
 
   private build(key: string, cx: number, cy: number, data: ChunkData): void {
@@ -535,6 +634,13 @@ export class MapView {
     const animated: Animated[] = [];
     const emitters: number[] = [];
     const ground = new Container({ label: `ground ${key}`, x: ox, y: oy });
+    const { mask: indoor, deps: indoorDeps } = this.indoorOf(cx, cy, data);
+    /** The ground, decals and border pieces of the indoor tiles: drawn over the shadows. */
+    const roofed = indoor ? new Container({ label: `indoor ${key}`, x: ox, y: oy }) : undefined;
+    const roofedDecals: Sprite[] = [];
+    const roofedFlats: Sprite[] = [];
+    const under = (lx: number, ly: number): boolean =>
+      indoor !== null && indoor[ly * CHUNK_TILES + lx] === 1;
     const deps = new Map<string, CachedChunk["deps"][number]>();
     /** The chunk holding global tile (x, y): this one, or a neighbour (then a dependency). */
     const chunkAt = (x: number, y: number): ChunkData | undefined => {
@@ -578,14 +684,15 @@ export class MapView {
         if (art?.frames) animated.push(animatedOf(sprite, art, hash, 0));
         if (art?.particles && (art.particles !== "spray" || edgeOf(data.ground, lx, ly, id)))
           emitters.push(x, y, PARTICLE_KINDS.indexOf(art.particles));
-        ground.addChild(sprite);
+        const inside = under(lx, ly);
+        (inside && roofed ? roofed : ground).addChild(sprite);
         const d = art?.decals ? groundDecal(x, y, z, art.decals.length) : -1;
         if (art?.decals && d >= 0 && inField(x, y, id)) {
           const decal = new Sprite({ texture: art.decals[d] as Texture, x: lx * T, y: ly * T });
           decal.width = T;
           decal.height = T;
           decal.tint = tint;
-          decals.push(decal);
+          (inside ? roofedDecals : decals).push(decal);
         }
       }
     }
@@ -632,7 +739,7 @@ export class MapView {
           sprite.position.set((s.x + ax) * T, (s.y + 1) * T - raised);
           // Tinted like the ground it comes from: the tone is the same function of position.
           sprite.tint = groundTone(x, y, z);
-          flats.push(sprite);
+          (under(s.x, s.y) ? roofedFlats : flats).push(sprite);
         } else {
           sprite.position.set(ox + (s.x + ax) * T, oy + (s.y + 1) * T - raised);
           sprite.zIndex = itemZIndex(x, y, i);
@@ -666,11 +773,19 @@ export class MapView {
     }
     if (flats.length > 0) ground.addChild(...flats);
     this.groundLayer.addChild(ground);
+    if (roofed) {
+      if (roofedDecals.length > 0) roofed.addChild(...roofedDecals);
+      if (roofedFlats.length > 0) roofed.addChild(...roofedFlats);
+      this.indoorLayer.addChild(roofed);
+    }
     if (shadows) this.shadowLayer.addChild(shadows);
     if (items.length > 0) this.itemLayer.addChild(...items);
     this.cache.set(key, {
       data,
       ground,
+      roofed,
+      indoor,
+      indoorDeps,
       shadows,
       items,
       itemTiles,
@@ -689,6 +804,7 @@ export class MapView {
     const c = this.cache.get(key);
     if (!c) return;
     c.ground.destroy({ children: true });
+    c.roofed?.destroy({ children: true });
     c.shadows?.destroy({ children: true });
     for (const sprite of c.items) sprite.destroy();
     if (c.animated.length > 0) this.animatedStale = true;
@@ -702,6 +818,17 @@ export class MapView {
 }
 
 const EMPTY_WALLS = new Uint8Array(CHUNK_TILES * CHUNK_TILES);
+const NO_INDOOR: { mask: Uint8Array | null; deps: CachedChunk["indoorDeps"] } = {
+  mask: null,
+  deps: [],
+};
+
+function sameBytes(a: Uint8Array | null, b: Uint8Array | null): boolean {
+  if (a === null || b === null) return a === b;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
 const NO_SPRITES: readonly Sprite[] = [];
 
 /** A sprite's rectangle in its parent's units, from its texture, anchor and scale. */

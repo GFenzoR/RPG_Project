@@ -1,5 +1,6 @@
 id: bosque_merchant
 name: npc.bosque_merchant.name
+role: npc.bosque_merchant.role
 sprite: npcs/bosque_merchant
 look:
   sex: female

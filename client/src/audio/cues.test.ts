@@ -72,6 +72,12 @@ describe("cuesOf", () => {
     expect(cuesOf(move(8), ctx)).toEqual([]);
   });
 
+  it("an own step has no cue when the canvas sounds it at each footfall (living world)", () => {
+    const step = msg({ case: "creatureMove", value: { id: 7, from: at, to: at, durationMs: 200 } });
+    expect(cuesOf(step, { ...ctx, footfalls: true })).toEqual([]);
+    expect(cuesOf(step, { ...ctx, footfalls: false })).toEqual([{ events: ["step.self"] }]);
+  });
+
   it("an own step sounds like the surface it lands on, then like any step (living world)", () => {
     const to = { x: 4, y: 5, z: 7 };
     const step = msg({ case: "creatureMove", value: { id: 7, from: at, to, durationMs: 200 } });
@@ -218,8 +224,8 @@ describe("assets/sounds.yaml", () => {
       for (const id of pool) expect(m.sounds[id]?.channel, `${island} ${id}`).toBe("music");
     }
     expect(m.music.underground).toBe("cave");
-    // The owner's picks of 2026-11-18: Puerto alternates its three takes, the caves more.
-    expect(m.music.pools[m.music.islands["puerto"] ?? ""]?.length).toBe(3);
+    // The owner's picks of 2026-11-18: Puerto alternates its three takes (plus the dusk version of 2026-11-26), the caves more.
+    expect(m.music.pools[m.music.islands["puerto"] ?? ""]?.length).toBe(4);
     expect(m.music.pools["cave"]?.length ?? 0).toBeGreaterThan(1);
   });
 

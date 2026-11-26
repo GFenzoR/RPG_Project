@@ -1,5 +1,6 @@
 id: volcan_priest
 name: npc.volcan_priest.name
+role: npc_role.healer   # she also keeps a shop: the default would say merchant
 sprite: npcs/volcan_priest
 look:
   sex: female

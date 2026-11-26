@@ -127,6 +127,7 @@ python tools/gemini/gemini_web.py check [--list-modes]       solo lectura: ¿con
 python tools/gemini/gemini_web.py image "<prompt>" --name N [--ref assets/....png] [--out-dir DIR]
 python tools/gemini/music_web.py ask "<prompt>" --name N [--out-dir DIR]   |   fetch <url> --name N
 python tools/gemini/music_queue.py run|status [--slots a,b] [--takes 2] [--into DIR]
+python tools/gemini/music_queue.py run --slots bosque_mist,cave_echo --takes 1   versiones (`versions` de music_slots.json)
 python tools/gemini/music_style.py <tema>|--all      el prompt con que se pide cada tema
 python tools/gemini/import_art.py <hoja.png> --grid 4x2 --size 32 --layer creature --prefix walk_s
 python tools/gemini/import_art.py <hoja.png> --cut rows|blobs --size 64 --names "walk_s_0,-,idle_s_0+attack_s_0,..."
@@ -188,6 +189,11 @@ copian a mano después de mirarlos, y ningún tema entra sin que el dueño lo ha
   tal ("el límite se restablece", "has alcanzado el límite"). Gemini escribe un resumen del
   tema mientras lo hace, y un "limited percussion" en él cortaba la espera a los 50 s.
   `QUOTA_WORDS` va por palabras enteras (`límite` ya no se encuentra en "limited").
+- **"No music generation tool is available" con "Crear música" elegida** (2026-11-25): la
+  respuesta llega como texto (un plan de composición) y queda `nothing`. Una suelta se
+  arregla sola (el pedido siguiente, a los 10 min, trajo tema); tres seguidas después de
+  ocho temas en una hora y media fueron el tope de la noche: se corta la cola y se sigue
+  otro día. El menú hoy dice Hydrogen, Neon y Carbon (Argon ya no está).
 - **Un menú de modos vacío o renombrado es la página que cambió, no la cuota:** el pedido
   termina `not_sent` y dice que se mire `gemini_web.py check --list-modes`.
 
@@ -244,8 +250,9 @@ cerca; uno de Gemini que el techo de pico deja más bajo lo compensa con el volu
 
 **De las elecciones al juego (`music_import.py`, `make music-gemini`):** lee `picks.json`
 (una toma, una lista de tomas, `none` u `off`; un lugar sin elegir = toma 1 provisional;
-`combat` solo `none`/`off`; `cave_pool` = las versiones extra de cueva, y sin ella entran
-como provisionales las de `Slot.extras` que pasan `piece_problems`), convierte cada toma
+`combat` solo `none`/`off`; `<lugar>_pool` (`cave_pool`, `bosque_pool`...) = las versiones
+extra de ese lugar, y sin ella entran como provisionales las de `Slot.extras` que pasan
+`piece_problems`), convierte cada toma
 entera en estéreo (`KBPS` = 48, `AMBIENT_KBPS` = 40 para las cuevas; las ya convertidas
 con los mismos ajustes, `ANALYSIS` y los `ENTRY_*` incluidos (`entry_settings` en el
 registro; uno de antes cuenta con los de `ANALYSIS` 1), se reusan desde
@@ -264,6 +271,20 @@ dos parlantes: un tema estéreo y uno mono de soundgen al mismo LUFS suenan igua
 recetas siguen en el repo. Las tablas de lugares (`SLOTS`: sonido, regla, tema de soundgen)
 y de nombres (`ALIASES`: la toma 3 de Puerto es `probe_1`) están en el script.
 
+**Más temas del mismo estilo (dueño, 2026-11-25: "un soundtrack más amplio"):** una
+**versión** es otro tema para la pool de un lugar, pedido con el texto de ese lugar y otro
+instrumento principal, ánimo o tempo. Las de `music_slots.json` `versions` (`id`:
+`<lugar>_<nombre>`, `of`: su lugar; dos por lugar con música: siete entregadas el
+2026-11-25 y cinco por pedir, docs/14) se piden solo por nombre
+(`music_queue.py run --slots <id>,... --takes 1 --into build/music-gemini`, que deja
+`<id>_1.mp4`; si la primera respuesta no trajo tema, el archivo es `<id>_2.mp4` y va en
+`ALIASES`). El importador las toma como versiones extra de su lugar (`<lugar>_pool` en
+`picks.json`: `"bosque_pool": ["mist", "hollow"]`; sonido `music_bosque_mist`, archivo
+`bosque_mist_1.ogg`). **`Slot.extras` lleva las versiones entregadas que caben en el presupuesto** (docs/07
+"Audio": 24 MiB en total): esas suenan como provisionales hasta que el dueño las escuche;
+las demás quedan en `build/music-gemini/` y entran cuando él las liste (si no caben, `make
+music-gemini` falla en el presupuesto: sacar otra o subir el tope en `BUDGET` y docs/07).
+
 **Tests:** `make test-gemini` (unittest; claves, cortes, escala, paleta y bandas, costura,
 crossfade, ganancia, lectura de respuestas y del menú, la regla del prompt, el candado, la
 cola contra un Gemini falso, y una conversión real si hay ffmpeg con libopus). No están en
@@ -274,7 +295,8 @@ cambia `tools/gemini/`, `tools/spritegen/src/palette.ts` (la paleta que lee `imp
 ## soundgen
 `tools/soundgen` (T3.7) genera los efectos, la música y el ambiente propios de
 `assets/sounds/`. Es un sintetizador determinista en TS (`synth.ts`) con las recetas en
-`sfx.ts` y `music.ts`, y encoda a Ogg Opus con ffmpeg. Uso: `make sounds` (o
+`sfx.ts`, `music.ts`, `ambience.ts` (el ambiente del mundo vivo) y `steps.ts` (las pisadas
+por superficie, niveladas por sonoridad), y encoda a Ogg Opus con ffmpeg. Uso: `make sounds` (o
 `ONLY=sfx/hit`). `cli.ts check` solo revisa el presupuesto de tamaño. Los `.ogg` se
 commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
 
@@ -283,7 +305,7 @@ commitean. Cómo cambiar a un pack de terceros: `assets/README.md`, "Sonido".
 de recetas en código: `src/recipes/{terrain,ground,walls,trees,props,portals,items,creatures,effects,ui}.ts`
 (`ground.ts`: suelos con sus looks y detalles sueltos y el agua y la lava animadas;
 `variety.ts`: cómo un look conserva el anillo del principal y redibuja el corazón, docs/17 ART-4; `walls.ts`: las 16 piezas de
-cada muro y las puertas metidas en él; `trees.ts`: árboles y arbusto con viento y sombra;
+cada muro y las puertas metidas en él; `trees.ts`: árboles y arbusto con su sombra y su metadata de viento;
 `props.ts`: fragua, fogón, antorcha, estandarte, brasero y fuente animados; `portals.ts`:
 escaleras de mano, agujeros, puntos de soga y teletransportes; arte del mapa en
 `assets/README.md`, "Arte del mapa"), con la paleta de
@@ -321,6 +343,31 @@ pergamino y el cofre de recompensa (`specs/lore.ts`, docs/02 "Libros y cofres"),
 de props de pueblo (`specs/town.ts`, docs/17 "Kit de props de pueblo": barril, mesa,
 banco, estante, cama, farol, pozo, sacos, red de pesca, jardinera, puesto de mercado y
 mástil con bandera), y desde el 2026-11-19 el humanoide (`specs/humanoid/`, abajo).
+
+**Plantas y viento (regla, dueño 2026-11-24).** Toda receta o spec de una planta (árbol,
+palmera, arbusto, hierba, junco, flor, enredadera, cactus, árbol seco) **declara su
+metadata de viento**: `wind: plantWind("<tipo>", { pivot })` (`src/wind.ts`). El tipo da
+los valores por defecto (`data/livingworld/wind.yaml` `kinds`); `pivot` es dónde termina
+el tronco o el tallo, en px sobre el borde de abajo del sprite (obligatorio en `tree`,
+`palm`, `cactus` y `dead_tree`; en los demás sale del dibujo); `stiffness`, `amplitude` y
+`flutter` solo si la planta no se parece a su tipo. El cliente la mece sin más código: no
+se dibujan frames de viento (los `frame_<n>` de los árboles salieron en el lote 20). El
+flujo es automático: `make spritegen` escribe `data/livingworld/wind_sprites.yaml`
+(generado, nunca a mano; entero aunque se use `ONLY=`), con el `pivot` y la fila más alta
+del dibujo (`top`), y **revisa el dibujo**: tronco y copa separados (el tronco bajo el
+pivot, menos del 60 % del ancho de la copa), ningún píxel suelto (todo unido a la base),
+al menos 1 px libre a cada lado de las filas que se mueven. `spritegen check` y
+`src/wind.test.ts` fallan si el archivo está viejo o un dibujo no cumple, y `make
+validate` falla si un item que es una planta no tiene viento ni `wind: none`
+(`livingworld/README.md` "Cómo agregar una planta"). Un sprite de planta que no dibuja
+spritegen (pack, Gemini) lleva la misma metadata en `tiles:` de `assets/sprites.yaml`:
+`<sprite>: { wind: { kind: palm, pivot: 30 } }` (`pivot` obligatorio; `import_art.py
+--wind palm --pivot 30` deja la línea en `import.json` y avisa si un objeto con nombre de
+planta se importa sin `--wind`). **Mirar siempre el vaivén:** `make sway-preview
+[ONLY=<prefijo>]` escribe `build/spritegen/sway.png` (cada planta quieta y en 8 momentos,
+con la matemática del cliente, a zoom 2) y `make sway-preview SCENE=forest|town` cuatro
+momentos de un trozo de mapa (`sway.<n>.png`); se revisan con Read: sutil y orgánico,
+nunca de goma.
 
 ## spritegen: el motor
 `tools/spritegen/src/engine/` (docs/17, "Motor de sprites", con cada regla atada a su

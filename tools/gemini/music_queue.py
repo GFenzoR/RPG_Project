@@ -11,6 +11,9 @@ and the quota.
                                        [--modes Hydrogen,Argon] [--stall-cooldown 300]
                                        [--nothing-cooldown 600]
 
+`--slots` may also name the versions of `music_slots.json` (`title_vigil`...:
+more tracks in a slot's style, one take each); without it only the slots run.
+
 ## What is on disk is the truth
 
 Each ask is `<into>/<slot>_<n>.mp4` and `music_web`'s sidecar `<slot>_<n>.json`,
@@ -372,6 +375,12 @@ def fetch_one(slot_id: str, number: int, url: str, args=None) -> int:
 ARGS = None
 
 
+def slots_of(book: dict, wanted: str) -> list[dict]:
+    """What a run may ask: the slots, and with `--slots` also the versions of
+    `music_slots.json` (more tracks in a slot's style, asked only by name)."""
+    return book["slots"] + (book.get("versions", []) if wanted else [])
+
+
 def pick(slots: list[dict], wanted: str) -> list[dict]:
     if not wanted:
         return slots
@@ -384,7 +393,7 @@ def pick(slots: list[dict], wanted: str) -> list[dict]:
 
 def do_status(args) -> int:
     book = music_style.load()
-    for slot in pick(book["slots"], args.slots):
+    for slot in pick(slots_of(book, args.slots), args.slots):
         asks = asks_of(args.into, slot["id"])
         live = live_of(asks)
         spent = spent_of(asks)
@@ -402,7 +411,7 @@ def do_run(args) -> int:
     ARGS = args
     os.makedirs(args.into, exist_ok=True)
     book = music_style.load()
-    Queue(args).run(pick(book["slots"], args.slots), book)
+    Queue(args).run(pick(slots_of(book, args.slots), args.slots), book)
     return 0
 
 

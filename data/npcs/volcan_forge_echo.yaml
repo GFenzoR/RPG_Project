@@ -1,5 +1,6 @@
 id: volcan_forge_echo
 name: npc.volcan_forge_echo.name
+role: npc.volcan_forge_echo.role
 sprite: npcs/forge_echo
 notes: >-
   What is left of the forge's last smith, bound to the sealed gate at the bottom of the

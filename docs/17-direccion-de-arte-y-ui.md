@@ -398,6 +398,11 @@ dibujan lo mismo; nada cambia en el mapa ni en el servidor):
     (`CAST_SHADOW_ALPHA`) y cada sombra va teñida hacia el azul violeta
     (`CAST_SHADOW_TINT`), así dos sombras que se pisan no se oscurecen el doble. La tienen
     los árboles, el arbusto, la roca, la fragua, la fuente y el brasero.
+    **Desde el 2026-11-25 el juego no las dibuja:** cada objeto con altura proyecta su
+    propia sombra según el sol (abajo, "Sombras de los objetos"). El arte `<sprite>/shadow`
+    queda para el editor de mapas y `mapcli render`, que no tienen hora;
+  - la **sombra de contacto** de una criatura solo se dibuja donde no hay sombra
+    proyectada (bajo tierra, bajo techo, noche sin luna): nunca las dos juntas.
 
 ### ART-6 Paleta y valores
 - **Paleta maestra:** si se integra LPC, la de LPC Revised (~170 colores) es la referencia.
@@ -440,8 +445,7 @@ dibujan lo mismo; nada cambia en el mapa ni en el servidor):
   | Antorcha, fogata, fragua | 3–4 | 100–140 | tile |
   | Bandera, ropa colgada | 3–4 | 150–180 | tile |
   | Fuente, cascada | 4 | 120–160 | world |
-  | Copa de árbol (viento) | 2–3 | 600–900 | tile |
-  | Pasto alto, juncos | 2 | 700 | tile |
+  | Copa de árbol, arbusto, pasto alto, juncos (viento) | ninguno | — | el viento del mundo vivo los mece (abajo, "Mundo vivo: el viento"); ya no llevan frames |
   | Teletransporte | 6–8 | 100 | world |
   | Veta de mineral | 1 destello cada 3–5 s | 80 | random |
 
@@ -495,22 +499,77 @@ mismo campo. Lo tienen el cajón de carga, el barril y la mesa (8 px; los dos ú
 del kit de props del lote 12): el libro de la herrera del archivo de Cinderstead está sobre una
 mesa y se dibuja 8 px más arriba.
 
+### Mundo vivo: el viento (hecho, 2026-11-25, rama `feat/wind-flora`, lote 20)
+Pedido del dueño (2026-11-24): que también se mueva lo grande del mapa (árboles, arbustos,
+plantas en general), poco pero **orgánico**, y que toda planta futura (selva y demás) lo
+herede sola. El contrato está en `livingworld/README.md` "Viento"; aquí, la dirección de
+arte.
+
+- **La base plantada, la copa se mueve.** Un skew o un giro del sprite entero se ve falso
+  (se mueve el tronco). El sprite se corta en tiras horizontales que se corren de lado por
+  el cuadrado de su altura sobre el *pivot* (donde termina el tronco): el tronco no se
+  mueve nunca.
+- **Poco:** 1 a 2 px en la punta de un árbol (vaivén lento, de unos 3 s) más un aleteo
+  rápido de la copa de menos de 1 px. Un arbusto, la mitad; hierba y juncos se doblan
+  desde el suelo; un cactus o un árbol seco casi no se mueven. Los números por tipo están
+  en `data/livingworld/wind.yaml`.
+- **Píxeles enteros de pantalla.** Cada tira se corre un número entero de px de pantalla al
+  zoom actual: el pixel art no se desenfoca ni tiembla. Es el recurso clásico del pixel art
+  hecho a mano (correr filas), no un estirado.
+- **Ráfagas que cruzan el mapa.** El viento es un campo que viaja: los árboles de un bosque
+  se inclinan uno tras otro, cada uno con su fase y su tamaño. Nunca todos a la vez.
+- **Según el lugar:** más en la costa y el desierto, menos dentro de un bosque y sobre la
+  piedra de un pueblo, nada adentro (pisos de madera) ni en cuevas, un poco menos de noche.
+- **La sombra de la copa se mece con la copa** y la del tronco queda quieta (2026-11-25:
+  la sombra de un árbol es una segunda malla sobre las mismas tiras; "Sombras de los
+  objetos", abajo). Con "Animaciones reducidas" la sombra sigue, quieta.
+- **Estandartes y bandera** siguen con su bucle de frames de ART-7 (una onda que recorre
+  la tela): ya se mueven bien y no son plantas.
+
+**Reglas para dibujar una planta** (propia, de un pack o de Gemini), para que se deforme
+bien; las revisa `make spritegen` (`tools/spritegen/src/wind.ts`):
+1. **Tronco y copa bien separados:** el tronco visible mide menos del 60 % del ancho de
+   la copa, y el pivot va justo donde termina. Una palmera: tronco largo, pivot bajo.
+2. **Ningún píxel suelto:** hojas, pétalos, frutos y semillas unidos a la planta (aunque
+   sea por un tallo de 1 px). Lo suelto quedaría flotando al lado mientras se mece.
+3. **Margen a los lados:** 2 o 3 px transparentes a cada lado de la copa (1 como mínimo).
+4. **La copa lee bien corrida 2 px:** nada de detalles que dependan de una columna exacta
+   contra el tronco (una rama que entra a la copa se corta en escalón: que entre poco).
+5. Toda planta declara su **tipo** (`tree`, `palm`, `bush`, `tall_grass`, `reed`,
+   `flower`, `vine`, `cactus`, `dead_tree`) y, si tiene tronco, su **pivot**. Después,
+   `make sway-preview` y mirar `build/spritegen/sway.png` con Read: debe leerse sutil y
+   orgánico, nunca de goma. `make validate` no deja pasar una planta sin viento.
+
+Revisado el 2026-11-25 con `make sway-preview` (cada planta en 8 momentos) y `make
+sway-preview SCENE=forest` y `SCENE=town` (cuatro momentos de un bosque y de una plaza con
+árboles, a zoom 2): los troncos quietos, las copas a 1 o 2 px de su lugar, cada árbol en
+su fase, ninguna silueta rota. Falta mirarlo en movimiento en el juego (E2E del lote).
+
 ### Mundo vivo (hecho, 2026-11-23, rama `feat/living-ground`, lote 17)
 Pedido del dueño: "el entorno reacciona a los jugadores que pasan, para que el mundo se
 sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
 (`livingworld/README.md` tiene el contrato; aquí, la dirección de arte):
-- **Huellas** sobre arena, arena mojada, nieve, barro y ceniza: una marca por paso,
-  orientada hacia donde camina (pies alternados a cada lado; patas de bestia sobre su línea,
-  más grandes para las bestias altas; las voladoras no dejan). Son máscaras blancas
+- **Huellas** sobre arena, arena mojada, nieve, barro y ceniza: una marca por cada pie que
+  se apoya, en el lugar de ese pie y en el frame en que la animación lo apoya (el dueño,
+  2026-11-24: "tienen que coincidir con los pasos que da el personaje; si no, se ve muy
+  falso"; `livingworld/README.md` "Huellas que coinciden con los pasos"). Pies
+  alternados a cada lado de la línea del camino, giradas a la dirección real (las 8) y
+  separadas por la zancada real (16 px al este, 9 al norte o al sur, 8 y 8 en diagonal:
+  "La regla de la zancada" abajo); las bestias dejan cuatro patas por ciclo, las grandes
+  más grandes y más hondas, arañas y cangrejos dos líneas de puntos, y las voladoras nada.
+  Ninguna con el pie en el aire, quieto, girando en el lugar, deslizándose por una
+  corrección ni al teletransportarse. El sonido del paso, la onda en el agua, el polvo al
+  correr y las motas de MOV-7 salen de la misma pisada. Son máscaras blancas
   (`livingworld/fx/footprint_*`) teñidas con el `tint` de su superficie, un tono más oscuro
   del suelo: se leen sin contorno. Se desvanecen en la segunda mitad de su vida; en la arena
   el viento las borra antes, en ráfagas que recorren el mapa.
 - **Plantas que reaccionan:** hierba, hierba alta, flores, juncos, arbustos y jardineras se
-  doblan hacia donde va quien pasa y vuelven con un resorte corto (900 ms); las altas se
-  mecen solas con el viento. Sin shaders: un skew del sprite con el pie fijo. Los árboles
-  se sacuden 1 px y sueltan alguna hoja (también de vez en cuando, solos).
+  doblan hacia donde va quien pasa y vuelven con un resorte corto (900 ms). Los árboles
+  se sacuden 1 px y sueltan alguna hoja (también de vez en cuando, solos). Desde el lote
+  20 el doblez se suma al viento sobre las mismas tiras del sprite (abajo).
 - **Agua y polvo:** anillos achatados que se abren en el agua baja; una nube de polvo al
-  correr (paso de 260 ms o menos) por tierra, arena o ceniza. Las motas de MOV-7 siguen.
+  correr (paso de 260 ms o menos) por tierra, arena o ceniza, las dos bajo el pie que pisa.
+  Las motas de MOV-7 siguen, también desde la pisada.
 - **Bichos:** pájaros y mariposas por el pasto que huyen cuando el jugador se acerca,
   luciérnagas de noche y sombras de peces en el agua. Pocos (10) y
   donde el hash de la casilla diga: el mismo lugar siempre tiene el mismo bicho.
@@ -559,19 +618,85 @@ sol: a la mañana para un lado, a la tarde para el otro". Contrato en `livingwor
   tarde. Más larga cuanto más bajo el sol (hasta 1,4 alturas) y más tenue al salir y al
   ponerse. De noche la proyecta la luna, tenue (0,16) y según su fase (nada con luna
   nueva). Toda la capa se desvanece junta (un `AlphaFilter`): dos sombras que se cruzan o
-  las capas de un muñeco no hacen manchas más oscuras. La **sombra de contacto** (la
-  elipse) sigue siempre: los pies nunca flotan. Un cuerpo que cae muerto conserva su
-  sombra hasta desvanecerse a la mitad. Con "Animaciones reducidas" no hay sombra
-  proyectada (solo la de contacto); el tinte y las luces de la noche siguen.
-- **Árboles y edificios:** sus sombras dibujadas (ART-5) se desvanecen con el sol (un alfa
-  sobre su capa); no giran con él (pendiente en docs/14).
+  las capas de un muñeco no hacen manchas más oscuras. Un cuerpo que cae muerto conserva su
+  sombra hasta desvanecerse a la mitad. "Animaciones reducidas" **no** apaga las sombras
+  (una sombra quieta no es movimiento): solo detiene el vaivén del viento.
+- **Sombra de contacto (la elipse), solo sin sombra proyectada** (dueño, 2026-11-25: "la
+  sombra circular abajo del personaje arruina la nueva" y "está muy alejada del personaje
+  y parece que flota"). Una criatura que proyecta sombra no dibuja la elipse; la elipse
+  queda bajo tierra, bajo techo y en una noche sin luna, y para un cuerpo a menos de media
+  opacidad (que no proyecta). Entre una y otra hay un fundido corto cuando la sombra
+  proyectada es casi invisible (`CONTACT_GONE`, opacidad 0,06: el sol asomando, una luna
+  fina), sin saltos. Donde queda, **toca los pies**: va en la línea donde el cuerpo está
+  parado mirando hacia donde mira (`stance` de `atlas.json`, abajo), centrada bajo los
+  pies y tan ancha como ellos más 8 px (entre 12 y 56 px): chica bajo una rata, ancha bajo
+  el custodio.
+- **Dónde está parado cada sprite (`stance`):** `foot` de `atlas.json` es lo más bajo que
+  llega la caminata, y el pie que avanza hacia la cámara baja 3 a 5 px más que el cuerpo
+  parado (el humanoide del motor: `foot` 3, parado a 6-8). Por eso la elipse quedaba
+  despegada. `tools/spritepack` mide ahora, por orientación (las 8 del humanoide), la pose
+  parada (los frames de `idle`, o los de `walk`): `stance: { s: [pie, x0, x1], … }`, las
+  filas vacías bajo el píxel más bajo y las columnas que ocupa su base (el 15 % inferior
+  del dibujo, mínimo 3 filas). La elipse y la sombra proyectada salen las dos de esa
+  línea: la sombra arranca en las suelas, sin hueco. Un muñeco de capas se apoya en su
+  cuerpo y su calzado (la punta de una espada no pisa el suelo).
+
+#### Sombras de los objetos (hecho, 2026-11-25, rama `feat/object-shadows`)
+Pedido del dueño: "quiero asegurarme que consideraste esta sombra dinámica para todos los
+objetos, incluidos los árboles".
+- **Todo objeto del mapa con altura proyecta la suya**, con la misma pose del sol o de la
+  luna que las criaturas (dirección, largo, opacidad) y en la misma capa (un solo
+  `AlphaFilter`: la sombra de un árbol que cruza la de un muro o la de un personaje hace
+  un tono parejo, nunca una mancha más oscura): árboles, arbustos, rocas, postes,
+  faroles, carteles, barriles, cajas, mesas, puestos, pozos, fuentes, fraguas, cofres,
+  muros, portones, los objetos del mundo vivo (rompibles, empujables) y los restos de las
+  criaturas. Sale de la **silueta dibujada** del objeto, apoyada en su base (la fila
+  donde termina su dibujo: `feet` de `atlas.json`).
+- **Qué proyecta lo dicen los datos**, no una lista en el código:
+  `data/livingworld/shadows.yaml` (docs/06). Por defecto según el `kind` del item
+  (`decoration` y `container`: silueta; `wall`: bloque), luego por familia (una palabra
+  del id: `gate` es bloque; `border`, `stairs`, `rubble`, `torch`… no proyectan) y por
+  último el item. Solo proyecta lo que está fijo en el mapa (`pickupable: false` y los
+  muros): una espada tirada queda plana. Lo plano (bordes, placas, escombros, pasto,
+  flores, telarañas) y lo colgado de un muro (antorchas, estandartes) no proyecta. Un
+  cuerpo tendido (los restos) proyecta corto (`length: 0.4`).
+- **Muros y edificios: sombra de bloque.** Cada casilla de muro proyecta la caja que
+  ocupa (32 px de alto, lo que su dibujo sube sobre su casilla): el barrido de su borde
+  norte y el de su borde este u oeste a lo largo de la sombra. Los barridos de casillas
+  vecinas coinciden exactamente, así una pared entera hace una sola sombra continua, sin
+  huecos; y como toda la capa se desvanece junta, donde se pisan no oscurecen el doble.
+  Es una proyección de verdad (gira y se alarga con el sol), no la sombra horneada
+  movida a pasos. Un portón se une a la sombra de su muro.
+- **Árboles con viento:** la sombra es una segunda malla sobre las mismas tiras de la
+  copa (`LivingWorld.windStrips`): se mece con ella y la del tronco queda quieta, sin
+  costo por frame de más. Con "Animaciones reducidas" es un sprite quieto.
+- **Bajo techo y bajo tierra, ninguna.** Bajo tierra no hay cielo. Los mapas no tienen
+  techos: "adentro" son las casillas que los muros encierran (`indoorTiles` en
+  `packages/renderer/src/tile-art.ts`). Una puerta, un portón o un vano de hasta 3
+  casillas en un muro cierran el cuarto (casi todos los edificios tienen un vano sin
+  puerta); un pasillo entre dos edificios no es un vano; un patio amurallado de más de
+  400 casillas es cielo abierto. Adentro ni los muebles ni las criaturas proyectan (las
+  criaturas llevan la elipse), y el suelo de adentro se dibuja **encima** de la capa de
+  sombras, así la sombra de un muro o de un árbol nunca entra a la casa.
+- **Sobre qué caen:** solo sobre el suelo. La capa va bajo los items y las criaturas; una
+  sombra que llega a un muro más alto queda tapada por el dibujo del muro (se corta ahí,
+  no trepa). Decisión tomada así por simple y porque se lee bien.
+- **Límites conocidos** (docs/14): las huellas y ondas del mundo vivo no se ven bajo techo
+  (el suelo de adentro las tapa); las criaturas con sombra pintada en el sprite (las de
+  Dungeon Crawl) la conservan además de la proyectada; un objeto apilado sobre una mesa
+  proyecta desde su altura, no desde el suelo.
+- Capturas del E2E: `99a-daynight-indoors` (dentro del templo: elipse, sin sombra),
+  `99b…99g` y `99d2-daynight-afternoon` en la plaza de Thimblewick (muros del templo,
+  robles, arbustos, cartel), y `124-shadows-forest-morning`,
+  `125-shadows-forest-afternoon`, `126-shadows-forest-full-moon` y
+  `127-shadows-forest-noon` en el bosque de Ivernel.
 - La sombra gira en la **línea de los pies** del sprite, no en el borde de abajo de la
   textura: un lobo o un thornling tienen filas vacías bajo los pies (`foot`) y su sombra
   sale de las patas a cualquier hora. Si el cuerpo se dibuja inclinado (`skewX` de la
   pose), la sombra se inclina con él.
 - Capturas del E2E, una por hora: `99b-daynight-noon`, `99c-daynight-night` (luna llena),
-  `99d-daynight-morning`, `99e-daynight-dusk`, `99f-daynight-new-moon` y
-  `99g-daynight-dawn`. **Pendiente mirarlas** en el E2E final del lote (docs/14): la
+  `99d-daynight-morning`, `99d2-daynight-afternoon`, `99e-daynight-dusk`,
+  `99f-daynight-new-moon` y `99g-daynight-dawn`. **Pendiente mirarlas** en el E2E final del lote (docs/14): la
   revisión visual de esta rama se hizo sobre una vista previa local, sin capturas
   guardadas.
 ## 3. Animación de criaturas y personajes (ANI)
@@ -1522,7 +1647,8 @@ recortar y pasar a woff2 con su nombre.
 | Logo, pantalla de muerte, subida de nivel | Grenze Gotisch | `ofl/grenzegotisch` | `GrenzeGotisch[wght].ttf` |
 | Texto de interfaz (listas, botones, chat) | Alegreya Sans | `ofl/alegreyasans` | `AlegreyaSans-Regular.ttf`, `-Italic`, `-Medium`, `-Bold` |
 | Diálogos de NPC, descripciones, libros | Alegreya | `ofl/alegreya` | `Alegreya[wght].ttf`, `Alegreya-Italic[wght].ttf` |
-| Canvas: nombres, números de daño | Pixelify Sans | `ofl/pixelifysans` | `PixelifySans[wght].ttf` |
+| Canvas: números de daño, globos de diálogo | Pixelify Sans | `ofl/pixelifysans` | `PixelifySans[wght].ttf` |
+| Canvas: nombres sobre las criaturas (desde el 2026-11-25) | Alegreya Sans 700 y 500 | `ofl/alegreyasans` | los de la interfaz |
 
 - **Alternativas** (también OFL):
   - Spectral (`ofl/spectral`), para cuerpo.
@@ -2811,6 +2937,72 @@ color de algunos NPCs no se leían (el violeta `0x7d4fb0` sobre el contorno negr
   2092,2090, justo al norte del muro sur del templo, la pieza de 2092,2091 baja de 1 (alfa
   < 0,5), la de 2099,2091 no, y no se dibuja ninguna copia pálida del jugador
   (`102-wall-fade-own-player`, de cerca en `102b-...-close`).
+
+### Hecho: nombres nítidos y los NPCs en dos líneas (2026-11-25, rama `feat/labels-and-steps`)
+El dueño, después de jugar el lote 19: "la fuente que agrandaste de los nombres se ve muy
+pixeleada y ahora está muy grande; déjala más definida y achícala un poco", y "los NPC
+muestran su nombre y después unos puntos suspensivos; en vez de eso, dos líneas: el nombre
+y abajo qué es lo que hace (Tilde Varga / Provisiones)".
+- **Por qué se veía pixelada:** el nombre era la fuente pixel de 11 px rasterizada una vez
+  y agrandada 2x o 3x con muestreo al más cercano (la sección de arriba): cada celda de la
+  letra era un bloque de 2 o 3 px. Era nítido "como pixel art", pero a ese tamaño se leía
+  como una letra de baja resolución.
+- **Regla de resolución** (`client/src/render/label-style.ts`, `labelFontPx`): el nombre se
+  rasteriza **al tamaño exacto al que se ve, en píxeles de dispositivo**, y el `Text` nunca
+  se escala (escala 1, posición en px enteros). El canvas ya tiene su backing store en
+  píxeles de dispositivo, así que la letra es tan nítida como la pantalla a cualquier zoom
+  y con cualquier `devicePixelRatio` (Windows al 125 % o 150 % incluido). Al cambiar el zoom
+  cambia el `fontSize` y Pixi vuelve a rasterizar; no hay textura por frame. La fuente es
+  Alegreya Sans (la de la interfaz, OFL): negrita 700 para el nombre, 500 para las líneas
+  de abajo, con contorno negro redondeado de ~1/4,5 del tamaño (mínimo 2 px).
+- **Tamaño** (elegido mirando una lámina con los cuatro zooms a densidad 1, 1,25, 1,5 y 2,
+  al lado del nombre del lote 19): sigue al zoom que ve el jugador (px CSS por px de
+  sprite = zoom del mapa / `devicePixelRatio`, entre 1 y 4) y se pasa a px de dispositivo:
+  | Zoom visto | 1 | 2 | 3 | 4 |
+  |---|---|---|---|---|
+  | Grande (por defecto), px CSS | 12 | 15 | 18 | 21 |
+  | Normal, px CSS | 10 | 12 | 14 | 16 |
+  | Lote 19 (fuente pixel escalada), alto de la letra | 11 | 22 | 22 | 33 |
+  Las líneas de abajo (rol del NPC, gremio) miden el 80 % del nombre y nunca menos de 9 px
+  CSS. La misma ventana se ve igual al 100 % y al 150 % de escala de Windows.
+- **NPCs en dos líneas** (`render/labels.ts`): la primera el nombre (violeta
+  `0xc79bff`), la segunda qué hace, más chica y más pálida (`LABEL_ROLE_COLOR`
+  `0xe4d9f5`). Nunca "…": el nombre de un NPC encoge hasta el 82 % si no entra y no se
+  corta; el rol, si no entra en el ancho, se parte **por sus palabras** en dos líneas
+  (`wrapRole`). El texto del rol es contenido (`role` en `data/npcs`, docs/06 "NPC con
+  diálogo de ventana"): el cliente lo saca del bundle de contenido (`npcRoles`,
+  `client/vite/content.ts`), sin tocar el protocolo. Los nombres de los NPCs ya no repiten
+  el oficio después de una coma ("Tilde Varga, provisiones" → "Tilde Varga").
+- **Nombres largos** de jugadores y monstruos: una sola línea; primero encogen (hasta el
+  82 %, `fitName`) y solo pasado el ancho duro (12 tamaños de letra con espacio, 7,5 cuando
+  los nombres se amontonan) se cortan con "…".
+- **Apilado** (`stackLabel`): sobre la barra de vida va la línea del gremio, encima el rol
+  y arriba el nombre; la marca PvP queda a la izquierda del nombre y el globo de diálogo
+  (UI-11) se apoya sobre el tope del bloque entero, o sea, sobre las dos líneas. Las
+  reglas de solape de T5.6 cuentan el bloque completo (`nameBlockHeight`) y rigen mientras
+  una casilla mida menos de 4 alturas de nombre (`labelsFull`).
+- **Los números flotantes y los globos** siguen en la fuente pixel con su escala entera.
+- **Tests:** `label-style.test.ts` (tamaño entero en px de dispositivo a zoom 1–4 y
+  densidad 1, 1,25, 1,5 y 2; más chico que el lote 19; contraste del rol), `labels.test.ts`
+  (dos líneas, sin "…" para NPCs, encoger antes de cortar, apilado con el globo),
+  `packages/content-schema/src/npc-role.test.ts` y `validate.test.ts` (todo NPC de `data/`
+  termina con un rol en es y en). E2E: `100-*` (el instructor a 2x y 1x, de cerca, y la
+  plaza de Thimblewick con sus NPCs a 1x y 2x), `101-*` (monstruos a 2x y 4x).
+
+### Hecho: los dos pies y huellas que borra el viento (2026-11-25, rama `feat/labels-and-steps`)
+Pedido del dueño después de jugar: el paso sonaba "solo al pie derecho", las marcas eran
+"de uno de los dos pies", todos los suelos sonaban igual y las huellas de la arena se
+borraban por reloj. Detalle en `livingworld/README.md` ("Los dos pies" y "Huellas: qué las
+borra"); en corto:
+- las huellas del pie izquierdo y del derecho se dibujan en dos hileras (antes caían en una
+  fila caminando al este u oeste, por el aplastado de la vista 3/4);
+- cada pie suena con su voz (unos puntos de tono y volumen de diferencia), nunca la misma
+  toma dos veces seguidas, y el volumen de todos los pasos es un número
+  (`steps.volume` de `data/livingworld/surfaces.yaml`, 0,7 sobre 0,15);
+- el sonido es el del suelo bajo ese pie, con un test que recorre el mapa real;
+- una huella no tiene tiempo de vida: la borra el viento según lo expuesto del lugar (en
+  la playa abierta, desde barlovento; al abrigo dura hasta el tope), la ola siguiente en
+  la arena mojada, o el pie de otra criatura; las más viejas se desvanecen al pasar el tope.
 
 ### Cadáveres (hecho, 2026-11-23, rama `feat/corpse-names`)
 Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo el nombre.

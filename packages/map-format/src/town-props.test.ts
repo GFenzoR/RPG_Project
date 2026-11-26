@@ -214,7 +214,8 @@ describe("the furnished towns", () => {
       }
       guard(is.meta.temple, "the temple");
       for (const [x, y] of E2E_TILES) guard({ x, y, z: 7 }, "a tile of the e2e test");
-      const props = [...Object.keys(KIT), "brazier", "fountain"].filter(blocks);
+      // A bush is solid too (docs/06 "Qué bloquea el paso").
+      const props = [...Object.keys(KIT), "brazier", "fountain", "bush"].filter(blocks);
       for (const id of props)
         for (const z of is.meta.floors)
           for (const p of find(is, z, id)) {

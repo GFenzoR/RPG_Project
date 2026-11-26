@@ -3,6 +3,11 @@
 //   node tools/spritegen/src/cli.ts preview --out FILE.png [--scale N] [--only PREFIX]
 //   node tools/spritegen/src/cli.ts check [--root DIR]     every recipe path is used by data/,
 //        and every engine spec is valid, passes the gates and matches its sprites.yaml hints
+//   node tools/spritegen/src/cli.ts sway [--only PREFIX] [--out FILE.png] [--scale N]
+//        every plant sprite swaying in the wind over a few frames, drawn with the client's
+//        own maths (wind.ts), to review with Read (make sway-preview); with --scene
+//        forest|town, FILE.<n>.png: four moments 350 ms apart of a patch of map with those
+//        plants in the real wind field (gusts crossing it), to compare one with the next
 //   node tools/spritegen/src/cli.ts corpses [--out FILE.png] [--scale N]
 //        every monster standing beside its corpse (recipes/corpses.ts), to review with Read
 //   node tools/spritegen/src/cli.ts sheet [--only PREFIX] [--out DIR] [--scale N]
@@ -31,7 +36,12 @@ import { TOWN_FLOORS, TOWN_PROPS } from "./engine/specs/town.ts";
 import { corpseSheet } from "./recipes/corpses.ts";
 import {
   buildSprites,
+  buildWind,
   checkPaths,
+  checkWind,
+  SWAY_SCENES,
+  swayPng,
+  swayScenePng,
   previewPng,
   recipePaths,
   recipesAt,
@@ -46,6 +56,7 @@ const { positionals, values } = parseArgs({
     out: { type: "string" },
     scale: { type: "string", default: "4" },
     ref: { type: "string" },
+    scene: { type: "string" },
   },
 });
 const root = resolve(values.root);
@@ -55,10 +66,11 @@ if (
   command !== "preview" &&
   command !== "check" &&
   command !== "sheet" &&
+  command !== "sway" &&
   command !== "corpses"
 ) {
   console.error(
-    "usage: spritegen build|preview|check|sheet|corpses [--root DIR] [--only PREFIX] [--out FILE.png|DIR]",
+    "usage: spritegen build|preview|check|sheet|sway|corpses [--root DIR] [--only PREFIX] [--out FILE.png|DIR]",
   );
   process.exit(2);
 }
@@ -78,11 +90,37 @@ if (command === "corpses") {
     ),
   );
   console.log(`spritegen: corpses sheet -> ${out}`);
+} else if (command === "sway") {
+  const scale = Number(values.scale);
+  const out = resolve(values.out ?? join(root, "build", "spritegen", "sway.png"));
+  mkdirSync(dirname(out), { recursive: true });
+  const scene = values.scene;
+  if (scene !== undefined) {
+    if (scene !== "forest" && scene !== "town") {
+      console.error(`sway --scene is one of ${Object.keys(SWAY_SCENES).join(", ")}`);
+      process.exit(2);
+    }
+    for (let n = 0; n < 4; n++) {
+      const file = out.replace(/\.png$/, `.${n}.png`);
+      writeFileSync(file, swayScenePng(root, values.only, scene, 20000 + n * 350));
+      console.log(`spritegen: sway scene ${scene} -> ${file}`);
+    }
+  } else {
+    // Drawn at 2x already (the game's zoom): --scale multiplies that.
+    writeFileSync(
+      out,
+      swayPng(root, values.only, Number.isInteger(scale) && scale > 0 ? scale : 2),
+    );
+    console.log(`spritegen: sway preview -> ${out}`);
+  }
 } else if (command === "build") {
   const built = buildSprites(root, values.only);
   for (const b of built)
     console.log(`${String(b.bytes).padStart(6)} B  ${relative(root, spriteFile(root, b.path))}`);
   console.log(`spritegen: ${built.length} sprites`);
+  // The plants' wind metadata, whole whatever --only says (wind.ts).
+  buildWind(root);
+  console.log("spritegen: data/livingworld/wind_sprites.yaml");
 } else if (command === "preview") {
   const scale = Number(values.scale);
   const paths = recipePaths(values.only);
@@ -143,7 +181,7 @@ if (command === "corpses") {
     console.log(`spritegen: ${file}`);
   }
 }
-const problems = [...checkPaths(root), ...engineProblems(root)];
+const problems = [...checkPaths(root), ...engineProblems(root), ...checkWind(root)];
 for (const p of problems) console.log(`error ${p}`);
 if (problems.length > 0) process.exit(1);
 if (command === "check")

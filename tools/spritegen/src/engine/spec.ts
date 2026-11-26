@@ -4,6 +4,7 @@
 // loaded from JSON or YAML; validateSpec checks them. How to write one: tools/CLAUDE.md,
 // "spritegen: el motor".
 import { PALETTE } from "../palette.ts";
+import type { WindMeta } from "../wind.ts";
 import type { MaterialName } from "../palette.ts";
 import type { Vec3 } from "./math.ts";
 import { ACTIONS, DIRS8, LOOP, SIZES } from "./style.ts";
@@ -142,6 +143,8 @@ export interface SpriteSpec {
   views?: Partial<Record<Dir, number>>;
   /** Hovers (assets/sprites.yaml `flying: true`): the client bobs it. */
   flying?: boolean;
+  /** A plant object: how it takes the wind (../wind.ts plantWind, like Recipe.wind). */
+  wind?: WindMeta;
   /** The ground its review lineup stands on (a ground sprite such as ground/ash; default grass). */
   seenOn?: string;
   /**

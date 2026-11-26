@@ -3,8 +3,9 @@
 // three tiles and overhangs half a tile each side. Each has
 // - a cast shadow, <sprite>/shadow: a blob under the canopy toward the bottom-right (light
 //   from the top-left), drawn translucent by the renderer under the items;
-// - wind frames, <sprite>/frame_<n>: the canopy sways a pixel left and right, more at the top,
-//   each tree at its own phase (sync: tile).
+// - wind metadata (`wind`): its type and where its trunk ends. The client sways the canopy
+//   over that row with the wind of the living world (livingworld/README.md "Viento"); the
+//   old baked frames (<sprite>/frame_<n>) are gone.
 // The canopy is clumps of leaves (a jittered lattice of small cells, each lit on its
 // top-left) over a few overlapping domes lit from the top-left, with a dark underside.
 import { createImage } from "@rpg/spritepack";
@@ -21,7 +22,9 @@ import {
   px,
 } from "../draw.ts";
 import { hex } from "../palette.ts";
-import type { Recipe, RecipeBook } from "../recipe.ts";
+import type { RecipeBook } from "../recipe.ts";
+import { plantWind } from "../wind.ts";
+import type { WindMeta } from "../wind.ts";
 import { stones } from "./walls.ts";
 
 type Blob = readonly [cx: number, cy: number, rx: number, ry: number];
@@ -97,28 +100,16 @@ function treeShadow(w: number, h: number, cx: number, foot: number, rx: number, 
   return img;
 }
 
-/** Sways the canopy (rows above `canopyBottom`): `amp` px at the top, 0 at the bottom. */
-function sway(src: Image, canopyBottom: number, amp: number): Image {
-  const out = createImage(src.width, src.height);
-  for (let y = 0; y < src.height; y++) {
-    const s = y >= canopyBottom ? 0 : Math.round(amp * (1 - y / canopyBottom) * 1.4);
-    for (let x = 0; x < src.width; x++) {
-      const c = get(src, x - s, y);
-      if (c) px(out, x, y, c);
-    }
-  }
-  return out;
-}
-
-/** Swaying frames: still, right, still, left. */
-const SWAY = [0, 1, 0, -1];
-
 interface TreeSpec {
   w: number;
   h: number;
   draw(img: Image, seed: number): void;
-  /** Rows above this sway. */
-  canopyBottom: number;
+  /**
+   * How it takes the wind (wind.ts): its type and its pivot, the px over the sprite's
+   * bottom edge where the trunk ends and the canopy starts. The client sways the canopy
+   * over it (livingworld/README.md "Viento"); no frames are drawn for it.
+   */
+  wind: WindMeta;
   shadow: { cx: number; foot: number; rx: number; ry: number };
 }
 
@@ -130,24 +121,22 @@ function tree(sprite: string, spec: TreeSpec): RecipeBook {
     outline(img, { amount: 0.55 });
     return img;
   };
-  const frame = (amp: number): Recipe => ({
-    kind: "object",
-    width: spec.w,
-    height: spec.h,
-    draw: (img) => blitAll(amp === 0 ? base() : sway(base(), spec.canopyBottom, amp), img),
-  });
-  const book: RecipeBook = { [sprite]: frame(0) };
-  SWAY.slice(1).forEach((amp, i) => {
-    book[`${sprite}/frame_${i + 1}`] = frame(amp);
-  });
   const { cx, foot, rx, ry } = spec.shadow;
-  book[`${sprite}/shadow`] = {
-    kind: "object",
-    width: spec.w,
-    height: spec.h,
-    draw: (img) => blitAll(treeShadow(spec.w, spec.h, cx, foot, rx, ry), img),
+  return {
+    [sprite]: {
+      kind: "object",
+      width: spec.w,
+      height: spec.h,
+      wind: spec.wind,
+      draw: (img) => blitAll(base(), img),
+    },
+    [`${sprite}/shadow`]: {
+      kind: "object",
+      width: spec.w,
+      height: spec.h,
+      draw: (img) => blitAll(treeShadow(spec.w, spec.h, cx, foot, rx, ry), img),
+    },
   };
-  return book;
 }
 
 function blitAll(src: Image, dst: Image): void {
@@ -288,35 +277,36 @@ export const TREES: RecipeBook = {
     w: 64,
     h: 96,
     draw: oak,
-    canopyBottom: 68,
+    wind: plantWind("tree", { pivot: 28 }),
     shadow: { cx: 32, foot: 92, rx: 22, ry: 7 },
   }),
   ...tree("decor/elm_tree", {
     w: 64,
     h: 96,
     draw: elm,
-    canopyBottom: 64,
+    wind: plantWind("tree", { pivot: 32 }),
     shadow: { cx: 32, foot: 92, rx: 19, ry: 6 },
   }),
   ...tree("decor/birch_tree", {
     w: 64,
     h: 96,
     draw: birch,
-    canopyBottom: 60,
+    wind: plantWind("tree", { pivot: 36 }),
     shadow: { cx: 32, foot: 92, rx: 16, ry: 6 },
   }),
   ...tree("decor/pine_tree", {
     w: 64,
     h: 96,
     draw: pine,
-    canopyBottom: 76,
+    // Under the lowest tier's fringe: the trunk alone stays planted.
+    wind: plantWind("tree", { pivot: 17 }),
     shadow: { cx: 32, foot: 92, rx: 20, ry: 6 },
   }),
   ...tree("decor/bush", {
     w: 32,
     h: 32,
     draw: bush,
-    canopyBottom: 26,
+    wind: plantWind("bush", { pivot: 6 }),
     shadow: { cx: 16, foot: 31, rx: 12, ry: 4 },
   }),
 };

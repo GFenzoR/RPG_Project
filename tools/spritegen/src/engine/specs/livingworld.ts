@@ -17,6 +17,7 @@
 // - pressure_plate: a square stone plate sunk in a darker frame.
 // - portcullis: an iron grate between two stone posts; open, the grate is raised.
 import type { PartSpec, ShapeSpec, SpriteSpec } from "../spec.ts";
+import { plantWind } from "../../wind.ts";
 
 /** A flat plank lying on the ground at (x, y), turned `deg` about z. */
 function plank(
@@ -222,6 +223,7 @@ export const THORNY_VINES: SpriteSpec = {
   sprite: "livingworld/thorny_vines",
   size: "object",
   canvas: [32, 64],
+  wind: plantWind("vine"),
   seenOn: "ground/grass",
   parts: [
     { name: "stems", material: "thornWood", shapes: stems() },
@@ -272,6 +274,7 @@ export const CUT_VINES: SpriteSpec = {
 export const THICK_BUSH: SpriteSpec = {
   sprite: "livingworld/thick_bush",
   size: "object",
+  wind: plantWind("bush"),
   seenOn: "ground/grass",
   parts: [
     {

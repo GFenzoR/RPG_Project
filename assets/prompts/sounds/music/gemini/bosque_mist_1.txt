@@ -1,0 +1,9 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sounds/music/gemini/bosque_mist_1.ogg
+# Herramienta: Gemini web app (owner's account), music_web.py
+# Fecha: 2026-11-25
+# Modo: Hydrogen
+
+Dark forest wilderness in the mist. Quiet but unsettling, about 56 bpm. Ambient low string drones, wind through old trees, a lone low wooden flute with long breathy notes, a distant wordless choir that comes and goes, creaking wood textures; mostly atmosphere with very little melody.
+
+Instrumental only: no vocals, no lyrics, no spoken words (a wordless choir pad is fine where asked). Original composition for a dark medieval fantasy role-playing game set on cursed islands. Acoustic, organic instruments with a dusty, reverb-drenched, slightly lo-fi production; no electronic beats, no synth leads, no modern pop or cinematic trailer sound. Loopable background music: steady texture from start to end, no long fade-in or fade-out, no big ending. Around three minutes.

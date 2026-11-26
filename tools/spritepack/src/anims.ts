@@ -89,6 +89,11 @@ export interface AnimMeta {
   shadow: Shadow;
   facing?: "left" | "right";
   flying?: boolean;
+  /**
+   * Where it stands, per facing (measureStance): the ground line of its standing pose and
+   * the span of what touches the ground. The shadows start there (docs/17 ART-5).
+   */
+  stance?: Partial<Record<AnimDir, Stance>>;
   actions: Partial<
     Record<
       AnimAction,
@@ -96,6 +101,12 @@ export interface AnimMeta {
     >
   >;
 }
+
+/**
+ * [foot, x0, x1]: the transparent rows under the lowest opaque pixel of the standing pose,
+ * and the columns (from the frame's left edge, x1 exclusive) its lowest rows span.
+ */
+export type Stance = [foot: number, x0: number, x1: number];
 
 const LPC_ROWS = { n: 0, w: 1, s: 2, e: 3 } as const;
 const LPC_FRAME = { w: 64, h: 64 } as const;
@@ -565,6 +576,85 @@ export function measureFrames(frames: Image[]): { foot: number; top: number } {
   const h = frames[0]?.height ?? 0;
   if (min === Infinity) return { foot: 0, top: h };
   return { foot: h - 1 - max, top: max - min + 1 };
+}
+
+/** The share of the drawing's height, from the ground up, that counts as its base. */
+export const STANCE_BAND = 0.15;
+/** The base is never thinner than this, rows. */
+export const STANCE_MIN_ROWS = 3;
+
+/**
+ * Where the pose of `frames` (one facing's standing frames) touches the ground: the rows
+ * left empty under its lowest opaque pixel, and the columns spanned by its lowest rows
+ * (STANCE_BAND of its height: the feet of a person, the legs of a beast). Undefined for
+ * frames with nothing drawn.
+ */
+export function measureStance(frames: Image[]): Stance | undefined {
+  let foot = Infinity;
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  const boxes: { img: Image; top: number; bottom: number }[] = [];
+  for (const img of frames) {
+    let top = -1;
+    let bottom = -1;
+    for (let y = 0; y < img.height; y++) {
+      for (let x = 0; x < img.width; x++) {
+        if ((img.data[(y * img.width + x) * 4 + 3] ?? 0) === 0) continue;
+        if (top < 0) top = y;
+        bottom = y;
+        break;
+      }
+    }
+    if (bottom < 0) continue;
+    boxes.push({ img, top, bottom });
+    foot = Math.min(foot, img.height - 1 - bottom);
+  }
+  if (boxes.length === 0) return undefined;
+  for (const { img, top, bottom } of boxes) {
+    const rows = Math.max(STANCE_MIN_ROWS, Math.round((bottom - top + 1) * STANCE_BAND));
+    for (let y = Math.max(top, bottom - rows + 1); y <= bottom; y++) {
+      for (let x = 0; x < img.width; x++) {
+        if ((img.data[(y * img.width + x) * 4 + 3] ?? 0) === 0) continue;
+        if (x < x0) x0 = x;
+        if (x + 1 > x1) x1 = x + 1;
+      }
+    }
+  }
+  return [foot, x0, x1];
+}
+
+/**
+ * The stance of every facing of an animated sprite: its idle frames of that facing, else
+ * its walk frames; a sprite with one drawing has the one stance, under "s". `frame` gives
+ * the image of a frame name, `single` the sprite's own image.
+ */
+export function stancesOf(
+  sprite: string,
+  meta: AnimMeta,
+  frame: (name: string) => Image | undefined,
+  single: Image | undefined,
+): Partial<Record<AnimDir, Stance>> | undefined {
+  const out: Partial<Record<AnimDir, Stance>> = {};
+  for (const dir of ANIM_DIRS) {
+    for (const action of ["idle", "walk"] as const) {
+      const clip = meta.actions[action];
+      if (!clip?.dirs.includes(dir)) continue;
+      const frames: Image[] = [];
+      for (let n = 0; n < clip.frames; n++) {
+        const img = frame(frameName(sprite, action, dir, n));
+        if (img) frames.push(img);
+      }
+      const st = measureStance(frames);
+      if (!st) continue;
+      out[dir] = st;
+      break;
+    }
+  }
+  if (Object.keys(out).length === 0 && single) {
+    const st = measureStance([single]);
+    if (st) out.s = st;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

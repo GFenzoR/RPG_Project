@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/livingworld-gaits.schema.json",
+  "title": "Living world gaits (data/livingworld/gaits.yaml)",
+  "description": "When and where each foot of a creature touches the ground in one cycle of the walk the client draws: footprints, ripples, dust and the step's sound come at those footfalls (livingworld/README.md \"Huellas\"). Cosmetic: the server never reads it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["view", "gaits", "defaults"],
+  "properties": {
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depth"],
+      "properties": {
+        "depth": {
+          "description": "How much shorter the 3/4 view draws the map's north-south axis than its east-west one.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "slide_px": {
+      "description": "A drawing gliding over a correction further than this (sprite pixels) leaves no prints.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 32
+    },
+    "gaits": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "common.schema.json#/$defs/id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/gait"
+      }
+    },
+    "defaults": {
+      "description": "The gait of each kind of body.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["humanoid", "beast", "big_beast", "flying"],
+      "properties": {
+        "humanoid": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "beast": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "big_beast": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "flying": {
+          "$ref": "common.schema.json#/$defs/id"
+        }
+      }
+    },
+    "creatures": {
+      "description": "The gait of a monster or NPC by its id, over its body's default.",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "common.schema.json#/$defs/id"
+      },
+      "additionalProperties": {
+        "$ref": "common.schema.json#/$defs/id"
+      }
+    }
+  },
+  "$defs": {
+    "gait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["print", "contacts"],
+      "properties": {
+        "print": {
+          "description": "The mark of a foot: assets/livingworld/sprites/fx/footprint_<print>.",
+          "enum": ["feet", "paw", "big_paw", "dot", "trail"]
+        },
+        "stance": {
+          "description": "Sprite pixels from the path's centre line to each foot.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "reach": {
+          "description": "How far ahead of the body a foot lands, as a share of the distance one cycle travels.",
+          "type": "number",
+          "minimum": -0.5,
+          "maximum": 0.5
+        },
+        "rise": {
+          "description": "Sprite pixels from the lowest row of the walk frames up to the ground point under the body.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4
+        },
+        "depth": {
+          "description": "Opacity of a fresh print.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "contacts": {
+          "description": "The feet of one walk cycle. Empty: no footfalls (a flier).",
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["at"],
+            "properties": {
+              "at": {
+                "description": "When in the cycle the foot lands.",
+                "type": "number",
+                "minimum": 0,
+                "exclusiveMaximum": 1
+              },
+              "side": {
+                "enum": ["left", "right", "centre"]
+              },
+              "along": {
+                "description": "Sprite pixels along the body: front feet +, hind feet -.",
+                "type": "number",
+                "minimum": -24,
+                "maximum": 24
+              }
+            }
+          }
+        },
+        "print_spread": {
+          "description": "Sprite pixels on screen a print is drawn out to its foot's side of the path, so the two feet read as two rows where the 3/4 view squeezes them into one line.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 6
+        }
+      }
+    }
+  }
+}

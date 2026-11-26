@@ -168,6 +168,17 @@ export function slideLeft(s: Slide | undefined, now: number): { x: number; y: nu
   return { x: s.x * k, y: s.y * k };
 }
 
+/**
+ * How far a slide still is from its end at `now`, in tiles (the longer axis); 0 without
+ * one. A number, nothing made: the canvas asks for every creature every frame.
+ */
+export function slideSize(s: Slide | undefined, now: number): number {
+  if (!s) return 0;
+  const t = (now - s.start) / SLIDE_MS;
+  if (t >= 1) return 0;
+  return Math.max(Math.abs(s.x), Math.abs(s.y)) * (1 - Math.max(0, t)) ** 2;
+}
+
 function choicesOf(d: Direction): readonly Direction[] {
   const [dx, dy] = delta(d);
   if (dx === 0 || dy === 0) return Object.freeze([d]);

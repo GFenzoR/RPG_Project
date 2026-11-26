@@ -91,6 +91,8 @@ export interface BufferLike {
 export interface SourceLike extends NodeLike {
   buffer: BufferLike | null;
   loop: boolean;
+  /** Playback rate (1: as recorded); absent in a test double that does not care. */
+  playbackRate?: { value: number };
   /** `offset`: where in the buffer it starts, s (a loop then wraps round to its start). */
   start(when?: number, offset?: number): void;
   stop(when?: number): void;
@@ -106,6 +108,16 @@ export interface ContextLike {
   createStereoPanner(): PannerLike;
   createBufferSource(): SourceLike;
   decodeAudioData(data: ArrayBuffer): Promise<BufferLike>;
+}
+
+/** How one play of a sound differs from its definition (AudioEngine.play). */
+export interface PlayVoice {
+  /** A factor over the sound's volume. */
+  gain?: number;
+  /** Playback rate (pitch and length together): 1 as recorded. */
+  rate?: number;
+  /** Which of the event's `n` takes to play (0-based); absent: one at random. */
+  pick?: (n: number) => number;
 }
 
 /** A media element routed into the graph: how the music streams. */
@@ -576,9 +588,11 @@ export class AudioEngine {
 
   /**
    * Plays the first of `events` that sounds.yaml maps (more specific names first). With
-   * `at` and `listener` it is positional. Returns the sound id it starts, or undefined.
+   * `at` and `listener` it is positional. `voice` shapes this one play (a footstep,
+   * livingworld footsteps.ts): which of the event's takes, how loud and at what rate.
+   * Returns the sound id it starts, or undefined.
    */
-  play(events: readonly string[], at?: Pos, listener?: Pos): string | undefined {
+  play(events: readonly string[], at?: Pos, listener?: Pos, voice?: PlayVoice): string | undefined {
     const ctx = this.ctx;
     if (!ctx) return undefined;
     // Suspended (no gesture yet, or the tab's audio is paused): drop one-shots, or they
@@ -590,15 +604,18 @@ export class AudioEngine {
       if (ids) break;
     }
     if (!ids || ids.length === 0) return undefined;
-    const id = ids[Math.min(ids.length - 1, Math.floor(this.ports.random() * ids.length))] ?? "";
-    return this.playId(id, at, listener);
+    const take = voice?.pick
+      ? Math.max(0, Math.floor(voice.pick(ids.length)))
+      : Math.floor(this.ports.random() * ids.length);
+    const id = ids[Math.min(ids.length - 1, take)] ?? "";
+    return this.playId(id, at, listener, voice);
   }
 
   /**
    * Plays the sound `id` of sounds.yaml itself (no event: the living world's data names
    * its sounds, livingworld/README.md), positional like play. Returns id if it starts.
    */
-  playId(id: string, at?: Pos, listener?: Pos): string | undefined {
+  playId(id: string, at?: Pos, listener?: Pos, voice?: PlayVoice): string | undefined {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== "running") return undefined;
     const def = this.manifest.sounds[id];
@@ -610,8 +627,11 @@ export class AudioEngine {
     if (this.voices.length >= MAX_VOICES) return undefined;
     if (this.voices.filter((v) => v.sound === id).length >= def.maxVoices) return undefined;
     const buffer = this.decoded.get(id);
+    // Read now: a footstep's voice is one object reused for the next step.
+    const gain = def.volume * where.gain * Math.max(0, voice?.gain ?? 1);
+    const rate = voice?.rate ?? 1;
     if (buffer) {
-      this.startVoice(id, buffer, def.volume * where.gain, where.pan);
+      this.startVoice(id, buffer, gain, where.pan, rate);
       return id;
     }
     const asked = this.ports.now();
@@ -621,18 +641,19 @@ export class AudioEngine {
       if (this.voices.length >= MAX_VOICES) return;
       // Plays queued while the file loaded run in order: the cap counts the ones before.
       if (this.voices.filter((v) => v.sound === id).length >= def.maxVoices) return;
-      this.startVoice(id, b, def.volume * where.gain, where.pan);
+      this.startVoice(id, b, gain, where.pan, rate);
     });
     return id;
   }
 
-  private startVoice(id: string, buffer: BufferLike, gain: number, pan: number): void {
+  private startVoice(id: string, buffer: BufferLike, gain: number, pan: number, rate = 1): void {
     const ctx = this.ctx;
     const def = this.manifest.sounds[id];
     const out = def && this.channels.get(def.channel);
     if (!ctx || !out) return;
     const src = ctx.createBufferSource();
     src.buffer = buffer;
+    if (rate !== 1 && rate > 0 && src.playbackRate) src.playbackRate.value = rate;
     const g = ctx.createGain();
     g.gain.value = gain;
     src.connect(g);
@@ -644,7 +665,11 @@ export class AudioEngine {
       tail = p;
     }
     tail.connect(out);
-    const voice: OneShot = { sound: id, source: src, endsAt: ctx.currentTime + buffer.duration };
+    const voice: OneShot = {
+      sound: id,
+      source: src,
+      endsAt: ctx.currentTime + buffer.duration / (rate > 0 ? rate : 1),
+    };
     this.voices.push(voice);
     src.addEventListener("ended", () => {
       this.voices = this.voices.filter((v) => v !== voice);

@@ -3,7 +3,7 @@ import type { AlphaFilter } from "pixi.js";
 import { describe, expect, it } from "vitest";
 import { CAST_SHADOW_TINT, FEET_LINE, newPose } from "@rpg/renderer";
 import type { AnimMeta } from "@rpg/renderer";
-import { CastShadows, feetAnchor, leanOnGround } from "./cast-shadows.ts";
+import { CastShadows, feetAnchor, leanOnGround, poseOf } from "./cast-shadows.ts";
 import type { ShadowSink } from "./cast-shadows.ts";
 import { CreatureBody, SpritePool } from "./creature-body.ts";
 import type { BodyLayer } from "./creature-body.ts";
@@ -36,7 +36,7 @@ const fakeFade = (): AlphaFilter => ({ alpha: 1, destroy() {} }) as unknown as A
 describe("CastShadows", () => {
   it("lays each part on the ground from its feet with the sun's skew and squash", () => {
     const layer = new CastShadows(fakeFade);
-    expect(layer.begin({ skewX: 0.8, scaleY: 0.5, alpha: 0.3 })).toBe(true);
+    expect(layer.begin(poseOf(0.8, 0.5, 0.3))).toBe(true);
     const t = tex();
     layer.part(t, 100, 200, -1, 1);
     layer.end();
@@ -53,7 +53,7 @@ describe("CastShadows", () => {
 
   it("turns a sprite with empty rows under its feet around the feet, not the texture's edge", () => {
     const layer = new CastShadows(fakeFade);
-    layer.begin({ skewX: 1.1, scaleY: 0.9, alpha: 0.3 });
+    layer.begin(poseOf(1.1, 0.9, 0.3));
     const t = tex(); // 64 tall
     layer.part(t, 100, 200, 1, 1, 8);
     layer.part(t, 50, 60, 1, 1); // the pooled sprite after it: on the bottom edge
@@ -64,7 +64,7 @@ describe("CastShadows", () => {
     expect(layer.root.children[0]?.position).toMatchObject({ x: 100, y: 200 });
     expect(plain?.anchor.y).toBe(1);
     // A pooled sprite takes the foot of whoever uses it this frame.
-    layer.begin({ skewX: 1.1, scaleY: 0.9, alpha: 0.3 });
+    layer.begin(poseOf(1.1, 0.9, 0.3));
     layer.part(t, 100, 200, 1, 1);
     layer.end();
     expect(s?.anchor.y).toBe(1);
@@ -85,7 +85,7 @@ describe("CastShadows", () => {
     expect(out).toEqual({ skewX: ks, scaleY: 0.9 * S });
 
     const layer = new CastShadows(fakeFade);
-    layer.begin({ skewX: ks, scaleY: S, alpha: 0.3 });
+    layer.begin(poseOf(ks, S, 0.3));
     layer.part(tex(), 0, 0, 1, by, 0, kb);
     leanOnGround(kb, by, ks, S, out);
     expect(layer.root.children[0]?.skew.x).toBeCloseTo(out.skewX);
@@ -95,7 +95,7 @@ describe("CastShadows", () => {
   it("reuses its sprites frame after frame and hides what a frame did not use", () => {
     const layer = new CastShadows(fakeFade);
     for (let f = 0; f < 10; f++) {
-      layer.begin({ skewX: 0, scaleY: 0.2, alpha: 0.3 });
+      layer.begin(poseOf(0, 0.2, 0.3));
       const n = f % 2 === 0 ? 3 : 1;
       for (let i = 0; i < n; i++) layer.part(Texture.WHITE, i, 0, 1, 1);
       layer.end();
@@ -109,7 +109,7 @@ describe("CastShadows", () => {
     const layer = new CastShadows(fakeFade);
     // 60 paper dolls of 9 layers in view, 120 frames: the pool never grows after the first.
     for (let f = 0; f < 120; f++) {
-      layer.begin({ skewX: 0.3, scaleY: 0.4, alpha: 0.4 });
+      layer.begin(poseOf(0.3, 0.4, 0.4));
       for (let i = 0; i < 60 * 9; i++) layer.part(Texture.WHITE, i, f, 1, 1);
       layer.end();
     }
@@ -124,7 +124,7 @@ describe("CastShadows", () => {
     const layer = new CastShadows(fakeFade);
     const t = tex();
     const frame = (f: number): void => {
-      layer.begin({ skewX: 0.3 + f * 1e-4, scaleY: 0.4, alpha: 0.4 });
+      layer.begin(poseOf(0.3 + f * 1e-4, 0.4, 0.4));
       for (let i = 0; i < 60 * 9; i++)
         layer.part(t, i + f, f, i % 2 === 0 ? 1 : -1, 1, 8, (i % 3) * 0.1);
       layer.end();
@@ -138,10 +138,10 @@ describe("CastShadows", () => {
 
   it("hides with no light to cast (alpha 0, or none)", () => {
     const layer = new CastShadows(fakeFade);
-    layer.begin({ skewX: 0, scaleY: 0.2, alpha: 0.3 });
+    layer.begin(poseOf(0, 0.2, 0.3));
     layer.part(Texture.WHITE, 0, 0, 1, 1);
     layer.end();
-    expect(layer.begin({ skewX: 0, scaleY: 0.2, alpha: 0 })).toBe(false);
+    expect(layer.begin(poseOf(0, 0.2, 0))).toBe(false);
     expect(layer.root.visible).toBe(false);
     expect(layer.begin(undefined)).toBe(false);
     expect(layer.root.visible).toBe(false);

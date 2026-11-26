@@ -44,6 +44,12 @@ export interface CueContext {
    * surface, then step.self (render/living.ts stepSoundEvents). Without it, step.self.
    */
   stepEvents?: ((to: Pos) => string[]) | undefined;
+  /**
+   * The canvas plays the own step's sound itself, at each footfall of the walk it draws
+   * (render/living.ts footfallSounds, GameCanvasOptions.footstep): an own CreatureMove has
+   * no cue, or the step would sound twice and off the beat of the feet.
+   */
+  footfalls?: boolean | undefined;
 }
 
 const EFFECT_NAMES: Record<number, string> = {
@@ -89,7 +95,7 @@ export function cuesOf(msg: ServerMessage["message"], ctx: CueContext): Cue[] {
     case "dialogOpen":
       return [{ events: ["ui.dialog_open"] }];
     case "creatureMove":
-      if (msg.value.id !== ctx.selfId) return [];
+      if (msg.value.id !== ctx.selfId || ctx.footfalls) return [];
       {
         const to = pos(msg.value.to);
         return [{ events: to && ctx.stepEvents ? ctx.stepEvents(to) : ["step.self"] }];

@@ -1,5 +1,6 @@
 id: bosque_ferryman
 name: npc.bosque_ferryman.name
+role: npc.bosque_ferryman.role
 sprite: npcs/bosque_ferryman
 look:
   sex: male

@@ -24,5 +24,15 @@ description: Agrega un item nuevo (arma, armadura, material, consumible, suelo o
    (docs/17 "Íconos de items"), en su fila de `ICON_ROWS`; `make spritegen ONLY=<ruta>`,
    `spritegen sheet` y revisar `build/spritegen/icons.slots.png` con Read. Nunca un tile
    de un pack ni un placeholder: `engine/items.test.ts` lo exige.
+   **Planta** (árbol, palmera, arbusto, hierba, junco, flor, enredadera, cactus, árbol
+   seco; `kind: decoration`): su sprite **declara su metadata de viento**, o el item no
+   pasa `make validate`. Receta de spritegen: `wind: plantWind("<tipo>", { pivot })`; sprite
+   de un pack o de Gemini: `<sprite>: { wind: { kind: <tipo>, pivot: N } }` en `tiles:` de
+   `assets/sprites.yaml`. Después `make spritegen` (escribe
+   `data/livingworld/wind_sprites.yaml`, generado) y **`make sway-preview ONLY=<ruta>`**:
+   abre `build/spritegen/sway.png` con Read y revisa que el vaivén sea sutil y orgánico
+   (el tronco quieto, la copa a 1 o 2 px). Solo algo que no debe mecerse (restos, un
+   tocón) lleva `wind: none` en `data/livingworld/plants.yaml`, con el motivo. Reglas de
+   dibujo y pasos: `livingworld/README.md` "Cómo agregar una planta".
 7. Si un NPC lo vende o compra, agrégalo a su `shop`.
 8. `make validate test`.

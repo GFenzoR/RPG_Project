@@ -718,7 +718,8 @@ umbrales en `01-architecture.md`, "Detección de bots"):
 - Runas: items de uso con carga; las crea el mago gastando maná.
 - **Magia (T1.9, `server/internal/session/magic.go`):** un hechizo exige vocación, nivel,
   nivel mágico, que no estén corriendo ni su cooldown ni el de su grupo, y maná. Si además
-  encuentra objetivo, rango, línea de visión (los muros la cortan) y no hay zona de
+  encuentra objetivo, rango, línea de visión (la cortan los muros, los árboles y lo demás que
+  tapa la vista, docs/06 "Qué bloquea el paso") y no hay zona de
   protección, se aplica; recién ahí se gasta el maná, que suma lo mismo en intentos de
   nivel mágico (`skills.base.magic`), y empiezan ambos cooldowns. Un hechizo fallido no
   cuesta nada.
@@ -3406,7 +3407,7 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
 | `effect.gather.<tool.use>`, `effect.gather` | `Effect` 5, con la herramienta usada | minería, tala, pesca |
 | `effect.gather_miss` | `Effect` 6 | fallo |
 | `message.<clave>`, `message.<clave>.<oficio>` | mensaje de sistema (`craft.done` con el oficio de la estación abierta) | level up, muerte, viaje, herrería, cocina, monedas, rechazo |
-| `step.self` | `CreatureMove` propio | paso |
+| `step.self.<sound>`, `step.self` | `CreatureMove` propio, con el `sound` de la superficie pisada (`data/livingworld/surfaces.yaml`) | pisada de esa superficie (una de tres tomas), o el paso genérico |
 | `ui.dialog_open` | `DialogOpen` | campana suave |
 | `ui.click` | click en cualquier botón del DOM | click |
 
@@ -3428,8 +3429,9 @@ un sonido o asignarle uno a un evento nuevo no requiere tocar código.
 - **Música: el director** (pedido del dueño, 2026-11-18; `client/src/audio/director.ts`,
   `sounds.yaml` `music`). Lo que oye el jugador:
   - **Cada lugar tiene una pool de temas enteros** (~3 minutos cada uno): Puerto alterna sus
-    tres tomas, las cuevas siete versiones, cada isla la suya, el título la suya y el
-    guardián de la forja la suya. Un tema nunca se repite dos veces seguidas y la pool se
+    tres tomas, las cuevas siete versiones, Selvaine y Karvask dos cada una (desde el
+    2026-11-25: una versión más del mismo estilo, provisional hasta que el dueño la
+    escuche), el título la suya y el guardián de la forja la suya. Un tema nunca se repite dos veces seguidas y la pool se
     recorre entera antes de repetir.
   - **Ningún tema empieza por el principio:** arranca en uno de sus puntos de entrada (donde
     empieza una frase, medidos al importarlo), al azar. Bajar a una cueva no suena igual dos

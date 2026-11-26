@@ -21,6 +21,7 @@
   name: item.forge_gate_open.name
   description: item.forge_gate_open.desc
   pickupable: false
+  blocks_movement: false
   door: { closed: forge_gate }
 
 # The practice gate of Thimblewick (sandbox island, docs/16-probar-el-juego.md): a
@@ -41,6 +42,7 @@
   name: item.pruebas_gate_open.name
   description: item.pruebas_gate_open.desc
   pickupable: false
+  blocks_movement: false
   door: { closed: pruebas_gate }
 
 # The timber frame of a house door (docs/17 A11): never in the maps. A house door
@@ -71,4 +73,5 @@
   name: item.morvund_gate_open.name
   description: item.morvund_gate_open.desc
   pickupable: false
+  blocks_movement: false
   door: { closed: morvund_gate }

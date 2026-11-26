@@ -20,6 +20,7 @@ export const meta = {
 //     wt: 'pi',                   // worktree under .wt/ (2-3 letters: Windows MAX_PATH)
 //     from: 'feat/x',             // optional: start from another item's branch (it then waits for it)
 //     risk: 'high' | 'server' | 'content' | 'client' | 'docs',
+//     model: 'sonnet',            // optional: a cheaper model for a mechanical item (default: the session's)
 //     brief: '...',               // goal, files and docs to read, constraints, done criteria
 //   }],
 // }
@@ -62,6 +63,10 @@ const RULES = `Game: Neque's Realm (repo ${REPO}). Follow CLAUDE.md: server auth
 Native Windows + Git Bash: start EVERY Bash call with: ${PATHX}
 Never push, never open PRs, never call gh, never use git stash. Do NOT launch sub-agents (the owner caps agents at 2 at a time, sub-agents included).`
 
+// Usage limit: a cut agent loses whatever it had not committed. Commit often, and wait for the reset
+// instead of being cut (the watcher estimates the 5-hour window from the local transcripts).
+const USAGE = `Usage limit care: commit every finished step at once (a small Conventional Commit; lint may still be pending then, fix it in the next commit), so a cut run loses nothing. Before you start, and after each commit, run: node "C:/Users/fenzo/.claude/tools/usage-watch.cjs" --json . If its verdict starts with STOP, wait for the reset before going on: until node "C:/Users/fenzo/.claude/tools/usage-watch.cjs" --json | grep -qv '"verdict":"STOP'; do sleep 240; done (run it with a 10 minute timeout and repeat it until it returns). If the watcher fails, ignore it and go on.`
+
 const WT = (it) => `Your worktree is ${REPO}\\.wt\\${it.wt} (branch ${it.branch}). If it already exists, an earlier run of this task was cut: reuse it, look at git status / git log / git diff and keep the good work. Otherwise create it from ${REPO}: git worktree add .wt/${it.wt} -b ${it.branch} ${it.from || BASE}. Work ONLY there (cd into it in every Bash call, absolute paths with that prefix); pnpm install --frozen-lockfile first.`
 
 const IMPL = {
@@ -79,12 +84,13 @@ function implement(it) {
   return run(`${RULES}
 ${WT(it)}
 Do NOT use Docker, servers, make e2e or make test-integration: the batch runs them once at the end. Use make lint, make test, make validate, go test, vitest, mapcli/spritegen previews (review images with Read).
+${USAGE}
 Done for this stage: the change + tests that fail without it + docs (Spanish) + docs/14 "Pendientes conocidos" adjusted + make lint test validate green + small Conventional Commits. ${ATTR}
 
 TASK:
 ${it.brief}
 
-Answer (structured): ok, touches_server (server/, proto/ or .github/ changed), summary (Spanish, PR-ready: what changed, decisions, tests, results, pending), e2e_notes (what the final e2e/screenshot review should look at).`, { label: `impl:${it.slug}`, phase: 'Implement', schema: IMPL })
+Answer (structured): ok, touches_server (server/, proto/ or .github/ changed), summary (Spanish, PR-ready: what changed, decisions, tests, results, pending), e2e_notes (what the final e2e/screenshot review should look at).`, { label: `impl:${it.slug}`, phase: 'Implement', schema: IMPL, ...(it.model ? { model: it.model } : {}) })
 }
 
 const reviewPrompt = (it, round) => `${RULES}
@@ -102,6 +108,7 @@ function fix(it, review, label) {
   return run(`${RULES}
 ${WT(it)}
 Apply this code review to your branch (the work is already committed there). Fix every BLOCKING and IMPORTANT finding (verify it first; explain any you reject) and the cheap MINOR ones, each with a test that fails without the fix. make lint test validate green; commit. ${ATTR} No Docker, no e2e.
+${USAGE}
 Review:
 ${review}`, { label, phase: 'Review', schema: DONE })
 }
@@ -167,6 +174,7 @@ Answer in Spanish: BLOCKING / IMPORTANT / MINOR (file:line, scenario, fix), or s
   const notes = results.filter((x) => x && x.ok).map((x) => `- ${x.slug}: ${x.e2e_notes}`).join('\n')
   verify = await run(`${RULES}
 You close the batch "${NAME}". From ${REPO} create the worktree: git worktree add .wt/vf -b ${NAME}/verify ${tip} (if .wt/vf exists, an earlier run was cut: reuse it). Work only there; pnpm install --frozen-lockfile.
+${USAGE}
 1. Apply the BLOCKING and IMPORTANT findings of the final review below (verify each; explain rejects) and cheap MINOR ones, with tests. Commit. ${ATTR}
 2. Before Docker: the owner may be playing with 'make play' (a gameserver.exe and Vite on :8080/:5173 started from ${REPO}). Never stop it. For every PID that 'netstat -ano | grep LISTENING | grep -E ":(8080|5173) "' shows, read where it runs from: powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'ProcessId=<PID>' | Format-List ExecutablePath,CommandLine". One whose path or command line is under ${REPO}\\.wt\\vf was left by a cut run of this same step: stop it (taskkill //PID <PID> //F). Any other is the owner's: wait in a loop (check every 2 min, up to 8 h) until it is gone. If it is still there after 8 h, stop: no Docker, no step 3 or 4; answer ok=false with a summary that says the fixes of step 1 are committed and the verification waits for the owner to close 'make play' (resume this step then). Then you are the only agent with Docker and ports. If docker info fails: powershell -NoProfile -Command "Start-Process 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'", poll, make db-up. Fresh database rpg_e2e_${NAME} (DROP IF EXISTS + CREATE via docker exec ... psql -U postgres); DATABASE_URL and TEST_DATABASE_URL = postgres://postgres:postgres@localhost:5432/rpg_e2e_${NAME}.
 3. make lint, make test, make validate, make test-integration, make e2e — all full, the only e2e of the batch. Fix until green (never weaken tests; a flaky test gets its cause found and fixed). Review with Read the screenshots the items point at:

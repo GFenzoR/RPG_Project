@@ -5,6 +5,17 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadContent } from "@rpg/map-format";
 import {
+  CreatureKind,
+  CreatureSchema,
+  ItemStackSchema,
+  MapAreaSchema,
+  MapFloorSchema,
+  TileSchema,
+  create,
+} from "@rpg/protocol";
+import { Steering } from "../src/state/steering.ts";
+import { WorldState } from "../src/state/world.ts";
+import {
   GAME_SITE_KEYS,
   dialogTopics,
   loadAttributes,
@@ -29,19 +40,38 @@ describe("client content (T0.5)", () => {
     for (const d of Object.values(content.items))
       if (d.ground && d.walkable) expect(d.surface, d.id).toBeDefined();
     const lw = content.livingWorld;
-    expect(lw?.surfaces.sand?.footprintMs).toBeGreaterThan(0);
-    expect(lw?.surfaces.sand?.wind).toBeGreaterThan(0);
-    expect(lw?.plants["tall_grass"]).toEqual({
+    expect(lw?.surfaces.sand?.prints?.wind).toBeGreaterThan(0);
+    expect(lw?.surfaces.wet_sand?.prints?.waves).toBe(true);
+    expect(lw?.surfaces.grass?.prints).toBeUndefined();
+    expect(lw?.steps?.volume).toBeGreaterThan(0);
+    expect(lw?.prints?.waves.periodMs).toBeGreaterThan(0);
+    expect(lw?.plants["tall_grass"]).toMatchObject({
       reaction: "bend",
-      idle: true,
       leaves: false,
       trample: true,
+      wind: { kind: "tall_grass" },
     });
     expect(lw?.plants["oak_tree"]?.reaction).toBe("rustle");
+    // The wind (data/livingworld/wind.yaml and the sprites' metadata of make spritegen):
+    // every tree knows where its trunk ends, and what is left of a cut bush never sways.
+    expect(lw?.wind?.field.speed).toBeGreaterThan(0);
+    expect(lw?.plants["oak_tree"]?.wind).toMatchObject({ kind: "tree", pivotPx: 28 });
+    expect(lw?.plants["bush"]?.wind?.amplitude).toBeLessThan(
+      lw?.plants["oak_tree"]?.wind?.amplitude ?? 0,
+    );
+    expect(lw?.plants["cut_bush"]).toBeUndefined();
+    for (const [id, rule] of Object.entries(lw?.plants ?? {})) expect(rule.wind, id).toBeDefined();
     // Day and night (data/livingworld/daynight.yaml): the owner's 180 + 60 minutes.
     expect(lw?.dayNight?.dayMs).toBe(180 * 60_000);
     expect(lw?.dayNight?.nightMs).toBe(60 * 60_000);
     expect(lw?.dayNight?.floor).toBeGreaterThanOrEqual(0.4);
+    // Gaits (data/livingworld/gaits.yaml): the footfalls of each body.
+    expect(lw?.gaits?.gaits["biped"]?.contacts).toHaveLength(2);
+    expect(lw?.gaits?.defaults.humanoid).toBe("biped");
+    expect(lw?.gaits?.creatures["moss_spider"]).toBe("many_legs");
+    // Every creature with a gait of its own is a monster or an NPC the client knows.
+    for (const id of Object.keys(lw?.gaits?.creatures ?? {}))
+      expect(content.monsterSprites[id] ?? content.npcSprites?.[id], id).toBeDefined();
   });
 
   it("ships the positional ambience: beds and emitters on ambient sounds (livingworld/README.md)", () => {
@@ -309,6 +339,106 @@ describe("client content (T0.5)", () => {
     // The temple walls of Thimblewick (kind: wall, no blocks_movement).
     expect(byId.get("stone_wall")?.blocks).toBe(true);
     expect(byId.get("wooden_wall")?.blocks).toBe(true);
+  });
+
+  // Owner's report of 2026-11-24: one walked over the bushes. What fills its tile blocks
+  // (docs/06 "Qué bloquea el paso"), so a click beyond a bush walks round it, as the
+  // server's path does; low growth and what lies flat are walked over.
+  it("walks by click round a bush, over grass and a cut bush", () => {
+    const byId = new Map(Object.values(content.items).map((d) => [d.id, d]));
+    for (const id of ["bush", "thick_bush", "oak_tree", "pine_tree", "boulder", "well", "barrel"])
+      expect(byId.get(id)?.blocks, id).toBe(true);
+    for (const id of ["cut_bush", "grass_tuft", "tall_grass", "wildflowers", "reeds", "bench"])
+      expect(byId.get(id)?.blocks, id).toBe(false);
+    // The click itself (state/steering.ts walkTo: pathPassable over WorldState.free, what
+    // game.ts runs every frame), on a 5x3 lawn the server sent with one thing on its middle
+    // tile, the player at its west end: the tiles stepped on up to the east end.
+    const num = (id: string): number => {
+      const n = Object.entries(content.items).find(([, d]) => d.id === id)?.[0];
+      expect(n, id).toBeDefined();
+      return Number(n);
+    };
+    const walk = (onTheWay: string): string[] => {
+      const w = new WorldState(content);
+      w.apply(
+        {
+          case: "welcome",
+          value: {
+            $typeName: "game.v1.Welcome",
+            creatureId: 7,
+            serverTime: 0n,
+            tickMs: 50,
+            maxQueuedSteps: 4,
+            viewWidth: 31,
+            viewHeight: 21,
+            attackEvents: false,
+          },
+        },
+        0,
+      );
+      const grass = create(ItemStackSchema, { itemId: num("grass") });
+      const area = create(MapAreaSchema, {
+        x: 100,
+        y: 200,
+        width: 5,
+        height: 3,
+        palette: [
+          create(TileSchema, { items: [grass] }),
+          create(TileSchema, {
+            items: [grass, create(ItemStackSchema, { itemId: num(onTheWay) })],
+          }),
+        ],
+        floors: [
+          create(MapFloorSchema, { z: 7, tiles: [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0] }),
+        ],
+        creatures: [
+          create(CreatureSchema, {
+            id: 7,
+            kind: CreatureKind.PLAYER,
+            name: "me",
+            pos: { x: 100, y: 201, z: 7 },
+            speed: 200,
+          }),
+        ],
+      });
+      w.apply(
+        { case: "fullMapView", value: { $typeName: "game.v1.FullMapView", area, walkEpoch: 1 } },
+        0,
+      );
+      const s = new Steering({
+        portals: content.portals,
+        diagonalCost: content.movement.diagonalCost,
+        maxPathTiles: content.movement.maxPathTiles,
+      });
+      expect(s.walkTo(w, { x: 104, y: 201, z: 7 }, 0), onTheWay).toBe(true);
+      const stepped: string[] = [];
+      for (let t = 0; t <= 20_000 && s.goal; t += 10) {
+        if (s.next(w, t, {})?.kind !== "walk") continue;
+        const p = w.predicted[0];
+        if (!p) throw new Error("a walk without a predicted step");
+        stepped.push(`${p.to.x - 100},${p.to.y - 200}`);
+        // The server takes the step.
+        w.apply(
+          {
+            case: "creatureMove",
+            value: {
+              $typeName: "game.v1.CreatureMove",
+              id: 7,
+              from: { $typeName: "game.v1.Position", ...p.from },
+              to: { $typeName: "game.v1.Position", ...p.to },
+              durationMs: p.walk.duration,
+              walkSeq: p.seq,
+            },
+          },
+          t,
+        );
+      }
+      return stepped;
+    };
+    expect(walk("bush")).not.toContain("2,1");
+    expect(walk("bush").at(-1)).toBe("4,1");
+    expect(walk("tall_grass")).toEqual(["1,1", "2,1", "3,1", "4,1"]);
+    expect(walk("cut_bush")).toEqual(["1,1", "2,1", "3,1", "4,1"]);
   });
 
   it("marks the map doors, open or shut, and only those (playtest m5)", () => {

@@ -38,5 +38,68 @@
       "use": "the forge guardian",
       "text": "Boss fight against an ancient guardian of a volcanic forge. Grim and epic, about 100 bpm. Heavy pounding percussion with anvil-like metal hits, grinding low brass, a dark choir, relentless and loopable."
     }
+  ],
+  "versions_about": "More tracks for a slot's pool, in that slot's style (the owner, 2026-11-25: a wider soundtrack of the same styles). Each is the text of its slot (`of`) with another lead instrument, mood or tempo, asked once: `music_queue.py run --slots <id>,... --takes 1` writes `<id>_1.mp4`, and `music_import.py` ships it as the extra version `<id minus its slot>_1` of that slot's pool (picks.json `<slot>_pool`). The six cave versions of 2026-11-18 (mine, crystal, flooded, abyss, ossuary, ember) were asked by hand: their prompts are in assets/prompts/sounds/music/gemini/. Delivered on 2026-11-25: title_vigil (its second ask), title_embers, town_puerto_dusk, bosque_mist, volcan_cinder, cave_echo, boss_forge_bellows. Still to ask (Gemini answered three asks in a row with text and no track, so the run was stopped): town_puerto_tide, bosque_hollow, volcan_ridge, cave_roots, boss_forge_slag.",
+  "versions": [
+    {
+      "id": "title_vigil",
+      "of": "title",
+      "text": "Main menu theme. Brooding and lonely, about 60 bpm, minor key. A solo cello carries a slow, mournful melody over sparse fingerpicked nylon-string acoustic guitar arpeggios and a low drone; soft distant wordless choir swells now and then; a feeling of an old, cursed world keeping watch through the night."
+    },
+    {
+      "id": "title_embers",
+      "of": "title",
+      "text": "Main menu theme. Brooding and weary with a faint thread of hope, about 70 bpm, minor key. A fingerpicked nylon-string acoustic guitar trades a slow, sparse melody with a low wooden flute over a low cello drone; a few soft hammered dulcimer notes answer now and then; distant wordless choir; a feeling of an old, cursed world waiting."
+    },
+    {
+      "id": "town_puerto_dusk",
+      "of": "town_puerto",
+      "text": "Harbour town theme at dusk. Melancholic and calm but haunted, about 66 bpm, minor key. Fingerpicked acoustic guitar (slightly detuned, twelve-string colour) with gentle open chords, a slow solo fiddle melody far back in the room, a quiet sea-wind ambience bed, lots of room reverb."
+    },
+    {
+      "id": "town_puerto_tide",
+      "of": "town_puerto",
+      "text": "Harbour town theme on a grey morning. Melancholic and calm but haunted, about 74 bpm, minor key, a gentle lilting three-four sway. Fingerpicked acoustic guitar (slightly detuned, twelve-string colour), long soft concertina notes underneath, an occasional low wooden flute phrase, a quiet sea-wind ambience bed, lots of room reverb."
+    },
+    {
+      "id": "bosque_mist",
+      "of": "bosque",
+      "text": "Dark forest wilderness in the mist. Quiet but unsettling, about 56 bpm. Ambient low string drones, wind through old trees, a lone low wooden flute with long breathy notes, a distant wordless choir that comes and goes, creaking wood textures; mostly atmosphere with very little melody."
+    },
+    {
+      "id": "bosque_hollow",
+      "of": "bosque",
+      "text": "Dark forest wilderness, deep among the oldest trees. Quiet but unsettling, about 64 bpm. Ambient low string drones, wind through old trees, sparse plucked harp notes, a soft frame drum like a slow heartbeat far away, a distant wordless choir that comes and goes, creaking wood textures; mostly atmosphere with very little melody."
+    },
+    {
+      "id": "volcan_cinder",
+      "of": "volcan",
+      "text": "Volcanic ash island. Ominous and oppressive, about 52 bpm. Deep rumbling drones, slow heavy hand drums far away, a low bowed double bass line that rises and sinks, metallic scrapes and hisses, a dry heat-haze feeling; sparse and heavy."
+    },
+    {
+      "id": "volcan_ridge",
+      "of": "volcan",
+      "text": "Volcanic ash island, high on the burnt ridge. Ominous and oppressive, about 58 bpm. Deep rumbling drones, slow heavy hand drums far away, low brass swells, a lone low horn repeating a slow three-note call, distant ringing metal, a dry heat-haze feeling; sparse and heavy."
+    },
+    {
+      "id": "cave_echo",
+      "of": "cave",
+      "text": "A vast echoing cavern deep underground. Tense and very sparse. Cavernous reverb, water drips, deep sub drones, a few soft bowed-metal tones that ring for a long time, slow dissonant string clusters swelling and fading, the sense of something waiting in the dark."
+    },
+    {
+      "id": "cave_roots",
+      "of": "cave",
+      "text": "Narrow earthen tunnels under old roots. Tense and very sparse, about 58 bpm. Close, damp reverb, water drips, deep sub drones, dry wooden knocks, a slow low flute phrase that comes and goes, faint string harmonics, the sense of something waiting in the dark."
+    },
+    {
+      "id": "boss_forge_bellows",
+      "of": "boss_forge",
+      "text": "Boss fight against an ancient guardian of a volcanic forge. Grim and epic, about 96 bpm. Heavy pounding percussion with anvil-like metal hits, a driving low-strings ostinato in front, grinding low brass, a dark choir, relentless and loopable."
+    },
+    {
+      "id": "boss_forge_slag",
+      "of": "boss_forge",
+      "text": "Boss fight against an ancient guardian of a volcanic forge. Grim and epic, about 104 bpm, a heavy six-eight pulse. Pounding war drums with anvil-like metal hits on the accents, grinding low brass stabs, a dark wordless male choir carrying the theme, relentless and loopable."
+    }
   ]
 }

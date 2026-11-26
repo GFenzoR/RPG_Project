@@ -1,7 +1,8 @@
 // Plants that react (livingworld/README.md): a creature stepping on or next to a plant
-// bends it away for a moment (a damped spring), and tall plants sway gently in the wind.
-// Shader-free: the result is a skew (bend) or a pixel offset (rustle) the renderer puts on
-// the plant's sprite. Deterministic: only the tile and the clock.
+// bends it away for a moment (a damped spring). The result is a bend in radians: a plant
+// that takes the wind adds it to its sway as pixels at its top (bendPx: the same strips move
+// both, so one never pops over the other); one without wind data gets a skew (bend) or a
+// pixel offset (rustle) on its sprite. Deterministic: only the tile and the clock.
 import { hash01, tileKey } from "./hash.ts";
 
 /** How long a plant keeps moving after a step, ms. */
@@ -10,10 +11,16 @@ export const SWAY_MS = 900;
 export const SWAY_PERIOD_MS = 420;
 /** The lean of a fresh bend on the stepped tile, radians of skew. */
 export const BEND = 0.28;
-/** Neighbours of the stepped tile bend this much of it. */
+/**
+ * Neighbours of the stepped tile bend this much of it. It is all a solid plant ever gets (a
+ * bush, a tree: nobody steps on their tile, docs/06 "Qué bloquea el paso"), so it has to
+ * show: a 32 px sprite leans 4 px at its top, and a tree shakes its pixel (rustleOffset).
+ */
 export const NEIGHBOUR = 0.45;
-/** Idle wind sway, radians of skew at most. */
-export const IDLE = 0.05;
+/** How much of the rows that move a full skew would push the top: the bend is gentler. */
+export const BEND_REACH = 0.7;
+/** A rustling tree's top moves this far for a full bend, sprite px. */
+export const RUSTLE_PX = 1.4;
 /** docs/07: plants moving at once from steps (more are ignored until some settle). */
 export const MAX_SWAYS = 48;
 
@@ -84,14 +91,15 @@ export class SwaySim {
   }
 }
 
-/** The idle wind sway of a tall plant on tile (x, y) at `now`, radians of skew. */
-export function idleSway(x: number, y: number, now: number): number {
-  const phase = hash01(x, y, 11) * Math.PI * 2;
-  const breeze = 0.6 + 0.4 * Math.sin(now / 5100 + x * 0.21);
-  return IDLE * breeze * Math.sin(now / 1300 + phase);
-}
-
 /** A rustling tree's shake in whole sprite pixels for a bend (skew) value. */
 export function rustleOffset(bend: number): number {
-  return Math.round((bend / BEND) * 1.4);
+  return Math.round((bend / BEND) * RUSTLE_PX);
+}
+
+/**
+ * A bend (bendAt, radians) as sprite px at the top of a plant whose moving rows are `reach`
+ * px tall: what the wind's strips add to the sway. A tree only shakes.
+ */
+export function bendPx(bend: number, reach: number, rustle: boolean): number {
+  return rustle ? (bend / BEND) * RUSTLE_PX : Math.tan(bend) * reach * BEND_REACH;
 }

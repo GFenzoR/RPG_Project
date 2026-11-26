@@ -1,5 +1,6 @@
 id: pruebas_merchant
 name: npc.pruebas_merchant.name
+role: npc.pruebas_merchant.role
 sprite: npcs/pruebas_merchant
 look:
   sex: male

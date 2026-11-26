@@ -9,6 +9,10 @@
   "properties": {
     "id": { "$ref": "common.schema.json#/$defs/id" },
     "name": { "$ref": "common.schema.json#/$defs/i18nKey" },
+    "role": {
+      "description": "What the NPC does, in two or three words: the second line of its label in the game, under its name (\"Tilde Varga\" / \"Provisiones\"). Optional: without it the role is the default of what the NPC offers (npc_role.captain, merchant, healer, trainer, quest_giver, by its boat routes, shop and dialog actions); an NPC that offers none of those must name one. At most 28 characters in every language.",
+      "$ref": "common.schema.json#/$defs/i18nKey"
+    },
     "sprite": {
       "description": "An atlas sprite (a spirit, a beast). A person's is its still portrait (the dialog's), drawn by spritegen from its look.",
       "$ref": "common.schema.json#/$defs/sprite"

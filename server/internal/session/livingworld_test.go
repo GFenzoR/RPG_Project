@@ -672,3 +672,68 @@ func TestLivingEmptyPushWaitsForTheCooldown(t *testing.T) {
 		t.Fatalf("empty pushes in one cooldown: %d messages, want 1", n)
 	}
 }
+
+// A character that logged out on the tile of a living object wakes up there, not at its
+// temple: on the debris while the tile is free ground, and beside the object once it
+// stands again, even one that hides what is behind it (placement, besideSolid). The areas
+// were numbered with the object standing, so its tile is in none.
+func TestLivingSavedOnAnObjectWakesThere(t *testing.T) {
+	crate, boulder := pos(12, 1), pos(20, 1)
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
+		"T.......................",
+		"........................",
+		"........................",
+	), map[world.Pos]uint16{crate: lwCrateID, boulder: lwBoulderID})
+	m := h.w.Map()
+	near := func(got, want world.Pos) bool {
+		return got != want && m.Walkable(got) && max(dist(got.X, want.X), dist(got.Y, want.Y)) == 1
+	}
+	sleep := func(on world.Pos) world.Pos {
+		t.Helper()
+		nextChar++
+		c := withPack(nextChar, on)
+		cl, p := h.joinChar(c)
+		got := p.Pos()
+		h.leave(cl)
+		return got
+	}
+
+	// Saved inside the standing crate: beside it.
+	if got := sleep(crate); !near(got, crate) {
+		t.Fatalf("saved on the standing crate %v, woke up at %v", crate, got)
+	}
+
+	cl, _ := armed(h, pos(11, 1), swordID)
+	strike(h, cl, crate, lwCrateID)
+	h.sim.RunTicks(2)
+	strike(h, cl, crate, lwCrateID)
+	h.leave(cl)
+	if !m.Walkable(crate) {
+		t.Fatal("the crate did not break")
+	}
+	// On its debris: the very tile.
+	if got := sleep(crate); got != crate {
+		t.Fatalf("saved on the crate's debris %v, woke up at %v", crate, got)
+	}
+
+	// The crate stands again (2 s of debris, 4 s more) and hides what is behind it.
+	h.sim.RunTicks(200)
+	if m.Walkable(crate) || m.LineOfSight(pos(11, 1), pos(13, 1)) {
+		t.Fatal("the crate did not come back")
+	}
+	if got := sleep(crate); !near(got, crate) {
+		t.Fatalf("saved on the crate that came back %v, woke up at %v", crate, got)
+	}
+
+	// The tile a pushed boulder left: the very tile.
+	cl, _ = armed(h, pos(19, 1), 0)
+	h.input(cl, push(boulder, E))
+	h.sim.RunTicks(20)
+	h.leave(cl)
+	if !m.Walkable(boulder) {
+		t.Fatal("the boulder was not pushed")
+	}
+	if got := sleep(boulder); got != boulder {
+		t.Fatalf("saved where the boulder stood %v, woke up at %v", boulder, got)
+	}
+}

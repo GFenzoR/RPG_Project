@@ -128,11 +128,16 @@ var npcTitles = map[string]bool{
 	"master": true, "maestro": true, "maestra": true,
 }
 
-// NPCReservedNames turns NPC display names ("Maren Holt, jefa del puerto", "Sister
-// Liora", "Gisla the tanner") into the names a character may not take: the name before
-// a comma ("Maren Holt") and each of its capitalized words of at least MinNameLen
-// letters ("Maren", "Holt"; "Liora"; "Gisla") but titles (npcTitles: "Sister"). A
-// player cannot then pose as an NPC, in any language its name is shown in.
+// NPCReservedNames turns NPC display names ("Maren Holt", "Sister Liora", "Corvo",
+// "forge echo") into the names a character may not take: the whole name ("Maren Holt",
+// "forge echo") and each of its capitalized words of at least MinNameLen letters
+// ("Maren", "Holt"; "Liora"; "Corvo") but titles (npcTitles: "Sister"). A name written
+// without capitals ("forge echo") reserves only itself. A player cannot then pose as an
+// NPC, in any language its name is shown in.
+//
+// Names carry no trade since lote 20b (it is the NPC's role text, and make validate
+// refuses a comma in a name); what comes after a comma is still dropped, should a name
+// arrive with one from elsewhere.
 func NPCReservedNames(displayNames []string) []string {
 	seen := map[string]bool{}
 	var out []string

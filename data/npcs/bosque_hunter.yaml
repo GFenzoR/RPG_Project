@@ -1,5 +1,6 @@
 id: bosque_hunter
 name: npc.bosque_hunter.name
+role: npc.bosque_hunter.role
 sprite: npcs/bosque_hunter
 look:
   sex: male

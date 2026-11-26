@@ -1,5 +1,6 @@
 id: pruebas_ferryman
 name: npc.pruebas_ferryman.name
+role: npc.pruebas_ferryman.role
 sprite: npcs/pruebas_ferryman
 look:
   sex: male

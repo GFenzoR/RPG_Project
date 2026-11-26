@@ -69,6 +69,9 @@ importers:
         specifier: 10.29.8
         version: 10.29.8
     devDependencies:
+      '@rpg/content-schema':
+        specifier: workspace:*
+        version: link:../packages/content-schema
       '@rpg/map-format':
         specifier: workspace:*
         version: link:../packages/map-format
@@ -197,6 +200,9 @@ importers:
 
   tools/spritegen:
     dependencies:
+      '@rpg/living-world':
+        specifier: workspace:*
+        version: link:../../livingworld/client
       '@rpg/spritepack':
         specifier: workspace:*
         version: link:../spritepack

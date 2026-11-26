@@ -104,6 +104,52 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
+  el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
+  que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:
+  el viento"):** cada planta se dibuja en tiras que se corren px enteros de pantalla con la
+  base plantada, movidas por un campo de viento que cruza el mapa; el roce de una criatura
+  se suma sin saltos. Toda planta declara su viento en su sprite (`plantWind` en la receta
+  de spritegen, o la pista `wind` de `assets/sprites.yaml`) y `make validate` falla si
+  falta. Sin cambios de servidor ni de protocolo. Queda:
+  - **Mirarlo en movimiento** (E2E del lote y playtest del dueño): un bosque y un pueblo
+    con árboles, a zoom 2 y a zoom 1; que se lea sutil y orgánico. Si es mucho o poco, los
+    números están en `data/livingworld/wind.yaml` (`kinds.<tipo>.amplitude`, `field.calm`,
+    `field.speed`); no hace falta código.
+  - **Arreglo de paso:** las plantas del lote 17 nunca reaccionaban en el juego real (el
+    pegamento le daba al módulo el número del item y los datos van por id); ahora sí se
+    doblan al pasar. Mirar que el doblez de hierba y arbustos (hasta ~6 px en la punta) no
+    sea demasiado.
+  - **Tiempo de frame en el navegador** sobre un bosque: medido solo en Node (0,8 ms con
+    999 árboles, docs/07); falta el número real con GPU.
+  - **Sin clima:** cuando haya lluvia o tormenta, es un factor más sobre la fuerza del
+    viento (`strengthAt`). Las hojas que caen no derivan con el viento.
+  - **Estandartes y bandera** siguen con su bucle de frames; no siguen las ráfagas.
+  - **El editor de mapas** no muestra el vaivén (no monta el mundo vivo): los árboles se
+    ven quietos ahí, ya sin los frames viejos.
+  - **Plantas de selva** (palmeras, helechos, lianas): los tipos `palm`, `vine` y los demás
+    ya tienen sus valores; falta el arte. `make sway-preview` es el paso de revisión.
+- **Arbustos sólidos (hecho, rama `feat/solid-flora`; el dueño el 2026-11-24: "se puede
+  caminar sobre los arbustos"):** `bush` bloquea el paso y la regla de qué bloquea está en
+  docs/06 "Qué bloquea el paso", con `data/solid_families.yaml` y su chequeo en
+  `make validate`. Queda:
+  - **Los árboles tapan la vista** (`blocks_sight: true` en los cuatro, como pedía la
+    tarea: "alto y denso"): detrás de un tronco no pasan flechas ni hechizos ni la vista de
+    un monstruo que busca objetivo. **A probar por el dueño** en el Bosque con un arquero
+    o un mago; si molesta, volver atrás es sacar esa línea de los cuatro árboles en
+    `data/items/decoration.yaml` y ajustar `solid_test.go` y la tabla de docs/06.
+  - **Decisión del dueño: banco, cama y jardinera** siguen caminables (regla de las casas
+    del lote 12). Si deben bloquear fuera de las casas, hacen falta items aparte para las
+    casas o revisar `town-props.test.ts`.
+  - **Quien salió del juego parado sobre un arbusto** despierta al lado del arbusto, en la
+    isla donde estaba (`besideSolid`, docs/06); ya no viaja gratis al templo de su pueblo.
+    La misma regla vale para cualquier casilla que bloquea el paso y no la vista, también
+    una de agua: quien quedara guardado ahí despierta en la orilla más cercana.
+  - **`thick_bush` no se dobla** al rozarlo (`data/livingworld/plants.yaml` no lo nombra:
+    es un rompible del mundo vivo, ya era así). Decidir si un rompible también se mece.
+  - **E2E** (lo corre el lote al final): ningún test nombra la casilla de un arbusto, pero
+    los caminos por click de Puerto, Bosque y Volcán ahora los rodean; mirar que ninguna
+    captura cambie de recorrido.
 - **Globos de diálogo (hecho, rama `feat/chat-bubbles`; el dueño el 2026-11-23: lo dicho en
   el canal local aparece sobre la cabeza; docs/17 UI-11):** decir, gritar, susurrar y la
   línea del NPC en su diálogo, con ajuste de línea, apilado, separación entre hablantes y
@@ -137,15 +183,25 @@ el punto 5:
     emisor (se oye una fragua a través de un muro).
   - **E2E:** el test de sonido de `e2e/game.spec.ts` espera la brisa del pasto (y no las
     olas) en el templo de la isla del E2E; lo corre el lote al final.
-- **Nombres más grandes y legibles (hecho, rama `feat/name-labels`; el dueño el 2026-11-23:
-  "los nombres deben ser más grandes", el violeta de los NPCs no se leía; docs/17 "Hecho:
-  nombres más grandes y legibles"):** los nombres, gremios, marcas PvP y números flotantes
-  escalan con el zoom en pasos enteros (grande por defecto, normal en Opciones → Interfaz)
-  y los colores tienen contraste ≥ 4,5:1 contra el contorno. Falta que el dueño lo mire en
-  su pantalla: si a 1x (la app a 960x700) los quiere más grandes, `labelScale` daría 2 desde
-  zoom 1 con "Grande" (a 1x un nombre ocuparía 2/3 de casilla de alto y se ocultarían más
-  por solapes). El muro que se vuelve translúcido delante del jugador (ART-3) tiene ahora su
-  E2E (`102-wall-fade-own-player`).
+- **Nombres nítidos y NPCs en dos líneas (hecho, rama `feat/labels-and-steps`, 2026-11-25;
+  antes `feat/name-labels`, lote 19; el dueño: "la fuente se ve muy pixeleada y ahora está
+  muy grande", "los NPC muestran su nombre y después unos puntos suspensivos; dos líneas:
+  el nombre y abajo qué hace"; docs/17 "Hecho: nombres nítidos y los NPCs en dos líneas"):**
+  los nombres se rasterizan al tamaño exacto en píxeles de dispositivo (Alegreya Sans con
+  contorno, 12/15/18/21 px CSS a zoom 1 a 4; "Normal" 10 a 16), los NPCs muestran su rol
+  (`role` en `data/npcs`, con rol por defecto según lo que ofrecen) y nada de "…" para
+  ellos. Queda:
+  - **Que el dueño lo mire en su pantalla** (Windows al 125 % o 150 % incluido): el tamaño
+    se eligió sobre una lámina sin el juego corriendo; se ajusta en `NAME_PX` de
+    `client/src/render/label-style.ts` (base y paso por zoom) y `SUB_RATIO` (el rol).
+  - **Los textos de rol** los escribí yo ("Provisiones", "Jefa del puerto", "Guardiana de
+    los registros"...; los sacerdotes usan el por defecto "Bendiciones y sanación"): el
+    dueño puede cambiarlos en `i18n/*/npcs.yaml` (`npc.<id>.role`, máximo 28 caracteres).
+    Los nombres de NPC ya no llevan el oficio tras una coma (también en la ventana de
+    diálogo).
+  - **Números flotantes y globos** siguen en la fuente pixel escalada; si también se ven
+    pixelados, el mismo cambio (`labelFontPx`) sirve para ellos.
+  - **E2E** (lo corre el lote al final): `100-*` y `101-*` de `sandbox.spec.ts`.
 - **Ventanas que cambian de tamaño desde las cuatro esquinas (hecho, rama
   `feat/window-resize`; el dueño el 2026-11-23: "como en Ragnarok Online"; docs/17 UI-5,
   §7 "Hecho: cambiar el tamaño desde las cuatro esquinas"):** solo las esquinas (los bordes
@@ -439,15 +495,103 @@ el punto 5:
   2026-11-23: "el entorno reacciona a los jugadores que pasan"; `livingworld/README.md`):**
   huellas, plantas que se doblan, ondas, polvo, hojas, bichos y pasos por superficie en
   `livingworld/client`. Queda:
-  - **Sonidos de paso propios por superficie:** sin ffmpeg en la máquina no se pudieron
-    generar. Los eventos `step.self.<sound>` ya se piden y caen en `step`; falta la receta
-    de soundgen (o un pack con licencia) en `assets/livingworld/sounds/`, su fila en
-    `sounds.yaml` y en `CREDITS.md`.
+  - **Huellas que coinciden con los pasos (hecho, rama `feat/footprint-sync`; el
+    dueño el 2026-11-24: "las marcas tienen que coincidir con los pasos; si no, se ve muy
+    falso"):** una huella por pisada, bajo el pie, sacada del ciclo de caminar dibujado
+    (`livingworld/client/src/gait.ts`, `data/livingworld/gaits.yaml`); el sonido del paso,
+    la onda, el polvo y las motas salen de la misma pisada. Sin cambios de servidor ni de
+    protocolo. Queda:
+    - **Mirarlo en el juego:** el E2E "sandbox footprints" (capturas `99h` a `99j`) camina
+      por la playa de Thimblewick; la playa es angosta (5 casillas de arena en fila), así
+      que la diagonal solo se captura si hay tres casillas seguidas. La captura sin
+      navegador (`livingworld/client/scripts/footfall-shot.ts`) ya muestra las 4 direcciones.
+    - **Los dos pies (hecho, rama `feat/labels-and-steps`, 2026-11-25; el dueño: "solo al
+      pie derecho, pareciera que está cojeando", "se marcan de uno de los dos pies"):**
+      las huellas van en dos hileras (`print_spread`), cada pie suena con su voz y nunca
+      se repite la toma, y el volumen es un número (`steps.volume`, 0,7). Queda que el
+      dueño lo escuche: son dos golpes por casilla al este u oeste, 3,5 al norte o al sur
+      y 4 en diagonal (lo que da la animación); si cansa, bajar `steps.volume` en
+      `data/livingworld/surfaces.yaml` (no en `sounds.yaml`). Se revisó contra la mezcla
+      por números (0,105 contra 0,7 de la música, 0,8 de un golpe y 0,15 de la capa de
+      ambiente más baja), no de oído.
+    - **Huellas que borra el viento o la ola (hecho, misma rama; el dueño: "en la arena
+      no debiesen borrarse después de un rato necesariamente; es según el viento o según
+      las olas"):** sin tiempo de vida; `livingworld/README.md` "Huellas: qué las borra".
+      La playa de Thimblewick no tenía arena mojada y la mitad de la ola del E2E se
+      saltaba sin avisar: en el cierre del lote 20b se pintaron tres casillas junto al
+      agua (2082–2084, 2130) y el test ahora la exige (pisadas con sonido de arena mojada,
+      huellas, y ninguna tras la ola). En el resto del mundo solo hay arena mojada junto
+      al agua en las charcas de Selvaine: si las olas deben verse en las playas, hay que
+      pintarles su franja. Queda mirarlo en el juego (capturas `99k` a `99n` del E2E
+      "sandbox footprints": el rastro antes y después de una ráfaga, y en la arena mojada
+      antes y después de una ola; la huella sobre arena mojada se ve poco) y afinar a gusto `prints.wind` de cada superficie, `prints.still` y `waves`
+      (`surfaces.yaml`). No hay lluvia (gancho `FootprintSim.rain`), la ola no se dibuja
+      subiendo por la arena, y la marca de los dos pies es el mismo sprite.
+    - **Descalzo o con botas:** la misma marca (no era barato: pide leer el calzado
+      visible de cada criatura y un sprite más).
+    - **Criaturas dibujadas a mano (Gemini):** usan los contactos de su tipo de cuerpo por
+      fracción del ciclo, sin medir sus frames; si alguna se ve desfasada, un andar propio
+      en `creatures` de `gaits.yaml`.
+    - **Sin sprite en el atlas** (el bloque de color) una criatura no deja pisadas ni
+      suena su paso.
+  - **Sonidos de paso propios por superficie (hecho el 2026-11-25, rama
+    `feat/step-sounds`):** once superficies con tres tomas cada una, recetas de
+    `tools/soundgen/src/steps.ts` en `assets/livingworld/sounds/steps/`, niveladas a la
+    misma sonoridad y a volumen 0,15 (el `step` de reserva bajó de 0,25 a 0,12). Sin ffmpeg
+    en el PATH se encodaron con el de `imageio-ffmpeg` (el de `tools/gemini`). Queda: que el
+    dueño las escuche: el nivel de todas se ajusta con `steps.volume` de
+    `data/livingworld/surfaces.yaml` (0,7 desde `feat/labels-and-steps`, que también hizo
+    que la toma no se repita y varíe el tono). Si pasto, tierra y piedra le siguen sonando
+    parecidos, son las recetas de `tools/soundgen/src/steps.ts` las que hay que separar
+    más (un test ya exige que cada superficie del mapa real toque sus propios archivos).
   - **Día y noche (hecho, rama `feat/day-night-shadows`):** reloj del servidor, luz,
     lámparas, luna y sombras proyectadas (`livingworld/README.md` "Día y noche"). Queda:
-    - **Sombras de objetos altos que giren con el sol:** árboles, pilares y casas tienen
-      su sombra dibujada (ART-5), que solo se desvanece con el sol; girarlas pide una
-      silueta por objeto como la de las criaturas.
+    - **Sombras de los objetos (hecho, 2026-11-25, rama `feat/object-shadows`):** todo
+      objeto con altura proyecta su sombra con la pose del sol o de la luna
+      (`data/livingworld/shadows.yaml`, docs/17 "Sombras de los objetos"); la sombra de la
+      copa de un árbol se mece con ella; la elipse de contacto solo queda donde no hay
+      sombra proyectada y va en la línea real de los pies (`stance` de `atlas.json`); bajo
+      techo y bajo tierra no hay sombras del sol; "Animaciones reducidas" las conserva,
+      quietas (era la decisión pendiente de abajo: el dueño pidió conservarlas). Queda:
+      - **Capturas del E2E final miradas (cierre del lote 20b, 2026-11-26):** `99a` a
+        `99g` y `99d2` en la plaza de Thimblewick y `124` a `127` en el bosque de
+        Ivernel. Una sombra por objeto del lado contrario al sol, larga a la mañana y a la
+        tarde, corta al mediodía, tenue con luna; ningún personaje ni criatura con elipse
+        al sol, y los pies tocan su sombra (también el espinoso y el lobo). El test del
+        bosque sacaba `124` a `127` con el personaje muerto en el templo (los espinosos lo
+        mataban a mitad de camino y el test pasaba igual): ahora entra con nivel 200 y
+        el test exige que termine de pie en el bosque. Números en docs/07: 60 fps y 6
+        draw calls. Dos cosas que se ven mal y quedan:
+        - **Sol dentro de un edificio visto de lejos:** una habitación cuyo muro más
+          lejano queda fuera de la ventana del servidor (a 12 filas o más, o 17 columnas)
+          cuenta como aire libre "hasta ver su último muro" (`indoorTiles`), así que desde
+          la plaza de Thimblewick (2095,2095) el piso del templo muestra la sombra de sus
+          muros y la del vano (`99d`, `99d2`), y desaparecen al dar un paso al norte
+          (comprobado con capturas desde 2095, 2094, 2093 y 2092). Arreglo posible: una
+          zona `indoor` en el mapa, o recordar los muros ya vistos.
+        - **La sombra de un muro fino arranca separada de él:** la sombra de bloque sale
+          del borde de la casilla, y el dibujo de un muro vertical ocupa solo el medio
+          (20 de 64 px a 2x): quedan unos 11 px de sprite de pasto al sol entre el muro
+          y su sombra (`99d2`, al este del templo). Arreglo: que el bloque use el ancho
+          del dibujo de la pieza y no la casilla.
+      - **"Bajo techo" es una heurística** (los mapas no tienen techos): casillas
+        encerradas por muros, con vanos de hasta 3 casillas, hasta 400 casillas. Un
+        edificio con un vano más ancho o un patio chico amurallado se leen mal (uno con
+        sol adentro, el otro sin sombras). Si molesta: marcar el interior en el mapa
+        (una zona `indoor`), que es un cambio de formato.
+      - **Bajo techo no se ven huellas ni ondas del mundo vivo:** el suelo de adentro se
+        dibuja encima de `groundOverlay` para tapar las sombras, y tapa también eso.
+        Hoy los interiores son de madera y piedra (sin huellas); un interior de arena o
+        con agua las perdería.
+      - **Criaturas con sombra pintada** (`shadow: baked`, las de Dungeon Crawl): llevan
+        la pintada y además la proyectada. Sacar la pintada es repintar esos sprites.
+      - **Voladores:** la sombra proyectada de un murciélago sale del cuerpo en el aire,
+        no del suelo bajo él.
+      - **Items animados o apilados:** la sombra toma la textura del item al colocarse,
+        no cada frame (una fuente animada proyecta un frame fijo); un objeto sobre una
+        mesa proyecta desde su altura.
+      - **Editor y `mapcli render`** siguen con la sombra horneada (`<sprite>/shadow`):
+        no tienen hora.
     - **Sombra que se aleja de una luz fuerte:** de noche, junto a una fogata, la sombra
       sigue a la luna; apuntarla lejos del fuego queda para después.
     - **Medir en el navegador (decisión del dueño):** el pedido era un sprite más por
@@ -460,21 +604,17 @@ el punto 5:
       muñeco en una textura (un sprite por criatura). El `AlphaFilter` de
       `castShadows.root` es una pasada offscreen del tamaño de todas las sombras (casi la
       pantalla) y de noche se suma la del mapa de luz.
-    - **Sombras que se cruzan:** las de criaturas van en `groundOverlay`, debajo de las
-      horneadas; donde se cruzan con la de un árbol o una casa se suman y queda una mancha
-      más oscura. Revisarlo en las capturas.
+    - **Sombras que se cruzan (resuelto, 2026-11-25):** las de criaturas y las de objetos
+      van en el mismo contenedor con un solo filtro; donde se cruzan queda un tono parejo.
     - **Mirar las capturas:** el E2E saca `99b-daynight-noon`, `99c-daynight-night`,
       `99d-daynight-morning`, `99e-daynight-dusk`, `99f-daynight-new-moon` y
       `99g-daynight-dawn`; nadie las miró todavía en esta rama (sin E2E en la revisión).
       Mirarlas en el E2E final del lote y, aparte, un lobo o un thornling con sol bajo
       (`/time morning`): sus sprites tienen filas vacías bajo los pies (`foot` 8 y 10) y
       la sombra ahora gira en la línea de los pies, no en el borde de la textura.
-    - **Efectos reducidos sin sombra proyectada (decisión del dueño):** con "Animaciones
-      reducidas" o `prefers-reduced-motion` (común en móvil) solo queda la elipse de
-      contacto, aunque una sombra quieta no es movimiento. Confirmar si se quiere así. El
-      tinte del cielo y el mapa de luz de la noche (lámparas, fogatas) **no** se apagan
-      con efectos reducidos: no se mueven ni parpadean, y sin ellos no habría noche;
-      confirmar también eso.
+    - **Efectos reducidos (resuelto, 2026-11-25):** el dueño pidió que "Animaciones
+      reducidas" conserve las sombras, sin vaivén. El tinte del cielo y el mapa de luz de
+      la noche tampoco se apagan: no se mueven ni parpadean, y sin ellos no habría noche.
     - **Luna nueva contra el piso de luminancia (mirar en las capturas):** el color
       `night_new_moon` (`#58648c`, luminancia ~0,40) queda bajo `floor` 0,5, así que
       nunca se dibuja tal cual: `withFloor` lo aclara. La diferencia real entre luna nueva
@@ -487,7 +627,8 @@ el punto 5:
       `game-canvas.ts` (solo el E2E).
     - **Hora en la interfaz:** no hay reloj ni icono de la luna en el HUD.
   - **Plantas en los mapas:** `grass_tuft`, `tall_grass`, `wildflowers` y `reeds` existen
-    pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan.
+    pero ningún mapa las coloca todavía; arbustos, jardineras y árboles ya reaccionan (los
+    arbustos y los árboles, sólidos, al pasar por una casilla vecina).
   - **Superficies sin suelo:** `snow`, `mud` y `tall_grass` están en el enum y en
     `surfaces.yaml`, pero ningún suelo las usa aún.
   - **Medir en el navegador:** los topes están en docs/07; falta mirar el tiempo de frame
@@ -1489,9 +1630,9 @@ el punto 5:
       la casilla y la sombra de contacto como el resto; desde el motor de sprites son
       modelos a esa escala. La gaviota queda de
       32x32 con su sombra pintada hasta que el dueño elija su arte.
-    - **La sombra de contacto es de un solo tamaño** (`SHADOW_W` = 20 px): bajo el custodio
-      (77 px de ancho) o el gólem queda chica. Una sombra que escale con el ancho del
-      dibujo (`top` y el ancho del frame están en `atlas.json`) sería un cambio del cliente.
+    - **La sombra de contacto escala con los pies (hecho, 2026-11-25):** su ancho es el
+      de la base del cuerpo más 8 px (12 a 56 px) y va en la línea donde está parado
+      (`stance` de `atlas.json`); solo se ve donde no hay sombra proyectada.
     - **Click sobre la cabeza** de un personaje alto: hecho (rama `feat/world-art-2`,
       ART-2). Elige a la criatura antes que la casilla; el propio jugador queda fuera.
       Y una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
@@ -2019,6 +2160,25 @@ el punto 5:
     principal (título 1, Puerto 1, 2 y 3, Bosque 1, Volcán 2, Cuevas 1, guardián de la
     forja 1; combate apagado). Cambiar una elección es editar ese archivo y correr
     `make music-gemini`. Cada toma está en "Generado con IA" de `CREDITS.md` con su prompt.
+  - **Más música de los mismos estilos (2026-11-25, rama `feat/more-music`, pedido del
+    dueño):** `music_slots.json` tiene doce versiones (`versions`: dos por lugar, el texto
+    del lugar con otro instrumento, ánimo o tempo) y el importador acepta versiones extra
+    en cualquier lugar (`<lugar>_pool` en `picks.json`). Gemini entregó siete
+    (`build/music-gemini/`: `title_vigil_2`, `title_embers_1`, `town_puerto_dusk_1`,
+    `bosque_mist_1`, `volcan_cinder_1`, `cave_echo_1`, `boss_forge_bellows_1`, todas `.mp4`
+    y dentro de las medidas) y después contestó tres pedidos seguidos con texto y sin tema
+    ("no music generation tool is available"), así que la cola se cortó. Lo que queda:
+    - **Las siete están en el juego** (2026-11-26), provisionales: el dueño subió el tope de
+      audio a 24 MiB (`BUDGET.totalBytes`, docs/07 "Audio"; ~20,9 MiB en total) y son
+      `Slot.extras` de `tools/gemini/music_import.py`. Un `<lugar>_pool` en `picks.json`
+      REEMPLAZA esa lista: `cave_pool` tiene que nombrar también las seis de antes
+      (`"cave_pool": ["mine", "crystal", "flooded", "abyss", "ossuary", "ember", "echo"]`).
+    - **Faltan pedir cinco:** `python tools/gemini/music_queue.py run --into
+      build/music-gemini --takes 1 --retries 1 --slots
+      bosque_hollow,volcan_ridge,cave_roots,boss_forge_slag` (y `town_puerto_tide`, que ya
+      gastó sus dos pedidos: con `--retries 2`), otro día.
+    - **El dueño no escuchó ninguna:** las que no le gusten se sacan de `Slot.extras` o no
+      se listan.
   - **Director de música (hecho, rama `feat/music-director`, pedido del dueño del
     2026-11-18):** temas enteros en estéreo transmitidos, pools por lugar sin repetir el
     mismo tema dos veces seguidas, arranque en un punto de entrada al azar, memoria por zona,
@@ -2054,7 +2214,7 @@ el punto 5:
       de presupuesto.
   - **Presupuesto de audio (revisado el 2026-11-18, docs/07 "Audio"):** temas enteros en
     estéreo a 48 kbps (40 las cuevas): ~13,3 MiB de música en total, ~6 MiB la pool de las
-    cuevas, dentro de los nuevos topes de 16 MiB en total y 8 MiB por pool. Nada de eso
+    cuevas, dentro de los topes de 16 MiB en total (24 MiB desde el 2026-11-26) y 8 MiB por pool. Nada de eso
     está en la descarga inicial: cada zona baja el tema que suena y el siguiente. Caben
     unas dos versiones más de cueva; más que eso, subir el tope de la pool o bajar a 32 kbps.
   - **Volumen:** los temas enteros quedan a -14 LUFS (el peor, Karvask, a -14,8 con

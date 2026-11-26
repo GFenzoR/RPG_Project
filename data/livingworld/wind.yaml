@@ -1,0 +1,54 @@
+# The wind of the living world (livingworld/README.md "Viento"): trees, bushes and every
+# other plant of the map sway with it. Cosmetic: the server never reads it.
+#
+# field: gusts are a smooth pattern that travels over the map, so neighbouring trees move
+# one after another.
+#   direction   where the gusts travel to, degrees (0 east, 90 south)
+#   speed       how fast they travel, tiles per second
+#   gust_tiles  the length of a gust along the wind, tiles
+#   calm        share of the strength that blows between gusts
+#   exposure    strength by ground surface (data/items ground.surface) round a plant:
+#               coasts and deserts blow harder, a floor indoors not at all
+#   open        strength over a surface that is not listed
+#   forest      how much a dense stand of trees calms the wind inside it (0..1)
+#   night       strength at night, a factor
+# Underground (caves) there is no wind at all.
+field:
+  direction: 20
+  speed: 2.4
+  gust_tiles: 9
+  calm: 0.22
+  exposure:
+    sand: 1.3
+    wet_sand: 1.45
+    water_shallow: 1.45
+    ash: 1.25
+    snow: 1.2
+    grass: 1.0
+    tall_grass: 1.0
+    dirt: 0.9
+    mud: 0.9
+    stone: 0.55
+    wood: 0.0
+    lava: 0.8
+  open: 1.0
+  forest: 0.4
+  night: 0.8
+
+# kinds: the defaults of each plant type. A sprite says its type and where its trunk ends
+# (tools/spritegen, data/livingworld/wind_sprites.yaml); plants.yaml may override a plant.
+#   stiffness  0 limp .. 1 rigid: a stiff plant gives only to a strong gust
+#   amplitude  how far its top moves in a full gust, sprite px
+#   flutter    the fast shimmer of its canopy rows, sprite px (under 1)
+#   period_ms  one swing of the main sway
+#   pivot      where it starts to move when the sprite does not say, share of its height
+kinds:
+  tree: { stiffness: 0.45, amplitude: 2.0, flutter: 0.7, period_ms: 3400, pivot: 0.3 }
+  palm: { stiffness: 0.3, amplitude: 3.0, flutter: 0.8, period_ms: 3000, pivot: 0.1 }
+  bush: { stiffness: 0.35, amplitude: 1.0, flutter: 0.6, period_ms: 2200, pivot: 0.15 }
+  tall_grass: { stiffness: 0.1, amplitude: 2.0, flutter: 0.5, period_ms: 1500, pivot: 0.05 }
+  reed: { stiffness: 0.2, amplitude: 2.0, flutter: 0.3, period_ms: 1900, pivot: 0.05 }
+  flower: { stiffness: 0.15, amplitude: 1.5, flutter: 0.4, period_ms: 1600, pivot: 0.05 }
+  vine: { stiffness: 0.3, amplitude: 1.0, flutter: 0.5, period_ms: 2400, pivot: 0.1 }
+  cactus: { stiffness: 0.9, amplitude: 0.5, flutter: 0.0, period_ms: 2600, pivot: 0.3 }
+  dead_tree: { stiffness: 0.8, amplitude: 0.6, flutter: 0.0, period_ms: 2800, pivot: 0.4 }

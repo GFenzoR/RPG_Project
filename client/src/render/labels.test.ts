@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { LABEL_FULL_ZOOM, labelText, labelsFull, placeLabels } from "./labels.ts";
-import { labelScale } from "./label-style.ts";
-import type { LabelBox } from "./labels.ts";
+import {
+  MAX_WIDTH_CROWDED,
+  ROLE_LINES,
+  fitName,
+  labelMaxWidth,
+  labelsFull,
+  nameBlockHeight,
+  placeLabels,
+  stackLabel,
+  wrapRole,
+} from "./labels.ts";
+import { SHRINK_MIN, labelFontPx, linePitch, subFontPx } from "./label-style.ts";
+import type { LabelBox, MeasureLine } from "./labels.ts";
+import { stackBubbles } from "./bubbles.ts";
 
 // Zoom 1: a tile is 32 px; names are ~60 px wide and 12 px tall.
 const box = (
@@ -24,9 +35,9 @@ const box = (
 const self = box(1, 7, 5, { self: true });
 
 describe("placeLabels", () => {
-  it("leaves every label alone from zoom 2 up", () => {
+  it("leaves every label alone when a name is a quarter of a tile or less", () => {
     const boxes = [self, box(2, 8, 5, { guildHeight: 10 }), box(3, 9, 5)];
-    const out = placeLabels(boxes, LABEL_FULL_ZOOM);
+    const out = placeLabels(boxes, 64, 15);
     expect([...out.values()]).toEqual([
       { show: true, guild: false, lift: 0 },
       { show: true, guild: true, lift: 0 },
@@ -35,21 +46,21 @@ describe("placeLabels", () => {
   });
 
   it("keeps labels that do not touch", () => {
-    const out = placeLabels([self, box(2, 10, 5), box(3, 7, 8)], 1);
+    const out = placeLabels([self, box(2, 10, 5), box(3, 7, 8)], 32, 12);
     for (const p of out.values()) expect(p).toEqual({ show: true, guild: false, lift: 0 });
   });
 
   it("drops a guild line before anything else", () => {
     // Directly below the own creature: its guild line would reach into the name above.
     const below = box(2, 7, 6, { guildHeight: 30 });
-    const out = placeLabels([self, below], 1);
+    const out = placeLabels([self, below], 32, 12);
     expect(out.get(2)).toEqual({ show: true, guild: false, lift: 0 });
   });
 
   it("lifts a far label above the one it hits", () => {
     const a = box(2, 10, 5);
     const b = box(3, 11, 5); // 32 px right of a: the 60 px names overlap
-    const out = placeLabels([self, a, b], 1);
+    const out = placeLabels([self, a, b], 32, 12);
     expect(out.get(2)).toEqual({ show: true, guild: false, lift: 0 });
     expect(out.get(3)).toEqual({ show: true, guild: false, lift: 13 });
   });
@@ -62,7 +73,7 @@ describe("placeLabels", () => {
       box(5, 12, 4, { target: true }),
       box(6, 8, 5), // next to the player: stays
     ];
-    const out = placeLabels([self, ...crowd], 1);
+    const out = placeLabels([self, ...crowd], 32, 12);
     expect(out.get(1)?.show).toBe(true);
     expect(out.get(5)?.show).toBe(true);
     expect(out.get(6)?.show).toBe(true);
@@ -73,110 +84,148 @@ describe("placeLabels", () => {
     // The target overlaps a nearer creature: the target keeps its spot.
     const near = box(2, 9, 5);
     const target = box(3, 10, 5, { target: true });
-    const out = placeLabels([near, target, self], 1);
+    const out = placeLabels([near, target, self], 32, 12);
     expect(out.get(3)).toEqual({ show: true, guild: false, lift: 0 });
     expect(out.get(2)?.lift).toBeGreaterThan(0);
   });
 
   it("is stable for the same input", () => {
     const boxes = [self, box(2, 11, 5), box(3, 12, 5), box(4, 13, 5)];
-    expect(placeLabels(boxes, 1)).toEqual(placeLabels([...boxes].reverse(), 1));
+    expect(placeLabels(boxes, 32, 12)).toEqual(placeLabels([...boxes].reverse(), 32, 12));
   });
 });
 
-describe("labelText", () => {
-  it("keeps names at full zoom", () => {
-    expect(labelText("Sir Bartholomew the Long", 2)).toBe("Sir Bartholomew the Long");
+/** Every character half its font size wide: widths the tests can count. */
+const mono: MeasureLine = (text, px) => [...text].length * px * 0.5;
+
+describe("fitName", () => {
+  it("keeps a name that fits as it is", () => {
+    expect(fitName("Lobo gris", 15, 180, mono)).toEqual({ text: "Lobo gris", fontPx: 15 });
   });
 
-  it("shortens long names at small zoom", () => {
-    expect(labelText("Sir Bartholomew the Long", 1)).toBe("Sir Barthol…");
-    expect(labelText("Short", 1)).toBe("Short");
-    expect(labelText("Exactly12chr", 1)).toBe("Exactly12chr");
-    expect(labelText("Sir Bart Long", 1)).toBe("Sir Bart Lo…");
-    expect(labelText("Big Red Wolf X", 1, 9)).toBe("Big Red…");
+  it("shrinks a long name a little before any cut", () => {
+    // 26 characters: 195 px at 15 px, 182 at 14, 169 at 13.
+    const name = "Guardian de escoria atado!";
+    expect(fitName(name, 15, 180, mono)).toEqual({ text: name, fontPx: 13 });
+    expect(fitName(name, 15, 190, mono)).toEqual({ text: name, fontPx: 14 });
+  });
+
+  it("cuts only past the hard width, at the smallest size", () => {
+    const name = "Sir Bartholomew the Long of the Far Shore";
+    const min = Math.ceil(15 * SHRINK_MIN);
+    const out = fitName(name, 15, 112, mono);
+    expect(out.fontPx).toBe(min);
+    expect(out.text.endsWith("…")).toBe(true);
+    expect(mono(out.text, out.fontPx)).toBeLessThanOrEqual(112);
+    // As much of the name as fits: most of the width is used.
+    expect(mono(out.text, min)).toBeGreaterThan(112 - 2 * min);
+  });
+
+  it("never cuts an NPC's name", () => {
+    const out = fitName("Casia Hollín de los Registros", 15, 100, mono, false);
+    expect(out.text).toBe("Casia Hollín de los Registros");
+    expect(out.fontPx).toBe(Math.ceil(15 * SHRINK_MIN));
   });
 });
 
-// Large names (render/label-style.ts): at zoom 2 a tile is 64 px and a name at label scale
-// 2 is ~120 px wide and 24 px tall, as big next to its tile as at zoom 1.
-const box2 = (
-  id: number,
-  tileX: number,
-  tileY: number,
-  extra: Partial<LabelBox> = {},
-): LabelBox => ({
-  ...box(id, tileX, tileY, extra),
-  x: tileX * 64 + 32,
-  y: tileY * 64 - 8,
-  width: 120,
-  nameHeight: 24,
-  ...extra,
+describe("wrapRole", () => {
+  it("is one line when it fits", () => {
+    expect(wrapRole("Provisiones", 12, 180, mono)).toEqual({ lines: ["Provisiones"], fontPx: 12 });
+  });
+
+  it("wraps a long role by its words onto two lines, never with an ellipsis", () => {
+    const out = wrapRole("Guardiana de los registros", 12, 100, mono);
+    expect(out.lines).toEqual(["Guardiana de los", "registros"]);
+    expect(out.fontPx).toBe(12);
+    expect(out.lines.join(" ")).not.toContain("…");
+  });
+
+  it("shrinks before it takes a third line", () => {
+    // Three lines at 12 px (max 16 characters a line), two at 10 (max 20).
+    const out = wrapRole("Bendiciones y sanación del templo", 12, 100, mono);
+    expect(out.lines.length).toBe(ROLE_LINES);
+    expect(out.fontPx).toBeLessThan(12);
+    expect(out.fontPx).toBeGreaterThanOrEqual(Math.ceil(12 * SHRINK_MIN));
+  });
+
+  it("keeps every word of a text too long for two lines", () => {
+    const role = "uno dos tres cuatro cinco seis siete ocho nueve diez";
+    const out = wrapRole(role, 12, 60, mono);
+    expect(out.lines.join(" ")).toBe(role);
+  });
+
+  it("has no line without a role", () => {
+    expect(wrapRole("", 12, 100, mono).lines).toEqual([]);
+  });
 });
-const self2 = box2(1, 7, 5, { self: true });
 
-describe("labels at a bigger label scale", () => {
-  it("leave labels alone only when they are at most half as big as at zoom 1", () => {
-    expect(labelsFull(2)).toBe(true);
-    expect(labelsFull(2, labelScale(2, "normal"))).toBe(true);
-    expect(labelsFull(2, labelScale(2, "large"))).toBe(false);
-    expect(labelsFull(4, labelScale(4, "normal"))).toBe(true);
-    expect(labelsFull(6, labelScale(6, "large"))).toBe(false);
+describe("the hard width", () => {
+  it("is roomy when labels show untouched and tight when they crowd", () => {
+    expect(labelsFull(64, 15)).toBe(true);
+    expect(labelsFull(32, 12)).toBe(false);
+    expect(labelMaxWidth(64, 15)).toBe(180);
+    expect(labelMaxWidth(32, 12)).toBe(12 * MAX_WIDTH_CROWDED);
   });
 
-  it("lift a far label by its scaled height and a scaled gap", () => {
-    const a = box2(2, 10, 5);
-    const b = box2(3, 11, 5); // 64 px right of a: the 120 px names overlap
-    const out = placeLabels([self2, a, b], 2, 2);
-    expect(out.get(2)).toEqual({ show: true, guild: false, lift: 0 });
-    expect(out.get(3)).toEqual({ show: true, guild: false, lift: 26 });
+  it("crowds at every zoom and pixel density where a name is over a quarter of a tile", () => {
+    for (const dpr of [1, 1.25, 1.5, 2])
+      for (const zoom of [1, 2, 3, 4, 6, 8]) {
+        const px = labelFontPx(zoom, dpr, "large");
+        expect(labelsFull(32 * zoom, px)).toBe(32 * zoom >= 4 * px);
+      }
+    // The fitted desktop view (2x and up at 100 %): untouched.
+    for (const zoom of [2, 3, 4])
+      expect(labelsFull(32 * zoom, labelFontPx(zoom, 1, "large"))).toBe(true);
+    expect(labelsFull(32, labelFontPx(1, 1, "large"))).toBe(false);
+  });
+});
+
+describe("stackLabel", () => {
+  const name = labelFontPx(2, 1, "large");
+  const sub = subFontPx(name, 1);
+
+  it("puts a one-line name right over the bar", () => {
+    const st = stackLabel(200, { name, role: sub, roleLines: 0, guild: 0 });
+    expect(st.name).toBe(200);
+    expect(st.top).toBe(200 - linePitch(name));
   });
 
-  it("place the same crowd as at zoom 1, scaled", () => {
-    const crowd = (mk: typeof box): LabelBox[] => [
-      mk(1, 7, 5, { self: true }),
-      mk(2, 11, 5),
-      mk(3, 12, 5),
-      mk(4, 12, 5),
-      mk(5, 12, 4, { target: true }),
-      mk(6, 8, 5),
-    ];
-    const small = placeLabels(crowd(box), 1, 1);
-    const big = placeLabels(crowd(box2), 2, 2);
-    for (const [id, p] of small) {
-      const q = big.get(id);
-      expect(q?.show, `label ${id}`).toBe(p.show);
-      expect(q?.lift, `label ${id}`).toBe(p.lift * 2);
-    }
+  it("puts an NPC's role under its name, smaller", () => {
+    const lines = { name, role: sub, roleLines: 1, guild: 0 };
+    const st = stackLabel(200, lines);
+    expect(sub).toBeLessThan(name);
+    expect(st.role).toBe(200);
+    expect(st.name).toBe(200 - linePitch(sub));
+    expect(st.top).toBe(st.name - linePitch(name));
+    expect(nameBlockHeight(lines)).toBe(200 - st.top);
   });
 
-  it("never overlap two shown labels of far creatures", () => {
-    const boxes = [self2];
-    for (let i = 0; i < 12; i++) boxes.push(box2(10 + i, 9 + (i % 4), 2 + Math.floor(i / 4)));
-    const out = placeLabels(boxes, 3, 2);
-    const shown = boxes.filter((b) => out.get(b.id)?.show && !b.self && b.distance > 1);
-    const rect = (b: LabelBox) => {
-      const lift = out.get(b.id)?.lift ?? 0;
-      return {
-        l: b.x - b.width / 2,
-        r: b.x + b.width / 2,
-        t: b.y - lift - b.nameHeight,
-        b: b.y - lift,
-      };
-    };
-    for (let i = 0; i < shown.length; i++)
-      for (let j = i + 1; j < shown.length; j++) {
-        const p = rect(shown[i] as LabelBox);
-        const q = rect(shown[j] as LabelBox);
-        const hit = p.l < q.r && q.l < p.r && p.t < q.b && q.t < p.b;
-        expect(hit).toBe(false);
+  it("makes room for a wrapped role and for a guild line", () => {
+    const st = stackLabel(200, { name, role: sub, roleLines: 2, guild: sub });
+    expect(st.guild).toBe(200);
+    expect(st.role).toBe(200 - linePitch(sub));
+    expect(st.name).toBe(st.role - 2 * linePitch(sub));
+  });
+
+  it("is whole pixels", () => {
+    for (const dpr of [1, 1.25, 1.5, 2])
+      for (const zoom of [1, 2, 3, 4, 5, 6, 8]) {
+        const n = labelFontPx(zoom, dpr, "large");
+        const st = stackLabel(317, { name: n, role: subFontPx(n, dpr), roleLines: 2, guild: 0 });
+        for (const v of Object.values(st)) expect(Number.isInteger(v)).toBe(true);
       }
   });
 
-  it("shorten long names with large labels but not with normal ones at zoom 2", () => {
-    const long = "Sir Bartholomew the Long";
-    expect(labelText(long, 2, 12, labelScale(2, "large"))).toBe("Sir Barthol…");
-    expect(labelText(long, 2, 12, labelScale(2, "normal"))).toBe(long);
-    expect(labelText(long, 6, 12, labelScale(6, "normal"))).toBe(long);
+  it("leaves a speech bubble above both lines of an NPC", () => {
+    // The canvas anchors a speaker's bubbles one pixel over the label's top.
+    const st = stackLabel(200, { name, role: sub, roleLines: 1, guild: 0 });
+    const placed = stackBubbles(
+      [{ id: 1, x: 300, y: st.top - 1, width: 80, height: 24, self: false, distance: 1 }],
+      0,
+    );
+    // The bubble's box ends above the name, which ends above the role.
+    expect(placed.get(1)).toBe(st.top - 1);
+    expect(st.top).toBeLessThan(st.name);
+    expect(st.name).toBeLessThan(st.role);
   });
 });

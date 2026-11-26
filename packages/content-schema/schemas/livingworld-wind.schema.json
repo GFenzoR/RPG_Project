@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rpg-project.local/schemas/livingworld-wind.schema.json",
+  "title": "Living world wind (data/livingworld/wind.yaml)",
+  "description": "The wind field and how each type of plant takes it (livingworld/README.md, Viento). Cosmetic: the server never reads it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["field", "kinds"],
+  "properties": {
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["direction", "speed", "gust_tiles", "calm"],
+      "properties": {
+        "direction": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+        "speed": { "type": "number", "minimum": 0, "maximum": 20 },
+        "gust_tiles": { "type": "number", "minimum": 2, "maximum": 64 },
+        "calm": { "type": "number", "minimum": 0, "maximum": 1 },
+        "exposure": {
+          "type": "object",
+          "propertyNames": { "$ref": "common.schema.json#/$defs/surface" },
+          "additionalProperties": { "type": "number", "minimum": 0, "maximum": 2 }
+        },
+        "open": { "type": "number", "minimum": 0, "maximum": 2 },
+        "forest": { "type": "number", "minimum": 0, "maximum": 1 },
+        "night": { "type": "number", "minimum": 0, "maximum": 2 }
+      }
+    },
+    "kinds": {
+      "description": "Every plant type has its defaults: a new plant of a type needs no numbers.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tree",
+        "palm",
+        "bush",
+        "tall_grass",
+        "reed",
+        "flower",
+        "vine",
+        "cactus",
+        "dead_tree"
+      ],
+      "properties": {
+        "tree": { "$ref": "#/$defs/kind" },
+        "palm": { "$ref": "#/$defs/kind" },
+        "bush": { "$ref": "#/$defs/kind" },
+        "tall_grass": { "$ref": "#/$defs/kind" },
+        "reed": { "$ref": "#/$defs/kind" },
+        "flower": { "$ref": "#/$defs/kind" },
+        "vine": { "$ref": "#/$defs/kind" },
+        "cactus": { "$ref": "#/$defs/kind" },
+        "dead_tree": { "$ref": "#/$defs/kind" }
+      }
+    }
+  },
+  "$defs": {
+    "kind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stiffness", "amplitude", "flutter", "period_ms", "pivot"],
+      "properties": {
+        "stiffness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "amplitude": {
+          "description": "Sprite px at the top in a full gust.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "flutter": {
+          "description": "Sprite px, always under one.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.95
+        },
+        "period_ms": { "type": "integer", "minimum": 300, "maximum": 20000 },
+        "pivot": {
+          "description": "Share of the sprite's height that stays planted when the sprite does not say.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.95
+        }
+      }
+    }
+  }
+}

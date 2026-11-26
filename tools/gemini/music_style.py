@@ -48,7 +48,7 @@ def load(path: str = SLOTS) -> dict:
 
 
 def slot_of(book: dict, slot_id: str) -> dict:
-    for slot in book["slots"]:
+    for slot in book["slots"] + book.get("versions", []):
         if slot["id"] == slot_id:
             return slot
     raise SystemExit("no slot %r in %s" % (slot_id, SLOTS))
@@ -85,7 +85,7 @@ def main() -> int:
     if not wanted:
         print(__doc__)
         return 2
-    slots = book["slots"] if wanted == ["--all"] else [slot_of(book, name) for name in wanted]
+    slots = book["slots"] + book.get("versions", []) if wanted == ["--all"] else [slot_of(book, name) for name in wanted]
     for slot in slots:
         text = prompt(book, slot)
         print("== %s (%d characters)\n%s\n" % (slot["id"], len(text), text))

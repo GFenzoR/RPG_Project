@@ -1,5 +1,6 @@
 id: volcan_ferryman
 name: npc.volcan_ferryman.name
+role: npc.volcan_ferryman.role
 sprite: npcs/volcan_ferryman
 look:
   sex: female

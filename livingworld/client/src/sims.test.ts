@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { CritterSim, FLEE_MS, MAX_CRITTERS, RETURN_MS } from "./critters.ts";
 import { EMPTY_DATA, groundSurfaces, isSurface, parseLivingWorldData } from "./data.ts";
 import type { SurfaceRules } from "./data.ts";
-import { FootprintSim, gust, MAX_FOOTPRINTS, stepRotation } from "./footprints.ts";
+import { stepRotation } from "./footprints.ts";
 import { footstepEvents } from "./footsteps.ts";
 import { seededRandom } from "./hash.ts";
 import { LEAF_FALL_MS, LEAF_REST_MS, LeafSim, MAX_LEAVES } from "./leaves.ts";
 import { MAX_PUFFS, PUFF_MS, PuffSim } from "./puffs.ts";
-import { BEND, idleSway, IDLE, MAX_SWAYS, rustleOffset, SWAY_MS, SwaySim } from "./sway.ts";
+import { BEND, bendPx, MAX_SWAYS, NEIGHBOUR, rustleOffset, SWAY_MS, SwaySim } from "./sway.ts";
 import {
   MAX_WEAR_DRAWN,
   MAX_WEAR_LEVEL,
@@ -27,8 +27,6 @@ function first<T>(list: readonly T[]): T {
 }
 
 const rules = (over: Partial<SurfaceRules> = {}): SurfaceRules => ({
-  footprintMs: 10000,
-  wind: 0,
   dust: false,
   ripple: false,
   tint: 0x553311,
@@ -42,33 +40,50 @@ describe("data", () => {
     const d = parseLivingWorldData(
       {
         surfaces: {
-          sand: { footprints: 9000, wind: 2, dust: true, tint: "#7a6440", critters: ["bird", "x"] },
+          sand: {
+            prints: { wind: 2, tread: 0.5 },
+            dust: true,
+            tint: "#7a6440",
+            critters: ["bird", "x"],
+          },
+          wet_sand: { prints: { waves: true } },
           lava: {},
-          marble: { footprints: 1 },
+          marble: { prints: {} },
         },
+        prints: { still: 0.5, waves: { period_ms: 6000 } },
+        steps: { volume: 0.6, left: { pitch: -0.03 } },
       },
       {
         plants: [
-          { item: "bush", reaction: "bend", idle: true },
+          { item: "bush", reaction: "bend" },
           { item: "oak", reaction: "rustle", leaves: true },
           { reaction: "bend" },
         ],
       },
     );
     expect(d.surfaces.sand).toEqual({
-      footprintMs: 9000,
-      wind: 2,
+      prints: { wind: 2, waves: false, tread: 0.5 },
       dust: true,
       ripple: false,
       tint: 0x7a6440,
       sound: "sand",
       critters: ["bird"],
     });
-    expect(d.surfaces.lava?.footprintMs).toBe(0);
-    expect(Object.keys(d.surfaces)).toEqual(["sand", "lava"]);
+    expect(d.surfaces.lava?.prints).toBeUndefined();
+    expect(d.surfaces.wet_sand?.prints).toEqual({ wind: 0, waves: true, tread: 0 });
+    expect(Object.keys(d.surfaces)).toEqual(["sand", "wet_sand", "lava"]);
+    // What the file leaves out keeps its default.
+    expect(d.prints).toMatchObject({ still: 0.5, fadeMs: 700 });
+    expect(d.prints?.waves).toMatchObject({ periodMs: 6000, reachTiles: 2.5 });
+    expect(d.steps).toEqual({
+      volume: 0.6,
+      jitter: 0,
+      left: { pitch: -0.03, gain: 1 },
+      right: { pitch: 0, gain: 1 },
+    });
     expect(d.plants).toEqual({
-      bush: { reaction: "bend", idle: true, leaves: false, trample: false },
-      oak: { reaction: "rustle", idle: false, leaves: true, trample: false },
+      bush: { reaction: "bend", leaves: false, trample: false },
+      oak: { reaction: "rustle", leaves: true, trample: false },
     });
     expect(parseLivingWorldData(undefined, null)).toEqual(EMPTY_DATA);
   });
@@ -86,63 +101,8 @@ describe("data", () => {
   });
 });
 
+// What erases a footprint has its own tests: footprints.test.ts.
 describe("footprints", () => {
-  it("fade out over the end of their life and are gone after it", () => {
-    const sim = new FootprintSim();
-    sim.add(0, 0, 0, "feet", "mud", rules());
-    const p = sim.prints[0];
-    expect(p && FootprintSim.alpha(p)).toBe(1);
-    sim.step(5000, 5000);
-    expect(p && FootprintSim.alpha(p)).toBe(1);
-    sim.step(2500, 7500);
-    expect(p && FootprintSim.alpha(p)).toBeCloseTo(0.5);
-    sim.step(2500, 10000);
-    expect(sim.count).toBe(0);
-  });
-
-  it("leaves none on a surface without footprints", () => {
-    const sim = new FootprintSim();
-    sim.add(0, 0, 0, "feet", "stone", rules({ footprintMs: 0 }));
-    expect(sim.count).toBe(0);
-  });
-
-  it("never holds more than the cap: the most worn gives way", () => {
-    const sim = new FootprintSim();
-    for (let i = 0; i < MAX_FOOTPRINTS; i++) {
-      sim.add(i, 0, 0, "paw", "snow", rules());
-      sim.step(10, i * 10);
-    }
-    expect(sim.count).toBe(MAX_FOOTPRINTS);
-    sim.add(999, 0, 0, "big_paw", "snow", rules());
-    expect(sim.count).toBe(MAX_FOOTPRINTS);
-    expect(sim.prints.some((p) => p.x === 0)).toBe(false); // the first one, most worn, went
-    expect(sim.prints.some((p) => p.x === 999)).toBe(true);
-  });
-
-  it("wind wears sand faster, in gusts, the same way every run", () => {
-    const run = (): number[] => {
-      const still = new FootprintSim();
-      const windy = new FootprintSim();
-      still.add(40, 40, 0, "feet", "mud", rules({ footprintMs: 1e6 }));
-      windy.add(40, 40, 0, "feet", "sand", rules({ footprintMs: 1e6, wind: 3 }));
-      const out: number[] = [];
-      for (let t = 0; t < 4000; t += 50) {
-        still.step(50, t);
-        windy.step(50, t);
-      }
-      out.push(still.prints[0]?.wear ?? -1, windy.prints[0]?.wear ?? -1);
-      return out;
-    };
-    const [still, windy] = run();
-    expect(still).toBe(4000);
-    expect(windy).toBeGreaterThan(4000);
-    expect(run()).toEqual([still, windy]);
-    // Gusts come and go: calm somewhere, strong somewhere else.
-    const samples = Array.from({ length: 200 }, (_, i) => gust(64, 64, i * 250));
-    expect(Math.min(...samples)).toBeLessThan(0.05);
-    expect(Math.max(...samples)).toBeGreaterThan(0.8);
-  });
-
   it("point the way the creature walks", () => {
     expect(stepRotation(0, -1)).toBe(0);
     expect(stepRotation(1, 0)).toBeCloseTo(Math.PI / 2);
@@ -166,6 +126,30 @@ describe("plants", () => {
     expect(sim.active).toBe(0);
   });
 
+  // A bush or a tree is solid (docs/06 "Qué bloquea el paso"): nobody steps on its tile, so
+  // all it ever gets is the brush of a walker on a tile next to it.
+  it("bend when a walker brushes past a solid plant, never stepping on it", () => {
+    const sim = new SwaySim();
+    const bush = { x: 10, y: 10 };
+    // Walking east along the row below it: two tiles away it stays still.
+    sim.trigger(8, 11, 1, 0);
+    expect(sim.bendAt(bush.x, bush.y, 0)).toBe(0);
+    // Diagonally next to it, right below it and past it: each step brushes it, leaning the
+    // way the walker goes, enough to see (a pixel or more of a 32 px sprite).
+    for (const [i, x] of [9, 10, 11].entries()) {
+      const now = 400 * (i + 1);
+      sim.trigger(x, 11, 1, now);
+      expect(sim.bendAt(bush.x, bush.y, now)).toBeCloseTo(BEND * NEIGHBOUR);
+      expect(Math.tan(sim.bendAt(bush.x, bush.y, now)) * 32).toBeGreaterThan(1);
+    }
+    // A tree shakes when brushed too.
+    expect(Math.abs(rustleOffset(BEND * NEIGHBOUR))).toBeGreaterThanOrEqual(1);
+    // Walking straight past its side (north along the column next to it) pushes it away.
+    const side = new SwaySim();
+    side.trigger(11, 10, 0, 0);
+    expect(side.bendAt(bush.x, bush.y, 0)).toBeCloseTo(-BEND * NEIGHBOUR);
+  });
+
   it("lean the way the walker goes, and away from it when it walks up or down", () => {
     const sim = new SwaySim();
     sim.trigger(5, 5, -1, 0);
@@ -182,13 +166,14 @@ describe("plants", () => {
     expect(sim.active).toBe(MAX_SWAYS);
   });
 
-  it("sway gently in the wind, deterministic, and trees shake a pixel or so", () => {
-    const v = [...Array(50).keys()].map((i) => idleSway(3, 4, i * 200));
-    expect(Math.max(...v.map(Math.abs))).toBeLessThanOrEqual(IDLE);
-    expect(Math.max(...v)).toBeGreaterThan(0);
-    expect(idleSway(3, 4, 777)).toBe(idleSway(3, 4, 777));
+  it("shake a tree a pixel or so, and turn a bend into pixels at the top", () => {
     expect(rustleOffset(BEND)).toBe(1);
     expect(rustleOffset(0)).toBe(0);
+    // A tree only shakes; a bush leans by its moving rows.
+    expect(bendPx(BEND, 60, true)).toBeCloseTo(1.4);
+    expect(bendPx(BEND, 26, false)).toBeGreaterThan(3);
+    expect(bendPx(-BEND, 26, false)).toBeCloseTo(-bendPx(BEND, 26, false));
+    expect(bendPx(0, 26, false)).toBe(0);
   });
 });
 

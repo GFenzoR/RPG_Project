@@ -1,0 +1,27 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sprites/decor/jungle_flowers.png
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-25
+# Modo: Hydrogen
+# Hoja devuelta: jungle_ground_a.png (sha256 321e869c2be5ef0a19db5acf9cfb0d983dd1f9dd8d2abfbecd5ffdb9326e05da)
+# Importada con: python tools/gemini/import_art.py <hoja> --cut blobs --size 32 --layer object --margin 1 --scale 6.536 --colors 20 --names "-,-,-,jungle_flowers,-"
+
+Pixel art game sprites of five different rainforest things for a top-down role-playing game, in one row of five equal cells (5 columns, 1 row). Foliage shaded in three or four dark muted greens, lit from the top left, with a dark outline of the local colour. Cell 1: a bamboo clump, eight or nine tall jointed green-yellow canes growing close together from one base, with small narrow leaves near the top, twice as tall as wide. Cell 2: a hanging curtain of jungle vines, a dense tall mass of leafy lianas that reaches down to the floor and is wide at the bottom, like a leafy pillar, twice as tall as wide. Cell 3: a carnivorous-looking flower, a low plant with a fat stalk, a big toothed trap-like bloom in dull red and yellow-green, and a few broad leaves at its base. Cell 4: a small patch of low jungle flowers, a handful of orange, red and yellow blossoms on short stems among a few leaves, all joined in one clump. Cell 5: a fallen tree log lying on its side, seen from the side and slightly above, short and thick, its bark covered with green moss and a couple of small pale mushrooms, the cut end showing rings. No ground, no grass, no soil patch, no shadow under the subjects, nothing floating apart from its subject. Draw no lines, borders, boxes or panels between the cells.
+
+Hard technical requirements, these matter more than the art direction:
+- Solid flat magenta background, exactly RGB(255, 0, 255), filling every pixel that is
+  not part of a drawing. No gradient, no vignette, no texture, no shadow cast onto it.
+- Lay the subjects out in an even grid with equal spacing. Every cell the same size.
+  No labels, no captions, no text of any kind anywhere in the image.
+- Every subject fully inside its own cell, centred, touching neither its neighbours nor
+  the edge of the image. In an animation, the same size and the same ground line in
+  every cell.
+- Three-quarter top-down view: the camera looks down from the south at about 45
+  degrees, so the top and the south face of things show. Light from the top left.
+- Pixel art: crisp square pixels, hard edges, no anti-aliasing, no blur, no soft
+  airbrush shading. Limited palette, flat shading in three or four tones, and a dark
+  outline of the local colour (never pure black).
+- Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
+- They are read at 32x32 pixels in game (people at 64x64), so favour a strong
+  silhouette and clear separation of parts over fine detail.

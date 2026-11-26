@@ -43,6 +43,7 @@
   description: item.birch_tree.desc
   pickupable: false
   blocks_movement: true
+  blocks_sight: true
   resource:
     tool: woodcutting
     skill: woodcutting
@@ -99,13 +100,16 @@
   pickupable: false
   blocks_movement: true
 
-# Nature (T1.16): trees and boulders block walking; bushes do not.
+# Nature (T1.16): trees, bushes and boulders block walking (docs/06 "Qué bloquea el paso"). A
+# bush or a boulder is low: it stops feet, not arrows or eyes. A tree is tall and dense: it
+# also blocks sight and shots (blocks_sight).
 - id: oak_tree
   kind: decoration
   sprite: decor/oak_tree
   name: item.oak_tree.name
   pickupable: false
   blocks_movement: true
+  blocks_sight: true
 
 - id: pine_tree
   kind: decoration
@@ -113,12 +117,14 @@
   name: item.pine_tree.name
   pickupable: false
   blocks_movement: true
+  blocks_sight: true
 
 - id: bush
   kind: decoration
   sprite: decor/bush
   name: item.bush.name
   pickupable: false
+  blocks_movement: true
 
 - id: boulder
   kind: decoration
@@ -159,7 +165,8 @@
 # Town prop kit (docs/17 "Kit de props de pueblo", lote 12): one-tile props drawn with the
 # sprite engine (tools/spritegen/src/engine/specs/town.ts) that furnish temples, depots,
 # plazas and houses. A table or a barrel lifts what is stacked on it (elevation, ART-8). The
-# bench, the bed and the flower box never block, so a rented house keeps every tile for its
+# bench, the bed and the flower box never block (said out loud: blocks_movement: false, docs/06
+# "Qué bloquea el paso"), so a rented house keeps every tile for its
 # tenant's items (docs/03 "Muebles y luces"); the rest block like furniture. The lamp post
 # gives light in caves (assets/sprites.yaml `light`); the lamp, the stall and the flag loop.
 - id: barrel
@@ -183,6 +190,7 @@
   sprite: decor/bench
   name: item.bench.name
   pickupable: false
+  blocks_movement: false
 
 - id: shelf
   kind: decoration
@@ -197,6 +205,7 @@
   sprite: decor/bed
   name: item.bed.name
   pickupable: false
+  blocks_movement: false
 
 - id: lamp_post
   kind: decoration
@@ -232,6 +241,7 @@
   sprite: decor/flower_box
   name: item.flower_box.name
   pickupable: false
+  blocks_movement: false
 
 - id: market_stall
   kind: decoration
@@ -395,6 +405,7 @@
   description: item.elm_tree.desc
   pickupable: false
   blocks_movement: true
+  blocks_sight: true
   resource:
     tool: woodcutting
     skill: woodcutting
@@ -618,5 +629,128 @@
   sprite: decor/signpost
   name: item.signpost.name
   description: text.volcan.morvund_sign
+  pickupable: false
+  blocks_movement: true
+
+# Jungle flora (2026-11-25), drawn with the owner's Gemini ahead of the jungle island: on no
+# map yet. Blocking follows docs/06 "Qué bloquea el paso": trees, palms, the bamboo clump and
+# the curtain of vines are tall and dense (they also block sight); the shrubs, the plantain
+# and the fallen log stop feet only; ferns, the broadleaf plant and flowers are walked through.
+- id: jungle_canopy_tree
+  kind: decoration
+  sprite: decor/jungle_canopy_tree
+  name: item.jungle_canopy_tree.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_spire_tree
+  kind: decoration
+  sprite: decor/jungle_spire_tree
+  name: item.jungle_spire_tree.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_buttress_tree
+  kind: decoration
+  sprite: decor/jungle_buttress_tree
+  name: item.jungle_buttress_tree.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_palm
+  kind: decoration
+  sprite: decor/jungle_palm
+  name: item.jungle_palm.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_leaning_palm
+  kind: decoration
+  sprite: decor/jungle_leaning_palm
+  name: item.jungle_leaning_palm.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_banana_plant
+  kind: decoration
+  sprite: decor/jungle_banana_plant
+  name: item.jungle_banana_plant.name
+  pickupable: false
+  blocks_movement: true
+
+- id: jungle_fern
+  kind: decoration
+  sprite: decor/jungle_fern
+  name: item.jungle_fern.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_fiddle_fern
+  kind: decoration
+  sprite: decor/jungle_fiddle_fern
+  name: item.jungle_fiddle_fern.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_broadleaf
+  kind: decoration
+  sprite: decor/jungle_broadleaf
+  name: item.jungle_broadleaf.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_flowering_shrub
+  kind: decoration
+  sprite: decor/jungle_flowering_shrub
+  name: item.jungle_flowering_shrub.name
+  pickupable: false
+  blocks_movement: true
+
+- id: jungle_thorn_bush
+  kind: decoration
+  sprite: decor/jungle_thorn_bush
+  name: item.jungle_thorn_bush.name
+  pickupable: false
+  blocks_movement: true
+
+- id: jungle_bamboo
+  kind: decoration
+  sprite: decor/jungle_bamboo
+  name: item.jungle_bamboo.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_hanging_vines
+  kind: decoration
+  sprite: decor/jungle_hanging_vines
+  name: item.jungle_hanging_vines.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_maw_flower
+  kind: decoration
+  sprite: decor/jungle_maw_flower
+  name: item.jungle_maw_flower.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_flowers
+  kind: decoration
+  sprite: decor/jungle_flowers
+  name: item.jungle_flowers.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_mossy_log
+  kind: decoration
+  sprite: decor/jungle_mossy_log
+  name: item.jungle_mossy_log.name
   pickupable: false
   blocks_movement: true

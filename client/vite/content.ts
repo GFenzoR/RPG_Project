@@ -22,8 +22,10 @@ import { fileURLToPath } from "node:url";
 import { readBorders } from "@rpg/map-format";
 import { borderItems } from "@rpg/map-format/ops";
 import { buildAtlas, writeAtlas } from "@rpg/spritepack";
+// What an NPC does (its label's second line): the same rule make validate checks.
+import { npcRoleKey } from "@rpg/content-schema/npc-role";
 import { parseAmbience } from "@rpg/living-world/ambience";
-import { parseLivingWorldData } from "@rpg/living-world/data";
+import { parseLivingWorldData, shadowOf } from "@rpg/living-world/data";
 import { loadCredits } from "./credits.ts";
 import type { Plugin } from "vite";
 import { parse } from "yaml";
@@ -96,16 +98,42 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 
 const readYaml = (file: string): unknown => parse(readFileSync(file, "utf8")) as unknown;
 
-/** data/livingworld/surfaces.yaml, plants.yaml, ambience.yaml and daynight.yaml as the living world uses them. */
-function loadLivingWorld(root: string): LivingWorldData {
+/**
+ * data/livingworld/surfaces.yaml, plants.yaml, ambience.yaml, daynight.yaml and the wind
+ * (wind.yaml and wind_sprites.yaml, joined to the plants by each item's sprite) as the
+ * living world uses them.
+ */
+function loadLivingWorld(root: string, items: Record<number, ItemDef>): LivingWorldData {
   const read = (name: string): unknown => {
     const file = join(root, "data", "livingworld", name);
     return existsSync(file) ? readYaml(file) : undefined;
   };
-  return {
-    ...parseLivingWorldData(read("surfaces.yaml"), read("plants.yaml"), read("daynight.yaml")),
-    ambience: parseAmbience(read("ambience.yaml")),
-  };
+  const itemSprites: Record<string, string> = {};
+  for (const item of Object.values(items)) if (item.sprite) itemSprites[item.id] = item.sprite;
+  const data = parseLivingWorldData(
+    read("surfaces.yaml"),
+    read("plants.yaml"),
+    read("daynight.yaml"),
+    {
+      wind: read("wind.yaml"),
+      sprites: read("wind_sprites.yaml"),
+      itemSprites,
+    },
+    read("gaits.yaml"),
+    read("shadows.yaml"),
+  );
+  // Each item's shadow, resolved here once (kind, family, own line): the canvas reads
+  // ItemDef.shadow and knows nothing of the rules.
+  if (data.shadows)
+    for (const item of Object.values(items)) {
+      const shadow = shadowOf(data.shadows, {
+        id: item.id,
+        kind: item.kind ?? "",
+        fixed: item.fixed === true || item.kind === "wall",
+      });
+      if (shadow) item.shadow = shadow;
+    }
+  return { ...data, ambience: parseAmbience(read("ambience.yaml")) };
 }
 
 /** Builds the content module from data/ and i18n/ under root. Throws on unreadable data. */
@@ -223,6 +251,7 @@ export function loadClientContent(root: string): ClientContent {
     if (typeof m["sprite"] === "string") monsters[m["id"]] = m["sprite"];
   }
   const npcs: Record<string, string> = {};
+  const npcRoles: Record<string, string> = {};
   const ndir = join(root, "data", "npcs");
   for (const file of readdirSync(ndir)
     .filter((f) => f.endsWith(".yaml"))
@@ -230,6 +259,8 @@ export function loadClientContent(root: string): ClientContent {
     const n = readYaml(join(ndir, file));
     if (!isObj(n) || typeof n["id"] !== "string") continue;
     if (typeof n["sprite"] === "string") npcs[n["id"]] = n["sprite"];
+    const role = npcRoleKey(n);
+    if (role) npcRoles[n["id"]] = role;
   }
   const outfits = loadOutfits(root);
   const looks = loadLooks(root);
@@ -315,13 +346,14 @@ export function loadClientContent(root: string): ClientContent {
   const forge = loadForge(balance, ids);
   return {
     items,
-    livingWorld: loadLivingWorld(root),
+    livingWorld: loadLivingWorld(root, items),
     attributes,
     monsterSprites: monsters,
     // A topic conflict is the content test's to report (vite/content.test.ts): the build
     // keeps the first topic.
     dialogTopics: dialogTopics(root).topics,
     npcSprites: npcs,
+    npcRoles,
     outfits,
     ...(looks ? { looks } : {}),
     ...(lookOptions ? { lookOptions } : {}),

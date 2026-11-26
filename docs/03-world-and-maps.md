@@ -285,6 +285,10 @@ quien arma un mapa (las vigila `packages/map-format/src/town-props.test.ts`):
   de una casa, en un cartel o libro de `texts.yaml`, en el templo, ni en las casillas que
   camina o usa el E2E (la lista `E2E_TILES` del test: si el E2E cambia de camino, se cambia
   ahí también). Lo demás (que todo se siga alcanzando a pie) lo revisa la validación.
+  Desde el lote 20 vale también para los arbustos (`bush`), que ahora bloquean: al
+  sembrarlos con `scatter`, ninguno en esas casillas ni cerrando un paso de una casilla de
+  ancho (`packages/map-format/src/solid-objects.test.ts` compara las zonas caminables con
+  y sin arbustos).
 - **Una cueva lleva una antorcha de pared cada 6 a 8 casillas** en las caras de su roca:
   ninguna cara a más de 6 casillas (Chebyshev) de una antorcha y ninguna antorcha a menos
   de 6 de otra; las salas hondas, que las antorchas del muro norte no alcanzan, llevan
@@ -390,7 +394,10 @@ veredicto de `mapcompile` con el de `packages/map-format`.
 
 **Muros y línea de visión (decidido).** `kind: wall` bloquea la vista igual que el paso:
 proyectiles, ataques a distancia y hechizos no atraviesan muros. Un muro que deba dejar
-ver (una reja abierta, una ventana) declara `blocks_sight: false`. Es una regla de juego,
+ver (una reja abierta, una ventana) declara `blocks_sight: false`. Lo que no es muro y es
+alto y denso (los árboles, un portón cerrado, cajones apilados, una cortina de
+enredaderas) declara `blocks_sight: true` y corta la vista igual; lo bajo (un arbusto, una
+roca, un barril) solo frena los pies (tabla en docs/06 "Qué bloquea el paso"). Es una regla de juego,
 no de render: el cliente sigue mostrando toda la vista (hasta 31x21) del piso actual.
 `packages/map-format` no calcula la vista (solo la caminabilidad), así que la regla vive
 en `mapcompile`; el significado del bit no cambia y `world.bin` no sube de versión.
@@ -504,7 +511,9 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - Cada tile con items tiene suelo; templo, spawns y NPCs están sobre tiles caminables:
   suelo `walkable` y ningún item de la pila que bloquee el paso. Bloquea el paso un item
   con `blocks_movement: true`, y **todo item `kind: wall` salvo que declare
-  `blocks_movement: false`** (regla del contrato: `mapcompile` la aplica igual).
+  `blocks_movement: false`** (regla del contrato: `mapcompile` la aplica igual). Qué
+  objetos bloquean (arbustos, árboles, rocas, muebles) y cuáles se pisan: docs/06 "Qué
+  bloquea el paso".
 - Portales salen de un tile caminable de la isla y llegan a uno caminable de cualquier
   isla. `stairs`/`ladder` cambian de piso y tienen pareja: otro portal
   `stairs`/`ladder` que sale a distancia ≤ 1 del destino y llega a distancia ≤ 1 del

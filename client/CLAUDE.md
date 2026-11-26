@@ -1343,6 +1343,24 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
   `vite/canvas-font.test.ts` lee las tablas del `.ttf`: todo nombre de criatura tiene sus
   letras, uno acortado a zoom 1 (`labelText`) mide como mucho 96 px, las letras miden 7 y
   5 px de alto y los avances no son píxeles enteros (lo que dice `canvas-font.ts`).
+- **Nombres nítidos y NPCs en dos líneas** (rama `feat/labels-and-steps`, 2026-11-25;
+  docs/17 "Hecho: nombres nítidos y los NPCs en dos líneas"): **reemplaza** lo que dicen
+  este bloque y "Nombres a zoom 1x" sobre la fuente y el tamaño de los nombres. Los nombres,
+  el rol y el gremio ya no usan la fuente pixel ni `labelScale`: son Alegreya Sans
+  (`LABEL_FONT`, 700 el nombre, 500 las líneas de abajo) rasterizada al tamaño que se ve en
+  px de dispositivo (`labelFontPx(zoom, devicePixelRatio, tamaño)`, `subFontPx`,
+  `labelStroke`), con el `Text` a escala 1. `render/labels.ts`: `fitName` (encoge hasta
+  `SHRINK_MIN` antes de cortar; un NPC nunca se corta), `wrapRole` (el rol del NPC en una o
+  dos líneas por palabras, sin "…"), `stackLabel` (gremio, rol, nombre, y el tope donde se
+  apoya el globo), `labelsFull(tilePx, fontPx)` y `placeLabels(boxes, tilePx, fontPx)`. El
+  rol sale de `content.npcRoles` (`vite/content.ts`, `npcRoleKey` de
+  `@rpg/content-schema`). `labelScale` queda para los números flotantes y los globos.
+  Hook E2E `__rpgClient.labels()`: `fontPx`, `dpr` y, por nombre, `text`, `fontPx`, `role`,
+  `roleFontPx`, `scale` (siempre 1) y `top`.
+- **Pisadas con voz** (misma rama, `livingworld/README.md` "Los dos pies"):
+  `GameCanvasOptions.footstep(events, voice)` y `AudioEngine.play(events, at, listener,
+  voice)` (`PlayVoice`: `gain`, `rate`, `pick`). Hook `__rpgClient.footfalls()`: `own` con
+  `sound` y `rate`, y `prints` (lado, lugar, `wear`, superficie).
 - **Tamaño y color de los nombres** (rama `feat/name-labels`, docs/17 "Hecho: nombres más
   grandes y legibles"): `render/label-style.ts` (puro, con tests) tiene los tokens de color
   (`LABEL_COLORS`, `SKULL_COLORS`, `LABEL_OUTLINE`; contraste ≥ `LABEL_MIN_CONTRAST`, 4,5,

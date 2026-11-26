@@ -27,7 +27,6 @@ import type { AttackKind, Direction } from "@rpg/protocol";
 import {
   Atlas,
   DEATH_FADE_MS,
-  FEET_LINE,
   DEATH_MS,
   DecoratedSource,
   HOUSE_DOOR_FRAME,
@@ -54,7 +53,9 @@ import {
   tilePixels,
   tileToScreen,
   VANISH_MS,
+  walkCyclesPerStep,
 } from "@rpg/renderer";
+import { slideSize } from "../state/motion.ts";
 import type {
   AnimState,
   AtlasIcon,
@@ -75,8 +76,12 @@ import type { Dressed } from "./look.ts";
 import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
-import { mountLivingWorld, printOf } from "./living.ts";
-import { CastShadows } from "./cast-shadows.ts";
+import { bodyKindOf, creatureGait, kicksUp, mountLivingWorld, newWalkSample } from "./living.ts";
+import type { StepVoice } from "./living.ts";
+import type { Gait } from "./living.ts";
+import { CastShadows, contactShare } from "./cast-shadows.ts";
+import { ObjectShadows } from "./object-shadows.ts";
+import type { ObjectShadowHint } from "./object-shadows.ts";
 import { NIGHT_PLAYER_LIGHT, SkyView, dimmed, litSurface } from "./sky.ts";
 import type { ParticleView } from "./particles.ts";
 import {
@@ -102,16 +107,33 @@ import {
   zoomScale,
 } from "./zoom.ts";
 import type { ZoomRange, ZoomView } from "./zoom.ts";
+import { loadCanvasFont } from "./canvas-font.ts";
 import {
-  CANVAS_FONT,
-  CANVAS_FONT_SIZE,
-  CANVAS_TEXT_STROKE,
-  loadCanvasFont,
-} from "./canvas-font.ts";
-import { SHORT_NAME_CHARS, labelText, placeLabels } from "./labels.ts";
-import { DEFAULT_NAME_SIZE, LABEL_COLORS, LABEL_OUTLINE, labelScale } from "./label-style.ts";
+  fitName,
+  labelMaxWidth,
+  nameBlockHeight,
+  placeLabels,
+  stackLabel,
+  wrapRole,
+} from "./labels.ts";
+import {
+  DEFAULT_NAME_SIZE,
+  LABEL_COLORS,
+  LABEL_FONT,
+  LABEL_FONT_FAMILY,
+  LABEL_NAME_WEIGHT,
+  LABEL_OUTLINE,
+  LABEL_ROLE_COLOR,
+  LABEL_SUB_WEIGHT,
+  labelFontPx,
+  labelScale,
+  labelStroke,
+  linePitch,
+  markScale,
+  subFontPx,
+} from "./label-style.ts";
 import type { NameSize } from "./label-style.ts";
-import type { LabelBox } from "./labels.ts";
+import type { LabelBox, LabelLines } from "./labels.ts";
 import { GestureRecognizer, isTouchPointer } from "../input/gestures.ts";
 import type { Gesture } from "../input/gestures.ts";
 import { LeftPress, mapPress } from "../input/mouse.ts";
@@ -128,7 +150,13 @@ import { BubbleLayer } from "./bubble-layer.ts";
 import type { BubbleAnchor } from "./bubble-layer.ts";
 import { admitSpeech } from "./bubbles.ts";
 import type { BubbleStyle } from "./bubbles.ts";
-import { mapItemArt, mapItemId, mapItemTexture } from "../state/corpse-art.ts";
+import {
+  corpseSprite,
+  mapItemArt,
+  mapItemId,
+  mapItemTexture,
+  parseMapItemKey,
+} from "../state/corpse-art.ts";
 import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
@@ -156,6 +184,7 @@ const COLORS = {
   player: LABEL_COLORS.player,
   monster: LABEL_COLORS.monster,
   npc: LABEL_COLORS.npc,
+  role: LABEL_ROLE_COLOR,
   guild: LABEL_COLORS.guild,
   marker: 0xffffff,
   outline: 0x101010,
@@ -195,14 +224,26 @@ export function figureRect(
 
 /** What GameCanvas.labels reports (E2E). */
 export interface LabelsShown {
-  /** Screen pixels per font cell of the names, and the map scale. */
-  scale: number;
+  /**
+   * The names' font size in device pixels (render/label-style.ts labelFontPx), the map
+   * scale and the screen's device pixels per CSS pixel.
+   */
+  fontPx: number;
   zoom: number;
+  dpr: number;
   shown: {
     id: number;
+    /** The name as drawn (one line) and the size it is rasterised at, device px. */
     text: string;
+    fontPx: number;
+    /** What an NPC does, under its name: its lines ("" for a player or a monster). */
+    role: string;
+    roleFontPx: number;
     fill: number;
+    /** The Text's own scale: always 1 (never a blown-up raster). */
     scale: number;
+    /** Top of the whole label, where a speech bubble sits (page px). */
+    top: number;
     /** Page px. */
     x: number;
     y: number;
@@ -214,6 +255,26 @@ export interface LabelsShown {
 const barColor = (pct: number): number =>
   pct > 50 ? COLORS.barHigh : pct > 25 ? COLORS.barMid : COLORS.barLow;
 
+/** What the E2E hook `footfalls()` tells (GameCanvas.footfalls). */
+export interface FootfallHook {
+  footprints: number;
+  /** How many feet of the own player touched the ground since the canvas was made. */
+  total: number;
+  /**
+   * The last of them (at most OWN_FOOTFALLS), oldest first: which foot, where, the sound
+   * event of the ground under it and the rate its take played at.
+   */
+  own: { side: number; x: number; y: number; sound: string; rate: number }[];
+  /**
+   * The prints on the ground: which foot left each, where, and how much of it the wind,
+   * the waves or other feet have erased (0 fresh, 1 gone).
+   */
+  prints: { side: number; x: number; y: number; wear: number; surface: string }[];
+}
+
+/** How many of the own player's footfalls the E2E hook keeps. */
+const OWN_FOOTFALLS = 16;
+
 /** What the E2E hook `sky()` tells (GameCanvas.sky). */
 export interface SkyHook {
   phase: string;
@@ -221,7 +282,20 @@ export interface SkyHook {
   lamps: number;
   moon: number;
   shadowAlpha: number;
+  /** Cast shadow sprites of the creatures drawn this frame (one per paper-doll layer). */
   shadows: number;
+  /** Where the tip of a caster one unit high lands: east (+) or west (-), and north. */
+  shadowX: number;
+  shadowY: number;
+  /** Shadow sprites and meshes of the map's objects, and how many objects cast them. */
+  objectShadows: number;
+  casters: number;
+  /** Of those, the plants whose shadow sways with them in the wind (none with reduced motion). */
+  swayingShadows: number;
+  /** Creatures drawn with their contact ellipse (none of those that cast a shadow). */
+  contacts: number;
+  /** Whether the own player is drawn with its contact ellipse (indoors, a moonless night). */
+  selfContact: boolean;
 }
 
 export interface GameCanvas {
@@ -274,6 +348,12 @@ export interface GameCanvas {
    * many cast shadow sprites the frame drew; undefined underground or without a day and night.
    */
   sky(): SkyHook | undefined;
+  /**
+   * E2E: the footfalls of the walks drawn (livingworld/README.md "Huellas"): the footprints
+   * on the ground now, and the last feet of the own player that touched the ground, oldest
+   * first (the side, and where: sprite pixels of the map).
+   */
+  footfalls(): FootfallHook;
   /** E2E: the facing creature `id` was last drawn in, and whether its figure has eight. */
   drawnFacing(id: number): { facing: string; eight: boolean } | undefined;
   /** The <canvas> element (drop target for items dragged onto the map). */
@@ -312,6 +392,12 @@ export interface GameCanvasOptions {
   lookTile(x: number, y: number, z: number): void;
   /** Plays a sound of assets/sounds.yaml by id at a tile (the living world's objects). */
   playSound?(id: string, at: { x: number; y: number; z: number }): void;
+  /**
+   * A foot of the own player touched the ground in the walk drawn (render/living.ts):
+   * the sound events of a step on the ground under that foot, most specific first, and
+   * how that foot sounds (its take, loudness and pitch). Both are reused.
+   */
+  footstep?(events: readonly string[], voice: StepVoice | undefined): void;
   /**
    * docs/17 UI-6: the tile's menu with its item's card (a right click in the menu controls,
    * Shift+right click in both), at page coordinates (cx, cy).
@@ -435,8 +521,19 @@ interface CreatureSprite {
   shape: Graphics;
   frame: Graphics;
   label: Text;
+  /** What an NPC does, under its name (docs/17 UI-3); empty for the rest. */
+  role: Text;
   /** The guild name, between the name and the health bar (T5.1); empty = hidden. */
   guild: Text;
+  /** What the lines were fitted for (fitted again only when one changes). */
+  fitName: string;
+  fitRole: string;
+  fitPx: number;
+  fitMax: number;
+  /** The sizes the lines are drawn at (render/labels.ts stackLabel). */
+  lines: LabelLines;
+  /** Top of the label as drawn last, canvas px (the E2E hook). */
+  top: number;
   /** The PvP mark left of the name (T5.2): its sprite, or shapes without one (drawSkull). */
   skull: Container;
   drawnSkull: Skull;
@@ -445,6 +542,8 @@ interface CreatureSprite {
    * (T0.5; T5.7: the equipped outfit cosmetic, else citizen). Undefined = the coloured block.
    */
   figure: CreatureBody | undefined;
+  /** How it walks (render/living.ts creatureGait): where its feet leave their marks. */
+  gait: Gait | undefined;
   /**
    * CreatureState.lookRev the sprites were built with: the cosmetics (T5.7), the body or
    * the visible equipment changed since, and they are built again.
@@ -475,6 +574,14 @@ export async function createGameCanvas(
   const [atlas] = await Promise.all([
     Atlas.load(new URL("/atlas/", document.baseURI).href),
     loadCanvasFont(document.fonts, { onLate: () => redrawLabels() }),
+    // The names' font (render/label-style.ts), in the weights of the name and of the
+    // lines under it.
+    ...[LABEL_NAME_WEIGHT, LABEL_SUB_WEIGHT].map((w) =>
+      loadCanvasFont(document.fonts, {
+        onLate: () => redrawLabels(),
+        font: `${w} 16px "${LABEL_FONT_FAMILY}"`,
+      }),
+    ),
   ]);
   const T = atlas.tileSize;
   const app = new Application();
@@ -535,13 +642,15 @@ export async function createGameCanvas(
     elevation: (id) => content.items[mapItemId(id)]?.elevation ?? 0,
     tileSize: T,
     floor: world.self?.pos.z ?? 7,
+    // Under the sky, the sun's shadows stay out of the buildings (docs/17 ART-5).
+    indoors: content.livingWorld?.dayNight ? (z) => !isDark(z) : undefined,
   });
   // Ambient particles (A13), in world space under the silhouettes.
   const particles = new ParticleLayer(T);
   const particleView: ParticleView = { x: 0, y: 0, width: 0, height: 0 };
   // The living world's frame, reused (docs/07: a frame allocates nothing for it).
   const livingSelf = { x: 0, y: 0 };
-  const livingView = { x: 0, y: 0, width: 0, height: 0, z: 0, self: livingSelf };
+  const livingView = { x: 0, y: 0, width: 0, height: 0, z: 0, self: livingSelf, zoom: 1 };
   /** The trail wear version the living world has (state/trail-wear.ts). */
   let livingWear = -1;
   const emitters = (fn: Parameters<MapView["forEachEmitter"]>[0]): void => view.forEachEmitter(fn);
@@ -604,12 +713,75 @@ export async function createGameCanvas(
   // The day and night (livingworld/README.md "Día y noche", render/sky.ts): the world clock
   // the server sent, run on every frame into the sky's light and the sun's angle.
   const sky = new SkyView(content.livingWorld?.dayNight, world.worldClock);
-  const living = mountLivingWorld(view, world, content, atlas, reducedMotion, () => sky.night());
+  const living = mountLivingWorld(
+    view,
+    world,
+    content,
+    atlas,
+    reducedMotion,
+    () => sky.night(),
+    // No wind underground (livingworld/README.md "Viento").
+    () => isDark(world.self?.pos.z ?? 0),
+    // A foot on the ground (livingworld gait.ts): the ground's motes (MOV-7) fly from
+    // under it, and the own player's is the step's sound.
+    (fall, events, voice) => {
+      if (kicksUp(fall)) kickUp(fall.x, fall.y, fall.z);
+      if (!fall.self) return;
+      opts.footstep?.(events, voice);
+      // A ring of the last ones, written over (nothing made per footfall).
+      const slot = ownFalls[ownFallCount++ % OWN_FOOTFALLS];
+      if (slot) {
+        slot.side = fall.side;
+        slot.x = fall.x;
+        slot.y = fall.y;
+        slot.sound = events[0] ?? "";
+        slot.rate = voice?.rate ?? 1;
+      }
+    },
+  );
+  const ownFalls = Array.from({ length: OWN_FOOTFALLS }, () => ({
+    side: 0,
+    x: 0,
+    y: 0,
+    sound: "",
+    rate: 1,
+  }));
+  let ownFallCount = 0;
+  /** The creature drawn, as the living world reads its walk (reused: docs/07). */
+  const walkSample = newWalkSample();
+  /** A drawing gliding over a correction further than this (sprite px) leaves no prints. */
+  const slidePx = content.livingWorld?.gaits?.slidePx ?? 0;
   // The creatures' cast shadows (render/cast-shadows.ts): over the ground and the living
-  // world's footprints, under the items and the creatures; off with reduced motion and
-  // underground (no sun there: the contact ellipse stays).
+  // world's footprints, under the items and the creatures; none underground or indoors (no
+  // sun there: the contact ellipse stays).
   const castShadows = new CastShadows();
   view.groundOverlay.addChild(castShadows.root);
+  // The map objects' (render/object-shadows.ts), in the same layer: how each item casts is
+  // its ItemDef.shadow (data/livingworld/shadows.yaml), and its base the row its drawing
+  // ends on (atlas.json `feet`; a corpse's is its own sprite's).
+  const shadowHints = new Map<string, ObjectShadowHint | null>();
+  const shadowHint = (key: string): ObjectShadowHint | undefined => {
+    let h = shadowHints.get(key);
+    if (h === undefined) {
+      const { itemId, remainsOf } = parseMapItemKey(key);
+      const def = content.items[itemId];
+      const corpse = remainsOf ? corpseSprite(remainsOf) : undefined;
+      const sprite = corpse !== undefined && atlas.has(corpse) ? corpse : def?.sprite;
+      h = def?.shadow
+        ? { ...def.shadow, foot: sprite === undefined ? 0 : atlas.foot(sprite) }
+        : null;
+      shadowHints.set(key, h);
+    }
+    return h ?? undefined;
+  };
+  const objectShadows = new ObjectShadows(T, shadowHint);
+  castShadows.mount(objectShadows.root);
+  const shadowWind = living
+    ? {
+        version: () => living.windVersion(),
+        strips: (sprite: Sprite) => living.windStrips(sprite),
+      }
+    : undefined;
   // The living objects' effects (render/living.ts): over the map.
   const livingObjects = mountLivingObjects(view.overlay, {
     tileSize: T,
@@ -645,8 +817,54 @@ export async function createGameCanvas(
     );
 
   let scale = 1;
-  // Screen pixels per font cell of the names this frame (render/label-style.ts labelScale).
+  // Screen pixels per font cell of the floating numbers this frame (labelScale), and the
+  // font sizes of the names and of the lines under them, in device pixels: the labels are
+  // rasterised at the size they show (render/label-style.ts labelFontPx).
   let nameScale = 1;
+  let namePx = 12;
+  let subPx = 10;
+  let labelMax = 144;
+  // Line widths, measured with a 2D context of the names' font (kept: a name is measured
+  // once per size, not per frame).
+  const measureCtx = document.createElement("canvas").getContext("2d");
+  const widths = new Map<string, number>();
+  const measurer =
+    (weight: string) =>
+    (text: string, px: number): number => {
+      const key = `${weight}|${px}|${text}`;
+      let w = widths.get(key);
+      if (w === undefined) {
+        if (widths.size > 2000) widths.clear();
+        if (measureCtx) {
+          measureCtx.font = `${weight} ${px}px ${LABEL_FONT}`;
+          w = measureCtx.measureText(text).width + labelStroke(px);
+        } else w = text.length * px * 0.55;
+        widths.set(key, w);
+      }
+      return w;
+    };
+  const measureName = measurer(LABEL_NAME_WEIGHT);
+  const measureSub = measurer(LABEL_SUB_WEIGHT);
+  /** Sets a label line to `px`: its outline and line height follow. */
+  const sizeLine = (text: Text, px: number): void => {
+    const st = text.style;
+    if (st.fontSize === px) return;
+    st.fontSize = px;
+    st.lineHeight = linePitch(px);
+    // The outline keeps its colour (a name effect's, render/cosmetics.ts) at the new width.
+    const k: unknown = st.stroke;
+    const color =
+      typeof k === "object" && k !== null && "color" in k && typeof k.color === "number"
+        ? k.color
+        : LABEL_OUTLINE;
+    st.stroke = { color, width: labelStroke(px), join: "round" };
+  };
+  /** What an NPC does (its role's text, @rpg/content-schema npcRoleKey), "" for the rest. */
+  const roleOf = (c: CreatureState): string => {
+    if (c.kind !== CreatureKind.NPC) return "";
+    const key = content.npcRoles?.[c.contentId];
+    return key ? t(key) : "";
+  };
   let cam: Camera = { x: 0, y: 0, zoom: 1 };
   // The zoom the player chose (undefined = the fitted view) and what the map's box
   // allows; `scale` is the one drawn.
@@ -871,24 +1089,32 @@ export async function createGameCanvas(
   };
   // Steps (docs/17 MOV-7): what a step kicks up on each ground, by ground item, from the
   // `steps` of its sprite in atlas.json `tiles` (assets/sprites.yaml): a puff of dust, a
-  // ripple. Particles of render/particles.ts, at the feet of the tile the step leaves.
+  // ripple. Particles of render/particles.ts, under the foot that touches the ground at
+  // (px, py) sprite pixels (the living world's footfall, render/living.ts).
   const stepKinds = new Map<number, StepKind | null>();
-  const kickUp = (at: Pos): void => {
-    const ground = world.tile(at.x, at.y, at.z)?.[0];
+  const kickUp = (px: number, py: number, z: number): void => {
+    const ground = world.tile(Math.floor(px / T), Math.floor(py / T), z)?.[0];
     if (ground === undefined) return;
     let kind = stepKinds.get(ground);
     if (kind === undefined) {
       kind = stepKindOf(ground, content.items, atlas.index.tiles) ?? null;
       stepKinds.set(ground, kind);
     }
-    if (kind) particles.kick(kind, (at.x + 0.5) * T, (at.y + 1) * T - FEET_LINE);
+    if (kind) particles.kick(kind, px, py);
   };
-  /** Draws a creature's body for `now` (its step, facing and what happened to it). */
+  /**
+   * Draws a creature's body for `now` (its step, facing and what happened to it). Its
+   * tile's top-left is drawn at (bx, by) sprite pixels on the ground (not raised on a
+   * table): the living world follows its feet from there.
+   */
   const animateBody = (
     figure: CreatureBody,
     st: AnimState,
     c: CreatureState,
     now: number,
+    gait: Gait | undefined,
+    bx: number,
+    by: number,
   ): boolean => {
     const w = world.activeWalk(c, now);
     const moving = w && now >= w.start && now < w.start + w.duration ? w : undefined;
@@ -905,18 +1131,32 @@ export async function createGameCanvas(
     const stepBefore = st.walkStart;
     animate(st, figure.clips.meta, animInput, pose);
     figure.draw(pose, dirIndex(animInput.dir));
-    // MOV-7: a step starting now kicks up what the ground it leaves gives (a flier none).
+    if (living) {
+      // The walk cycle drawn and where the feet are: each foot that touches the ground
+      // leaves its print, kicks up the ground (MOV-7) and, the own player's, sounds.
+      const meta = figure.clips.meta;
+      const w = walkSample;
+      w.id = c.id;
+      w.x = bx + figure.feetX;
+      w.y = by + figure.feetY;
+      w.z = c.pos.z;
+      w.phase = pose.walk;
+      w.frames = meta?.actions.walk?.frames ?? 0;
+      w.dx = animInput.moveDx;
+      w.dy = animInput.moveDy;
+      w.cyclePx =
+        (T * Math.hypot(animInput.moveDx, animInput.moveDy)) / walkCyclesPerStep(meta, animInput);
+      w.gait = gait;
+      w.sliding = slideSize(c.slide, now) * T > slidePx;
+      w.self = c.id === world.selfId;
+      w.stepMs = animInput.walkMs;
+      living.onCreatureWalk(w);
+    }
+    // A step starting now: the plants of the tile it enters bend (a flier brushes none).
     if (moving && st.walkStart !== stepBefore) {
       const flying = figure.clips.meta?.flying === true;
-      if (!flying) kickUp(moving.from);
       living?.onCreatureStep(
-        {
-          id: c.id,
-          from: moving.from,
-          to: moving.to,
-          durationMs: moving.duration,
-          print: printOf(c.look !== undefined, flying, figure.lift),
-        },
+        { id: c.id, from: moving.from, to: moving.to, grounded: !flying },
         now,
       );
       if (!flying) livingObjects.onStep(moving.from, moving.to, now);
@@ -1052,33 +1292,35 @@ export async function createGameCanvas(
       body.addChild(frame); // the target frame goes over the body
       const bar = new Graphics();
       labels.addChild(bar);
-      const label = new Text({
-        text: nameOf(c),
-        style: {
-          fontFamily: CANVAS_FONT,
-          fontSize: CANVAS_FONT_SIZE,
-          fill: colorOf(c),
-          stroke: { color: LABEL_OUTLINE, width: CANVAS_TEXT_STROKE },
-          ...look?.name,
-        },
-        anchor: { x: 0.5, y: 1 },
-        roundPixels: true,
-        // Scaled by whole numbers (labelScale): every font cell an exact square of pixels.
-        textureStyle: { scaleMode: "nearest" },
+      // Rasterised at the size it shows, in device pixels, and drawn 1:1 on whole pixels
+      // (never scaled): sharp at any zoom and pixel density (render/label-style.ts).
+      const line = (text: string, weight: string, px: number, fill: number, more?: object): Text =>
+        new Text({
+          text,
+          style: {
+            fontFamily: LABEL_FONT,
+            fontWeight: weight as "500" | "700",
+            fontSize: px,
+            lineHeight: linePitch(px),
+            align: "center",
+            fill,
+            stroke: { color: LABEL_OUTLINE, width: labelStroke(px), join: "round" },
+            ...more,
+          },
+          anchor: { x: 0.5, y: 1 },
+          roundPixels: true,
+          textureStyle: { scaleMode: "nearest" },
+        });
+      // A name effect (T5.7) brings its fill, the outline's colour and a glow.
+      const fx = look?.name;
+      const label = line("", LABEL_NAME_WEIGHT, namePx, fx?.fill ?? colorOf(c), {
+        ...(fx ? { stroke: { ...fx.stroke, width: labelStroke(namePx), join: "round" } } : {}),
+        ...(fx?.dropShadow ? { dropShadow: fx.dropShadow } : {}),
       });
       labels.addChild(label);
-      const guild = new Text({
-        text: c.guild,
-        style: {
-          fontFamily: CANVAS_FONT,
-          fontSize: CANVAS_FONT_SIZE,
-          fill: COLORS.guild,
-          stroke: { color: LABEL_OUTLINE, width: CANVAS_TEXT_STROKE },
-        },
-        anchor: { x: 0.5, y: 1 },
-        roundPixels: true,
-        textureStyle: { scaleMode: "nearest" },
-      });
+      const role = line("", LABEL_SUB_WEIGHT, subPx, COLORS.role);
+      labels.addChild(role);
+      const guild = line(c.guild, LABEL_SUB_WEIGHT, subPx, COLORS.guild);
       labels.addChild(guild);
       const skull = new Container();
       labels.addChild(skull);
@@ -1087,10 +1329,28 @@ export async function createGameCanvas(
         shape,
         frame,
         label,
+        role,
         guild,
+        fitName: "",
+        fitRole: "",
+        fitPx: 0,
+        fitMax: 0,
+        lines: { name: namePx, role: subPx, roleLines: 0, guild: subPx },
+        top: 0,
         skull,
         drawnSkull: Skull.UNSPECIFIED,
         figure,
+        gait: figure
+          ? creatureGait(
+              content,
+              isPlayer ? undefined : c.contentId,
+              bodyKindOf(
+                isPlayer || c.look !== undefined,
+                figure.clips.meta?.flying === true,
+                figure.lift,
+              ),
+            )
+          : undefined,
         drawnLook: lk,
         held: doll && person ? { weapon: person.dressed.worn.weapon?.shape } : undefined,
         bar,
@@ -1101,9 +1361,30 @@ export async function createGameCanvas(
       sprites.set(c.id, s);
     }
     // The language can change during the game (T1.13).
-    // Shortened at small zoom (T5.6, render/labels.ts); the zoom follows the window size.
-    const name = labelText(nameOf(c), scale, SHORT_NAME_CHARS, nameScale);
-    if (s.label.text !== name) s.label.text = name;
+    // The lines (render/labels.ts): a long name shrinks before it is cut; an NPC shows
+    // what it does under its name, wrapped by its words and never cut. Fitted again only
+    // when the text, the size (a zoom) or the room changed.
+    const name = nameOf(c);
+    const what = roleOf(c);
+    if (s.fitName !== name || s.fitRole !== what || s.fitPx !== namePx || s.fitMax !== labelMax) {
+      s.fitName = name;
+      s.fitRole = what;
+      s.fitPx = namePx;
+      s.fitMax = labelMax;
+      const fit = fitName(name, namePx, labelMax, measureName, c.kind !== CreatureKind.NPC);
+      sizeLine(s.label, fit.fontPx);
+      if (s.label.text !== fit.text) s.label.text = fit.text;
+      const wrapped = wrapRole(what, subPx, labelMax, measureSub);
+      sizeLine(s.role, wrapped.fontPx);
+      const roleText = wrapped.lines.join("\n");
+      if (s.role.text !== roleText) s.role.text = roleText;
+      s.role.visible = wrapped.lines.length > 0;
+      sizeLine(s.guild, subPx);
+      s.lines.name = fit.fontPx;
+      s.lines.role = wrapped.fontPx;
+      s.lines.roleLines = wrapped.lines.length;
+      s.lines.guild = subPx;
+    }
     if (s.guild.text !== c.guild) s.guild.text = c.guild;
     if (s.drawnSkull !== c.skull) drawSkull(s.skull, c.skull, markTexture(c.skull));
     s.drawnSkull = c.skull;
@@ -1118,14 +1399,18 @@ export async function createGameCanvas(
   redrawLabels = (): void => {
     CanvasTextMetrics.clearMetrics();
     speech.refresh();
+    widths.clear();
     for (const s of sprites.values()) {
+      s.fitPx = 0; // measured with the fallback: fit the lines again
       s.label.style.update();
+      s.role.style.update();
       s.guild.style.update();
     }
   };
 
   const dropLabels = (s: CreatureSprite): void => {
     s.label.destroy();
+    s.role.destroy();
     s.guild.destroy();
     s.skull.destroy();
     s.bar.destroy();
@@ -1172,6 +1457,7 @@ export async function createGameCanvas(
     const s = sprites.get(id);
     const state = animStates.get(id);
     animStates.delete(id);
+    living?.forgetCreature(id);
     const dir = lastSeen.get(id);
     lastSeen.delete(id);
     if (!s || !s.figure || !state || style === "drop" || dir === undefined) {
@@ -1192,10 +1478,15 @@ export async function createGameCanvas(
       if (s) leave(d.id, now, leaveStyle(d.reason, s.drawnHealth));
     }
   };
-  /** `casting`: the frame casts shadows; a falling body keeps its own until it fades. */
-  const drawGhosts = (now: number, casting: boolean): void => {
+  /**
+   * `casting`: the frame casts shadows; a falling body keeps its own until it fades (and
+   * `contact` of its ellipse meanwhile), unless it fell indoors.
+   */
+  const drawGhosts = (now: number, casting: boolean, contact: number): void => {
     for (let i = ghosts.length - 1; i >= 0; i--) {
       const g = ghosts[i] as Ghost;
+      const sunlit = casting && !view.indoorAt(Math.round(g.body.x / T), Math.round(g.body.y / T));
+      g.figure.contact = sunlit ? contact : 1;
       animInput.now = now;
       const [gx, gy] = delta(g.dir);
       animInput.dir = faceTo(g.state, g.figure.clips.meta, now, gx, gy, false, g.figure.eight);
@@ -1206,7 +1497,7 @@ export async function createGameCanvas(
       animate(g.state, g.figure.clips.meta, animInput, pose);
       g.figure.draw(pose, dirIndex(animInput.dir));
       if (pose.done) dropGhost(i);
-      else if (casting) g.figure.castShadow(castShadows, g.body.x, g.body.y);
+      else if (sunlit) g.figure.castShadow(castShadows, g.body.x, g.body.y);
     }
   };
 
@@ -1299,6 +1590,8 @@ export async function createGameCanvas(
     livingView.width = particleView.width;
     livingView.height = particleView.height;
     livingView.z = self.pos.z;
+    // The wind moves the plants in whole screen pixels at this zoom.
+    livingView.zoom = cam.zoom;
     livingSelf.x = self.pos.x;
     livingSelf.y = self.pos.y;
     // Trail wear (state/trail-wear.ts): handed over whole, only when it changed.
@@ -1314,12 +1607,26 @@ export async function createGameCanvas(
     livingObjects.onTick(now, self.pos.z);
     drawnBoxes.reset();
     const skyNow = isDark(self.pos.z) ? sky.none() : sky.update(now);
-    view.castShadowStrength = sky.staticShadows(skyNow);
-    const casting = castShadows.begin(sky.shadowPose(skyNow, reducedMotion()));
+    view.castShadowStrength = sky.staticShadows();
+    const shadowPose = sky.shadowPose(skyNow);
+    const casting = castShadows.begin(shadowPose);
+    // After the map's render and the living world's tick: the chunks and the wind's strips
+    // of this frame exist. Placed again only when the map or the sun moved.
+    objectShadows.update(view, shadowPose, shadowWind);
+    // A creature casts its shadow or stands on its contact ellipse, never both.
+    const outdoorContact = casting && shadowPose ? contactShare(shadowPose.alpha) : 1;
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
-    nameScale = labelScale(scale, opts.nameSize?.() ?? DEFAULT_NAME_SIZE);
+    const stackLines: LabelLines = { name: 0, role: 0, roleLines: 0, guild: 0 };
+    const nameSize = opts.nameSize?.() ?? DEFAULT_NAME_SIZE;
+    const dpr = window.devicePixelRatio || 1;
+    nameScale = labelScale(scale, nameSize);
+    namePx = labelFontPx(scale, dpr, nameSize);
+    subPx = subFontPx(namePx, dpr);
+    labelMax = labelMaxWidth(T * scale, namePx);
+    const mark = markScale(namePx);
+    const labelGap = Math.max(1, Math.round(namePx / 11));
     react(now);
     depart(now);
     for (const c of world.creatures.values()) {
@@ -1336,10 +1643,21 @@ export async function createGameCanvas(
       // fades as one figure (CreatureBody.opacity): the container's alpha would fade a paper
       // doll layer by layer, the skin showing through the tunic.
       const see = c.id === world.selfId && world.invisible ? 0.4 : 1;
+      // No sun under a roof: no cast shadow there, the contact ellipse instead.
+      const sunlit = casting && !view.indoorAt(Math.round(p.x), Math.round(p.y));
       if (s.figure) {
         s.figure.opacity = see;
-        animateBody(s.figure, stateOf(c.id, now), c, now);
-        if (casting) s.figure.castShadow(castShadows, s.body.x, s.body.y);
+        s.figure.contact = sunlit ? outdoorContact : 1;
+        animateBody(
+          s.figure,
+          stateOf(c.id, now),
+          c,
+          now,
+          s.gait,
+          s.body.x,
+          devicePixels(p.y, T, scale),
+        );
+        if (sunlit) s.figure.castShadow(castShadows, s.body.x, s.body.y);
       }
       s.body.alpha = s.figure ? 1 : see;
       if (lastSeen.get(c.id) !== c.dir) lastSeen.set(c.id, c.dir);
@@ -1363,21 +1681,23 @@ export async function createGameCanvas(
       const barTop = Math.round(head.y) - BAR_H * scale;
       s.bar.position.set(Math.round(head.x), barTop);
       s.bar.scale.set(scale);
-      // Names, guild lines and skulls grow with the zoom in whole steps (docs/17 UI-3).
-      s.label.scale.set(nameScale);
-      s.guild.scale.set(nameScale);
-      s.skull.scale.set(nameScale);
+      // The names are drawn at their own size (docs/17 UI-3: never a scaled raster); the
+      // skull, pixel art, grows in whole steps with them.
+      s.skull.scale.set(mark);
       const hasGuild = c.guild !== "";
       const hasSkull = s.drawnSkull !== Skull.UNSPECIFIED;
       boxes.push({
         id: c.id,
         x: Math.round(head.x),
-        y: barTop - nameScale,
+        y: barTop - labelGap,
         width:
-          Math.max(s.label.width, hasGuild ? s.guild.width : 0) +
-          (hasSkull ? (MARK_BOX.w + 2) * nameScale : 0),
-        nameHeight: s.label.height,
-        guildHeight: hasGuild ? s.guild.height : 0,
+          Math.max(
+            s.label.width,
+            s.lines.roleLines > 0 ? s.role.width : 0,
+            hasGuild ? s.guild.width : 0,
+          ) + (hasSkull ? (MARK_BOX.w + 2) * mark : 0),
+        nameHeight: nameBlockHeight(s.lines),
+        guildHeight: hasGuild ? linePitch(s.lines.guild) : 0,
         self: c.id === world.selfId,
         target: c.id === world.target,
         distance: Math.max(Math.abs(c.pos.x - self.pos.x), Math.abs(c.pos.y - self.pos.y)),
@@ -1386,32 +1706,37 @@ export async function createGameCanvas(
     view.revealBehind(reveal, revealRow, now);
     // Names, guild lines and skulls (T5.6): at small zoom neighbours would overlap, so
     // render/labels.ts drops guild lines and lifts or hides the labels of far creatures.
-    const placements = placeLabels(boxes, scale, nameScale);
+    const placements = placeLabels(boxes, T * scale, namePx);
     for (const b of boxes) {
       const s = sprites.get(b.id);
       const at = placements.get(b.id);
       if (!s || !at) continue;
       s.label.visible = at.show;
+      s.role.visible = at.show && s.lines.roleLines > 0;
       s.guild.visible = at.show && at.guild;
       s.skull.visible = at.show;
-      const bottom = b.y - at.lift;
-      if (s.guild.visible) {
-        // The guild name goes right above the bar and the player's name above it.
-        s.guild.position.set(b.x, bottom);
-        s.label.position.set(b.x, bottom - Math.round(s.guild.height));
-      } else {
-        s.label.position.set(b.x, bottom);
-      }
+      // From the bar up (render/labels.ts stackLabel): the guild line, an NPC's role and,
+      // on top, the name; all on whole pixels.
+      stackLines.name = s.lines.name;
+      stackLines.role = s.lines.role;
+      stackLines.roleLines = s.lines.roleLines;
+      stackLines.guild = s.guild.visible ? s.lines.guild : 0;
+      const stack = stackLabel(b.y - at.lift, stackLines);
+      s.guild.position.set(b.x, stack.guild);
+      s.role.position.set(b.x, stack.role);
+      s.label.position.set(b.x, stack.name);
+      s.top = stack.top;
       if (s.drawnSkull !== Skull.UNSPECIFIED) {
         s.skull.position.set(
-          Math.round(s.label.x - s.label.width / 2 - (MARK_HALF + 2) * nameScale),
-          Math.round(s.label.y - s.label.height / 2),
+          Math.round(s.label.x - s.label.width / 2 - (MARK_HALF + 2) * mark),
+          Math.round(stack.name - linePitch(s.lines.name) / 2),
         );
       }
-      // docs/17 UI-11: a speech bubble goes right over the name (or the bar, without one).
+      // docs/17 UI-11: a speech bubble goes right over the name, the top line of the
+      // label (or over the bar, without one).
       anchors.set(b.id, {
         x: b.x,
-        top: at.show ? Math.round(s.label.y - s.label.height) - 1 : b.y,
+        top: at.show ? stack.top - 1 : b.y,
         self: b.self,
         distance: b.distance,
       });
@@ -1419,10 +1744,14 @@ export async function createGameCanvas(
     drawSpeech(now);
     // Gone without a departure of its own (another floor, a new map view): it just goes.
     for (const id of [...sprites.keys()]) if (!seen.has(id)) leave(id, now, "drop");
-    for (const id of animStates.keys()) if (!seen.has(id)) animStates.delete(id);
+    for (const id of animStates.keys())
+      if (!seen.has(id)) {
+        animStates.delete(id);
+        living?.forgetCreature(id);
+      }
     // The bodies falling or shimmering away cast their shadow too, until they fade below
     // half (CreatureBody.castShadow): it does not vanish the moment a creature dies.
-    drawGhosts(now, casting);
+    drawGhosts(now, casting, outdoorContact);
     if (casting) castShadows.end();
     // A creature mostly hidden by a taller one in front (a wolf right north of a player),
     // and a body falling or shimmering away behind one.
@@ -1813,15 +2142,19 @@ export async function createGameCanvas(
         shown.push({
           id,
           text: s.label.text,
+          fontPx: s.lines.name,
+          role: s.lines.roleLines > 0 ? s.role.text : "",
+          roleFontPx: s.lines.role,
           fill: Number(s.label.style.fill),
           scale: s.label.scale.x,
+          top: r.top + s.top * k,
           x: r.left + b.x * k,
           y: r.top + b.y * k,
           width: b.width * k,
           height: b.height * k,
         });
       }
-      return { scale: nameScale, zoom: scale, shown };
+      return { fontPx: namePx, zoom: scale, dpr: window.devicePixelRatio || 1, shown };
     },
     wallFade(x, y) {
       return { alphas: view.wallAlphaAt(x, y), copies: hiddenShown };
@@ -1831,6 +2164,22 @@ export async function createGameCanvas(
     },
     bubbles() {
       return speech.shown();
+    },
+    footfalls() {
+      const n = Math.min(ownFallCount, OWN_FOOTFALLS);
+      const own = [];
+      for (let i = ownFallCount - n; i < ownFallCount; i++) {
+        const f = ownFalls[i % OWN_FOOTFALLS];
+        if (f) own.push({ ...f });
+      }
+      const prints = (living?.footprints() ?? []).map((p) => ({
+        side: p.side,
+        x: p.x,
+        y: p.y,
+        wear: p.wear,
+        surface: p.surface,
+      }));
+      return { footprints: prints.length, total: ownFallCount, own, prints };
     },
     sky() {
       const s = sky.current;
@@ -1842,6 +2191,13 @@ export async function createGameCanvas(
         moon: s.moon,
         shadowAlpha: s.shadow.alpha,
         shadows: castShadows.root.visible ? castShadows.count : 0,
+        shadowX: s.shadow.x,
+        shadowY: s.shadow.y,
+        objectShadows: castShadows.root.visible ? objectShadows.count : 0,
+        casters: castShadows.root.visible ? objectShadows.casters : 0,
+        swayingShadows: castShadows.root.visible ? objectShadows.swaying : 0,
+        contacts: [...sprites.values()].filter((sp) => sp.figure?.contactShown).length,
+        selfContact: sprites.get(world.selfId)?.figure?.contactShown === true,
       };
     },
     drawnFacing(id) {
@@ -1939,6 +2295,8 @@ export async function createGameCanvas(
       effects.destroy();
       speech.destroy();
       lights.destroy();
+      // Before the living world: the trees' shadow meshes share its strips.
+      objectShadows.destroy();
       castShadows.destroy();
       living?.destroy();
       livingObjects.destroy();

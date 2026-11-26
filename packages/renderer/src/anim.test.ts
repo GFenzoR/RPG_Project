@@ -28,6 +28,8 @@ import {
   dirOf,
   faceTo,
   turnTo,
+  stanceOf,
+  walkCyclesPerStep,
   walkPerStep,
 } from "./anim.ts";
 import type { AnimInput, AnimMeta, AnimState, Pose } from "./anim.ts";
@@ -89,6 +91,46 @@ function stepAt(
   }
   return animate(s, meta, in_, out);
 }
+
+describe("the walk cycle the pose reports (the living world's footfalls)", () => {
+  it("runs 0 to 1 over a clip's frames by distance, and is -1 when no step is walked", () => {
+    const { s, in_, out } = setup();
+    // LPC: 8 frames, 4 per tile: half a cycle per tile.
+    expect(stepAt(s, LPC, in_, out, 400, 0).walk).toBe(0);
+    expect(stepAt(s, LPC, in_, out, 400, 200).walk).toBeCloseTo(0.25, 9);
+    expect(out.frame).toBe(2);
+    expect(stepAt(s, LPC, in_, out, 400, 600).walk).toBeCloseTo(0.75, 9);
+    expect(walkCyclesPerStep(LPC, in_)).toBe(0.5);
+    // The step over: the last frame is held (ANI-3), but nobody walks.
+    in_.now = 840;
+    expect(animate(s, LPC, in_, out).action).toBe("walk");
+    expect(out.walk).toBe(-1);
+    in_.walkStart = undefined;
+    in_.now = 5000;
+    expect(animate(s, LPC, in_, out).walk).toBe(-1);
+  });
+
+  it("is the hop of a step for a sprite without a walk clip, and nothing for a flier", () => {
+    const { s, in_, out } = setup();
+    expect(stepAt(s, STILL, in_, out, 400, 100).walk).toBeCloseTo(0.25, 9);
+    expect(stepAt(s, STILL, in_, out, 400, 700).walk).toBeCloseTo(0.75, 9);
+    expect(walkCyclesPerStep(STILL, in_)).toBe(1);
+    expect(walkCyclesPerStep(undefined, in_)).toBe(1);
+    const fly = setup();
+    expect(stepAt(fly.s, { ...STILL, flying: true }, fly.in_, fly.out, 400, 100).walk).toBe(-1);
+  });
+
+  it("stops while an attack clip or a death plays over the step", () => {
+    const { s, in_, out } = setup();
+    stepAt(s, LPC, in_, out, 400, 100);
+    startAttack(s, 100, 1, 0);
+    expect(animate(s, LPC, in_, out).action).toBe("attack");
+    expect(out.walk).toBe(-1);
+    startDeath(s, 120);
+    in_.now = 130;
+    expect(animate(s, LPC, in_, out).walk).toBe(-1);
+  });
+});
 
 describe("clips", () => {
   it("plays the walk by distance: half a cycle per tile, continuous across steps", () => {
@@ -551,5 +593,30 @@ describe("facings (docs/17 ANI-1)", () => {
     // The diagonal counted its whole length into the cycle (16 frames: two cycles).
     expect(s.walkPer).toBeCloseTo(Math.hypot(8, 13.86), 6);
     expect(s.walkPhase).toBeCloseTo(Math.hypot(8, 13.86) % 8, 6);
+  });
+});
+
+describe("stanceOf (where a facing stands: the shadows start there)", () => {
+  const meta = (stance: AnimMeta["stance"]): AnimMeta => ({
+    w: 64,
+    h: 64,
+    anchor: "bc",
+    foot: 2,
+    top: 46,
+    shadow: "ellipse",
+    actions: {},
+    ...(stance ? { stance } : {}),
+  });
+
+  it("gives the facing's own stance, else the south's, else any", () => {
+    const m = meta({ s: [6, 24, 40], e: [4, 30, 44] });
+    expect(stanceOf(m, "e")).toEqual([4, 30, 44]);
+    expect(stanceOf(m, "nw")).toEqual([6, 24, 40]);
+    expect(stanceOf(meta({ w: [3, 8, 24] }), "n")).toEqual([3, 8, 24]);
+  });
+
+  it("is undefined for an atlas without stances: the caller falls back on foot", () => {
+    expect(stanceOf(meta(undefined), "s")).toBeUndefined();
+    expect(stanceOf(undefined, "s")).toBeUndefined();
   });
 });

@@ -873,13 +873,21 @@ func (w *World) Clients() []Client {
 // player there walks (searchFrom), even on a tile nobody may stand on now: a door shut
 // since the logout (in its open doorway) puts the player beside it, on its outside if the
 // door is locked, on either side if it is not; a house door, in its house or on the
-// street of its exit. Only a tile of no area with no rule of its own (a wall, no tile:
-// the map changed) sends the character to its temple.
+// street of its exit. A tile something low came to fill since the logout (a bush made
+// solid: it stops feet, not eyes) puts the player beside it (besideSolid), on the island
+// where it logged out; so does the tile of an object of the living world (a broken bush,
+// a pushed boulder, an open gate: no area holds it), on it while it is free ground and
+// beside it once the object stands again. Only another tile of no area with no rule of
+// its own (a wall, no tile: the map changed) sends the character to its temple.
 func (w *World) placement(c Character) world.Pos {
 	temple := w.temple(c.Town)
 	want := temple
-	if c.HasPos && w.searchFrom(c.Pos).n > 0 {
-		want = c.Pos
+	if c.HasPos {
+		if w.searchFrom(c.Pos).n > 0 {
+			want = c.Pos
+		} else if p, ok := w.besideSolid(c.Pos); ok {
+			return p
+		}
 	}
 	if p, ok := w.freeNear(want, 3); ok {
 		return p
@@ -893,6 +901,46 @@ func (w *World) placement(c Character) world.Pos {
 		return temple
 	}
 	return want // crowded: share the tile rather than refuse the login
+}
+
+// besideSolid returns where a character saved on p, a tile of the map in no area, outside
+// every house, with no door and no entrance of stairs, a hole or a teleport, wakes up:
+//   - p is a tile a low object fills now: it blocks movement and not sight (a bush, a
+//     boulder, a barrel, water too; a wall, a closed gate or a tree block both and never
+//     were ground). The free walkable tile closest to p (by rings, as freeNear), only in
+//     the street areas next to p that are no room behind a locked door: whoever stood on p
+//     walked there from one of them, and a room needs its key.
+//   - p is the tile of an object of the living world (livingTile): the areas were numbered
+//     with the object standing, so p is in none for good, yet players stand on it while
+//     the object is broken, pushed away or open. p itself while it is walkable and free;
+//     else the free walkable tile closest to it in the areas next to p. Those are all in
+//     one room or all outside (checkLivingRooms), where whoever stood on p already was.
+//
+// When p lies between two areas (a bush made solid, a broken barricade), the rings choose
+// (the north-west first) and the character may wake up on either side. Nobody gains from
+// it: nobody stands on a solid tile at will, and while p was ground it joined both sides.
+func (w *World) besideSolid(p world.Pos) (world.Pos, bool) {
+	_, flags, ok := w.m.Tile(p)
+	if !ok || flags&world.FlagHouse != 0 || w.doors[p] != nil || w.m.MovesOnStep(p) {
+		return world.Pos{}, false
+	}
+	living := w.livingTile(p)
+	if living && flags&world.FlagBlocksMovement == 0 && w.free(p) {
+		return p, true
+	}
+	if !living && flags&world.BlockFlags != world.FlagBlocksMovement {
+		return world.Pos{}, false
+	}
+	var from searchFrom
+	for e := world.North; e <= world.NorthWest; e++ {
+		if q, ok := p.Step(e); ok && (living || w.roomOf[q] == 0) {
+			from.add(w.areaOf(q))
+		}
+	}
+	if from.n == 0 {
+		return world.Pos{}, false
+	}
+	return w.searchRingsIn(from, p, 3, world.FlagBlocksMovement|world.FlagPortalStep|world.FlagHouse, w.free)
 }
 
 // lockedDoor reports whether a locked door stands on p (door.go), open or closed.

@@ -30,7 +30,7 @@ i18n/
 ## Esquemas y validador
 - Esquemas (JSON Schema 2020-12) en `packages/content-schema/schemas/`: `balance`,
   `vocations`, `items`, `attributes`, `monster`, `npc`, `quest`, `spells`, `recipes`,
-  `boat_routes`, `borders`, `outfits`, `cosmetics`, `i18n`,
+  `boat_routes`, `borders`, `outfits`, `cosmetics`, `solid_families`, `i18n`,
   `ids-lock`, más `common` con las definiciones compartidas (IDs, claves i18n, condiciones,
   acciones, elementos, skills). Son la fuente de verdad del formato; este doc da ejemplos.
 - Dos keywords propios: `x-ref: <tipo>` marca un ID que debe existir (`item`, `monster`,
@@ -273,7 +273,7 @@ items:
   `mapcompile`): un item bloquea el paso si tiene `blocks_movement: true`. Los items
   `kind: wall` bloquean **por defecto**, aunque no declaren `blocks_movement`; un muro
   atravesable (arco, cortina) declara `blocks_movement: false`. El suelo decide con
-  `ground.walkable`.
+  `ground.walkable`. Qué objeto bloquea y cuál no: "Qué bloquea el paso", abajo.
 - **Puertas y llaves** (reglas en `02-game-design.md` "Puertas con llave"): una puerta es
   un par de items fijos con bloque `door`; la cerrada nombra la abierta (`open`) y puede
   llevar `key` (id de llave, mismo formato que un id); la abierta nombra la cerrada
@@ -361,6 +361,88 @@ items:
   - **En el mapa** (`mapcli validate`, docs/03 "Validación"): cada `id` de cofre está una
     sola vez en todo el mundo (dos copias del item se abrirían una vez entre las dos) y
     junto a una casilla a la que se llega a pie desde el templo de su isla.
+
+### Qué bloquea el paso (lote 20, pedido del dueño del 2026-11-24)
+Un objeto del mapa bloquea lo que su sprite muestra. Antes se caminaba sobre los arbustos:
+`bush` no decía `blocks_movement`. La regla, una sola para todos los items de
+`data/items`:
+
+| El objeto… | `blocks_movement` | `blocks_sight` | Items de hoy |
+|---|---|---|---|
+| **Llena su casilla hasta la cintura o más**: planta leñosa, roca, mueble, poste | `true` | no | `bush`, `thick_bush`, `boulder`, `mossy_boulder`, `cracked_rock`, `iron_vein`, `ember_vein`, `well`, `fountain`, `barrel`, `rickety_barrel`, `weathered_crate`, `clay_pot`, `sacks`, `fishing_net`, `table`, `shelf`, `anvil`, `smelting_forge`, `cooking_hearth`, `brazier`, `market_stall`, `market_board`, `stash_chest`, los cofres, los atriles con libro, `lamp_post`, `flag_pole`, `mooring_post`, los carteles, `rotten_barricade`, `spider_web`, `portcullis_closed` |
+| **Además es alto y denso, más alto que una persona**: no deja hueco por donde ver ni tirar | `true` | `true` | los árboles (`oak_tree`, `pine_tree`, `birch_tree`, `elm_tree`), los `kind: wall` (por defecto), los portones cerrados (`forge_gate`, `pruebas_gate`, `morvund_gate`), `cargo_crate` y `heavy_crate` (cajones apilados), `thorny_vines` (una cortina de enredaderas) |
+| **Es bajo, está tirado o se pisa**: hierba, flores, restos, placas | no | no | `grass_tuft`, `tall_grass`, `wildflowers`, `reeds`, los restos de lo roto (`cut_bush`, `cut_vines`, `rock_rubble`, `*_debris`, `clay_pot_shards`, `barricade_planks`, `torn_web`), `pressure_plate`, las placas de sigilo, los rollos, los restos de criaturas, las piezas de borde |
+| **Cuelga de un muro o es una entrada** | no | no | `wall_torch`, `wall_banner` (van en la casilla del muro, que ya bloquea), las puertas y rejas abiertas, `house_door_frame`, escaleras, agujeros y teletransportes |
+| **Mueble de una casa que se alquila** (excepción decidida en el lote 12, docs/03 "Muebles y luces") | `false`, dicho | no | `bench`, `bed`, `flower_box`: no le quitan casilla al inquilino |
+
+- **Vista y proyectiles van juntos** (`blocks_sight`, docs/03 "Muros y línea de visión").
+  Un arbusto o una roca frenan los pies pero no la vista ni las flechas: son bajos. **Un
+  árbol sí tapa la vista**: es alto y denso, como un seto alto o un muro. Detrás de un
+  tronco no se ve ni se tira (flechas, hechizos, la vista de un monstruo que busca a quién
+  atacar); las casillas de los extremos no cuentan, así que un árbol vecino se tala o se
+  mira igual (`TestTreesBlockSightOnTheMap` lo juega en el mapa real: una curación detrás
+  de un tronco se rechaza, la misma sobre un arbusto llega, y el árbol vecino se tala).
+  Ningún spawn queda ciego: desde el centro de cada spawn con un árbol a 7 casillas o
+  menos se ve más de la mitad de las casillas caminables a esa distancia (lo vigila
+  `TestTreesLeaveNoSpawnBlind` de `mapcompile`; al cambiarlo, el peor veía el 57 %). Un
+  poste, un farol, un puesto de mercado o una reja dejan ver.
+- **`data/solid_families.yaml`** (`solid_families.schema.json`; solo lo lee el validador,
+  nunca el servidor): la lista `families` de palabras de id que nombran una familia sólida
+  (`tree`, `bush`, `shrub`, `hedge`, `boulder`, `rock`, `statue`, `well`, `fountain`,
+  `barrel`, `crate`, `fence`, `pillar`, `table`, `chest`, `gate`, `sign`...).
+  El archivo es obligatorio (sin él la regla se apagaría sola). `make validate` falla si un
+  objeto fijo del mapa (`pickupable: false`, de cualquier `kind` salvo `ground`, que se
+  pisa, y `wall`, que bloquea por defecto: un cajón registrable `kind: container` cuenta)
+  cuyo id tiene una de esas palabras (el id partido en `_`: `thick_bush` tiene `bush`; en
+  singular o en plural: `stacked_crates` tiene `crate`, `barrels` tiene `barrel`; o
+  una palabra compuesta que termina en ella tras tres letras o más: `signpost` tiene
+  `post`, `bookshelf` tiene `shelf`, pero `rope_spot` no es un `pot`) no
+  escribe `blocks_movement`, con `true` o con `false`. El miembro plano o abierto de una
+  familia lo dice en voz alta (`cut_bush`, `forge_gate_open`, `bench`:
+  `blocks_movement: false`). Un `kind: decoration` de una familia que no escribe
+  `pickupable` también falla: sin escribirlo se puede levantar, así que un seto nuevo sin
+  ninguna de las dos líneas quedaría caminable y además se lo llevarían; dice
+  `pickupable: false` (y entonces `blocks_movement`) o `pickupable: true`. Las piezas de borde (sprite `borders/...`) no cuentan: llevan
+  el nombre de su suelo. Un arbusto, un cajón o una estatua nuevos ya no pueden quedar
+  caminables por olvido; una familia nueva (`cart`, por ejemplo) se agrega a la lista.
+- **Quién lee la regla:** `mapcompile` (el A* del servidor y la línea de visión),
+  `packages/map-format` (validador, editor, `mapcli`), el cliente (`ItemDef.blocks`: el
+  camino por click) y el MCP. Todos leen `data/items`; `make test-parity` y
+  `client/vite/content.test.ts` comparan los veredictos.
+- **Al volver sólido un item que ya está en los mapas:** `make validate` (templo, spawns,
+  NPCs, portales, casas, cofres, placas y lugares de quest alcanzables) y
+  `packages/map-format/src/solid-objects.test.ts`, que compara en cada isla las zonas
+  caminables de antes y de ahora: ningún lugar al que se llegaba queda partido (el item
+  nuevo se suma a la lista `MADE_SOLID` de ese test). En el lote 20 los arbustos del mundo
+  no cortaron ningún camino; solo se quitaron dos: el que estaba en el centro del spawn
+  `puerto_spiders` (3124,6416,7) y el que crecía sobre agua en el Bosque (4215,6157,7).
+- **Un personaje guardado sobre una casilla que ahora llena un objeto bajo** (bloquea el
+  paso y no la vista: un arbusto, una roca, un barril) despierta al lado, en la casilla
+  libre más cercana (hasta 3) de las zonas caminables vecinas, en la isla donde salió y
+  sea cual sea su pueblo; nunca en una casa ni en la sala de una puerta con llave
+  (`placement` y `besideSolid` de `server/internal/session/player.go`; test
+  `TestBushesAreSolidOnTheMap`). Sobre un muro, un árbol o una casilla sin mapa sigue
+  despertando en su templo: ahí nunca hubo suelo y el servidor no adivina de qué lado
+  dejarlo (`TestSavedOnAWallGoesToTheTemple`). También despierta en su templo quien quedó
+  guardado sobre un arbusto de una casilla de casa (el jardín de una casa alquilada): una
+  casa responde a su dueño y sus invitados, y el servidor no lo deja adentro ni elige la
+  calle (`TestSavedOnASolidHouseTileGoesToTheTemple`). Si el arbusto ahora sólido separa
+  dos zonas caminables, despierta en cualquiera de los dos lados (primero el noroeste):
+  nadie se para a voluntad en una casilla sólida, y cuando se guardó esa casilla las unía.
+- **Un personaje guardado sobre la casilla de un objeto del mundo vivo** (los restos de un
+  `thick_bush` o una `cracked_rock` rotos, el hueco de una roca empujada, una reja
+  abierta) despierta ahí mismo mientras la casilla esté libre, y al lado cuando el objeto
+  ya volvió, aunque tape la vista (`rotten_barricade`, `heavy_crate`). Esas casillas no
+  pertenecen a ninguna zona caminable (las zonas se numeran una vez, con el objeto en
+  pie), y antes mandaban al personaje a su templo, aunque fuera de otra isla: un viaje
+  gratis. Las zonas vecinas son todas de la misma sala o todas de afuera
+  (`checkLivingRooms`), así que nadie entra a una sala sin su llave
+  (`TestLivingSavedOnAnObjectWakesThere`).
+- **Cobertura:** un árbol entre un monstruo y un jugador lo esconde (el monstruo no lo
+  toma de blanco ni le escupe); un arbusto no (`TestTreesCoverFromMonstersOnTheMap`, en
+  el mapa real).
+- **Mundo vivo:** una planta sólida (arbusto, árboles) nunca se pisa; se dobla o se sacude
+  cuando alguien pasa por una casilla vecina (`livingworld/README.md`, "Plantas").
 
 ## Atributo
 `data/attributes.yaml` (`attributes.schema.json`; opcional para el servidor: sin archivo,
@@ -564,11 +646,29 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   ninguna comida pura dure más que su `max_ms` (no se podría comer nunca).
 
 ## NPC con diálogo de ventana
+**Nombre y rol.** Sobre la cabeza de un NPC el juego muestra dos líneas: su nombre
+(`name`) y, debajo, qué hace (`role`, una clave de i18n: "Tilde Varga" / "Provisiones";
+docs/17 "Hecho: nombres nítidos y los NPCs en dos líneas"). `role` es opcional: sin él vale
+el rol por defecto de lo que el NPC ofrece, el primero de esta lista que tenga
+(`packages/content-schema/src/npc-role.ts`, la misma regla que usa el cliente):
+| Lo que ofrece | Clave por defecto | es / en |
+|---|---|---|
+| un nodo con `boat_routes: true` | `npc_role.captain` | Pasajes en barco / Boat passage |
+| `shop` o `open_shop` | `npc_role.merchant` | Comercio / Trade |
+| `bless` o `heal` | `npc_role.healer` | Bendiciones y sanación / Blessings and healing |
+| `train_skill` | `npc_role.trainer` | Entrenamiento / Training |
+| `start_quest` | `npc_role.quest_giver` | Encargos / Errands |
+`make validate` falla si un NPC no termina con un rol (no ofrece nada de la lista y no
+declara `role`), si el rol pasa de 28 caracteres o el nombre de 22 en algún idioma (el
+cartel nunca los corta: el rol se parte en dos líneas por sus palabras), o si el nombre
+dice el oficio después de una coma ("Tilde Varga, provisiones": eso va en `role`).
+
 Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de
 `data/npcs/puerto_provisioner.yaml`). Los archivos reales son la referencia completa.
 ```yaml
 id: puerto_foreman
 name: npc.puerto_foreman.name
+role: npc.puerto_foreman.role     # qué hace ("Capataz"): la segunda línea de su nombre
 sprite: npcs/puerto_foreman     # su retrato quieto (el del diálogo), dibujado de su look
 look:                           # una persona: humanoide del motor ("Looks")
   body: sturdy
@@ -1672,16 +1772,67 @@ toca al contenido:
     kind: ground
     ground: { walkable: true, speed: 160, surface: sand }
   ```
-- **`data/livingworld/surfaces.yaml`** (`livingworld-surfaces.schema.json`), por superficie:
-  `footprints` (ms que dura una huella sin viento; 0 o ausente: ninguna), `wind` (desgaste
-  extra por ms en una ráfaga), `dust` (polvo al correr), `ripple` (anillos en el agua),
-  `tint` (`#rrggbb` de huellas y polvo), `sound` (evento `step.self.<sound>` de
-  `assets/sounds.yaml`; por defecto el nombre de la superficie) y `critters` (`bird`,
-  `butterfly`, `firefly`, `fish`). `make validate` exige que toda superficie que usa un suelo
-  esté descrita.
+- **`data/livingworld/surfaces.yaml`** (`livingworld-surfaces.schema.json`). Arriba, dos
+  bloques obligatorios:
+  - `prints`: qué borra las huellas en todas partes (una huella no tiene tiempo de vida;
+    `livingworld/README.md` "Huellas: qué las borra"): `still` (fuerza del viento bajo la
+    que no se toca ninguna), `fade_ms` (lo que tarda en desvanecerse una que pasó el tope),
+    `tread_px` (a qué distancia el pie de otra criatura la pisa) y `waves` (`period_ms`,
+    una ola cada tanto; `reach_tiles`, hasta dónde sube la más grande; `lag_ms` por
+    casilla a lo largo de la costa; `wash_ms`, lo que tarda en borrarla);
+  - `steps`: cómo suenan los pasos del jugador: `volume` (**el** volumen de los pasos, un
+    factor sobre el `volume` de cada toma de `assets/sounds.yaml`: se baja aquí), `jitter`
+    (cambio de tono al azar por paso) y `left` / `right` (`pitch` y `gain` de cada pie).
+  Y por superficie (`surfaces`): `prints` (deja huellas, y qué las borra: `wind`, parte
+  borrada por segundo con viento de fuerza 1 sobre `still`; `waves`, las olas del agua
+  vecina; `tread`, parte que borra el pie de otra criatura; ausente: no deja huellas),
+  `dust` (polvo al correr), `ripple` (anillos en el agua), `tint` (`#rrggbb` de huellas y
+  polvo), `sound` (evento `step.self.<sound>` de `assets/sounds.yaml`; por defecto el
+  nombre de la superficie) y `critters` (`bird`, `butterfly`, `firefly`, `fish`).
+  `make validate` exige que toda superficie que usa un suelo esté descrita. El campo de
+  antes, `footprints: <ms>`, ya no existe (el esquema lo rechaza).
+- **`data/livingworld/gaits.yaml`** (`livingworld-gaits.schema.json`; cliente): cómo anda
+  cada cuerpo, para que huellas, ondas, polvo y sonido del paso salgan en cada pisada de la
+  animación. `view.depth`, `slide_px`, `gaits` (por nombre: `print` = `feet` | `paw` |
+  `big_paw` | `dot` | `trail`, `stance`, `reach`, `rise`, `scale`, `depth`, `print_spread`
+  (px que la huella se dibuja hacia el lado de su pie, para que se vean las dos hileras) y `contacts`,
+  una lista de `{ at, side, along }` con `at` de 0 a 1 en el ciclo de caminar), `defaults`
+  (`humanoid`, `beast`, `big_beast`, `flying`) y `creatures` (id de monstruo o NPC → andar).
+  `make validate` exige andares que existan y criaturas de `data/`. Un monstruo nuevo no
+  necesita fila si le sirve el andar de su cuerpo.
 - **`data/livingworld/plants.yaml`** (`livingworld-plants.schema.json`): `plants` es una
-  lista de `{ item, reaction: bend | rustle, idle?, leaves?, trample? }`; cada item una
-  vez. `trample`: sobre una casilla con desgaste de senderos se dibuja aplastada.
+  lista de `{ item, reaction?: bend | rustle, leaves?, trample?, wind? }`; cada item una
+  vez, con `reaction` o con `wind`. `trample`: sobre una casilla con desgaste de senderos
+  se dibuja aplastada. `wind`: cómo se mece (lote 20): ausente, lo que dice su sprite; un
+  tipo de planta (`tree`, `palm`, `bush`, `tall_grass`, `reed`, `flower`, `vine`,
+  `cactus`, `dead_tree`); un mapa `{ kind, pivot?, top?, stiffness?, amplitude?,
+  flutter? }`; o `none` (nunca se mece). La clave `idle` del lote 17 ya no existe.
+- **`data/livingworld/wind.yaml`** (`livingworld-wind.schema.json`): el viento. `field`:
+  `direction` (grados; 0 este, 90 sur), `speed` (casillas por segundo), `gust_tiles`,
+  `calm` (0 a 1), `exposure` (fuerza por superficie, 0 a 2), `open`, `forest` (0 a 1) y
+  `night`. `kinds`: por cada tipo de planta, `stiffness` (0 a 1), `amplitude` (px en la
+  punta, hasta 4), `flutter` (px, hasta 0,95), `period_ms` y `pivot` (parte del alto que
+  queda plantada, 0 a 0,95). Los nueve tipos son obligatorios.
+- **`data/livingworld/wind_sprites.yaml`** (`livingworld-wind_sprites.schema.json`):
+  **generado** por `make spritegen`, nunca a mano. `sprites`: por ruta de sprite, `{ kind,
+  pivot, top, stiffness?, amplitude?, flutter? }` (`pivot` y `top` en px sobre el borde de
+  abajo del sprite). `make validate` exige que **todo item que es una planta** tenga
+  metadata de viento (aquí, por su sprite, o en `plants.yaml`) o un `wind: none`
+  explícito, que un árbol declarado a mano diga su `pivot` y que cada sprite del archivo
+  lo use algún item (`livingworld/README.md` "Viento").
+- **`data/livingworld/shadows.yaml`** (`livingworld-shadows.schema.json`; cliente): qué
+  objeto del mapa proyecta sombra bajo el sol y la luna, y cómo (docs/17 "Sombras de los
+  objetos", `livingworld/README.md` "Sombras de los objetos"). Cada entrada es `none`,
+  `silhouette` (el dibujo del objeto tumbado desde su base), `block` (la caja de su
+  casilla: muros y portones) o `{ cast, length?, height? }` (`length` 0,1 a 1,5: la parte
+  del largo de una silueta; `height` 1 a 96 px: el alto de la caja). Tres tablas, de la
+  más general a la más precisa: `kinds` (por `kind` del item), `families` (por una
+  palabra del id, en singular o plural; gana la primera palabra del id con familia) e
+  `items` (por id). Por `kind` o familia solo proyectan los objetos fijos
+  (`pickupable: false` y los muros). `make validate` exige que cada `kind`, familia e item
+  nombrado exista y que un objeto con dos familias que no coinciden tenga su línea en
+  `items`. **Un objeto nuevo con altura proyecta sin escribir nada; uno plano o colgado
+  de un muro necesita `none`** (por familia o por item).
 - **`data/livingworld/wear.yaml`** (`livingworld-wear.schema.json`): el desgaste de
   senderos, que lee el **servidor** (`livingworld/server/trail`, docs/02 "Senderos"):
   `surfaces` (las superficies que se gastan), `player_step` y `monster_step` (puntos por
@@ -1763,15 +1914,23 @@ music:           # el director de música (client/src/audio/director.ts)
   `make music-gemini` desde las elecciones del dueño; no se editan a mano. Una pool hecha a
   mano va en `pools:` fuera de las marcas. Lo que tiene cada lugar está en
   `assets/sounds/music/gemini.yaml` (`format: 2`): `pick`, `provisional`, `extras` (las
-  versiones extra de las cuevas), `skipped` (las que quedaron afuera y por qué),
+  versiones extra del lugar, `<lugar>_pool` en `picks.json`), `skipped` (las que quedaron afuera y por qué),
   `file`/`volume` del sonido del lugar, `fallback` (el tema de soundgen que vuelve con
   `none`), `pool` y `tracks` (cada toma con su fuente, el título que le dio Gemini, su
   prompt, si es provisional, y sus medidas: `seconds`, `end`, `entries`, `longest_quiet`,
   `lufs`, `kbps`, `bytes`). El resto del archivo es a mano.
 
-Pasos por superficie (mundo vivo): el paso propio prueba `step.self.<sound>` (el `sound` de
-su superficie en `data/livingworld/surfaces.yaml`) antes de `step.self`; un evento sin fila
-suena como `step.self`. Hoy no hay sonidos propios por superficie (docs/14).
+Pasos por superficie (mundo vivo): cada pisada del jugador propio (cada pie que la
+animación apoya, `data/livingworld/gaits.yaml`) prueba `step.self.<sound>` (el `sound` de
+la superficie bajo ese pie en `data/livingworld/surfaces.yaml`) antes de `step.self`; un evento sin fila
+suena como `step.self`.
+Cada `sound` (`grass`, `tall_grass`, `dirt`, `sand`, `wet_sand`, `ash`,
+`stone`, `wood`, `snow`, `mud`, `water`) tiene tres tomas (`step_<sound>_<1-3>`, recetas de
+`tools/soundgen/src/steps.ts`) y su evento lista las tres: suena una distinta de la
+anterior, con el tono y el volumen del pie que pisa (`steps` de
+`data/livingworld/surfaces.yaml`, que también tiene el volumen de todos los pasos). Todas salen a
+la misma sonoridad y llevan el mismo volumen bajo (0,15; el `step` de reserva, 0,12): el
+paso queda de fondo.
 
 ### Música de una quest importante (`music` en `data/quests/<id>.yaml`)
 Una quest importante puede tener música propia en un lugar: mientras el jugador está en uno

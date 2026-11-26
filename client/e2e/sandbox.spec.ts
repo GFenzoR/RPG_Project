@@ -587,11 +587,13 @@ test("sandbox living world: cut the vines by hand, push both boulders, the portc
   expect(errors).toEqual([]);
 });
 
-// docs/17 UI-3 (owner, 2026-11-23): the names over creatures grow with the map zoom in whole
-// steps (large by default, normal in Options → Interface) and their colours read on the
-// black outline; and ART-3: a wall piece just south of the own player fades, the player
-// keeps its colours (no pale copy over the map).
-test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in front of the player fades", async ({
+// docs/17 UI-3 (owner, 2026-11-23 and 2026-11-25): the names over creatures are drawn at
+// the screen's own resolution (a font size in device pixels per zoom, never a blown-up
+// raster), a little smaller than the 2x pixel font of lote 19, in colours that read on the
+// black outline; an NPC shows what it does on a second line under its name, never "…";
+// and ART-3: a wall piece just south of the own player fades, the player keeps its colours
+// (no pale copy over the map).
+test("sandbox: sharp names at 1x, 2x and 4x, NPCs with their role on a second line; a wall in front of the player fades", async ({
   page,
   playwright,
 }) => {
@@ -661,38 +663,91 @@ test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in fro
     return shown.find((s) => ids.includes(s.id));
   };
 
-  // The temple, by the instructor (an NPC), at the fitted 2x: large names, 2 px per cell.
+  // The temple, by the instructor (an NPC), at 2x: a 15 px name drawn 1:1 (the page's
+  // devicePixelRatio is 1 here) and, under it, what she does, smaller.
   await standsOn(2095, 2086, 7);
   await zoomTo(2);
-  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.scale).toBe(2);
+  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.fontPx).toBe(15);
   const npc2 = await labelOf("npcs", "pruebas_trainer");
   expect(npc2?.fill).toBe(0xc79bff); // render/label-style.ts LABEL_COLORS.npc
+  expect(npc2?.scale).toBe(1); // rasterised at its size, not scaled
+  expect(npc2?.text).not.toContain("…");
+  expect(npc2?.text).not.toContain(",");
+  expect(npc2?.role ?? "").not.toBe("");
+  expect(npc2?.role).not.toContain("…");
+  expect(npc2?.roleFontPx ?? 99).toBeLessThan(npc2?.fontPx ?? 0);
+  // The label's top (where a speech bubble would sit) is above both lines.
+  expect(npc2?.top ?? 0).toBeLessThanOrEqual((npc2?.y ?? 0) + 4);
+  expect((await labels())?.dpr).toBe(1);
   await shot(page, "100-names-2x-npc");
+  const close = async (name: string, x: number, y: number): Promise<void> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    const k = await scale();
+    if (!p) throw new Error("no tile on screen");
+    await page.screenshot({
+      path: join(shots, `${name}.png`),
+      clip: {
+        x: Math.max(0, p.x - 4 * 32 * k),
+        y: Math.max(0, p.y - 3 * 32 * k),
+        width: 9 * 32 * k,
+        height: 5 * 32 * k,
+      },
+    });
+  };
+  // Cut round the instructor: the letters' edges, to judge the sharpness.
+  await close("100a-names-2x-npc-close", 2093, 2085);
 
-  // 1x: one cell per pixel, as before; half as tall.
+  // 1x: 12 px, smaller with the map.
   await zoomTo(1);
-  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.scale).toBe(1);
+  await expect.poll(async () => (await labelOf("npcs", "pruebas_trainer"))?.fontPx).toBe(12);
   const npc1 = await labelOf("npcs", "pruebas_trainer");
-  expect(npc1?.height ?? 0).toBeLessThan((npc2?.height ?? 0) * 0.6);
+  expect(npc1?.height ?? 0).toBeLessThan(npc2?.height ?? 0);
+  expect(npc1?.role.split(/\s+/).join(" ")).toBe(npc2?.role.split(/\s+/).join(" "));
   await shot(page, "100b-names-1x-npc");
+  await close("100c-names-1x-npc-close", 2093, 2085);
 
-  // The rats' pen (weak: they cannot kill the guardian meanwhile): monster names at 2x and
-  // at 4x (3 px per cell).
+  // The square, between the temple's instructor and the merchant at her stall: the town
+  // with its NPCs at 1x and at 2x.
+  const square = await page.evaluate(() => {
+    const c = window.__rpgClient;
+    for (let y = 2093; y <= 2097; y++)
+      for (let x = 2088; x <= 2093; x++) if (c?.walkable(x, y, 7)) return { x, y };
+    return undefined;
+  });
+  if (square) {
+    await tp(square.x, square.y, 7);
+    await expect
+      .poll(async () => (await labelOf("npcs", "pruebas_merchant"))?.role ?? "", {
+        timeout: 20_000,
+      })
+      .not.toBe("");
+    await shot(page, "100d-names-1x-town");
+    await zoomTo(2);
+    await shot(page, "100e-names-2x-town");
+    await close("100f-names-2x-merchant-close", 2086, 2100);
+  }
+
+  // The rats' pen (weak: they cannot kill the guardian meanwhile): monster names, one line,
+  // at 2x and at 4x (21 px).
   await zoomTo(2);
   await tp(2080, 2081, 7);
   await expect
     .poll(async () => (await labelOf("monsters", "bilge_rat"))?.fill, { timeout: 20_000 })
     .toBe(0xff4f5e); // LABEL_COLORS.monster
+  expect((await labelOf("monsters", "bilge_rat"))?.role).toBe("");
   await shot(page, "101-names-2x-monsters");
   await zoomTo(4);
-  await expect.poll(async () => (await labels())?.scale).toBe(3);
+  await expect.poll(async () => (await labels())?.fontPx).toBe(21);
   await shot(page, "101b-names-4x-monsters");
 
-  // Options → Interface → "Name size": normal at 4x is 2 px per cell.
+  // Options → Interface → "Name size": normal at 4x is 16 px.
   await openWindow(page, "options");
   await page.getByTestId("name-size").selectOption("normal");
   await closeWindow(page, "options");
-  await expect.poll(async () => (await labels())?.scale).toBe(2);
+  await expect.poll(async () => (await labels())?.fontPx).toBe(16);
   expect(await page.evaluate(() => localStorage.getItem("rpg.name-size"))).toBe("normal");
   await shot(page, "101c-names-normal-4x-monsters");
   await page.evaluate(() => localStorage.removeItem("rpg.name-size"));
@@ -723,8 +778,12 @@ test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in fro
 // Day and night (livingworld/README.md "Día y noche"): a gm stops the world clock at noon
 // (short shadows under the feet, no tint) and at a full-moon night (silvery blue, the
 // temple's lamps glowing, a faint moon shadow), with the cast shadows drawn under every
-// creature in view; then the low sun of the morning, the dusk, a new-moon night and the dawn
-// after it. It leaves the clock stopped at noon, as the E2E servers start it.
+// creature in view; then the low sun of the morning and of the afternoon, the dusk, a
+// new-moon night and the dawn after it. It leaves the clock stopped at noon, as the E2E
+// servers start it.
+// Owner, 2026-11-25: every object with height casts its own shadow in the sun's pose (the
+// temple's walls, the plaza's oaks, the bushes, the sign), and a creature that casts one has
+// no contact ellipse; inside the temple there is no sun: the ellipse, and no cast shadow.
 test("sandbox day and night: noon and a full-moon night, with cast shadows", async ({
   page,
   playwright,
@@ -750,6 +809,18 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     await page.waitForTimeout(300);
   };
   const sky = () => page.evaluate(() => window.__rpgClient?.sky());
+  const tp = async (x: number, y: number): Promise<void> => {
+    await say.fill(`/tp ${x} ${y} 7`);
+    await say.press("Enter");
+    await expect
+      .poll(async () => {
+        const s = await page.evaluate(() => window.__rpgClient?.self());
+        return s ? `${s.x},${s.y}` : "";
+      }, SLOW)
+      .toBe(`${x},${y}`);
+    await say.blur();
+    await page.waitForTimeout(400);
+  };
 
   // The E2E servers keep the time stopped at noon (-world-time noon in
   // playwright.config.ts); put it back however this test ends, so the specs after it are
@@ -758,11 +829,22 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     await time("speed 0");
     await time("noon");
     await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
+    // Where a new character wakes: inside the temple. No sun under a roof: the own player
+    // stands on its contact ellipse and casts nothing, while the objects outside do.
+    await say.blur();
+    await expect.poll(async () => (await sky())?.selfContact, { timeout: 10_000 }).toBe(true);
+    expect((await sky())?.casters).toBeGreaterThan(0);
+    await shot(page, "99a-daynight-indoors");
+
+    // Out on the plaza, south of the temple's doorway, between its two oaks.
+    await tp(2095, 2095);
+    await expect.poll(async () => (await sky())?.selfContact, { timeout: 10_000 }).toBe(false);
     const noon = await sky();
     expect(noon?.ambient).toBe(0xffffff);
-    expect(noon?.shadows).toBeGreaterThan(0); // the player and the instructor at least
-    await say.blur();
-    await page.waitForTimeout(300);
+    expect(noon?.shadows).toBeGreaterThan(0); // the own player at least
+    expect(noon?.casters).toBeGreaterThan(0);
+    expect(noon?.objectShadows).toBeGreaterThan(0);
+    expect(Math.abs(noon?.shadowX ?? 1)).toBeLessThan(0.05); // straight under the sun
     await shot(page, "99b-daynight-noon");
 
     await time("moon 4");
@@ -773,6 +855,9 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     expect(night?.moon).toBeCloseTo(1);
     expect(night?.ambient).not.toBe(0xffffff);
     expect(night?.shadowAlpha).toBeGreaterThan(0);
+    // The moon casts for the objects too, and the feet stand on that shadow.
+    expect(night?.casters).toBeGreaterThan(0);
+    expect(night?.selfContact).toBe(false);
     await say.blur();
     await page.waitForTimeout(300);
     await shot(page, "99c-daynight-night");
@@ -783,10 +868,23 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     // night, still under the moon of the night before it (phase 7).
     await time("morning");
     await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
-    expect((await sky())?.shadows).toBeGreaterThan(0);
+    const morning = await sky();
+    expect(morning?.shadows).toBeGreaterThan(0);
+    expect(morning?.shadowX).toBeLessThan(0); // to the west
+    expect(morning?.casters).toBeGreaterThan(0);
+    expect(morning?.selfContact).toBe(false);
     await say.blur();
     await page.waitForTimeout(300);
     await shot(page, "99d-daynight-morning");
+
+    await time("afternoon");
+    await expect
+      .poll(async () => (await sky())?.shadowX ?? 0, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    expect((await sky())?.casters).toBeGreaterThan(0);
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99d2-daynight-afternoon");
 
     await time("dusk");
     await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("dusk");
@@ -798,6 +896,11 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     await time("night");
     await expect.poll(async () => (await sky())?.moon, { timeout: 10_000 }).toBeCloseTo(0);
     expect((await sky())?.phase).toBe("night");
+    // No moon, no cast shadow of anything: the contact ellipse is back under the feet.
+    const dark = await sky();
+    expect(dark?.shadowAlpha).toBe(0);
+    expect(dark?.casters).toBe(0);
+    expect(dark?.selfContact).toBe(true);
     await say.blur();
     await page.waitForTimeout(300);
     await shot(page, "99f-daynight-new-moon");
@@ -812,5 +915,247 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     await time("speed 0");
   }
   expect(await page.evaluate(() => window.__rpgClient?.ready)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+// Footprints under the feet (livingworld/README.md "Huellas"): on the beach of Thimblewick
+// the own player's prints are dropped by the walk drawn, one per footfall, alternating
+// either side of the path and a stride apart, straight and on a diagonal. The screenshots
+// are cut round the player, mid-walk and at the end of each trail.
+test("sandbox footprints: one print per footfall on sand, both feet, straight and diagonal; the wind and a wave erase them", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(300_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Caminante");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const say = page.getByTestId("say").getByRole("textbox");
+  const standing = async (): Promise<{ x: number; y: number }> => {
+    let at = { x: 0, y: 0 };
+    await expect
+      .poll(
+        async () => {
+          const s = await page.evaluate(() => window.__rpgClient?.self());
+          if (s && !s.pending && !s.walking) at = { x: s.x, y: s.y };
+          return s !== undefined && !s.pending && !s.walking;
+        },
+        { timeout: 20_000 },
+      )
+      .toBe(true);
+    return at;
+  };
+  const tp = async (x: number, y: number): Promise<void> => {
+    await say.fill(`/tp ${x} ${y} 7`);
+    await say.press("Enter");
+    await expect.poll(async () => (await standing()).x, { timeout: 20_000 }).toBe(x);
+    await say.blur();
+    await page.waitForTimeout(400);
+  };
+  const falls = () => page.evaluate(() => window.__rpgClient?.footfalls());
+  /** A screenshot cut round tile (x, y): the trail next to the character. */
+  const around = async (name: string, x: number, y: number): Promise<void> => {
+    const p = await page.evaluate(({ a, b }) => window.__rpgClient?.tileToClient(a, b), {
+      a: x,
+      b: y,
+    });
+    const scale = (await page.evaluate(() => window.__rpgClient?.scale())) ?? 1;
+    if (!p) throw new Error("no tile on screen");
+    const t = 32 * scale;
+    await page.screenshot({
+      path: join(shots, `${name}.png`),
+      clip: {
+        x: Math.max(0, p.x - 5 * t),
+        y: Math.max(0, p.y - 4 * t),
+        width: 11 * t,
+        height: 8 * t,
+      },
+    });
+  };
+
+  // The beach west of the dock: the sand tiles the client knows there, and the longest
+  // runs of them east and along a diagonal.
+  await tp(2084, 2129);
+  const runs = await page.evaluate(() => {
+    const c = window.__rpgClient;
+    const sand = c?.itemNumber("sand");
+    const ok = (x: number, y: number): boolean =>
+      c?.tile(x, y, 7)?.[0] === sand && c?.walkable(x, y, 7) === true;
+    const best = (dx: number, dy: number): { x: number; y: number; n: number } => {
+      let top = { x: 0, y: 0, n: 0 };
+      for (let y = 2118; y <= 2136; y++)
+        for (let x = 2070; x <= 2100; x++) {
+          let n = 0;
+          while (n < 8 && ok(x + dx * n, y + dy * n)) n++;
+          if (n > top.n) top = { x, y, n };
+        }
+      return top;
+    };
+    return {
+      east: best(1, 0),
+      diagonals: [
+        { keys: ["ArrowDown", "ArrowRight"], dx: 1, dy: 1, ...best(1, 1) },
+        { keys: ["ArrowUp", "ArrowRight"], dx: 1, dy: -1, ...best(1, -1) },
+      ],
+    };
+  });
+  expect(runs.east.n, "a run of sand to walk east on").toBeGreaterThanOrEqual(4);
+
+  // East along the beach: hold the key, shoot mid-walk, let go, shoot the trail.
+  await tp(runs.east.x, runs.east.y);
+  const before = (await falls())?.total ?? 0;
+  await page.keyboard.down("ArrowRight");
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+      timeout: 15_000,
+    })
+    .toBeGreaterThanOrEqual(runs.east.x + 2);
+  await around("99h-footprints-east-walking", runs.east.x + 2, runs.east.y);
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+      timeout: 15_000,
+    })
+    .toBeGreaterThanOrEqual(runs.east.x + runs.east.n - 1);
+  await page.keyboard.up("ArrowRight");
+  const end = await standing();
+  await around("99i-footprints-east-trail", end.x, end.y);
+  const east = await falls();
+  const own = east?.own ?? [];
+  const fresh = (east?.total ?? 0) - before;
+  expect(fresh).toBeGreaterThanOrEqual(4);
+  expect(east?.footprints ?? 0).toBeGreaterThanOrEqual(4);
+  // The feet alternate, each print half a tile (a stride) after the one before, a little
+  // to its own side of the path.
+  const walked = own.slice(-fresh).filter((f) => f.x > (runs.east.x + 0.5) * 32);
+  for (let i = 1; i < walked.length; i++) {
+    const a = walked[i - 1];
+    const b = walked[i];
+    if (!a || !b) continue;
+    expect(b.side).toBe(-a.side);
+    expect(Math.abs(b.x - a.x - 16)).toBeLessThan(1.5); // drawn on whole device pixels
+    expect(Math.sign(b.y - a.y)).toBe(b.side);
+    expect(Math.abs(b.y - a.y)).toBeLessThan(4);
+  }
+
+  // A diagonal, where the beach has one: both keys held.
+  const d = runs.diagonals.sort((a, b) => b.n - a.n)[0];
+  if (d && d.n >= 3) {
+    await tp(d.x, d.y);
+    const from = (await falls())?.own.at(-1);
+    for (const k of d.keys) await page.keyboard.down(k);
+    await expect
+      .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+        timeout: 15_000,
+      })
+      .toBeGreaterThanOrEqual(d.x + d.n - 1);
+    for (const k of d.keys) await page.keyboard.up(k);
+    const stop = await standing();
+    await around("99j-footprints-diagonal-trail", stop.x, stop.y);
+    const after = (await falls())?.own ?? [];
+    const last = after.at(-1);
+    const prev = after.at(-2);
+    expect(last).not.toEqual(from);
+    if (last && prev) {
+      // A stride on a diagonal: 8 px across and 8 down, give or take the feet's stance.
+      expect(last.side).toBe(-prev.side);
+      expect(Math.abs(Math.abs(last.x - prev.x) - 8)).toBeLessThan(5);
+      expect(Math.abs(Math.abs(last.y - prev.y) - 8)).toBeLessThan(5);
+    }
+  } else console.log(`no diagonal run of sand on the beach (${JSON.stringify(runs.diagonals)})`);
+
+  // Standing still leaves nothing more.
+  const still = (await falls())?.total;
+  await page.waitForTimeout(800);
+  expect((await falls())?.total).toBe(still);
+
+  // Both feet (owner, 2026-11-25): the left foot and the right each sounded, on the
+  // sand's own sample, a little apart in pitch; and each left its mark.
+  const heard = (await falls())?.own ?? [];
+  for (const side of [-1, 1]) {
+    const foot = heard.filter((f) => f.side === side);
+    expect(foot.length, `footfalls of side ${side}`).toBeGreaterThanOrEqual(2);
+    for (const f of foot) expect(f.sound).toMatch(/^step\.self\.[a-z_]+$/);
+  }
+  expect(heard.some((f) => f.sound === "step.self.sand")).toBe(true);
+  expect(new Set(heard.map((f) => f.rate.toFixed(3))).size).toBeGreaterThan(2);
+
+  // What erases the prints (livingworld/README.md "Huellas: qué las borra"): no clock of
+  // their own. A fresh trail on the dry sand, shot, and shot again once the wind's gusts
+  // have worn it (the beach is open: it takes a gust or two).
+  await tp(runs.east.x, runs.east.y);
+  await standing();
+  await page.keyboard.down("ArrowRight");
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+      timeout: 15_000,
+    })
+    .toBeGreaterThanOrEqual(runs.east.x + runs.east.n - 1);
+  await page.keyboard.up("ArrowRight");
+  const trailEnd = await standing();
+  const dry = async (): Promise<{ side: number; wear: number }[]> =>
+    ((await falls())?.prints ?? []).filter((p) => p.surface === "sand");
+  const fresh0 = await dry();
+  expect(fresh0.some((p) => p.side === 1)).toBe(true);
+  expect(fresh0.some((p) => p.side === -1)).toBe(true);
+  await around("99k-footprints-before-gust", trailEnd.x - 2, trailEnd.y);
+  const worn = (list: { wear: number }[]): number =>
+    list.reduce((a, q) => a + q.wear, 0) + (fresh0.length - list.length);
+  await expect
+    .poll(async () => worn(await dry()), { timeout: 90_000, intervals: [500] })
+    .toBeGreaterThan(fresh0.length * 0.5);
+  await around("99l-footprints-after-gust", trailEnd.x - 2, trailEnd.y);
+
+  // Wet sand by the water: the next wave that runs that far wipes the prints.
+  const shore = await page.evaluate(
+    ({ x0, y0 }) => {
+      const c = window.__rpgClient;
+      const wet = c?.itemNumber("wet_sand");
+      const water = [c?.itemNumber("water_shallow"), c?.itemNumber("water_shoal")];
+      const isWet = (x: number, y: number): boolean =>
+        c?.tile(x, y, 7)?.[0] === wet && c?.walkable(x, y, 7) === true;
+      const isWater = (x: number, y: number): boolean => water.includes(c?.tile(x, y, 7)?.[0]);
+      for (let y = y0 - 8; y <= y0 + 8; y++)
+        for (let x = x0 - 12; x <= x0 + 12; x++) {
+          if (!isWet(x, y) || !isWet(x + 1, y) || !isWet(x + 2, y)) continue;
+          if (isWater(x + 1, y + 1) || isWater(x + 1, y - 1)) return { x, y };
+        }
+      return undefined;
+    },
+    { x0: runs.east.x, y0: runs.east.y },
+  );
+  // The beach has one (three tiles of wet sand with the sea south of them, west of the
+  // dock): without it this half of the test would pass without having looked.
+  if (!shore) throw new Error("no run of wet sand by the water near the beach");
+  await tp(shore.x, shore.y);
+  await standing();
+  await page.keyboard.down("ArrowRight");
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+      timeout: 15_000,
+    })
+    .toBeGreaterThanOrEqual(shore.x + 2);
+  await page.keyboard.up("ArrowRight");
+  const wetEnd = await standing();
+  const wetPrints = async (): Promise<number> =>
+    ((await falls())?.prints ?? []).filter((p) => p.surface === "wet_sand" && p.wear < 0.5).length;
+  // The walk was on wet sand: its footfalls sounded like it, and printed.
+  const wetFalls = ((await falls())?.own ?? []).filter((f) => /wet_sand/.test(String(f.sound)));
+  expect(wetFalls.length).toBeGreaterThanOrEqual(2);
+  console.log(`wet sand: ${wetFalls.length} footfalls, ${await wetPrints()} prints after the walk`);
+  // A wave may already be on its way: the shot is right after the walk.
+  await around("99m-wet-sand-before-wave", wetEnd.x - 1, wetEnd.y);
+  // A wave every 7.7 s; one that reaches the first tile from the water comes soon.
+  await expect.poll(wetPrints, { timeout: 60_000, intervals: [250] }).toBe(0);
+  await around("99n-wet-sand-after-wave", wetEnd.x - 1, wetEnd.y);
   expect(errors).toEqual([]);
 });

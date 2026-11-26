@@ -155,6 +155,16 @@ func (w *World) livingAt(pos world.Pos) uint16 {
 	return w.living.ItemAt(toLW(pos))
 }
 
+// livingTile reports whether pos, a tile of no area (tileArea), is the tile of an object
+// of the living world: one stands, lies broken or opens there, or pos is walkable (only
+// the living world frees a tile after initAreas: a pushed object left it).
+func (w *World) livingTile(pos world.Pos) bool {
+	if w.living == nil || w.tileArea(pos) != 0 {
+		return false
+	}
+	return w.living.Has(toLW(pos)) || w.m.Walkable(pos)
+}
+
 // staticBlock is what the map's own items of pos block (the rule of world/compile; a
 // ground without its ground block, as in some test drawings, counts as walkable: an
 // object only ever stands on walkable ground).

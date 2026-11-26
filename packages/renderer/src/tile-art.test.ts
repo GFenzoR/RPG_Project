@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { TileArt } from "./tile-art.ts";
 import {
+  CELL_OPEN,
+  CELL_UNKNOWN,
+  CELL_WALL,
+  MAX_INDOOR_AREA,
   GLINT_MIN_MS,
   GLINT_SPREAD_MS,
   MAX_ELEVATION,
@@ -12,6 +16,7 @@ import {
   frameAt,
   framePhase,
   framesOfLook,
+  indoorTiles,
   lookOf,
   pickVariant,
   resolveTileArt,
@@ -261,5 +266,134 @@ describe("stackElevation (ART-8)", () => {
     expect(stackElevation(["pit", "table"], 2, elev)).toBe(8);
     expect(stackElevation(["table", "table", "table", "table"], 9, elev)).toBe(MAX_ELEVATION);
     expect(MAX_ELEVATION).toBe(24);
+  });
+});
+
+describe("indoorTiles (docs/17 ART-5: no sun under a roof)", () => {
+  /** A map drawn in text: # wall, . open, ? unknown; outside it, `beyond`. */
+  const grid =
+    (rows: string[], beyond: number) =>
+    (x: number, y: number): number => {
+      const c = x < 0 ? undefined : rows[y]?.[x];
+      if (c === undefined) return beyond;
+      return c === "#" ? CELL_WALL : c === "?" ? CELL_UNKNOWN : CELL_OPEN;
+    };
+  const inside = (mask: Uint8Array | null, size: number): string[] => {
+    const out: string[] = [];
+    mask?.forEach((v, i) => {
+      if (v === 1) out.push(`${i % size},${Math.floor(i / size)}`);
+    });
+    return out;
+  };
+
+  it("finds the tiles walls close in, by their four sides", () => {
+    const rows = ["......", ".####.", ".#..#.", ".#..#.", ".####.", "......"];
+    expect(inside(indoorTiles(6, 2, grid(rows, CELL_OPEN)), 6)).toEqual([
+      "2,2",
+      "3,2",
+      "2,3",
+      "3,3",
+    ]);
+  });
+
+  it("closes a room at its doorway: a gap of up to three tiles in one wall", () => {
+    // Most buildings have a doorway with no door in it (a temple, a shop).
+    const rows = [
+      "..........",
+      ".#######..",
+      ".#.....#..",
+      ".#.....#..",
+      ".##...##..",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+    ];
+    const got = inside(indoorTiles(10, 2, grid(rows, CELL_OPEN)), 10);
+    // The 5 x 2 room and the three tiles of its doorway.
+    expect(got).toHaveLength(13);
+    expect(got).toContain("4,4");
+    expect(got).not.toContain("4,5");
+    // A doorway in a side wall, next to the corner.
+    const side = ["......", ".####.", ".#....", ".#..#.", ".####.", "......"];
+    expect(inside(indoorTiles(6, 2, grid(side, CELL_OPEN)), 6)).toEqual([
+      "2,2",
+      "3,2",
+      "4,2",
+      "2,3",
+      "3,3",
+    ]);
+  });
+
+  it("is outdoors through a gap wider than a doorway, and with no wall at all", () => {
+    const rows = [
+      "..........",
+      ".#######..",
+      ".#.....#..",
+      ".#.....#..",
+      ".#....##..",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+    ];
+    expect(indoorTiles(10, 2, grid(rows, CELL_OPEN))).toBeNull();
+    expect(indoorTiles(6, 2, () => CELL_OPEN)).toBeNull();
+  });
+
+  it("leaves the alley between two buildings under the sky: both walls go on beside it", () => {
+    const rows = [
+      "..........",
+      ".###..###.",
+      ".#.#..#.#.",
+      ".#.#..#.#.",
+      ".###..###.",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+    ];
+    // Only the two rooms: the two tiles between the houses are not a doorway.
+    expect(inside(indoorTiles(10, 2, grid(rows, CELL_OPEN)), 10)).toEqual([
+      "2,2",
+      "7,2",
+      "2,3",
+      "7,3",
+    ]);
+  });
+
+  it("takes walled ground bigger than a room for a courtyard under the sky", () => {
+    // 22 x 22 open tiles inside a ring of walls: more than MAX_INDOOR_AREA.
+    const yard = (x: number, y: number): number =>
+      x >= 0 && x <= 23 && y >= 0 && y <= 23 && (x === 0 || y === 0 || x === 23 || y === 23)
+        ? CELL_WALL
+        : CELL_OPEN;
+    expect(22 * 22).toBeGreaterThan(MAX_INDOOR_AREA);
+    expect(indoorTiles(24, 2, yard)).toBeNull();
+    // A hall of 18 x 18 is a room.
+    const hall = (x: number, y: number): number =>
+      x >= 0 && x <= 19 && y >= 0 && y <= 19 && (x === 0 || y === 0 || x === 19 || y === 19)
+        ? CELL_WALL
+        : CELL_OPEN;
+    expect(inside(indoorTiles(24, 2, hall), 24)).toHaveLength(18 * 18);
+  });
+
+  it("counts a room next to what is not known as outdoors until its wall is seen", () => {
+    const rows = ["######", "#....?", "#....?", "######", "......", "......"];
+    expect(indoorTiles(6, 2, grid(rows, CELL_OPEN))).toBeNull();
+    const seen = rows.map((r) => r.replace("?", "#"));
+    expect(inside(indoorTiles(6, 2, grid(seen, CELL_OPEN)), 6)).toHaveLength(8);
+  });
+
+  it("looks beyond the chunk's edge for the way out, as far as its reach", () => {
+    // The chunk is all open, the walls are in its neighbours, 2 tiles out on every side.
+    const ring = (x: number, y: number): number =>
+      x === -2 || y === -2 || x === 5 || y === 5 ? CELL_WALL : CELL_OPEN;
+    expect(inside(indoorTiles(4, 3, ring), 4)).toHaveLength(16);
+    // A town inside ramparts wider than the window is outdoors.
+    expect(indoorTiles(4, 1, ring)).toBeNull();
   });
 });

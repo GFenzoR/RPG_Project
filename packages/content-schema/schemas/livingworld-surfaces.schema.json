@@ -2,33 +2,136 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rpg-project.local/schemas/livingworld-surfaces.schema.json",
   "title": "Living world surfaces (data/livingworld/surfaces.yaml)",
-  "description": "What a step on each ground surface leaves behind in the client: footprints, wind, dust, ripples, footstep sound and ambient critters (livingworld/README.md). Cosmetic: the server never reads it.",
+  "description": "What a step on each ground surface leaves behind in the client: footprints and what erases them (wind, waves, other feet), dust, ripples, footstep sound and ambient critters (livingworld/README.md). Cosmetic: the server never reads it.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["surfaces"],
+  "required": ["prints", "steps", "surfaces"],
   "properties": {
+    "prints": {
+      "description": "What erases footprints everywhere.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "still": {
+          "description": "Wind strength under which no print is touched.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "fade_ms": {
+          "description": "A print over the cap fades out over this long.",
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000
+        },
+        "tread_px": {
+          "description": "A foot landing this near a print (sprite px) scuffs it.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "waves": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "period_ms": {
+              "description": "A wave every this long.",
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 120000
+            },
+            "reach_tiles": {
+              "description": "The furthest a wave runs up the shore, tiles from the water's edge.",
+              "type": "number",
+              "minimum": 0.75,
+              "maximum": 6
+            },
+            "lag_ms": {
+              "description": "A wave reaches a tile further along the coast this much later.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5000
+            },
+            "wash_ms": {
+              "description": "A wave wipes a print over this long.",
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 5000
+            }
+          }
+        }
+      }
+    },
+    "steps": {
+      "description": "How the own player's steps sound.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["volume"],
+      "properties": {
+        "volume": {
+          "description": "The loudness of steps: a factor over the volume of every step sound of assets/sounds.yaml.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.5
+        },
+        "jitter": {
+          "description": "Each step's pitch moves at random up to this share either way.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.2
+        },
+        "left": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "pitch": {
+              "type": "number",
+              "minimum": -0.2,
+              "maximum": 0.2
+            },
+            "gain": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1.5
+            }
+          }
+        },
+        "right": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "pitch": {
+              "type": "number",
+              "minimum": -0.2,
+              "maximum": 0.2
+            },
+            "gain": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1.5
+            }
+          }
+        }
+      }
+    },
     "surfaces": {
       "type": "object",
-      "propertyNames": { "$ref": "common.schema.json#/$defs/surface" },
+      "propertyNames": {
+        "$ref": "common.schema.json#/$defs/surface"
+      },
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "footprints": {
-            "description": "Milliseconds a footprint lasts in still air (0: none).",
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 120000
+          "dust": {
+            "type": "boolean"
           },
-          "wind": {
-            "description": "Extra wear per millisecond in a full gust.",
-            "type": "number",
-            "minimum": 0,
-            "maximum": 10
+          "ripple": {
+            "type": "boolean"
           },
-          "dust": { "type": "boolean" },
-          "ripple": { "type": "boolean" },
-          "tint": { "$ref": "common.schema.json#/$defs/hexColor" },
+          "tint": {
+            "$ref": "common.schema.json#/$defs/hexColor"
+          },
           "sound": {
             "description": "Footstep sound: event step.self.<sound> of assets/sounds.yaml.",
             "$ref": "common.schema.json#/$defs/id"
@@ -36,7 +139,32 @@
           "critters": {
             "type": "array",
             "uniqueItems": true,
-            "items": { "enum": ["bird", "butterfly", "firefly", "fish"] }
+            "items": {
+              "enum": ["bird", "butterfly", "firefly", "fish"]
+            }
+          },
+          "prints": {
+            "description": "A foot leaves its print on this surface, and what erases it. A print has no lifetime.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "wind": {
+                "description": "Share of a print a wind of strength 1 over `prints.still` erases per second (0 or absent: the wind does not touch it).",
+                "type": "number",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "waves": {
+                "description": "The waves of the water next to it wipe its prints.",
+                "type": "boolean"
+              },
+              "tread": {
+                "description": "Share of a print another creature's foot erases when it lands on it.",
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
           }
         }
       }

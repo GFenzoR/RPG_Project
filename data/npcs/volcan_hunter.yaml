@@ -1,5 +1,6 @@
 id: volcan_hunter
 name: npc.volcan_hunter.name
+role: npc.volcan_hunter.role
 sprite: npcs/volcan_hunter
 look:
   sex: male

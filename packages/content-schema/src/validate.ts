@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { isLicenseFile, registeredPacks } from "./credits.ts";
 import { checkIdsLock } from "./ids.ts";
+import { NPC_NAME_MAX_CHARS, NPC_ROLE_MAX_CHARS, npcRoleKey } from "./npc-role.ts";
 import { SCHEMA_DIR, SchemaSet } from "./schemas.ts";
 import type { RefKind, SchemaName, Usage } from "./schemas.ts";
 import { loadYaml, parseYaml, suggest } from "./source.ts";
@@ -204,6 +205,14 @@ class Validator {
   private tutorial: SourceFile | undefined;
   /** data/livingworld/*.yaml (livingworld/README.md), checked after the items. */
   private living: SourceFile[] = [];
+  /** data/livingworld/plants.yaml, wind.yaml and wind_sprites.yaml (checkPlantWind). */
+  private plants: SourceFile | undefined;
+  private wind: SourceFile | undefined;
+  private windSprites: SourceFile | undefined;
+  /** data/livingworld/shadows.yaml (checkShadows). */
+  private shadows: SourceFile | undefined;
+  /** data/livingworld/gaits.yaml, checked after the monsters and the NPCs. */
+  private gaits: SourceFile | undefined;
 
   private readonly root: string;
 
@@ -241,6 +250,8 @@ class Validator {
     this.checkI18n();
     this.checkSounds();
     this.checkLivingWorld();
+    this.checkPlantWind();
+    this.checkShadows();
     const lockFile = join(dataDir, "ids.lock.yaml");
     const lock = existsSync(lockFile)
       ? this.load(lockFile, "data/ids.lock.yaml", "ids-lock")
@@ -372,6 +383,9 @@ class Validator {
 
     for (const src of this.loadDir(dataDir, "news", "news", known)) this.checkNews(src);
 
+    const solid = single("solid_families.yaml", "solid_families", true);
+    if (solid) this.checkSolidFamilies(solid);
+
     this.loadLivingWorld(dataDir, known);
 
     for (const entry of readdirSync(dataDir).sort()) {
@@ -410,9 +424,14 @@ class Validator {
       }
       const src = this.load(join(abs, entry), rel, `livingworld-${name}`);
       if (src && name === "objects") this.living.push(src); // a list, not an object
+      if (src && name === "gaits") this.gaits = src;
       if (!src || !isObj(src.data)) continue;
       if (name === "ambience") this.checkAmbience(src, src.data);
+      if (name === "wind") this.wind = src;
+      if (name === "shadows") this.shadows = src;
+      if (name === "wind_sprites") this.windSprites = src;
       if (name === "plants") {
+        this.plants = src;
         const seen = new Map<string, number>();
         for (const [i, p] of asList(src.data["plants"]).entries()) {
           const item = isObj(p) ? p["item"] : undefined;
@@ -1122,6 +1141,66 @@ class Validator {
         ref.path,
         `unknown ${ref.kind} "${ref.value}"${hint ? ` (did you mean "${hint}"?)` : ""}`,
       );
+    }
+  }
+
+  /**
+   * data/solid_families.yaml (docs/06 "Qué bloquea el paso"): a map object (pickupable:
+   * false, of any kind but a ground, which one walks on, and a wall, which blocks unless it
+   * says otherwise) whose id has the word of a solid family (the id split at "_", one or
+   * many: stacked_crates has "crate", a vine has "vines"; or a word that ends in it: signpost
+   * has "post") writes blocks_movement, true or
+   * false, so that a new bush or crate is never walkable because nobody thought of it.
+   * A decoration of such a family (kind: decoration: nobody wears it or stacks it) that
+   * writes neither pickupable nor blocks_movement is asked for both: left out, pickupable means yes (Go:
+   * Item.CanPickUp), so a hedge written with neither would be walkable and carried away,
+   * the very oversight this is for. The border pieces (sprite borders/...) are the fringe
+   * of a ground named after it (border_rock_n would be no rock): never asked.
+   */
+  private checkSolidFamilies(solid: SourceFile): void {
+    const families = new Set(
+      isObj(solid.data) ? asList(solid.data["families"]).filter((f) => typeof f === "string") : [],
+    );
+    // The family of a word of an id, said in the singular or in the plural: the word itself,
+    // or its ending (a compound written in one word: signpost has "post", bookshelf has
+    // "shelf", flowerbeds has "bed") after three letters or more (a rope_spot is no pot), the
+    // longest family first.
+    const forms = (word: string): string[] => [
+      word,
+      word.replace(/s$/, ""),
+      word.replace(/es$/, ""),
+      `${word}s`,
+      `${word}es`,
+    ];
+    const byLength = [...families].sort((a, b) => b.length - a.length || (a < b ? -1 : 1));
+    const familyOf = (word: string): string | undefined =>
+      forms(word).find((w) => families.has(w)) ??
+      byLength.find((f) =>
+        forms(f).some((w) => w.length > 0 && word.length >= w.length + 3 && word.endsWith(w)),
+      );
+    for (const { item, src, path } of this.items) {
+      const unsaid =
+        item["kind"] === "decoration" &&
+        typeof item["pickupable"] !== "boolean" &&
+        typeof item["blocks_movement"] !== "boolean";
+      if (item["pickupable"] !== false && !unsaid) continue;
+      if (item["kind"] === "ground" || item["kind"] === "wall") continue;
+      if (String(item["sprite"]).startsWith("borders/")) continue;
+      let family: string | undefined;
+      for (const word of (idOf(item) ?? "").split("_")) if ((family = familyOf(word))) break;
+      if (family === undefined) continue;
+      if (unsaid)
+        this.error(
+          src,
+          path,
+          `"${String(item["id"])}" is of the solid family "${family}" (data/solid_families.yaml): say pickupable: false if it stands on the map (and blocks_movement), or pickupable: true if a player carries it`,
+        );
+      else if (typeof item["blocks_movement"] !== "boolean")
+        this.error(
+          src,
+          path,
+          `"${String(item["id"])}" is of the solid family "${family}" (data/solid_families.yaml): say blocks_movement: true, or blocks_movement: false if one walks over it`,
+        );
     }
   }
 
@@ -2617,6 +2696,7 @@ class Validator {
       }
     }
 
+    this.checkNpcRoles(catalogs);
     // Every key referenced from data/ exists in every language.
     const used = new Set<string>();
     for (const k of this.index.i18nKeys) {
@@ -2644,6 +2724,51 @@ class Validator {
       if (!used.has(key) && dataPrefixes.some((p) => key.startsWith(p))) {
         this.warn(entry.src, [key], `i18n key "${key}" is not used by any file in data/`);
       }
+    }
+  }
+
+  /**
+   * Every NPC ends up with a role text (docs/06 "NPCs"): the line under its name in the
+   * game ("Tilde Varga" / "Provisiones"). Its own `role` key, else the default of what it
+   * offers (npc-role.ts); one with neither is refused. The label never cuts an NPC's
+   * lines, so the name and the role stay short in every language, and the name does not
+   * repeat the role after a comma.
+   */
+  private checkNpcRoles(catalogs: Map<string, Map<string, { text?: unknown }>>): void {
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      if (!npc) continue;
+      const key = npcRoleKey(npc);
+      if (key === undefined) {
+        this.error(
+          src,
+          [],
+          "has no role: it offers no shop, boat, blessing, training or quest to name it by; add `role` (an i18n key, what it does in two or three words)",
+        );
+        continue;
+      }
+      // A default is not written in the file: count it as used and check it exists.
+      if (npc["role"] !== key) this.index.i18nKeys.push({ value: key, path: [], src });
+      const lines: [string, number, PathSegment[]][] = [[key, NPC_ROLE_MAX_CHARS, ["role"]]];
+      if (typeof npc["name"] === "string") lines.push([npc["name"], NPC_NAME_MAX_CHARS, ["name"]]);
+      for (const [k, max, path] of lines)
+        for (const lang of LANGUAGES) {
+          const text = catalogs.get(lang)?.get(k)?.text;
+          if (typeof text !== "string") continue;
+          const at = npc[path[0] as string] === k ? path : [];
+          if ([...text].length > max)
+            this.error(
+              src,
+              at,
+              `"${text}" (${k}, ${lang}) is longer than ${max} characters: an NPC's label shows its name and its role whole, on two lines`,
+            );
+          if (path[0] === "name" && text.includes(","))
+            this.error(
+              src,
+              at,
+              `"${text}" (${k}, ${lang}) says what the NPC does after a comma: that goes in its role, under the name`,
+            );
+        }
     }
   }
 
@@ -2683,12 +2808,183 @@ class Validator {
   }
 
   /**
+   * data/livingworld/shadows.yaml (livingworld/README.md "Día y noche"): who casts a shadow
+   * is said by rule, never by a list in code, so the rules must hold: every kind names a
+   * kind some item has, every family a word of some map object's id, every item of `items`
+   * exists, and a map object whose id has two families that disagree (cut_bush: "cut" casts
+   * none, a "bush" family would) has its own line in `items`. The client resolves it with
+   * the same rules (livingworld/client/src/shadows.ts shadowOf).
+   */
+  private checkShadows(): void {
+    const src = this.shadows;
+    if (!src || !isObj(src.data)) return;
+    const table = (key: string): Obj => {
+      const v = (src.data as Obj)[key];
+      return isObj(v) ? v : {};
+    };
+    const kinds = table("kinds");
+    const families = table("families");
+    const own = table("items");
+    const castOf = (v: unknown): string => JSON.stringify(isObj(v) ? v : { cast: v });
+    const kindsSeen = new Set<string>();
+    const familiesSeen = new Set<string>();
+    const ids = new Set<string>();
+    for (const { item } of this.items) {
+      const id = item["id"];
+      if (typeof id !== "string") continue;
+      ids.add(id);
+      if (typeof item["kind"] === "string") kindsSeen.add(item["kind"]);
+      // Only what stands on the map casts by family or kind (shadowOf's `fixed`).
+      if (item["pickupable"] !== false && item["kind"] !== "wall") continue;
+      const hits: string[] = [];
+      for (const word of id.split("_")) {
+        const hit = [word, word.replace(/s$/, "")].find(
+          (w) => w.length > 0 && Object.hasOwn(families, w),
+        );
+        if (hit !== undefined && !hits.includes(hit)) hits.push(hit);
+      }
+      for (const h of hits) familiesSeen.add(h);
+      if (Object.hasOwn(own, id)) continue;
+      const first = hits[0];
+      const other = hits.find((h) => castOf(families[h]) !== castOf(families[first ?? ""]));
+      if (first !== undefined && other !== undefined)
+        this.error(
+          src,
+          ["families", other],
+          `"${id}" is of the families "${first}" and "${other}", which cast different shadows: say which under items (${id}: none, silhouette or block)`,
+        );
+    }
+    for (const kind of Object.keys(kinds))
+      if (!kindsSeen.has(kind))
+        this.error(src, ["kinds", kind], `no item of data/items has the kind "${kind}"`);
+    for (const family of Object.keys(families))
+      if (!familiesSeen.has(family))
+        this.error(
+          src,
+          ["families", family],
+          `no map object (pickupable: false) of data/items has the word "${family}" in its id: drop the family`,
+        );
+    for (const id of Object.keys(own)) {
+      if (ids.has(id)) continue;
+      const hint = suggest(id, [...ids]);
+      this.error(
+        src,
+        ["items", id],
+        `unknown item "${id}"${hint ? ` (did you mean "${hint}"?)` : ""}`,
+      );
+    }
+  }
+
+  /**
+   * The wind (livingworld/README.md "Viento"): no plant is added and forgotten. Every map
+   * item that is a plant says how it takes the wind, or says `wind: none`:
+   *   - a plant is an item listed in plants.yaml, or a decoration whose id or sprite path
+   *     names a plant (PLANT_WORD: tree, bush, grass, reeds, flower, vine, fern, palm,
+   *     cactus...) or whose sprite lives under a plants/ folder;
+   *   - its wind is its `wind` in plants.yaml (a type, a mapping, none) or its sprite's
+   *     entry in wind_sprites.yaml, which make spritegen writes from the sprite's recipe
+   *     (or from its wind hint in assets/sprites.yaml).
+   * Also: every sprite of wind_sprites.yaml is used by an item, and a plant with a trunk
+   * that gets its wind from plants.yaml alone gives its pivot.
+   */
+  private checkPlantWind(): void {
+    const wind = this.wind;
+    if (!wind) return; // no wind in this content (a test fixture): nothing sways
+    const sprites =
+      this.windSprites && isObj(this.windSprites.data) && isObj(this.windSprites.data["sprites"])
+        ? this.windSprites.data["sprites"]
+        : {};
+    if (!this.windSprites)
+      this.error(
+        wind,
+        [],
+        "data/livingworld/wind_sprites.yaml is missing: run `make spritegen` (it writes the plants' wind metadata)",
+      );
+    const listed = new Map<string, { index: number; entry: Obj }>();
+    if (this.plants && isObj(this.plants.data))
+      for (const [i, p] of asList(this.plants.data["plants"]).entries())
+        if (isObj(p) && typeof p["item"] === "string" && !listed.has(p["item"]))
+          listed.set(p["item"], { index: i, entry: p });
+    const usedSprites = new Set<string>();
+    for (const { item, src, path } of this.items) {
+      const id = item["id"];
+      if (typeof id !== "string") continue;
+      const sprite = typeof item["sprite"] === "string" ? item["sprite"] : "";
+      if (sprite) usedSprites.add(sprite);
+      const entry = listed.get(id);
+      const own = entry?.entry["wind"];
+      const fromSprite = isObj(sprites[sprite]) ? sprites[sprite] : undefined;
+      if (entry && this.plants && own !== undefined && own !== "none") {
+        // A type alone, on a sprite that says nothing: a trunk needs its pivot.
+        const kind = typeof own === "string" ? own : isObj(own) ? own["kind"] : undefined;
+        const pivot = isObj(own) ? own["pivot"] : undefined;
+        if (
+          typeof kind === "string" &&
+          TRUNK_KINDS.has(kind) &&
+          pivot === undefined &&
+          fromSprite?.["kind"] !== kind
+        )
+          this.error(
+            this.plants,
+            ["plants", entry.index, "wind"],
+            `a ${kind} needs its pivot (where the trunk ends, px over the sprite's bottom edge): wind: { kind: ${kind}, pivot: N }`,
+          );
+      }
+      if (own !== undefined || fromSprite) continue;
+      const isPlant =
+        entry !== undefined ||
+        (item["kind"] === "decoration" &&
+          !sprite.startsWith("borders/") &&
+          (namesPlant(id) || namesPlant(sprite) || /(^|\/)plants\//.test(sprite)));
+      if (!isPlant) continue;
+      this.error(
+        entry && this.plants ? this.plants : src,
+        entry ? ["plants", entry.index] : path,
+        `plant "${id}" has no wind metadata: declare \`wind\` in the spritegen recipe of ${sprite || "its sprite"} (plantWind) or a wind hint in assets/sprites.yaml and run \`make spritegen\`, or give it \`wind: <type>\` or \`wind: none\` in data/livingworld/plants.yaml (livingworld/README.md "Cómo agregar una planta")`,
+      );
+    }
+    if (this.windSprites)
+      for (const sprite of Object.keys(sprites))
+        if (!usedSprites.has(sprite))
+          this.error(
+            this.windSprites,
+            ["sprites", sprite],
+            `no item of data/items uses the sprite "${sprite}": run \`make spritegen\``,
+          );
+  }
+
+  /**
+   * data/livingworld/gaits.yaml (livingworld/README.md "Huellas"): every default and every
+   * creature names a gait of the file, and every creature is a monster or an NPC.
+   */
+  private checkGaits(): void {
+    const src = this.gaits;
+    if (!src || !isObj(src.data)) return;
+    const gaits = isObj(src.data["gaits"]) ? src.data["gaits"] : {};
+    const known = new Set<string>();
+    for (const list of [this.monsters, this.npcs])
+      for (const c of list)
+        if (isObj(c.data) && typeof c.data["id"] === "string") known.add(c.data["id"]);
+    for (const block of ["defaults", "creatures"]) {
+      const map = src.data[block];
+      if (!isObj(map)) continue;
+      for (const [key, gait] of Object.entries(map)) {
+        if (typeof gait === "string" && !(gait in gaits))
+          this.error(src, [block, key], `unknown gait "${gait}"`);
+        if (block === "creatures" && !known.has(key))
+          this.error(src, [block, key], `unknown monster or NPC "${key}"`);
+      }
+    }
+  }
+
+  /**
    * data/livingworld/*.yaml (livingworld/README.md): one entry per item; never a wall, a
    * door or a ground; a breakable, pushable or closed gate blocks movement, its debris, an
    * open gate and a plate do not; sounds exist in assets/sounds.yaml; debris lies at most
    * as long as the respawn. The server's livingworld.Resolve applies the same rules.
    */
   private checkLivingWorld(): void {
+    this.checkGaits();
     if (this.living.length === 0) return;
     const items = new Map<string, Obj>();
     for (const { item } of this.items)
@@ -3067,4 +3363,18 @@ function kitSlot(item: Obj): string | undefined {
   if (isObj(item["armor"])) return `${String(item["armor"]["slot"])} armor`;
   if (isObj(item["ammo"])) return "ammo";
   return undefined;
+}
+
+/** The plant types that stand on a trunk: wind needs to know where it ends. */
+const TRUNK_KINDS = new Set(["tree", "palm", "cactus", "dead_tree"]);
+
+/**
+ * Words that name a plant in an item id or a sprite path, as the last part of one of its
+ * words (oak_tree, wildflowers, jungle_ferns): checkPlantWind.
+ */
+const PLANT_WORD =
+  /(tree|bush|shrub|grass|reeds?|flowers?|vines?|ferns?|palm|cactus|cacti|bamboo|sapling|hedge|ivy|weeds?|plants?|bramble|thicket|seaweed|kelp|lianas?)$/;
+
+function namesPlant(name: string): boolean {
+  return name.split(/[_/]/).some((word) => PLANT_WORD.test(word));
 }

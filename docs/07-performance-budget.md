@@ -246,10 +246,10 @@ El audio no cuenta en la descarga inicial: cada archivo se pide la primera vez q
 (carga perezosa). Los efectos y el ambiente quedan decodificados en memoria; la música se
 transmite (ver abajo).
 
-| Métrica | Presupuesto | Hoy (2026-11-18) |
+| Métrica | Presupuesto | Hoy (2026-11-18; la música, 2026-11-25) |
 |---|---|---|
-| Todos los archivos de `assets/sounds.yaml` | ≤ 16 MiB | ~13,4 MiB (44 archivos; 13,3 MiB de música) |
-| Una pool de música (`music.pools`) | ≤ 8 MiB | Cuevas ~6,0 MiB (7 temas), Puerto ~3,2 MiB (3), las demás ~1 MiB |
+| Todos los archivos de `assets/sounds.yaml` | ≤ 24 MiB | ~20,9 MiB (91 archivos; ~20,4 MiB de música): **quedan ~3,1 MiB** |
+| Una pool de música (`music.pools`) | ≤ 8 MiB | Cuevas ~6,8 MiB (8 temas), Puerto ~4,3 MiB (4), título ~3,1 MiB (3), Selvaine, Karvask y guardián ~2,0 MiB (2 cada uno) |
 | Un efecto (`sfx`) / interfaz (`ui`) | ≤ 32 KiB / ≤ 16 KiB | máx. ~11 KiB |
 | Un tema de música / un loop de ambiente | ≤ 1,5 MiB / ≤ 96 KiB | máx. ~1,1 MiB / ~44 KiB (los del ambiente posicional, ~42 KiB cada uno) |
 | Ambiente posicional (lote 18) | ≤ `voices` (6) loops a la vez, 3 en un teléfono o con animaciones reducidas; los que suenan y 2 más decodificados | 9 loops de 16 s, ~380 KiB en total; ~3 MB de PCM cada uno decodificado: ~24 MB con 6 sonando y 2 guardados, ~15 MB con 3 |
@@ -263,7 +263,18 @@ transmite (ver abajo).
   transiciones cuidadas, temas que no empiecen siempre por el principio, las tres tomas de
   Puerto y más versiones de cueva. Los loops de ~1 minuto mono a 20 kbps del lote 7 eran
   justo la monotonía que no quiere y sonaban finos. Ahora cada toma entra **entera** (~3 min)
-  en **Ogg Opus estéreo**, y el tope pasó de 1,5 MiB a 16 MiB en total, con 8 MiB por pool.
+  en **Ogg Opus estéreo**, y el tope pasó de 1,5 MiB a 16 MiB en total (24 MiB desde el 2026-11-26), con 8 MiB por pool.
+- **El tope subió a 24 MiB (2026-11-26):** el dueño pidió más temas de los mismos estilos y
+  se pidieron dos versiones por lugar (doce, `versions` de `tools/gemini/music_slots.json`);
+  Gemini entregó siete antes de dejar de dar temas. Con 16 MiB solo entraron dos; el dueño
+  decidió subir `BUDGET.totalBytes` (`tools/soundgen/src/index.ts`) a 24 MiB y entraron las
+  siete, provisionales hasta que las escuche (`Slot.extras` de `tools/gemini/music_import.py`):
+  `title_vigil`, `title_embers`, `town_puerto_dusk`, `bosque_mist`, `volcan_cinder`,
+  `cave_echo` y `boss_forge_bellows`. Quedan ~3,1 MiB: las cinco que faltan pedir (~5 MiB)
+  no caben sin subir el tope otra vez. Nada de la música está en la descarga inicial ni en
+  la caché de la PWA (se transmite), así que el total solo pesa en el repo y en la imagen
+  del servidor web. Si el dueño lista un `<lugar>_pool` en `picks.json`, esa lista
+  REEMPLAZA a las versiones por defecto: tiene que nombrar todas las que quiera conservar.
 - **Bitrate medido** (2026-11-18, la toma 1 de Puerto y la 1 de Cuevas contra el AAC de
   Gemini, error por tercio de octava y ancho estéreo): a 24 kbps el códec junta los canales
   (se pierde un cuarto a un tercio del ancho); desde 32 kbps el estéreo queda entero y el
@@ -315,8 +326,10 @@ mientras no se usan). Por frame:
 
 | Efecto | Tope | Costo por frame |
 |---|---|---|
-| Huellas | 64 vivas (la nueva reemplaza a la más gastada) | gasto y alfa de cada una |
-| Plantas | 48 moviéndose por pasos | skew de las plantas en vista; la lista se rearma solo cuando cambia `MapView.version` |
+| Huellas | 64 vivas (la nueva reemplaza a la más gastada; los objetos se reutilizan) | gasto y alfa de cada una |
+| Pisadas (`gait.ts`) | un estado por criatura en vista (256; los viejos se reutilizan) | por criatura dibujada: una resta de fases y los contactos de su andar (2 a 8 comparaciones); nada creado: un `WalkSample` y una `Footfall` reutilizados, los eventos de sonido de cada superficie hechos una vez |
+| Plantas | 48 moviéndose por pasos | el doblez de las plantas en vista; la lista se rearma solo cuando cambia `MapView.version` |
+| Viento (lote 20) | solo las plantas en vista (y 3 casillas de margen); una malla de hasta 17 tiras (68 vértices) por planta, en el batch de los sprites | por planta: una ráfaga (dos ruidos), tres senos y un seno por tira; los vértices se reescriben solo cuando una tira cambia de píxel de pantalla (la mayoría de los frames, ninguna) |
 | Ondas y polvo | 24 | frame y alfa |
 | Hojas | 24 | caída y alfa |
 | Bichos | 10 | moverse; buscar hogares recorre la vista cada `SCAN_MS` (1 s), no cada frame |
@@ -333,6 +346,22 @@ del loop. Ancho de banda: docs/05 "Presupuesto de ancho de banda".
 
 Medido con los tests de simulación (`make test-livingworld`); el tiempo de frame en el
 navegador se mira en la revisión del E2E final del lote (docs/14).
+
+**Viento, el peor caso** (`livingworld/client/src/wind.test.ts`, "stays inside the frame
+budget"): una pantalla de bosque con un árbol en **cada** casilla de la vista de 31x21 y su
+margen (37x27 = 999 árboles de 64x96, 999 mallas). Medido el 2026-11-25: **0,8 ms por
+frame** en Node (el cálculo y la reescritura de vértices; el test falla sobre 2 ms, el
+mismo tope holgado de las sombras proyectadas). Un bosque real del mapa tiene entre 150 y
+300 árboles en vista. La exposición de cada planta (25 casillas de alrededor) y su malla se
+calculan una vez, al armar la lista (cuando entra o sale un chunk), no por frame; las
+mallas de los sprites que siguen en pantalla se conservan. Draw calls: ninguno más (las
+mallas van en el batch del atlas, `batchMode: "batch"`); vértices: 68 por planta en vez de
+4. Con "Animaciones reducidas" o `prefers-reduced-motion` no hay mallas ni cálculo. El
+tiempo de frame en el navegador sobre un bosque lo mide el E2E "wind: crowns sway over
+still trunks…" de `client/e2e/game.spec.ts`, que cuenta las llamadas de dibujo de WebGL de
+la página y falla con 50 o más por frame. Medido el 2026-11-25 en el bosque de Ivernel
+(4221,6071; 51 árboles en la vista, 1280x800 a 2x, Chromium sin ventana con GPU):
+**60 fps y 7 draw calls por frame**: las mallas van en el batch del atlas.
 
 **Ambiente posicional** (lote 18): el cálculo cuesta casi nada. La ventana de 21x21 se
 mueve sumando una fila o columna de 21 casillas por paso (un anillo guarda lo que sumó
@@ -356,8 +385,9 @@ decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
   `cast-shadows.test.ts` cuenta una multitud de 60 muñecos durante 120 frames: 540 sprites
   hechos en el primero y ninguno más), con las texturas de la propia criatura (ninguna
   textura nueva por frame), y **una** pasada de filtro (`AlphaFilter`) sobre el contenedor
-  entero, no una por criatura. Con "Animaciones reducidas" y bajo tierra, nada. Las
-  sombras dibujadas de árboles y casas solo cambian el alfa de su capa.
+  entero, no una por criatura. Bajo tierra y bajo techo, nada. Las sombras dibujadas de
+  árboles y casas ya no se dibujan en el juego (su capa queda invisible): las reemplazan
+  las de los objetos, abajo.
   **Medido solo del lado JS:** colocar las 540 sombras de una multitud de 60 muñecos
   (`CastShadows.begin`/`part`/`end`: textura, ancla, posición, skew y escala de cada
   sprite) cuesta ~0,035 ms por frame en Node en la PC del dueño (2026-11-24), el 0,2 % de
@@ -367,6 +397,39 @@ decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
   pasada del filtro, casi del tamaño de la pantalla, y de noche se suma el mapa de luz.
   Ningún test mide el tiempo de frame en el navegador. Medirlo ahí (multitud de noche,
   móvil) o aceptar el costo es una decisión pendiente del dueño (docs/14).
+
+**Sombras de los objetos del mapa** (2026-11-25, `client/src/render/object-shadows.ts`,
+docs/17 "Sombras de los objetos"): el riesgo es un bosque denso, con cientos de objetos en
+vista.
+- **Qué se dibuja:** un sprite por objeto con silueta (del pool de `ObjectShadows`, con la
+  textura del propio item: ninguna textura nueva, mismo atlas, mismo batch); una malla por
+  árbol que se mece, sobre la **misma geometría** de tiras que ya mueve el viento (nada se
+  calcula de más por frame: cuando el viento corre las tiras, la sombra se corre sola);
+  uno o dos sprites de la textura blanca por casilla de muro (el barrido norte no se hace
+  si hay otro muro al norte, que lo tapa). Todo dentro del contenedor de las sombras de
+  las criaturas: **la misma única pasada de filtro**, ninguna más.
+- **Cuándo se trabaja:** las sombras se crean cuando `MapView` arma un chunk y se devuelven
+  al pool cuando lo suelta (primero las que se van, así el chunk que entra usa los sprites
+  del que salió); se vuelven a colocar solo cuando cambió el mapa o cuando el sol se movió
+  `POSE_STEP` (1/64 de altura; el sol tarda minutos en moverlo, un `/time` lo hace al
+  instante). Entre medio, un frame no toca nada.
+- **Medido en Node** (PC del dueño, 2026-11-25, `object-shadows.test.ts` "stays inside the
+  frame budget", 600 objetos de 64x96 en vista): **0,0001 ms por frame** sin cambios y
+  **0,06 ms** recolocar las 600 (el test falla sobre 0,05 ms y 2 ms). Las casillas "bajo
+  techo" se calculan una vez por chunk (una inundación sobre 64x64 casillas), no por
+  frame.
+- **Draw calls y fps en el navegador:** el test E2E del viento (`client/e2e/game.spec.ts`,
+  "wind: crowns sway…") mide el bosque más denso (51 árboles en vista de Ivernel) con
+  todas las sombras puestas, anota cuántos objetos proyectan y cuántas sombras se mecen, y
+  exige menos de 50 draw calls por frame. **Medido en el E2E final del lote 20b** (PC del
+  dueño, 2026-11-26, Chromium headless a 1280x800, zoom 2x, tres corridas completas de
+  `make e2e`): 51 árboles en vista, 75 objetos que proyectan 75 sombras, 68 de ellas
+  meciéndose con su copa: **60,1 a 60,4 fps y 6,0 draw calls por frame** (tope 50). Las
+  sombras van en el batch del atlas: no suman draw calls sobre los 6 a 7 del bosque sin
+  ellas, y no hizo falta degradar nada.
+- **Si no entrara:** degradar por distancia o tamaño (no proyectar lo que mide menos de
+  una casilla lejos del jugador) y anotar los números; nunca quitar objetos en silencio.
+  Hoy no se degrada nada.
 
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.

@@ -1,0 +1,27 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sprites/decor/jungle_fern.png
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-25
+# Modo: Hydrogen
+# Hoja devuelta: jungle_mid_b.png (sha256 3a242afdc0af4febcafe094dbb0915320687e8dd1c7ff79fa143811d8b859295)
+# Importada con: python tools/gemini/import_art.py <hoja> --cut blobs --size 32 --layer object --margin 1 --scale 9.429 --colors 20 --names "jungle_fern,-,-,-,-,-,-,-,-,-"
+
+Very low resolution pixel art game sprites of five different low rainforest plants for a top-down role-playing game, in one row of five equal cells (5 columns, 1 row). Each plant is drawn on a tiny 32 by 32 pixel canvas and shown enlarged, so every pixel is a big clearly visible square block and each plant is only about 28 blocks wide: very chunky, simple, bold shapes, no fine detail, no thin lines, no small leaflets, no dithering, no noise. Clear saturated medium greens in three flat tones (light on the top left, mid, dark on the lower right) and a solid dark green outline one block thick around the whole plant; never grey, never olive-brown. Cell 1: a fern, a rosette of seven thick arching fronds with simple saw-toothed edges. Cell 2: a different fern, upright, five thick fronds and two curled spiral fiddleheads in the middle. Cell 3: a big-leaf plant, four huge heart-shaped leaves, each with one pale midrib. Cell 4: a flowering shrub, a dense rounded green bush with six large bright orange-red blossoms, each blossom at least two blocks wide. Cell 5: a thorny bush, a rounded dark green bramble with thick brown stems showing and a dozen pale bone-coloured thorns sticking out of its outline. Each plant compact, solid and complete, growing from one point at the bottom centre. No ground, no grass, no soil patch, no pot, no shadow under the plants, nothing floating apart from the plant. Draw no lines, borders, boxes or panels between the cells.
+
+Hard technical requirements, these matter more than the art direction:
+- Solid flat magenta background, exactly RGB(255, 0, 255), filling every pixel that is
+  not part of a drawing. No gradient, no vignette, no texture, no shadow cast onto it.
+- Lay the subjects out in an even grid with equal spacing. Every cell the same size.
+  No labels, no captions, no text of any kind anywhere in the image.
+- Every subject fully inside its own cell, centred, touching neither its neighbours nor
+  the edge of the image. In an animation, the same size and the same ground line in
+  every cell.
+- Three-quarter top-down view: the camera looks down from the south at about 45
+  degrees, so the top and the south face of things show. Light from the top left.
+- Pixel art: crisp square pixels, hard edges, no anti-aliasing, no blur, no soft
+  airbrush shading. Limited palette, flat shading in three or four tones, and a dark
+  outline of the local colour (never pure black).
+- Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
+- They are read at 32x32 pixels in game (people at 64x64), so favour a strong
+  silhouette and clear separation of parts over fine detail.

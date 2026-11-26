@@ -1,5 +1,6 @@
 id: volcan_smith
 name: npc.volcan_smith.name
+role: npc.volcan_smith.role
 sprite: npcs/volcan_smith
 look:
   sex: male

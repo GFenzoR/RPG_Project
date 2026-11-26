@@ -76,9 +76,14 @@ describe("repository content", () => {
       "borders",
       "outfits",
       "cosmetics",
+      "solid_families",
       "sounds",
       "livingworld-objects",
       "livingworld-ambience",
+      "livingworld-plants",
+      "livingworld-wind",
+      "livingworld-wind_sprites",
+      "livingworld-shadows",
       "i18n",
       "ids-lock",
     ];
@@ -114,6 +119,98 @@ describe("validator diagnostics", () => {
       }
     }
   };
+  it('wants every object of a solid family to say whether it blocks (docs/06 "Qué bloquea el paso")', () => {
+    const solid = (): string[] => messages(root).filter((m) => m.includes("solid family"));
+    expect(solid()).toEqual([]);
+    // The owner's report of 2026-11-24: a bush nobody said blocks was walkable.
+    const said = "  name: item.bush.name\n  pickupable: false\n  blocks_movement: true\n";
+    const silent = "  name: item.bush.name\n  pickupable: false\n";
+    edit("data/items/decoration.yaml", said, silent);
+    expect(solid()).toEqual([
+      expect.stringMatching(
+        /^error data\/items\/decoration\.yaml:\d+.*"bush" is of the solid family "bush".*blocks_movement/,
+      ),
+    ]);
+    // Saying it does not block is an answer too (cut_bush, a bench, an open gate).
+    edit("data/items/decoration.yaml", silent, silent + "  blocks_movement: false\n");
+    expect(solid()).toEqual([]);
+    // The word anywhere in the id counts (thick_bush), and only map objects: what a player
+    // carries (tree_resin) is no obstacle, and a border piece is the fringe of its ground.
+    edit(
+      "data/items/livingworld.yaml",
+      "  description: item.thick_bush.desc\n  pickupable: false\n  blocks_movement: true\n",
+      "  description: item.thick_bush.desc\n  pickupable: false\n",
+    );
+    edit("data/solid_families.yaml", "  - tree\n", "  - tree\n  - resin\n  - grass\n");
+    const named = solid().map((m) => /"(\w+)" is of the solid family "(\w+)"/.exec(m)?.slice(1, 3));
+    expect(named.sort()).toEqual([
+      ["grass_tuft", "grass"],
+      ["tall_grass", "grass"],
+      ["thick_bush", "bush"],
+    ]);
+  });
+
+  it("asks it of any fixed object, of one or of many, and needs data/solid_families.yaml", () => {
+    const named = (): (string[] | undefined)[] =>
+      messages(root)
+        .filter((m) => m.includes("solid family"))
+        .map((m) => /"(\w+)" is of the solid family "(\w+)"/.exec(m)?.slice(1, 3))
+        .sort();
+    // Not only a decoration: a fixed crate one searches (kind: container) stands there too.
+    edit(
+      "data/items/decoration.yaml",
+      "  kind: decoration\n  sprite: decor/bush\n  name: item.bush.name\n  pickupable: false\n  blocks_movement: true\n",
+      "  kind: container\n  sprite: decor/bush\n  name: item.bush.name\n  pickupable: false\n",
+    );
+    expect(named()).toEqual([["bush", "bush"]]);
+    // One or many: the family "reed" has reeds, "bushes" has bush and "sacks" has a sack.
+    edit("data/solid_families.yaml", "  - bush\n", "  - bushes\n  - reed\n");
+    edit("data/items/decoration.yaml", "- id: bush\n", "- id: sack_of_bush\n");
+    expect(named()).toEqual([
+      ["reeds", "reed"],
+      ["sack_of_bush", "sacks"],
+    ]);
+    // A compound written in one word ends in its family (thornbush: "bush"), after three
+    // letters or more: a rush is no "ush", as a rope_spot is no pot.
+    edit("data/solid_families.yaml", "  - bushes\n", "  - bushes\n  - ush\n");
+    edit("data/items/decoration.yaml", "- id: sack_of_bush\n", "- id: thornbush\n");
+    expect(named()).toEqual([
+      ["reeds", "reed"],
+      ["thornbush", "bushes"],
+    ]);
+    edit("data/items/decoration.yaml", "- id: thornbush\n", "- id: rush\n");
+    expect(named()).toEqual([["reeds", "reed"]]);
+    edit("data/solid_families.yaml", "  - bushes\n  - ush\n", "  - bushes\n");
+    edit("data/items/decoration.yaml", "- id: rush\n", "- id: old_bush\n");
+    expect(named()).toEqual([
+      ["old_bush", "bushes"],
+      ["reeds", "reed"],
+    ]);
+    // A decoration that says neither (a new hedge with pickupable forgotten too) would be
+    // walkable and carried away: it is asked whether it is picked up. What says it is
+    // carried (pickupable: true) is no obstacle.
+    edit(
+      "data/items/decoration.yaml",
+      "- id: old_bush\n  kind: container\n  sprite: decor/bush\n  name: item.bush.name\n  pickupable: false\n",
+      "- id: old_bush\n  kind: decoration\n  sprite: decor/bush\n  name: item.bush.name\n",
+    );
+    expect(messages(root).filter((m) => m.includes("solid family"))).toEqual([
+      expect.stringMatching(/"old_bush" is of the solid family "bushes".*say pickupable: false/),
+      expect.stringMatching(/"reeds" is of the solid family "reed".*blocks_movement/),
+    ]);
+    edit(
+      "data/items/decoration.yaml",
+      "  name: item.bush.name\n",
+      "  name: item.bush.name\n  pickupable: true\n",
+    );
+    expect(named()).toEqual([["reeds", "reed"]]);
+    // Without the file nothing would be asked: it is required.
+    rmSync(file("data/solid_families.yaml"));
+    expect(messages(root)).toContainEqual(
+      expect.stringMatching(/^error data\/solid_families\.yaml.*required file is missing/),
+    );
+  });
+
   it('checks each vocation\'s start_kit (docs/02 "Equipo inicial")', () => {
     const kitErrors = (): string[] =>
       messages(root).filter((m) => m.startsWith("error") && m.includes("vocations.yaml"));
@@ -498,11 +595,15 @@ describe("validator diagnostics", () => {
 
   it("checks the living world: surfaces, plants and a schema for each file (livingworld/README.md)", () => {
     edit("data/items/ground.yaml", "surface: sand }", "surface: marble }");
+    // A footprint has no lifetime any more: the old field is refused, and so is a wind
+    // that would un-erase, or steps louder than the schema lets them be.
     edit(
       "data/livingworld/surfaces.yaml",
+      "  mud: { prints: { tread: 0.6 },",
       "  mud: { footprints: 40000,",
-      "  mud: { footprints: -1,",
     );
+    edit("data/livingworld/surfaces.yaml", "prints: { wind: 0.4,", "prints: { wind: -1,");
+    edit("data/livingworld/surfaces.yaml", "  volume: 0.7", "  volume: 7");
     edit("data/livingworld/surfaces.yaml", "  lava: {}", "  lava: {}\n  marsh: {}");
     appendFileSync(
       file("data/livingworld/plants.yaml"),
@@ -513,10 +614,161 @@ describe("validator diagnostics", () => {
     expect(out.some((m) => m.includes("ground.yaml") && m.includes("surface"))).toBe(true);
     expect(out.some((m) => m.includes("surfaces.yaml") && m.includes("marsh"))).toBe(true);
     expect(out.some((m) => m.includes("surfaces.yaml") && m.includes("footprints"))).toBe(true);
+    expect(out.some((m) => m.includes("surfaces.sand.prints.wind"))).toBe(true);
+    expect(out.some((m) => m.includes("steps.volume"))).toBe(true);
     expect(out.some((m) => m.includes('plant "bush" already listed'))).toBe(true);
     expect(out.some((m) => m.includes('unknown item "no_such_plant"'))).toBe(true);
     expect(out.some((m) => m.includes("plants.yaml") && m.includes("reaction"))).toBe(true);
     expect(out.some((m) => m.includes("geysers.yaml") && m.includes("no schema"))).toBe(true);
+  });
+
+  it('lets no plant be added and forgotten: wind metadata or wind: none (livingworld/README.md "Viento")', () => {
+    const wind = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && /wind|pivot/.test(m));
+    expect(wind()).toEqual([]);
+    // A new plant item whose sprite says nothing of the wind.
+    const fern =
+      "\n- id: marsh_fern\n  kind: decoration\n  sprite: decor/marsh_fern\n  name: item.grass_tuft.name\n  pickupable: false\n";
+    appendFileSync(file("data/items/plants.yaml"), fern);
+    let out = wind();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("plants.yaml");
+    expect(out[0]).toContain('plant "marsh_fern" has no wind metadata');
+    expect(out[0]).toContain("make spritegen");
+    // Saying none is an answer; so is a type; so is the sprite's own metadata.
+    appendFileSync(file("data/livingworld/plants.yaml"), "  - { item: marsh_fern, wind: none }\n");
+    expect(wind()).toEqual([]);
+    edit(
+      "data/livingworld/plants.yaml",
+      "{ item: marsh_fern, wind: none }",
+      "{ item: marsh_fern, wind: bush }",
+    );
+    expect(wind()).toEqual([]);
+    edit("data/livingworld/plants.yaml", "  - { item: marsh_fern, wind: bush }\n", "");
+    appendFileSync(
+      file("data/livingworld/wind_sprites.yaml"),
+      "  decor/marsh_fern: { kind: bush, pivot: 4, top: 20 }\n",
+    );
+    expect(wind()).toEqual([]);
+    // A plant by its sprite's folder or by a word inside its name, not only by its id.
+    edit(
+      "data/items/plants.yaml",
+      "- id: marsh_fern\n  kind: decoration\n  sprite: decor/marsh_fern",
+      "- id: green_thing\n  kind: decoration\n  sprite: flora/plants/green_thing",
+    );
+    out = wind();
+    expect(out.some((m) => m.includes('plant "green_thing" has no wind metadata'))).toBe(true);
+    // ...and the metadata of a sprite no item uses is stale.
+    expect(out.some((m) => m.includes("wind_sprites.yaml") && m.includes("decor/marsh_fern"))).toBe(
+      true,
+    );
+  });
+
+  it("wants the pivot of a tree, the generated file and a listed plant's wind", () => {
+    const wind = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && /wind|pivot/.test(m));
+    // A listed plant loses its sprite's metadata: it is still a plant.
+    edit("data/livingworld/wind_sprites.yaml", "  decor/bush:", "  # decor/bush:");
+    let out = wind();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('plant "bush" has no wind metadata');
+    // A tree declared by hand must say where its trunk ends.
+    edit(
+      "data/livingworld/plants.yaml",
+      "{ item: bush, reaction: bend }",
+      "{ item: bush, reaction: bend, wind: dead_tree }",
+    );
+    out = wind();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("a dead_tree needs its pivot");
+    edit(
+      "data/livingworld/plants.yaml",
+      "wind: dead_tree }",
+      "wind: { kind: dead_tree, pivot: 5 } }",
+    );
+    expect(wind()).toEqual([]);
+    // Schema: an unknown type, a flutter of a pixel or more, a plant with nothing to say.
+    edit(
+      "data/livingworld/plants.yaml",
+      "{ item: reeds, reaction: bend }",
+      "{ item: reeds, wind: kite }",
+    );
+    edit("data/livingworld/plants.yaml", "{ item: cut_bush, wind: none }", "{ item: cut_bush }");
+    edit("data/livingworld/wind.yaml", "flutter: 0.7,", "flutter: 1.0,");
+    out = messages(root).filter((m) => m.startsWith("error"));
+    expect(out.some((m) => m.includes("plants.yaml") && m.includes("wind"))).toBe(true);
+    expect(out.some((m) => m.includes("wind.yaml") && m.includes("flutter"))).toBe(true);
+    expect(out.filter((m) => m.includes("plants.yaml")).length).toBeGreaterThanOrEqual(2);
+    // Without the generated file every plant sprite is undeclared: say how to make it.
+    rmSync(file("data/livingworld/wind_sprites.yaml"));
+    out = wind();
+    expect(
+      out.some((m) => m.includes("wind_sprites.yaml is missing") && m.includes("make spritegen")),
+    ).toBe(true);
+    expect(out.some((m) => m.includes('plant "oak_tree" has no wind metadata'))).toBe(true);
+  });
+
+  it('checks the gaits: known gaits, known creatures, contacts in a cycle (livingworld/README.md "Huellas")', () => {
+    edit("data/livingworld/gaits.yaml", "  beast: quadruped", "  beast: trot");
+    edit("data/livingworld/gaits.yaml", "  mire_toad: hop", "  no_such_beast: hop");
+    edit("data/livingworld/gaits.yaml", "- { at: 0.5, side: left }", "- { at: 1.5, side: up }");
+    edit("data/livingworld/gaits.yaml", "    print: dot", "    print: hoof");
+    const out = messages(root).filter((m) => m.includes("gaits.yaml"));
+    const has = (s: string): boolean => out.some((m) => m.includes(s));
+    expect(has('unknown gait "trot"')).toBe(true);
+    expect(has('unknown monster or NPC "no_such_beast"')).toBe(true);
+    expect(has("contacts") && has("at")).toBe(true);
+    expect(has("print")).toBe(true);
+    expect(validateContent(REPO).diagnostics.filter((d) => d.file.includes("gaits"))).toEqual([]);
+  });
+
+  it('checks who casts a shadow: kinds, families and items that exist, no family in doubt (livingworld/README.md "Día y noche")', () => {
+    const shadows = (): string[] =>
+      messages(root).filter((m) => m.startsWith("error") && m.includes("shadows.yaml"));
+    expect(shadows()).toEqual([]);
+    // A kind no item has, a family no map object is of, an item that does not exist.
+    edit(
+      "data/livingworld/shadows.yaml",
+      "  container: silhouette\n",
+      "  container: silhouette\n  vehicle: silhouette\n",
+    );
+    edit("data/livingworld/shadows.yaml", "  border: none\n", "  border: none\n  carpet: none\n");
+    edit("data/livingworld/shadows.yaml", "  bed: {", "  bedd: {");
+    let out = shadows();
+    expect(out.some((m) => m.includes('no item of data/items has the kind "vehicle"'))).toBe(true);
+    expect(out.some((m) => m.includes('has the word "carpet" in its id'))).toBe(true);
+    expect(out.some((m) => m.includes('unknown item "bedd" (did you mean "bed"?)'))).toBe(true);
+    expect(out).toHaveLength(3);
+    edit("data/livingworld/shadows.yaml", "  vehicle: silhouette\n", "");
+    edit("data/livingworld/shadows.yaml", "  carpet: none\n", "");
+    edit("data/livingworld/shadows.yaml", "  bedd: {", "  bed: {");
+    expect(shadows()).toEqual([]);
+    // Two families that disagree in one id (cut_bush: "cut" lies flat, a "bush" would
+    // stand): the file must say which, under items.
+    edit(
+      "data/livingworld/shadows.yaml",
+      "  border: none\n",
+      "  border: none\n  bush: silhouette\n",
+    );
+    out = shadows();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('"cut_bush" is of the families "cut" and "bush"');
+    edit("data/livingworld/shadows.yaml", "  bed: {", "  cut_bush: none\n  bed: {");
+    expect(shadows()).toEqual([]);
+    // Schema: an unknown cast, then a length out of range.
+    edit("data/livingworld/shadows.yaml", "  wall: block", "  wall: cube");
+    out = shadows();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("kinds.wall");
+    edit("data/livingworld/shadows.yaml", "  wall: cube", "  wall: block");
+    edit(
+      "data/livingworld/shadows.yaml",
+      "remains: { cast: silhouette, length: 0.4 }",
+      "remains: { cast: silhouette, length: 4 }",
+    );
+    out = shadows();
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain("families.remains");
   });
 
   it('checks the ambience: ambient sounds, items, radius and caps (livingworld/README.md "Ambiente")', () => {
@@ -1026,7 +1278,7 @@ describe("validator diagnostics", () => {
     edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:65:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:66:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
       out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),
@@ -1216,6 +1468,52 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
+  it('wants a role text for every NPC, short, and the name without it (docs/06 "NPCs")', () => {
+    const roles = (): string[] =>
+      messages(root).filter((m) => /has no role|longer than \d+ characters|after a comma/.test(m));
+    expect(roles()).toEqual([]);
+    // The foreman names his role; without it his services (a quest) still give him one.
+    edit("data/npcs/puerto_foreman.yaml", "role: npc.puerto_foreman.role\n", "");
+    expect(roles()).toEqual([]);
+    // The keeper of records with no role of her own and no service to name her by.
+    const keeper = readFileSync(file("data/npcs/volcan_keeper.yaml"), "utf8");
+    writeFileSync(
+      file("data/npcs/volcan_keeper.yaml"),
+      keeper
+        .replace("role: npc.volcan_keeper.role\n", "")
+        .replace(/start_quest/g, "set_flag_was_start_quest"),
+    );
+    expect(roles().filter((m) => m.includes("volcan_keeper"))).toEqual([
+      expect.stringMatching(/^error data\/npcs\/volcan_keeper\.yaml.*has no role/),
+    ]);
+    writeFileSync(file("data/npcs/volcan_keeper.yaml"), keeper);
+    // A default nobody translated is a missing key like any other.
+    edit("i18n/en/npcs.yaml", 'npc_role.healer: "Blessings and healing"\n', "");
+    expect(messages(root).filter((m) => m.includes("npc_role.healer"))).not.toEqual([]);
+    edit("i18n/es/npcs.yaml", 'npc_role.healer: "Bendiciones y sanación"\n', "");
+    expect(
+      messages(root).filter((m) => m.includes('"npc_role.healer" is missing in: es, en')),
+    ).not.toEqual([]);
+    cpSync(join(REPO, "i18n"), join(root, "i18n"), { recursive: true });
+    // A role or a name too long for the label, and a name that says the role again.
+    edit(
+      "i18n/es/npcs.yaml",
+      'npc.puerto_armorer.role: "Armero"',
+      'npc.puerto_armorer.role: "Armero mayor de la cofradía del puerto viejo"',
+    );
+    edit(
+      "i18n/en/npcs.yaml",
+      'npc.puerto_armorer.name: "Bastian Roe"',
+      'npc.puerto_armorer.name: "Bastian Roe, armorer"',
+    );
+    expect(roles()).toEqual([
+      expect.stringMatching(
+        /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.role, es\) is longer than 28/,
+      ),
+      expect.stringMatching(/puerto_armorer\.yaml.*\(npc\.puerto_armorer\.name, en\) says what/),
+    ]);
+  });
+
   it("only lets NPCs placed on dev_only islands use dev-only actions (train_skill, restore_mana) or be dev_only", () => {
     const devErrors = (): string[] =>
       messages(root).filter((m) => m.startsWith("error") && m.includes("dev-only"));
@@ -1347,7 +1645,7 @@ describe("validator diagnostics", () => {
     // stay below the sandbox shop's too (its ferry takes players there).
     expect(out).toContainEqual(
       expect.stringMatching(
-        /^error data\/npcs\/puerto_provisioner\.yaml:57:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
+        /^error data\/npcs\/puerto_provisioner\.yaml:58:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
       ),
     );
     expect(
@@ -1620,13 +1918,16 @@ describe("validator diagnostics", () => {
     writeFileSync(file("data/ids.lock.yaml"), head + chest + lock.slice(items));
   };
 
+  // A chest is of a solid family (data/solid_families.yaml): it says that it blocks.
+  const FIXED = "pickupable: false\n  blocks_movement: true";
+
   it("checks reward chests: fixed, unique ids, one stack of what a backpack holds, never retired nor the forge's amber", () => {
     const chest = (id: string, n: number, rewards: string, extra?: string): void =>
       addItem(
         id,
         n,
         `chest: { id: ${id.replace("test_chest", "cache")}, rewards: [${rewards}] }`,
-        extra,
+        extra ?? FIXED,
       );
     chest(
       "test_chest_a",
@@ -1638,6 +1939,7 @@ describe("validator diagnostics", () => {
       "test_chest_b",
       60002,
       "chest: { id: cache_a, rewards: [{ item: warding_amber, count: 1 }] }",
+      FIXED,
     );
     chest(
       "test_chest_c",
@@ -1732,6 +2034,7 @@ steps:
       "test_chest",
       60000,
       "chest: { id: test_cache, rewards: [{ item: belaying_pin, count: 1 }] }",
+      FIXED,
     );
     expect(messages(root).filter((m) => m.startsWith("error"))).toEqual([]);
   });

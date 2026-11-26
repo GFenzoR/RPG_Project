@@ -15,8 +15,9 @@
 | `sounds.yaml` | Manifiesto: archivo y canal de cada sonido, eventos → sonidos, ambiente por isla, y la música: las pools de temas de cada lugar (islas, cuevas, título, jefes), las medidas de cada tema y los tiempos del director | Sí |
 | `sounds/{sfx,ui,music,ambient}/*.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`) | Sí |
 | `livingworld/sounds/ambience/*.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`, `src/ambience.ts`): el ambiente posicional del mundo vivo | Sí |
+| `livingworld/sounds/steps/<sonido>_<n>.ogg` | Obra propia (CC0) generada por `make sounds` (`tools/soundgen`, `src/steps.ts`): una pisada por superficie (pasto, pasto alto, tierra, arena, arena mojada, ceniza, piedra, madera, nieve, barro, agua baja), tres tomas de cada una, todas a la misma sonoridad | Sí |
 | `sounds/music/gemini/<lugar>_<toma>.ogg` | Música elegida por el dueño entre las tomas de Gemini ("Generado con IA" en `CREDITS.md`), temas enteros en estéreo escritos por `make music-gemini` | Sí |
-| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, las versiones extra de las cuevas, con fuente, título y medidas (puntos de entrada) | Sí (lo escribe `make music-gemini`) |
+| `sounds/music/gemini.yaml` | Qué tiene cada lugar: la toma, varias tomas o `none`, las versiones extra de cada lugar, con fuente, título y medidas (puntos de entrada) | Sí (lo escribe `make music-gemini`) |
 
 - Todo lo de `sounds/` sale de recetas en código (`tools/soundgen/src/sfx.ts` y
   `music.ts`): osciladores, ruido, envolventes y una cuerda pulsada (Karplus-Strong). Las
@@ -32,7 +33,8 @@ Desde el 2026-11-18 la música del juego es la que el dueño eligió entre las t
 Gemini hizo para cada lugar (`tools/gemini/music_slots.json`: título, Puerto, Bosque,
 Volcán, Cuevas, combate y el guardián de la forja), más seis versiones de cueva pedidas
 el mismo día (`cave_mine`, `cave_crystal`, `cave_flooded`, `cave_abyss`, `cave_ossuary`,
-`cave_ember`). Las tomas están fuera de git, en `build/music-gemini/<lugar>_<n>.mp4` con su
+`cave_ember`) y, desde el 2026-11-25, dos versiones más por lugar en el mismo estilo
+(`versions` de `music_slots.json`: `title_vigil`, `bosque_mist`...). Las tomas están fuera de git, en `build/music-gemini/<lugar>_<n>.mp4` con su
 sidecar (la tercera de Puerto es `probe_1.mp4`), y las elecciones en
 `build/music-gemini/picks.json`:
 ```json
@@ -43,9 +45,12 @@ sidecar (la tercera de Puerto es `probe_1.mp4`), y las elecciones en
   todas: la primera es el sonido del lugar (`music_puerto`), las demás sonidos propios
   (`music_puerto_2`, `music_puerto_3`), y todas forman la pool del lugar en `sounds.yaml`
   (`music.pools.town_puerto`), que el director de música baraja.
-- **Las versiones de cueva** (`cave_pool`: `"mine"`, `"cave_mine"` o `"cave_mine_1"`) se
-  suman a la pool de las cuevas después de su toma (`music_cueva_mine`...). Mientras el dueño
-  no escriba `cave_pool`, entran las seis que pasan las medidas
+- **Las versiones de un lugar** (`<lugar>_pool`: `cave_pool`, `bosque_pool`, `title_pool`,
+  `town_puerto_pool`, `volcan_pool`, `boss_forge_pool`; cada nombre como `"mine"`,
+  `"cave_mine"` o `"cave_mine_1"`) se suman a la pool del lugar después de su toma
+  (`music_cueva_mine`, `music_bosque_mist`...). Mientras el dueño no escriba esa clave,
+  entran las de `Slot.extras` de `music_import.py` (las seis de cueva del 2026-11-18 y, de
+  las del 2026-11-25, las que caben en el presupuesto de docs/07) que pasan las medidas
   (`music_convert.piece_problems`: tema entero de 2 minutos o más, volumen medible, ningún
   hueco de silencio de más de 6 s, al menos dos puntos de entrada), marcadas
   **provisionales** (en el manifiesto y en su fila de `CREDITS.md`); las que no pasan quedan
@@ -242,7 +247,8 @@ Lo que los nombres no dicen va en la sección `tiles` de `sprites.yaml`:
 ```yaml
 tiles:
   ground/water_shallow: { ms: 240, sync: world }   # ms por frame y sincronía
-  decor/oak_tree: { anchor: bc, ms: 800, sync: tile }   # centrado en su casilla
+  decor/oak_tree: { anchor: bc, particles: pollen }   # centrado en su casilla
+  plants/jungle_palm: { anchor: bc, wind: { kind: palm, pivot: 30 } }   # planta de un pack: su viento ("Plantas y viento")
   decor/wall_torch: { ms: 110, sync: tile, light: 3 }   # da luz en cuevas (radio en casillas)
   doors/forge_gate: { joins_walls: true }   # los muros de al lado lo cuentan como muro
   ground/lava: { ms: 280, sync: world, particles: embers }   # partículas de ambiente
@@ -278,6 +284,36 @@ de un sprite animado lleva sus propios frames, tantos como el sprite (si no, err
 `make sprites`). Todo sprite de `borders/` (que no sea una de esas partes) lleva `flat`: el
 renderer lo dibuja con los suelos, bajo las sombras, los items y las criaturas.
 
+## Plantas y viento (lote 20; `livingworld/README.md` "Viento")
+Árboles, arbustos, hierba, juncos, flores y enredaderas se mecen con el viento del mundo
+vivo: el cliente corta el sprite en tiras horizontales y las corre de lado, con la base
+plantada. No hay frames de viento que dibujar. Para eso **todo sprite de planta lleva su
+metadata de viento**, y `make validate` falla si a un item que es una planta le falta
+(o no dice `wind: none` en `data/livingworld/plants.yaml`).
+
+| De dónde viene el sprite | Dónde se declara |
+|---|---|
+| `tools/spritegen` (receta o spec) | `wind: plantWind("<tipo>", { pivot })` en la receta |
+| Un pack, Gemini o hecho a mano (`assets/sprites/<ruta>.png`, o una entrada de `sprites:`) | `tiles:` de `sprites.yaml`: `<ruta>: { wind: { kind: <tipo>, pivot: N } }` (`pivot` obligatorio; opcionales `stiffness`, `amplitude`, `flutter`) |
+
+Tipos: `tree`, `palm`, `bush`, `tall_grass`, `reed`, `flower`, `vine`, `cactus`,
+`dead_tree` (sus valores, en `data/livingworld/wind.yaml`). `pivot`: dónde termina el
+tronco o el tallo, en px sobre el borde de abajo del sprite; nada se mueve debajo.
+`make spritegen` junta las dos fuentes en `data/livingworld/wind_sprites.yaml` (generado:
+no se edita) y el cliente lo lee solo.
+
+Cómo dibujar (o elegir) una planta para que se deforme bien; `make spritegen` lo revisa en
+todo sprite que tenga su PNG en `assets/`:
+- **tronco y copa bien separados**: el tronco visible, menos del 60 % del ancho de la
+  copa; el pivot justo donde termina;
+- **ningún píxel suelto**: todo unido a la planta (un pétalo flotando quedaría al lado
+  mientras se mece);
+- **margen a los lados**: 2 o 3 px transparentes a cada lado de la copa (1 como mínimo);
+- sin sombra pintada en el sprite: la sombra va aparte (`<sprite>/shadow`) y queda quieta.
+
+Después, `make sway-preview ONLY=<prefijo>` y mirar `build/spritegen/sway.png` con Read.
+Al importar de Gemini: `import_art.py ... --layer object --wind <tipo> --pivot N`.
+
 ## Arte propio (spritegen)
 Parte de `sprites/` sale de `tools/spritegen`: recetas en TypeScript que dibujan cada
 sprite píxel a píxel (`tools/spritegen/src/recipes/`). Son obra propia (CC0, ver
@@ -297,7 +333,8 @@ reemplazan los sprites. Las reglas de abajo son las de hoy y cambian con sus tar
 - Objetos más altos que una casilla (carteles, la fragua) pueden medir 64x64 o 32x64: el
   renderer los ancla en la esquina inferior derecha de su casilla y crecen hacia arriba y a
   la izquierda. Los árboles (`recipes/trees.ts`, 64x96) van centrados en su
-  casilla (`anchor: bc`), con la copa en 3/4, sombra proyectada y 4 frames de viento.
+  casilla (`anchor: bc`), con la copa en 3/4, sombra proyectada y su metadata de viento
+  (sin frames: el cliente mece la copa, "Plantas y viento").
   Items de inventario: 32x32 centrados con fondo transparente.
 - Muros (`recipes/walls.ts`): 16 piezas de 32x64 por material, la tapa levantada 32 px
   sobre la cara (ver "Arte del mapa" arriba y docs/17 ART-3).
@@ -517,7 +554,9 @@ prompts en `assets/prompts/sprites/creatures/`):
 Música, del MP4 al juego:
 1. `python tools/gemini/music_queue.py run` pide los temas de `tools/gemini/music_slots.json`
    uno a la vez (o `music_web.py ask` uno suelto) y deja `build/gemini/music/<tema>_<n>.mp4`
-   con su `.json`.
+   con su `.json`. Con `--slots <id>,... --takes 1` pide **versiones** (`versions` del mismo
+   archivo): otro tema del estilo de un lugar, con su texto y otro instrumento, ánimo o
+   tempo, para ampliar su pool.
 2. Se escuchan (para probar una conversión suelta: `python tools/gemini/music_convert.py
    build/gemini/music/<tema>_<n>.mp4 --no-loop`, el tema entero a -14 LUFS en Ogg Opus con
    sus puntos de entrada en el `.json`; sin `--no-loop` hace un loop cerrado con crossfade,

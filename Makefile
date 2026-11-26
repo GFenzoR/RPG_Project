@@ -288,6 +288,15 @@ sounds: ## Render assets/sounds/** (needs ffmpeg with libopus) and check the siz
 spritegen: ## Draw assets/sprites/** from tools/spritegen recipes (ONLY=decor/ for a path prefix)
 	node --experimental-strip-types tools/spritegen/src/cli.ts build $(if $(ONLY),--only $(ONLY))
 
+# The sway preview: every plant sprite with wind metadata (ONLY=<prefix> for some) swaying
+# over a few frames, drawn with the client's own maths (livingworld/README.md "Viento").
+# Look at build/spritegen/sway.png with Read after adding or changing a plant. SCENE=forest
+# or SCENE=town writes build/spritegen/sway.<n>.png instead: four moments of a patch of
+# map in the real wind field.
+.PHONY: sway-preview
+sway-preview: ## Draw the plants swaying in the wind into build/spritegen/sway.png (ONLY=decor/, SCENE=forest|town)
+	node --experimental-strip-types tools/spritegen/src/cli.ts sway $(if $(ONLY),--only $(ONLY)) $(if $(SCENE),--scene $(SCENE)) --scale $(or $(SCALE),2)
+
 # gen-borders draws the ground transitions of data/borders.yaml (each fringe's 12 pieces in 4
 # looks, and the surf in 4 frames) from the grounds' own art. Run it after make spritegen
 # changes a ground, or after a change to data/borders.yaml. docs/06 "Bordes".

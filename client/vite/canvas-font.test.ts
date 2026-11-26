@@ -1,15 +1,27 @@
-// The canvas labels in Pixelify Sans (render/canvas-font.ts): the font has every letter the
-// names use, and a name shortened at zoom 1 (render/labels.ts) still fits the label budget
-// with the new widths. Widths come from the font's own advance table (hmtx), at the canvas
-// size, so the test needs no browser.
+// The canvas fonts. The pixel font (Pixelify Sans, render/canvas-font.ts: floating numbers
+// and speech bubbles) has every letter they use. The names' font (Alegreya Sans,
+// render/label-style.ts) has every letter of every creature name and NPC role, and with its
+// real widths every NPC of data/npcs shows its name whole on one line and its role whole on
+// at most two, at every zoom and pixel density (render/labels.ts). Widths come from each
+// font's own advance table (hmtx), so the test needs no browser.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { describe, expect, it } from "vitest";
-import { repoRoot } from "./content.ts";
+import { loadClientContent, repoRoot } from "./content.ts";
 import { FONTS, fontSource } from "./fonts.ts";
 import { CANVAS_FONT_FAMILY, CANVAS_FONT_SIZE } from "../src/render/canvas-font.ts";
-import { labelText, SHORT_NAME_CHARS } from "../src/render/labels.ts";
+import {
+  LABEL_FONT_FAMILY,
+  LABEL_NAME_WEIGHT,
+  LABEL_SUB_WEIGHT,
+  SHRINK_MIN,
+  labelFontPx,
+  labelStroke,
+  subFontPx,
+} from "../src/render/label-style.ts";
+import { ROLE_LINES, fitName, labelMaxWidth, wrapRole } from "../src/render/labels.ts";
+import type { MeasureLine } from "../src/render/labels.ts";
 
 const root = repoRoot();
 
@@ -105,14 +117,6 @@ function advances(font: Buffer): {
 const font = FONTS.find((f) => f.family === CANVAS_FONT_FAMILY);
 const metrics = font ? advances(readFileSync(fontSource(root, font))) : undefined;
 
-/** Width in px of `text` at the canvas size (no kerning: Pixelify Sans is monoline). */
-function widthPx(text: string): number {
-  if (!metrics) return 0;
-  let units = 0;
-  for (const ch of text) units += metrics.advance.get(ch.codePointAt(0) ?? 0) ?? metrics.upem;
-  return (units * CANVAS_FONT_SIZE) / metrics.upem;
-}
-
 /** Every monster and NPC name of both languages (what the canvas labels show). */
 function creatureNames(): string[] {
   const out: string[] = [];
@@ -170,21 +174,105 @@ describe("canvas labels in the pixel font", () => {
     });
     expect(between.length).toBeGreaterThan(0);
   });
+});
 
-  it("keeps a name shortened at zoom 1 within three tiles (96 px)", () => {
-    const names = creatureNames();
-    expect(names.length).toBeGreaterThan(20);
-    let widest = "";
-    for (const name of names) {
-      const shown = labelText(name, 1);
-      expect([...shown].length).toBeLessThanOrEqual(SHORT_NAME_CHARS);
-      if (widthPx(shown) > widthPx(widest)) widest = shown;
+/** A measurer from a served font's advance table, as the canvas measures (plus the outline). */
+function measurer(weight: string): MeasureLine {
+  const file = FONTS.find((f) => f.family === LABEL_FONT_FAMILY && f.weight === weight);
+  if (!file) throw new Error(`no ${LABEL_FONT_FAMILY} ${weight} among the served fonts`);
+  const m = advances(readFileSync(fontSource(root, file)));
+  return (text, px) => {
+    let units = 0;
+    for (const ch of text) units += m.advance.get(ch.codePointAt(0) ?? 0) ?? m.upem;
+    return (units * px) / m.upem + labelStroke(px);
+  };
+}
+
+describe("creature labels in the interface's sans", () => {
+  const content = loadClientContent(root);
+  const catalogs = ["es", "en"].map(
+    (lang) =>
+      parse(readFileSync(join(root, "i18n", lang, "npcs.yaml"), "utf8")) as Record<string, string>,
+  );
+  const npcIds = Object.keys(content.npcRoles ?? {});
+
+  it("serves both weights of the names' font", () => {
+    expect(() => measurer(LABEL_NAME_WEIGHT)).not.toThrow();
+    expect(() => measurer(LABEL_SUB_WEIGHT)).not.toThrow();
+  });
+
+  it("has a glyph for every letter of a creature name or an NPC role", () => {
+    const roles = catalogs.flatMap((c) =>
+      Object.entries(c)
+        .filter(([k]) => k.endsWith(".role") || k.startsWith("npc_role."))
+        .map(([, v]) => v),
+    );
+    const text = creatureNames().join("") + roles.join("") + "…¿¡ñÑáéíóúüÜ'-.";
+    for (const weight of [LABEL_NAME_WEIGHT, LABEL_SUB_WEIGHT]) {
+      const file = FONTS.find((f) => f.family === LABEL_FONT_FAMILY && f.weight === weight);
+      if (!file) throw new Error("no font");
+      const m = advances(readFileSync(fontSource(root, file)));
+      const missing = new Set<string>();
+      for (const ch of text) if (!m.advance.has(ch.codePointAt(0) ?? 0)) missing.add(ch);
+      expect([...missing], weight).toEqual([]);
     }
-    expect(widthPx(widest), widest).toBeLessThanOrEqual(96);
-    // The widest a player's name can get: eleven of the widest letter and the ellipsis,
-    // ~100 px (the bold 12 px sans-serif of before drew it ~125 px wide).
-    expect(widthPx(labelText("W".repeat(30), 1))).toBeLessThanOrEqual(104);
-    // And the font is not so narrow that a shortened name became a smudge.
-    expect(widthPx(widest)).toBeGreaterThan(48);
+  });
+
+  it("gives every NPC of data/npcs a role text in both languages", () => {
+    expect(npcIds.length).toBeGreaterThanOrEqual(20);
+    for (const id of npcIds) {
+      const key = content.npcRoles?.[id] ?? "";
+      for (const cat of catalogs) {
+        expect(cat[key], `${id}: ${key}`).toBeTruthy();
+        expect(cat[`npc.${id}.name`], id).toBeTruthy();
+        // The name is the name alone: what the NPC does is the line under it.
+        expect(cat[`npc.${id}.name`], id).not.toContain(",");
+      }
+    }
+  });
+
+  it("shows every NPC's name whole on one line and its role whole on two at most, never cut", () => {
+    const name = measurer(LABEL_NAME_WEIGHT);
+    const sub = measurer(LABEL_SUB_WEIGHT);
+    for (const dpr of [1, 1.25, 1.5, 2])
+      for (const zoom of [1, 2, 3, 4])
+        for (const size of ["normal", "large"] as const) {
+          // The map scale is whole device pixels per sprite pixel.
+          const scale = Math.max(1, Math.round(zoom * dpr));
+          const px = labelFontPx(scale, dpr, size);
+          const max = labelMaxWidth(32 * scale, px);
+          for (const id of npcIds)
+            for (const cat of catalogs) {
+              const at = `${id} zoom ${zoom} dpr ${dpr} ${size}`;
+              const n = cat[`npc.${id}.name`] ?? "";
+              const fit = fitName(n, px, max, name, false);
+              expect(fit.text, at).toBe(n);
+              expect(name(fit.text, fit.fontPx), at).toBeLessThanOrEqual(max);
+              expect(fit.fontPx, at).toBeGreaterThanOrEqual(Math.ceil(px * SHRINK_MIN));
+              const role = cat[content.npcRoles?.[id] ?? ""] ?? "";
+              const wrapped = wrapRole(role, subFontPx(px, dpr), max, sub);
+              expect(wrapped.lines.join(" "), at).toBe(role);
+              expect(wrapped.lines.length, at).toBeGreaterThanOrEqual(1);
+              expect(wrapped.lines.length, at).toBeLessThanOrEqual(ROLE_LINES);
+              for (const l of wrapped.lines)
+                expect(sub(l, wrapped.fontPx), `${at}: ${l}`).toBeLessThanOrEqual(max);
+              expect(`${fit.text}${wrapped.lines.join("")}`, at).not.toContain("…");
+            }
+        }
+  });
+
+  it("keeps a monster's name on one line, cut only when even the smaller size is too wide", () => {
+    const name = measurer(LABEL_NAME_WEIGHT);
+    const px = labelFontPx(2, 1, "large");
+    const max = labelMaxWidth(64, px);
+    for (const n of creatureNames()) {
+      const fit = fitName(n, px, max, name);
+      expect(name(fit.text, fit.fontPx)).toBeLessThanOrEqual(max);
+      // At the fitted desktop zoom no creature of the game is cut.
+      expect(fit.text, n).toBe(n);
+    }
+    const long = fitName("W".repeat(40), px, max, name);
+    expect(long.text.endsWith("…")).toBe(true);
+    expect(name(long.text, long.fontPx)).toBeLessThanOrEqual(max);
   });
 });

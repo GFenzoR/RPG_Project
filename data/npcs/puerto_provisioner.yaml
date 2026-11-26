@@ -1,5 +1,6 @@
 id: puerto_provisioner
 name: npc.puerto_provisioner.name
+role: npc.puerto_provisioner.role
 sprite: npcs/puerto_provisioner
 look:
   sex: female

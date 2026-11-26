@@ -26,6 +26,17 @@ Usa las herramientas MCP `map_*` si están disponibles; si no, `pnpm mapcli ...`
    bloqueados, repetición evidente de decoración.
 9. **Entrega:** `map_patch_create` y PR con los renders y una descripción del área.
 
+## Plantas y biomas nuevos (selva, pantano, desierto)
+Árboles, arbustos y plantas se mecen con el viento del mundo vivo
+(`livingworld/README.md` "Viento"). Si la zona necesita **plantas nuevas** (palmeras,
+helechos, lianas, cactus): créalas con la skill `add-item`, cada una con su metadata de
+viento (tipo y `pivot`), `make spritegen` y **`make sway-preview ONLY=<prefijo>`** para
+mirar el vaivén con Read antes de colocarlas; `make sway-preview SCENE=forest` muestra un
+trozo de bosque con ellas en cuatro momentos. `make validate` falla si una planta no
+declara su viento. Un **suelo nuevo** del bioma dice su `surface`; si es una superficie
+nueva, su fuerza de viento va en `exposure` de `data/livingworld/wind.yaml` (costas y
+desiertos soplan más; un piso de interior, 0).
+
 ## Criterios de calidad
 - Caminos legibles: el jugador debe entender hacia dónde ir.
 - Variedad sin ruido: decoración agrupada, no esparcida uniformemente.

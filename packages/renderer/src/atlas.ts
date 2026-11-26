@@ -26,6 +26,11 @@ export interface AtlasIndex {
   anims?: Record<string, AnimMeta>;
   /** Map sprites with variants, frames, wall pieces, an anchor or a shadow (tile-art.ts). */
   tiles?: Record<string, TileMeta>;
+  /**
+   * Transparent rows under the lowest opaque pixel of the plain sprites that have any: where
+   * a map object touches the ground (its cast shadow starts there); absent in older atlases.
+   */
+  feet?: Record<string, number>;
   /** Each sprite's minimap colour, "#rrggbb" (docs/02 "Minimapa"); absent in older atlases. */
   minimap?: Record<string, string>;
 }
@@ -108,6 +113,11 @@ export class Atlas {
       this.tileArts.set(sprite, art);
     }
     return art ?? undefined;
+  }
+
+  /** The transparent rows under a plain sprite's drawing (index `feet`), 0 when none. */
+  foot(sprite: string): number {
+    return this.index.feet?.[sprite] ?? 0;
   }
 
   has(sprite: string): boolean {
