@@ -140,6 +140,20 @@ el punto 5:
   reducidas". Reemplazó el marco cuadrado. Sin cambios de servidor. Queda **mirar la captura
   `07d-target-halo` del E2E** (que se lea sobre pasto y arena, y con el lobo caminando) y
   ajustar `HALO_*` en `client/src/render/target-halo.ts` si es mucho o poco.
+- **Dos personajes, uno detrás del otro, cambiaban de color (arreglado, rama
+  `fix/overlap-tint`; el dueño el 2026-11-26: "cuando un personaje está detrás de otro
+  cambian de color, eso no debería pasar"):** no era un tinte compartido ni una sombra. Era
+  la copia translúcida de ART-2 para criaturas tapadas: la de atrás se dibujaba otra vez
+  encima de todo, pálida (tinte `0xffe2c8`, 55 %) y solo con el cuerpo desnudo. Con los
+  humanoides del motor pasaba con cada par en columna, y la copia caía sobre los dos.
+  Se quitó entera (docs/17 "Criaturas tapadas"); solo cliente. Queda:
+  - **Mirarlo en el juego** (E2E del lote y playtest): dos personajes y un personaje con un
+    NPC o un monstruo en casillas contiguas de norte a sur, quietos y cruzándose: cada uno
+    con sus colores, el de adelante tapando al de atrás.
+  - **Un bicho chico tapado del todo** por un personaje (una rata justo al norte) ya no se
+    ve hasta que alguno se mueve; se lo sigue eligiendo por lo que asoma, y su nombre y su
+    barra se dibujan igual. Si molesta al jugar, la salida es un contorno o un marcador,
+    no volver a teñir los cuerpos.
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:
@@ -1070,9 +1084,9 @@ el punto 5:
     ataque a distancia: eso queda para la prueba a mano.
   - **Los otros jugadores**: hecho en `feat/character-look` (el punto siguiente): cada
     jugador se ve con su aspecto y su equipo.
-  - **La silueta translúcida** (tapado por otra criatura) muestra solo el cuerpo, sin ropa
-    ni arma. Detrás de un muro ya no hay silueta: el muro se vuelve translúcido (docs/17
-    ART-3, 2026-11-23).
+  - **La silueta translúcida** ya no existe: detrás de un muro, el muro se vuelve
+    translúcido (docs/17 ART-3, 2026-11-23); detrás de otra criatura, queda tapado (se
+    retiró el 2026-11-26, ver "Pendientes conocidos").
   - Un juego de armadura es de un solo tinte (el cinturón también); el arco no se tensa con
     la mano; el JSON del atlas creció ~0,9 MB por los 3612 nombres de frame (docs/07).
   - Si el dueño quiere más formas (un sombrero de ala, una capa, un escudo de torre de
@@ -1670,8 +1684,8 @@ el punto 5:
       (`stance` de `atlas.json`); solo se ve donde no hay sombra proyectada.
     - **Click sobre la cabeza** de un personaje alto: hecho (rama `feat/world-art-2`,
       ART-2). Elige a la criatura antes que la casilla; el propio jugador queda fuera.
-      Y una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
-      de `07-combat`) se dibuja otra vez, translúcida, encima del mapa.
+      Una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
+      de `07-combat`) queda tapada: su copia translúcida se retiró el 2026-11-26.
     - **Atlas:** pasó de 1 a 2 páginas (docs/07).
     - **Pantalla de créditos (A1):** hecha: la página `/credits` del sitio, enlazada
       desde el pie del sitio y desde Opciones, y en la app de escritorio un botón de

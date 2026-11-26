@@ -75,8 +75,9 @@ client/
     jugador no cuenta) y después la casilla. Una cabeza que sube a una casilla con algo
     propio que usar (puerta, item, escalera de mano: `GameCanvasOptions.ownUse` →
     `Game.ownUse`) no cuenta: el click es de esa casilla, como dice el texto del cursor.
-  - **Criaturas tapadas:** si otra dibujada después cubre `HIDDEN_SHARE` (un cuarto) o más
-    de su caja, se dibuja otra vez encima del mapa, translúcida (`hiddenLayer`).
+  - **Criaturas tapadas:** quedan tapadas por la de adelante, sin más. No se dibuja nada
+    sobre una criatura por otra criatura (la copia translúcida se retiró el 2026-11-26:
+    teñía a los dos personajes; `render/overlap.test.ts`).
   - **Elevación** (ART-8): `MapView` sube lo apilado sobre un item con `elevation`
     (`ItemDef.elevation`) y el canvas sube a la criatura de esa casilla (`raisedBy`).
   - **Partículas** (A13): `render/particles.ts` (`ParticleLayer` en `view.overlay`), de los
@@ -682,8 +683,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   en un templo también a la vista (sale y vuelve en el mismo batch) deja su cuerpo cayendo
   donde murió, y la criatura de vuelta es un sprite nuevo, con estado nuevo y su fundido
   de 300 ms. Una criatura que deja de dibujarse sin salida propia (otro piso, un mapa
-  nuevo) se borra. Un fantasma tapado por una criatura más alta tiene su copia translúcida
-  (`DrawnBoxes.covered`).
+  nuevo) se borra. Un fantasma tapado por una criatura más alta queda tapado (sin copia
+  translúcida desde el 2026-11-26).
 - `WorldState` no borra una salida cuando la criatura vuelve: la marca `back`, y
   `departureOf` la ignora (así un jugador que murió y despertó a la vista no "muere" al
   salir después del piso dibujado); el canvas igual la juega una vez.
@@ -710,7 +711,7 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   la mano va sobre la ropa (docs/17 "Humanoides del motor"; 8 órdenes, uno por dirección: la
   oclusión del cuerpo ya viene en sus frames). Los sprites salen de `LAYER_POOL` y vuelven con
   `release()` (`dropSprite`, `dropGhost`): dibujar un frame no crea objetos. La capa del
-  cuerpo es `figure.sprite` (siluetas y la caja de `figureRect` para el muro translúcido).
+  cuerpo es `figure.sprite` (la caja de `figureRect` para el muro translúcido).
 - **Se desvanece entero:** las capas van en un contenedor propio dentro de `figure.root`
   (después de la sombra). Pixi multiplica el alfa de un contenedor en cada hijo, así que el
   alfa de la pose no va en las capas: mientras es menor que 1, el contenedor se dibuja a

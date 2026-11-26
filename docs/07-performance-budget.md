@@ -669,8 +669,8 @@ precalculado (ahora 8 órdenes).
 (`MAX_PARTICLES`), en arreglos tipados y dibujadas por un pool fijo de 100 sprites de 1 px
 hecho al crear el canvas; un frame no asigna nada (las fuentes salen de listas planas por
 chunk, `MapView.forEachEmitter`). Se apagan con movimiento reducido. Las cajas de las
-criaturas (click en la cabeza, siluetas) reusan sus objetos frame a frame; las siluetas
-salen de un pool que solo crece hasta las que se vieron juntas. Los pasos (MOV-7) usan el
+criaturas (click en la cabeza) reusan sus objetos frame a frame (las copias translúcidas
+de criaturas tapadas y su pool se retiraron el 2026-11-26). Los pasos (MOV-7) usan el
 mismo pool: el ambiente deja 16 de las 100 libres para ellos (`STEP_RESERVE`), y cada paso
 sobre arena, tierra o ceniza suma 6 y sobre arena mojada 8, de 220 a 460 ms de vida.
 

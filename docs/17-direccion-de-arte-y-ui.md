@@ -1372,8 +1372,9 @@ son finas a 1x (la espada mide 13 px, el arco 20).
 **Pendiente:** las piezas de un juego de armadura son de un solo tinte (el cinturón de la
 coraza, del mismo color); el arco no se tensa con la mano (la cuerda queda recta); los
 jugadores ajenos se ven con su atuendo hasta que `feat/character-look` mande su equipo (sus
-ataques juegan el clip de su tipo, `figureAttack`: uno a distancia dispara); la silueta
-translúcida (tapado por un muro o por otra criatura) muestra solo el cuerpo.
+ataques juegan el clip de su tipo, `figureAttack`: uno a distancia dispara). La silueta
+translúcida ya no existe (detrás de un muro cede el muro, ART-3; detrás de otra criatura
+queda tapado, 2026-11-26).
 
 ## 4. Sensación de movimiento (MOV)
 
@@ -2299,8 +2300,8 @@ protocolo no cambian.
   (`back`), y `departureOf` la ignora. El cuerpo cae donde murió y el jugador aparece con
   su fundido de 300 ms en el templo.
 - **Cuerpos tapados.** Un cuerpo que cae o se desvanece detrás de una criatura más alta (el
-  lobo muerto justo al norte del mago) también tiene la copia translúcida de ART-2
-  (`DrawnBoxes.covered`).
+  lobo muerto justo al norte del mago) queda tapado por ella: la copia translúcida de
+  ART-2 se retiró el 2026-11-26 (teñía a los dos, ver "Criaturas tapadas").
 - **Polvo y ondas al pisar (MOV-7, ART-7).** Dato: la clave `steps` de un suelo en la
   sección `tiles` de `assets/sprites.yaml` (`dust` o `ripple`), que spritepack lleva a
   `atlas.json`. Hoy: polvo en arena, tierra, ceniza y senda de escoria; ondas en la arena
@@ -2364,12 +2365,20 @@ que pide atribución (los personajes de LPC, OGA-BY 3.0 y CC-BY-SA 3.0) y fuente
   con otro jugador parado al sur de una puerta, el click derecho en la puerta lo atacaba).
 - **Criaturas tapadas por otra más alta (`07-combat`).** El jugador de LPC mide ~1,4
   casillas y tapaba al lobo de la casilla de arriba. El orden de dibujo se queda (el de
-  adelante tapa al de atrás, como pide ART-3); lo que se suma es la silueta: si una
-  criatura dibujada después cubre una cuarta parte o más de la caja de otra
-  (`HIDDEN_SHARE`), la de atrás se dibuja otra vez encima del mapa, aclarada y al 55 %
-  (`HIDDEN_ALPHA`, `HIDDEN_TINT` en `game-canvas.ts`), como el jugador detrás de un muro.
-  Vale para todas las criaturas, también para un NPC tapado por otro en el pueblo. Detrás
-  de un muro, en cambio, los demás siguen ocultos.
+  adelante tapa al de atrás, como pide ART-3) y la de atrás queda tapada, sin más: se la
+  elige con un click en lo que asoma (su caja, `DrawnBoxes.pick`). Detrás de un muro los
+  demás también siguen ocultos.
+  - **Sin copia translúcida (retirada el 2026-11-26).** Hasta entonces, si una criatura
+    dibujada después cubría una cuarta parte o más de la caja de otra, la de atrás se
+    dibujaba otra vez encima del mapa, aclarada y al 55 % (tinte `0xffe2c8`) y solo con su
+    cuerpo, sin ropa. Con los humanoides del motor (suben 16 px sobre su casilla: el de
+    adelante cubre un tercio del de atrás) eso pasaba con **cada** par de personajes en
+    columna, y la copia pálida caía sobre los dos. El dueño, al probar los lotes 19 y 20:
+    "cuando un personaje está detrás de otro cambian de color, eso no debería pasar". Se
+    quitó la copia entera (la capa, su pool, `HIDDEN_*` y `forEachHidden`/`covered` de
+    `creature-hits.ts`): nada se dibuja sobre una criatura por otra criatura. Lo cuida
+    `client/src/render/overlap.test.ts`. Si alguna vez hace falta ver a un bicho chico
+    tapado del todo, que sea un contorno o un marcador, nunca un tinte sobre los cuerpos.
 - **Elevación (ART-8):** ver ART-8.
 - **Muralla y ventanas (ART-3).** `tools/spritegen/src/recipes/walls.ts`: `drawPiece` toma
   la altura de la cara (`TALL_FACE` = 64 para la muralla) y un dibujo extra por pieza (la
