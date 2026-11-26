@@ -1,9 +1,9 @@
 // Building floors stay inside their walls (docs/03-world-and-maps.md, "Pisos de edificio").
-// A ground with `ground.floor: building` is the floor of a room: no side of it may face open
-// ground. Every neighbour of such a tile is another building floor, or has a wall or a door
-// on it, or the tile itself holds the wall or the door (the edge). Porches, piers, bridges,
-// stalls and ruins use a ground without the property (dock_planks, stone_floor): they are
-// the documented way out, never a silenced finding.
+// A ground with `ground.floor: building` is the floor of a room: none of its sides may face
+// open ground. Each neighbour must be another floor (building or open), or hold a wall or a
+// door, or the tile itself holds the wall or the door, or be a house doorway (houses.yaml).
+// Porches, doorsteps, piers, bridges and stalls use the `open` floor (dock_planks); ruins
+// use a ground with no floor property: the documented way out, never a silenced finding.
 import type { ContentIndex } from "./content.ts";
 import type { Tile, TileMap } from "./tiles.ts";
 import { CHUNK_SIZE } from "./types.ts";
@@ -41,6 +41,13 @@ export function floorLeaks(island: Island, tiles: TileMap, content: ContentIndex
   const chunks = [...island.chunks.values()].sort(
     (a, b) => a.z - b.z || a.cy - b.cy || a.cx - b.cx,
   );
+  const doorways = new Set(
+    island.houses.flatMap((h) => h.doors.map((d) => `${d.x},${d.y},${d.z}`)),
+  );
+  const edge = (t: Tile | undefined, x: number, y: number, z: number): boolean =>
+    hasEdge(t, content) || doorways.has(`${x},${y},${z}`);
+  const isFloorOrPorch = (g: string | null): boolean =>
+    g !== null && content.items.get(g)?.floor !== undefined;
   const isFloor = (g: string | null): boolean =>
     g !== null && content.items.get(g)?.floor === "building";
   for (const c of chunks) {
@@ -49,10 +56,11 @@ export function floorLeaks(island: Island, tiles: TileMap, content: ContentIndex
         const x = c.cx * CHUNK_SIZE + lx;
         const y = c.cy * CHUNK_SIZE + ly;
         const here = tiles.tile(x, y, c.z);
-        if (!here || !isFloor(here.ground) || hasEdge(here, content)) continue;
+        if (!here || !isFloor(here.ground) || edge(here, x, y, c.z)) continue;
         for (const s of SIDES) {
           const there = tiles.tile(x + s.dx, y + s.dy, c.z);
-          if (isFloor(there?.ground ?? null) || hasEdge(there, content)) continue;
+          if (isFloorOrPorch(there?.ground ?? null) || edge(there, x + s.dx, y + s.dy, c.z))
+            continue;
           out.push({ pos: { x, y, z: c.z }, side: s.side, facing: there?.ground ?? "nothing" });
         }
       }

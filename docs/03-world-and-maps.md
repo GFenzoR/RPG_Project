@@ -645,6 +645,22 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
   llegue a todas).
 
+### Pisos de edificio (regla de creación de mapas)
+El piso de un edificio queda **contenido** dentro de él: no sale hacia afuera del muro.
+Un suelo con `ground.floor: building` en `data/items/ground*.yaml` (hoy `wooden_floor`;
+un suelo de interior nuevo lo declara) es piso de cuarto, y `make validate` da error si
+alguno de sus cuatro lados da a suelo exterior sin un borde. Cada vecino debe ser otro piso
+(`building` u `open`), o tener encima un muro, una ventana o una puerta (item con bloque
+`door`); también vale que la casilla misma lleve el muro o la puerta, o que sea una puerta
+de casa (`doors` de `houses.yaml`). Al corregir, se elige por caso entre meter el piso
+(repintar la casilla con `mapcli paint`) o extender el muro (`place`).
+- Excepciones documentadas, como datos y no silenciadas: el suelo `ground.floor: open`
+  (`dock_planks`) es madera que puede tocar el exterior: porche, umbral de una puerta sin
+  hoja, muelle, puente, puesto de mercado. Las ruinas usan un suelo sin `floor`
+  (`stone_floor`, tierra). Un hueco de entrada en el muro se pinta `dock_planks`.
+- Al crear una casa o edificio: pinta el piso solo dentro del muro, deja el hueco de la
+  entrada en `dock_planks`, valida y renderiza el área.
+
 ### Mundo vivo
 El validador (`checkLiving` de `packages/map-format`) rechaza un objeto del mundo vivo
 (rompible, empujable o compuerta, y las placas) en una zona de protección, dentro de una casa,

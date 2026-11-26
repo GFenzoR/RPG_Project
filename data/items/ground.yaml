@@ -57,7 +57,7 @@
   kind: ground
   sprite: ground/dock_planks
   name: item.dock_planks.name
-  ground: { walkable: true, speed: 100, surface: wood }
+  ground: { walkable: true, speed: 100, surface: wood, floor: open }
 
 - id: wooden_floor
   kind: ground
