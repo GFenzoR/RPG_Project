@@ -1177,7 +1177,7 @@ test("sandbox light shadows: indoors, underground and by a lamp at night", async
   psql([
     databaseUrl,
     "-c",
-    `UPDATE characters SET town = 'pruebas', level = 200 WHERE name = '${who.name}';
+    `UPDATE characters SET town = 'pruebas', level = 200, health = 1000000 WHERE name = '${who.name}';
      UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
   ]);
   await enterGame(page, who);
