@@ -364,6 +364,24 @@ describe("buildAtlas", () => {
     expect(page.json.meta).toMatchObject({ image: "atlas-0.png", related_multi_packs: [] });
   });
 
+  it("says where every plain sprite touches the ground: the empty rows under it (docs/17 ART-5)", () => {
+    // A tree drawn down to 5 rows over its frame's bottom, a barrel that fills its tile.
+    const tree = createImage(64, 96);
+    fillRect(tree, 20, 4, 24, 87, [0, 128, 0, 255]); // rows 4..90
+    put("assets/sprites/decor/tree.png", encodePng(tree));
+    put("assets/sprites/decor/barrel.png", encodePng(solid(32, 32, [90, 60, 30])));
+    put("assets/sprites/decor/empty.png", encodePng(createImage(32, 32)));
+    put(
+      "data/items/x.yaml",
+      "- id: tree\n  sprite: decor/tree\n- id: barrel\n  sprite: decor/barrel\n- id: empty\n  sprite: decor/empty\n- id: ghost\n  sprite: decor/ghost\n",
+    );
+    const r = buildAtlas(root);
+    expect(errors(r)).toEqual([]);
+    // Only the sprites with rows to skip: not the barrel (0), not a frame with nothing
+    // drawn, not an automatic placeholder.
+    expect(r.atlas?.index.feet).toEqual({ "decor/tree": 5 });
+  });
+
   it("packs the living world's own art under livingworld/ (livingworld/README.md)", () => {
     put("assets/livingworld/sprites/plants/reeds.png", encodePng(solid(32, 32, [0, 128, 0])));
     put("assets/livingworld/sprites/fx/ripple_0.png", encodePng(solid(32, 32, [255, 255, 255])));

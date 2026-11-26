@@ -2,7 +2,15 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { layerOver, measureFrames, recolorImage, specColumns } from "./anims.ts";
+import {
+  layerOver,
+  measureFrames,
+  measureStance,
+  recolorImage,
+  specColumns,
+  stancesOf,
+} from "./anims.ts";
+import type { AnimMeta } from "./anims.ts";
 import { buildAtlas, legacyFrame } from "./build.ts";
 import { collectSpriteRefs, lookSprites } from "./content.ts";
 import { createImage, encodePng, fillRect } from "./image.ts";
@@ -189,6 +197,54 @@ describe("animation images", () => {
     expect(measureFrames([a, b])).toEqual({ foot: 4, top: 22 });
     expect(measureFrames([createImage(32, 64)])).toEqual({ foot: 0, top: 64 });
   });
+
+  it("measures where a pose stands: its ground line and the span of its feet (docs/17 ART-5)", () => {
+    // A person 40 rows tall whose body ends 6 rows over the frame's bottom, on two feet.
+    const man = createImage(64, 64);
+    fillRect(man, 26, 18, 12, 34, GREY); // the body: rows 18..51
+    fillRect(man, 24, 52, 5, 6, GREY); // the left foot: rows 52..57
+    fillRect(man, 35, 52, 5, 6, GREY); // the right foot
+    expect(measureStance([man])).toEqual([6, 24, 40]);
+    // The walk reaches lower than the pose stands: measureFrames says 2, the stance 6.
+    const step = createImage(64, 64);
+    fillRect(step, 26, 18, 12, 44, GREY); // rows 18..61
+    expect(measureFrames([man, step]).foot).toBe(2);
+    // A thing held out to the side above the base does not widen it.
+    fillRect(man, 50, 20, 8, 4, GREY);
+    expect(measureStance([man])).toEqual([6, 24, 40]);
+    // A beast: its whole belly line.
+    const rat = createImage(32, 32);
+    fillRect(rat, 6, 20, 20, 7, GREY); // rows 20..26
+    expect(measureStance([rat])).toEqual([5, 6, 26]);
+    expect(measureStance([createImage(8, 8)])).toBeUndefined();
+  });
+
+  it("gives every facing its own stance, from its idle frames, else its walk's", () => {
+    const frame = (x: number, bottom: number): Image => {
+      const img = createImage(32, 32);
+      fillRect(img, x, 10, 6, bottom - 9, GREY);
+      return img;
+    };
+    const frames: Record<string, Image> = {
+      "m/idle_s_0": frame(13, 27),
+      "m/walk_s_0": frame(13, 30),
+      "m/walk_e_0": frame(16, 26),
+    };
+    const meta = {
+      actions: {
+        idle: { frames: 1, ms: 400, dirs: ["s"] },
+        walk: { frames: 1, ms: 0, perTile: 1, dirs: ["s", "e"] },
+      },
+    } as unknown as AnimMeta;
+    expect(stancesOf("m", meta, (n) => frames[n], undefined)).toEqual({
+      s: [4, 13, 19],
+      e: [5, 16, 22],
+    });
+    // One drawing, no clips: its one stance, under "s".
+    const still = { actions: {} } as unknown as AnimMeta;
+    expect(stancesOf("m", still, () => undefined, frame(10, 25))).toEqual({ s: [6, 10, 16] });
+    expect(stancesOf("m", still, () => undefined, undefined)).toBeUndefined();
+  });
 });
 
 describe("buildAtlas with animations", () => {
@@ -204,6 +260,7 @@ describe("buildAtlas with animations", () => {
       h: 32,
       anchor: "bc",
       foot: 2,
+      stance: { n: [2, 11, 21], e: [2, 11, 21], s: [2, 11, 21], w: [2, 11, 21] },
       top: 26,
       shadow: "ellipse",
       actions: {
@@ -317,6 +374,7 @@ describe("buildAtlas with animations", () => {
         h: 32,
         anchor: "br",
         foot: 16,
+        stance: { s: [16, 8, 24] },
         top: 8,
         shadow: "baked",
         facing: "left",
@@ -347,6 +405,7 @@ describe("buildAtlas with animations", () => {
       h: 32,
       anchor: "br",
       foot: 2,
+      stance: { e: [2, 8, 24], w: [2, 8, 24] },
       top: 13,
       shadow: "baked",
       facing: "left",
@@ -489,6 +548,7 @@ describe("buildAtlas with animations", () => {
       h: 64,
       anchor: "bc",
       foot: 4,
+      stance: { n: [4, 20, 44], e: [4, 20, 44], s: [4, 20, 44], w: [4, 20, 44] },
       top: 25,
       shadow: "ellipse",
       actions: {

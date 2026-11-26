@@ -28,6 +28,7 @@ import {
   dirOf,
   faceTo,
   turnTo,
+  stanceOf,
   walkCyclesPerStep,
   walkPerStep,
 } from "./anim.ts";
@@ -592,5 +593,30 @@ describe("facings (docs/17 ANI-1)", () => {
     // The diagonal counted its whole length into the cycle (16 frames: two cycles).
     expect(s.walkPer).toBeCloseTo(Math.hypot(8, 13.86), 6);
     expect(s.walkPhase).toBeCloseTo(Math.hypot(8, 13.86) % 8, 6);
+  });
+});
+
+describe("stanceOf (where a facing stands: the shadows start there)", () => {
+  const meta = (stance: AnimMeta["stance"]): AnimMeta => ({
+    w: 64,
+    h: 64,
+    anchor: "bc",
+    foot: 2,
+    top: 46,
+    shadow: "ellipse",
+    actions: {},
+    ...(stance ? { stance } : {}),
+  });
+
+  it("gives the facing's own stance, else the south's, else any", () => {
+    const m = meta({ s: [6, 24, 40], e: [4, 30, 44] });
+    expect(stanceOf(m, "e")).toEqual([4, 30, 44]);
+    expect(stanceOf(m, "nw")).toEqual([6, 24, 40]);
+    expect(stanceOf(meta({ w: [3, 8, 24] }), "n")).toEqual([3, 8, 24]);
+  });
+
+  it("is undefined for an atlas without stances: the caller falls back on foot", () => {
+    expect(stanceOf(meta(undefined), "s")).toBeUndefined();
+    expect(stanceOf(undefined, "s")).toBeUndefined();
   });
 });

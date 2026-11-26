@@ -152,7 +152,27 @@ export interface AnimMeta {
   facing?: "left" | "right";
   /** Hovers: bobs all the time and never hops. */
   flying?: boolean;
+  /**
+   * Where it stands, per facing (tools/spritepack measureStance): [foot, x0, x1], the
+   * transparent rows under the lowest pixel of its standing pose and the columns (from the
+   * frame's left edge, x1 exclusive) its lowest rows span. `foot` above is the lowest reach
+   * of the walk (a foot stepping toward the viewer goes lower than the body stands).
+   * Absent in older atlases.
+   */
+  stance?: Partial<Record<AnimDir, Stance>>;
   actions: Partial<Record<AnimAction, AnimActionMeta>>;
+}
+
+export type Stance = readonly [foot: number, x0: number, x1: number];
+
+/**
+ * The stance of `meta` facing `dir`: its own, else the south one, else any; undefined for
+ * an atlas without them (the caller falls back on `foot`).
+ */
+export function stanceOf(meta: AnimMeta | undefined, dir: AnimDir): Stance | undefined {
+  const st = meta?.stance;
+  if (!st) return undefined;
+  return st[dir] ?? st.s ?? Object.values(st)[0];
 }
 
 /** Feet line: pixels above the tile's bottom edge where bc sprites stand and shadows sit. */

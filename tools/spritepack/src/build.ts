@@ -12,6 +12,7 @@ import {
   frameName,
   layerOver,
   measureFrames,
+  stancesOf,
   mirrorImage,
   recolorImage,
   specColumns,
@@ -25,7 +26,7 @@ import type { Image } from "./image.ts";
 import { parseManifest, SPRITE_PATH } from "./manifest.ts";
 import type { SpriteEntry } from "./manifest.ts";
 import { packSprites } from "./pack.ts";
-import { tileMetas } from "./tiles.ts";
+import { TILE_PART, tileMetas } from "./tiles.ts";
 import type { TileEntry, TileMeta } from "./tiles.ts";
 import { defaultColor, defaultLabel, renderPlaceholder, TILE } from "./placeholder.ts";
 
@@ -101,6 +102,12 @@ export interface AtlasIndex {
   anims: Record<string, AnimMeta>;
   /** Map sprites with variants, frames, wall pieces, an anchor or a shadow (tiles.ts). */
   tiles: Record<string, TileMeta>;
+  /**
+   * The transparent rows under the lowest opaque pixel of every plain sprite that has any
+   * (not animation frames, not parts of a tile's art): where a map object touches the
+   * ground, so its cast shadow starts at its base (docs/17 ART-5).
+   */
+  feet: Record<string, number>;
   /**
    * The minimap colour of every sprite (docs/02 "Minimapa"): the average of its opaque
    * pixels, "#rrggbb". The client colours a minimap tile by its item's sprite.
@@ -464,6 +471,7 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     sprites: {},
     anims: {},
     tiles: {},
+    feet: {},
     minimap: {},
   };
   const byName = [...packed.placements].sort((a, b) => (a.name < b.name ? -1 : 1));
@@ -493,8 +501,27 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
   }
   index.sprites = sortedRecord(index.sprites);
   for (const page of pages) page.json.frames = sortedRecord(page.json.frames);
+  // Where every facing of an animated sprite stands (its shadows start there).
+  for (const [name, meta] of Object.entries(anims)) {
+    const target = aliases.get(name) ?? name;
+    const stance = stancesOf(
+      name,
+      meta,
+      (frame) => resolved.get(frame)?.image,
+      resolved.get(target)?.image,
+    );
+    if (stance) meta.stance = stance;
+  }
   index.anims = anims;
   index.tiles = tiles;
+  // Where every plain sprite touches the ground (a map object's cast shadow starts there).
+  const feet: Record<string, number> = {};
+  for (const [name, r] of resolved) {
+    if (r.origin === "auto" || FRAME_NAME.test(name) || TILE_PART.test(name)) continue;
+    const foot = measureFrames([r.image]).foot;
+    if (foot > 0 && foot < r.image.height) feet[name] = foot;
+  }
+  index.feet = sortedRecord(feet);
   const colours: Record<string, string> = {};
   for (const [name, r] of resolved) colours[name] = averageColor(r.image);
   for (const [alias, target] of aliases) {
