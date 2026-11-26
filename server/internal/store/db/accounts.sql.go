@@ -59,6 +59,18 @@ func (q *Queries) GetAccountByEmail(ctx context.Context, email string) (GetAccou
 	return i, err
 }
 
+const getAccountOptions = `-- name: GetAccountOptions :one
+SELECT doc FROM account_options WHERE account_id = $1
+`
+
+// The interface options of an account (migration 00029); no row: it never saved any.
+func (q *Queries) GetAccountOptions(ctx context.Context, accountID int64) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getAccountOptions, accountID)
+	var doc []byte
+	err := row.Scan(&doc)
+	return doc, err
+}
+
 const lockAccount = `-- name: LockAccount :one
 SELECT id, disabled_at
 FROM accounts
@@ -77,6 +89,23 @@ func (q *Queries) LockAccount(ctx context.Context, id int64) (LockAccountRow, er
 	var i LockAccountRow
 	err := row.Scan(&i.ID, &i.DisabledAt)
 	return i, err
+}
+
+const saveAccountOptions = `-- name: SaveAccountOptions :exec
+INSERT INTO account_options (account_id, doc, updated_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (account_id) DO UPDATE SET doc = EXCLUDED.doc, updated_at = EXCLUDED.updated_at
+`
+
+type SaveAccountOptionsParams struct {
+	AccountID int64
+	Doc       []byte
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) SaveAccountOptions(ctx context.Context, arg SaveAccountOptionsParams) error {
+	_, err := q.db.Exec(ctx, saveAccountOptions, arg.AccountID, arg.Doc, arg.UpdatedAt)
+	return err
 }
 
 const touchAccountLogin = `-- name: TouchAccountLogin :exec

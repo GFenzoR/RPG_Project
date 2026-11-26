@@ -169,6 +169,7 @@ SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, 
        c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role,
        c.outfit, c.outfit_color, c.name_effect, a.premium_balance,
        c.look_body, c.look_skin, c.look_hair, c.look_hair_color, c.look_beard, c.look_sex,
+       c.opt_stance, c.opt_chase, c.opt_safe,
        (SELECT COALESCE(max(l.id), 0) FROM premium_ledger l WHERE l.account_id = a.id)::bigint AS premium_seq
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
@@ -214,6 +215,9 @@ type GetCharacterForPlayRow struct {
 	LookHairColor  string
 	LookBeard      string
 	LookSex        string
+	OptStance      int16
+	OptChase       bool
+	OptSafe        bool
 	PremiumSeq     int64
 }
 
@@ -250,6 +254,9 @@ func (q *Queries) GetCharacterForPlay(ctx context.Context, arg GetCharacterForPl
 		&i.LookHairColor,
 		&i.LookBeard,
 		&i.LookSex,
+		&i.OptStance,
+		&i.OptChase,
+		&i.OptSafe,
 		&i.PremiumSeq,
 	)
 	return i, err
@@ -583,8 +590,11 @@ SET level        = $1,
     look_hair_color = $18,
     look_beard      = $19,
     look_sex        = $20,
-    last_save_at = $21
-WHERE id = $22
+    opt_stance   = $21,
+    opt_chase    = $22,
+    opt_safe     = $23,
+    last_save_at = $24
+WHERE id = $25
 `
 
 type SaveCharacterStateParams struct {
@@ -608,6 +618,9 @@ type SaveCharacterStateParams struct {
 	LookHairColor string
 	LookBeard     string
 	LookSex       string
+	OptStance     int16
+	OptChase      bool
+	OptSafe       bool
 	SavedAt       pgtype.Timestamptz
 	ID            int64
 }
@@ -635,6 +648,9 @@ func (q *Queries) SaveCharacterState(ctx context.Context, arg SaveCharacterState
 		arg.LookHairColor,
 		arg.LookBeard,
 		arg.LookSex,
+		arg.OptStance,
+		arg.OptChase,
+		arg.OptSafe,
 		arg.SavedAt,
 		arg.ID,
 	)

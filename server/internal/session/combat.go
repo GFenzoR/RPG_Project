@@ -93,7 +93,7 @@ func (w *World) setTarget(ctx *game.TickContext, p *Player, id uint32) {
 }
 
 func (w *World) setFightMode(p *Player, stance pb.FightStance, chase bool) {
-	if stance < pb.FightStance_FIGHT_STANCE_OFFENSIVE || stance > pb.FightStance_FIGHT_STANCE_DEFENSIVE {
+	if !validStance(stance) {
 		return
 	}
 	p.stance, p.chase = stance, chase

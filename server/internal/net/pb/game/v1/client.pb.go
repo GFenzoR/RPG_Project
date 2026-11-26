@@ -1330,9 +1330,9 @@ func (x *SetTarget) GetCreatureId() uint32 {
 }
 
 // SetSafeMode turns the safe mode on or off (T5.2, docs/02 "PvP"). With it on (the
-// default until the client says otherwise) the player cannot attack a player whom it
+// default; the server saves it per character, docs/05 "Opciones guardadas") the player cannot attack a player whom it
 // would be unjustified to attack, and its area spells skip those players. The client sends
-// it right after the Welcome and whenever the player flips the switch.
+// it when the player flips the switch; the Welcome says the one in force.
 type SetSafeMode struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`

@@ -575,6 +575,7 @@ func (a *App) characterState(s session.Snapshot) store.CharacterState {
 		Cosmetics: store.Cosmetics{Outfit: s.Cosmetics.Outfit, Color: s.Cosmetics.Color, NameEffect: s.Cosmetics.NameEffect},
 		Look: store.Look{Sex: s.Look.Sex, Body: s.Look.Body, Skin: s.Look.Skin, Hair: s.Look.Hair, HairColor: s.Look.HairColor,
 			Beard: s.Look.Beard},
+		Options: store.GameOptions{Stance: int(s.Options.Stance), Chase: s.Options.Chase, Unsafe: s.Options.Unsafe},
 		SavedAt: a.cfg.Clock.Now(),
 	}
 }

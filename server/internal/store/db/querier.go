@@ -85,6 +85,8 @@ type Querier interface {
 	FillMarketOffer(ctx context.Context, arg FillMarketOfferParams) (int32, error)
 	FlagShopAccount(ctx context.Context, arg FlagShopAccountParams) error
 	GetAccountByEmail(ctx context.Context, email string) (GetAccountByEmailRow, error)
+	// The interface options of an account (migration 00029); no row: it never saved any.
+	GetAccountOptions(ctx context.Context, accountID int64) ([]byte, error)
 	GetAccountProfile(ctx context.Context, id int64) (GetAccountProfileRow, error)
 	GetAccountProfileByEmail(ctx context.Context, email string) (GetAccountProfileByEmailRow, error)
 	// The actor's role now (not the one cached at login), for bans in the same transaction.
@@ -278,6 +280,7 @@ type Querier interface {
 	RetireCosmetics(ctx context.Context, ids []string) error
 	// Approve or reject a pending submission. No row: it is not pending (or does not exist).
 	ReviewSubmission(ctx context.Context, arg ReviewSubmissionParams) (ReviewSubmissionRow, error)
+	SaveAccountOptions(ctx context.Context, arg SaveAccountOptionsParams) error
 	// A snapshot upserts the sectors that gained bits during the login. Explored bits are
 	// only ever set, so a sector already saved keeps its bits and gains the new ones (a
 	// bitwise OR, byte by byte: bits is always 128 bytes, migration 00028). The snapshots of

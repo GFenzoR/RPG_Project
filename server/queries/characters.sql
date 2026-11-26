@@ -22,6 +22,7 @@ SELECT c.id, c.account_id, c.name, c.vocation, c.level, c.experience, c.health, 
        c.pos_x, c.pos_y, c.pos_z, c.town, c.conditions, c.skull, c.skull_until, c.pvp_kills, a.role,
        c.outfit, c.outfit_color, c.name_effect, a.premium_balance,
        c.look_body, c.look_skin, c.look_hair, c.look_hair_color, c.look_beard, c.look_sex,
+       c.opt_stance, c.opt_chase, c.opt_safe,
        (SELECT COALESCE(max(l.id), 0) FROM premium_ledger l WHERE l.account_id = a.id)::bigint AS premium_seq
 FROM characters c
 JOIN accounts a ON a.id = c.account_id
@@ -63,6 +64,9 @@ SET level        = sqlc.arg(level),
     look_hair_color = sqlc.arg(look_hair_color),
     look_beard      = sqlc.arg(look_beard),
     look_sex        = sqlc.arg(look_sex),
+    opt_stance   = sqlc.arg(opt_stance),
+    opt_chase    = sqlc.arg(opt_chase),
+    opt_safe     = sqlc.arg(opt_safe),
     last_save_at = sqlc.arg(saved_at)
 WHERE id = sqlc.arg(id);
 
