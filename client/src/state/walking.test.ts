@@ -159,6 +159,12 @@ interface Result {
   observerLateMs: number;
   /** How long after the click (or the press) the own drawing first left its tile. */
   firstMoveMs: number;
+  /**
+   * The fastest and the slowest frame of each drawing while walking, over its mean (1 and
+   * 1: one speed all the way).
+   */
+  ownSpeeds: [number, number];
+  observerSpeeds: [number, number];
   own: WorldState;
 }
 
@@ -194,6 +200,8 @@ function simulate(run: Run): Result {
   let queue: { dir: Direction; seq: number }[] = [];
   let epoch = 1;
   let readyAt = 0;
+  let owed = 0;
+  let paceAt = -1;
   let lastStep = -1;
   let lastTicks = 0;
   let serverGaps = 0;
@@ -246,8 +254,13 @@ function simulate(run: Run): Result {
         else {
           queue.shift();
           const diagonal = dx !== 0 && dy !== 0;
-          // The server's StepTicks, which the client's stepMs mirrors (step-time.test.ts).
-          const ticks = stepMs(content.movement, 100, speed, diagonal) / TICK;
+          // The server's StepMs, which the client's stepMs mirrors (step-time.test.ts),
+          // and its pace: whole ticks, the rest owed by the walk's next step (move.go).
+          const ms = stepMs(content.movement, 100, speed, diagonal);
+          if (tick !== paceAt) owed = 0;
+          const ticks = Math.max(Math.floor((ms + owed) / TICK), 1);
+          owed = Math.max(ms + owed - ticks * TICK, 0);
+          paceAt = tick + ticks;
           if (lastStep >= 0) serverGaps += tick - (lastStep + lastTicks);
           lastStep = tick;
           lastTicks = ticks;
@@ -260,7 +273,7 @@ function simulate(run: Run): Result {
               id: WALKER,
               from: pos(x, y),
               to: pos(x + dx, y + dy),
-              durationMs: ticks * TICK,
+              durationMs: ms,
               walkSeq,
             },
           });
@@ -322,6 +335,15 @@ function simulate(run: Run): Result {
     const b = trail.findIndex((s) => s.x >= end);
     return trail.slice(Math.max(a - 1, 0), b + 1);
   };
+  // Frame to frame, without the frames the walk starts and ends in.
+  const speeds = (trail: typeof ownTrail): [number, number] => {
+    const w = walking(trail).slice(2, -2);
+    const dx: number[] = [];
+    for (let i = 1; i < w.length; i++)
+      dx.push(((w[i]?.x ?? 0) - (w[i - 1]?.x ?? 0)) / ((w[i]?.t ?? 0) - (w[i - 1]?.t ?? 0)));
+    const mean = dx.reduce((a, b) => a + b, 0) / Math.max(dx.length, 1);
+    return [Math.max(...dx) / mean, Math.min(...dx) / mean];
+  };
   let biggestJump = 0;
   for (let i = 1; i < ownTrail.length; i++)
     biggestJump = Math.max(
@@ -341,6 +363,8 @@ function simulate(run: Run): Result {
     ownXAtRelease,
     observerLateMs: (obsTrail.find((s) => s.x >= x)?.t ?? Infinity) - (lastStep + lastTicks) * TICK,
     firstMoveMs: (ownTrail.find((s) => s.x !== X0 || s.y !== Y)?.t ?? Infinity) - startAt,
+    ownSpeeds: speeds(ownTrail),
+    observerSpeeds: speeds(obsTrail),
     own,
   };
 }
@@ -387,6 +411,39 @@ describe("fluid walking (timing simulation)", () => {
       expect(r.biggestJump).toBeLessThan(0.05);
     },
   );
+
+  it("a step that is not whole ticks (435 ms) is walked at its own pace, one speed all the way", () => {
+    // data/balance.yaml since 2026-11-26: a level 1 player's step is 435 ms (here speed
+    // 230 with base_step_ms 1000). The server waits 8, 9, 9, 8, 9... ticks for them and
+    // sends 435 ms each; both clients draw 435 ms steps back to back.
+    expect(stepMs(content.movement, 100, 230, false)).toBe(435);
+    for (const link of [
+      { rttMs: 0, jitterMs: 0 },
+      { rttMs: 40, jitterMs: 0 },
+      { rttMs: 80, jitterMs: 0 },
+    ]) {
+      const r = simulate({ ...link, speed: 230, frameMs: 20, mode: { hold: 8000 } });
+      expect(r.rejections).toBe(0);
+      expect(r.ownStalls).toBe(0);
+      expect(r.observerStalls).toBe(0);
+      expect(r.own.self?.pos.x).toBe(r.serverX);
+      // 8 s of a held key at 435 ms a tile: 18 or 19 tiles, not the 17 of 450 ms steps.
+      expect(r.steps).toBeGreaterThanOrEqual(18);
+      expect(r.steps).toBeLessThanOrEqual(19);
+      // No step is drawn faster or slower than another (whole ticks alone would draw
+      // 400 and 450 ms steps: 6 % each way).
+      for (const [fast, slow] of [r.ownSpeeds, r.observerSpeeds]) {
+        expect(fast).toBeLessThan(1.01);
+        expect(slow).toBeGreaterThan(0.99);
+      }
+    }
+    // With jitter the buffer still plays every step whole: no stop, nothing rejected.
+    const r = simulate({ rttMs: 80, jitterMs: 30, speed: 230, mode: { hold: 8000 } });
+    expect(r.rejections).toBe(0);
+    expect(r.ownStalls).toBe(0);
+    expect(r.observerStalls).toBe(0);
+    expect(r.own.self?.pos.x).toBe(r.serverX);
+  });
 
   it("a fast walker (150 ms a step) on a slow link keeps going too", () => {
     const r = simulate({ rttMs: 250, jitterMs: 50, speed: 667, mode: { hold: 2000 } });
@@ -531,18 +588,18 @@ describe("own steps predicted ahead", () => {
     expect(w.canStep(500 - STEP_LEAD_MS - 1)).toBe(false);
     expect(w.chooseStep(Direction.SOUTH_EAST, 400)).toBeUndefined(); // too soon: nothing
     expect(w.canStep(460)).toBe(true);
-    // A diagonal: 700 ms (500 × √2, to the tick), starting when the first step ends, not now.
+    // A diagonal: 707 ms (500 × √2), starting when the first step ends, not now.
     expect(w.chooseStep(Direction.NORTH_EAST, 460)).toEqual({
       kind: "walk",
       dir: Direction.NORTH_EAST,
       seq: 2,
     });
-    expect(s.walk).toMatchObject({ start: 500, duration: 700 });
+    expect(s.walk).toMatchObject({ start: 500, duration: 707 });
     expect(w.unconfirmed).toBe(2);
     expect(w.drawPos(s, 480).x).toBeCloseTo(X0 + 0.96); // still the first step
     expect(w.facing(s, 480)).toBe(Direction.EAST);
     expect(w.drawPos(s, 500)).toEqual({ x: X0 + 1, y: Y });
-    expect(w.drawPos(s, 850)).toEqual({ x: X0 + 1.5, y: Y - 0.5 });
+    expect(w.drawPos(s, 853.5)).toEqual({ x: X0 + 1.5, y: Y - 0.5 });
     expect(w.facing(s, 850)).toBe(Direction.NORTH_EAST);
     // The first one confirmed: the facing stays the newest step's.
     confirm(w, X0, X0 + 1, 500, 520, 1);

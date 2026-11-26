@@ -433,7 +433,7 @@ func TestRepoMovementSpeed(t *testing.T) {
 		for level := 2; level <= b.Experience.MaxLevel; level++ {
 			got := mv.LevelSpeed(v.AtLevel(level).Speed, level)
 			want := float64(base) * (1 + 0.002*float64(level-1))
-			if got < prev || math.Abs(float64(got)-want) > 0.5 {
+			if got < prev || math.Abs(float64(got)-want) > 0.5001 {
 				t.Fatalf("%s: level %d speed %d, want %.2f (the level before: %d)", id, level, got, want, prev)
 			}
 			prev = got

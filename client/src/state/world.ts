@@ -52,7 +52,7 @@ import { WorldClockState } from "./world-clock.ts";
 import { modsOf } from "./mods.ts";
 import { mapItemKey } from "./corpse-art.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
-import { stepMs } from "./step-time.ts";
+import { stepMs, TICK_MS } from "./step-time.ts";
 import {
   PLAYOUT_CATCH_UP,
   PLAYOUT_MAX_LAG_MS,
@@ -105,6 +105,13 @@ export interface Walk {
   duration: number;
   /** The step before, while it is still being drawn (it ends when this one starts). */
   prev?: Walk | undefined;
+  /**
+   * A step of the server: the part of a tick its walk still owes when it ends, ms. The
+   * server waits whole ticks for a step that lasts `duration_ms` and carries the rest to
+   * the walk's next step (docs/05 "Caminar"), whose tick comes this long before this
+   * step ends.
+   */
+  rest?: number | undefined;
 }
 
 /** An own step the client predicted and sent, until the server confirms it. */
@@ -1368,18 +1375,23 @@ export class WorldState implements TileSource {
     let start = Math.max(at, now);
     let drawn = duration;
     let prev: Walk | undefined;
+    // What the walk's pace owes this step (Walk.rest of the one before): its tick came
+    // this long before that one ends. Starting when it ends is on time, not behind.
+    let owed = 0;
     if (old && old.start + old.duration > now && samePos(old.to, from)) {
       const lag = old.start + old.duration - start;
       if (lag <= PLAYOUT_MAX_LAG_MS) {
         prev = pruned(old, now);
+        owed = old.rest ?? 0;
         if (lag > 0) {
           start += lag;
-          drawn = duration - Math.min(lag, duration * PLAYOUT_CATCH_UP);
+          const late = start - Math.max(at + owed, now);
+          if (late > 0) drawn = duration - Math.min(late, duration * PLAYOUT_CATCH_UP);
         }
       }
     }
     c.pos = to;
-    c.walk = { from, to, start, duration: drawn, prev };
+    c.walk = { from, to, start, duration: drawn, prev, rest: (owed + duration) % TICK_MS };
     c.slide = slideBetween(
       before,
       this.drawPos(c, now),
