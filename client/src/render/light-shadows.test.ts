@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { Sprite, Texture } from "pixi.js";
-import type { AlphaFilter } from "pixi.js";
-import { DEFAULT_LIGHT_SHADOWS } from "@rpg/living-world";
+import { Sprite } from "pixi.js";
+import type { AlphaFilter, Texture } from "pixi.js";
 import { CONTACT_GONE, CastShadows, contactOf, poseOf } from "./cast-shadows.ts";
-import { LightField, LitObjectShadows, castTransform } from "./light-shadows.ts";
+import {
+  DEFAULT_LIGHT_SHADOWS,
+  LightField,
+  LitObjectShadows,
+  castTransform,
+} from "./light-shadows.ts";
 import type { LightMap } from "./light-shadows.ts";
 import type { ObjectShadowHint } from "./object-shadows.ts";
 

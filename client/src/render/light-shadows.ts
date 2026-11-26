@@ -25,6 +25,9 @@ import type { LightCast, LightShadowRules } from "@rpg/living-world";
 import { feetAnchor } from "./cast-shadows.ts";
 import type { ObjectShadowHint, ShadowMap } from "./object-shadows.ts";
 
+/** The numbers of the game data when a test has none. */
+export { DEFAULT_LIGHT_SHADOWS } from "@rpg/living-world";
+
 /** The map as the lights read it (packages/renderer MapView). */
 export interface LightMap extends ShadowMap {
   forEachLight(fn: (x: number, y: number, radius: number) => void): void;
