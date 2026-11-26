@@ -34,3 +34,5 @@ plants:
   # What is left of a cut bush and of cut vines: stubble on the ground, nothing to sway.
   - { item: cut_bush, wind: none }
   - { item: cut_vines, wind: none }
+  # A fallen log: dead wood lying on the ground, nothing to sway (its moss is part of it).
+  - { item: jungle_mossy_log, wind: none }

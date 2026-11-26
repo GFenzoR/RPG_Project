@@ -631,3 +631,126 @@
   description: text.volcan.morvund_sign
   pickupable: false
   blocks_movement: true
+
+# Jungle flora (2026-11-25), drawn with the owner's Gemini ahead of the jungle island: on no
+# map yet. Blocking follows docs/06 "Qué bloquea el paso": trees, palms, the bamboo clump and
+# the curtain of vines are tall and dense (they also block sight); the shrubs, the plantain
+# and the fallen log stop feet only; ferns, the broadleaf plant and flowers are walked through.
+- id: jungle_canopy_tree
+  kind: decoration
+  sprite: decor/jungle_canopy_tree
+  name: item.jungle_canopy_tree.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_spire_tree
+  kind: decoration
+  sprite: decor/jungle_spire_tree
+  name: item.jungle_spire_tree.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_buttress_tree
+  kind: decoration
+  sprite: decor/jungle_buttress_tree
+  name: item.jungle_buttress_tree.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_palm
+  kind: decoration
+  sprite: decor/jungle_palm
+  name: item.jungle_palm.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_leaning_palm
+  kind: decoration
+  sprite: decor/jungle_leaning_palm
+  name: item.jungle_leaning_palm.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_banana_plant
+  kind: decoration
+  sprite: decor/jungle_banana_plant
+  name: item.jungle_banana_plant.name
+  pickupable: false
+  blocks_movement: true
+
+- id: jungle_fern
+  kind: decoration
+  sprite: decor/jungle_fern
+  name: item.jungle_fern.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_fiddle_fern
+  kind: decoration
+  sprite: decor/jungle_fiddle_fern
+  name: item.jungle_fiddle_fern.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_broadleaf
+  kind: decoration
+  sprite: decor/jungle_broadleaf
+  name: item.jungle_broadleaf.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_flowering_shrub
+  kind: decoration
+  sprite: decor/jungle_flowering_shrub
+  name: item.jungle_flowering_shrub.name
+  pickupable: false
+  blocks_movement: true
+
+- id: jungle_thorn_bush
+  kind: decoration
+  sprite: decor/jungle_thorn_bush
+  name: item.jungle_thorn_bush.name
+  pickupable: false
+  blocks_movement: true
+
+- id: jungle_bamboo
+  kind: decoration
+  sprite: decor/jungle_bamboo
+  name: item.jungle_bamboo.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_hanging_vines
+  kind: decoration
+  sprite: decor/jungle_hanging_vines
+  name: item.jungle_hanging_vines.name
+  pickupable: false
+  blocks_movement: true
+  blocks_sight: true
+
+- id: jungle_maw_flower
+  kind: decoration
+  sprite: decor/jungle_maw_flower
+  name: item.jungle_maw_flower.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_flowers
+  kind: decoration
+  sprite: decor/jungle_flowers
+  name: item.jungle_flowers.name
+  pickupable: false
+  blocks_movement: false
+
+- id: jungle_mossy_log
+  kind: decoration
+  sprite: decor/jungle_mossy_log
+  name: item.jungle_mossy_log.name
+  pickupable: false
+  blocks_movement: true

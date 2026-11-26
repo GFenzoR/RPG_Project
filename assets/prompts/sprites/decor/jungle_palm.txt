@@ -1,0 +1,28 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sprites/decor/jungle_palm.png
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-25
+# Modo: Hydrogen
+# Referencia: assets/sprites/decor/oak_tree.png (sha256 248b268ddca04ae51ea1b87ae0e019ce54e1dd9f0aef820e145f381fafe51b2e)
+# Hoja devuelta: jungle_palms_a.png (sha256 7ab827394ab6dec8f8bf355e0350399222ee76a7003cf40c5307c89dc551769b)
+# Importada con: python tools/gemini/import_art.py <hoja> --cut blobs --size 64x96 --layer object --margin 1 --scale 6.75 --colors 20 --names "jungle_palm,-,-"
+
+Pixel art game sprites of three different tropical plants for a top-down role-playing game, in one row of three equal cells (3 columns, 1 row). The attached picture is an oak tree from the same game: match its drawing style exactly (foliage shaded in three or four dark muted greens, lit from the top left, plain brown trunk, dark outline of the local colour), but draw new species. Cell 1: a straight coconut-style palm tree, a slender ringed grey-brown trunk standing perfectly upright with a crown of seven or eight long drooping feathered fronds. Cell 2: a leaning palm tree, its ringed trunk curving gently to the right, with the same kind of crown of long drooping fronds. Cell 3: a banana-like plant, shorter than the palms, a thick green-brown stalk with six huge broad paddle-shaped leaves with split edges arching outward and one small hanging bunch of green fruit. Each plant complete from the foot of the trunk to the tip of the top leaf, trunk clearly visible and much narrower than the crown. No ground, no grass, no sand, no soil patch, no shadow under the plants, nothing floating apart from the plant. Draw no lines, borders, boxes or panels between the cells.
+
+Hard technical requirements, these matter more than the art direction:
+- Solid flat magenta background, exactly RGB(255, 0, 255), filling every pixel that is
+  not part of a drawing. No gradient, no vignette, no texture, no shadow cast onto it.
+- Lay the subjects out in an even grid with equal spacing. Every cell the same size.
+  No labels, no captions, no text of any kind anywhere in the image.
+- Every subject fully inside its own cell, centred, touching neither its neighbours nor
+  the edge of the image. In an animation, the same size and the same ground line in
+  every cell.
+- Three-quarter top-down view: the camera looks down from the south at about 45
+  degrees, so the top and the south face of things show. Light from the top left.
+- Pixel art: crisp square pixels, hard edges, no anti-aliasing, no blur, no soft
+  airbrush shading. Limited palette, flat shading in three or four tones, and a dark
+  outline of the local colour (never pure black).
+- Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
+- They are read at 32x32 pixels in game (people at 64x64), so favour a strong
+  silhouette and clear separation of parts over fine detail.

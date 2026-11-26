@@ -1,0 +1,27 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sprites/decor/jungle_banana_plant.png
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-25
+# Modo: Hydrogen
+# Hoja devuelta: jungle_ground_b.png (sha256 945b94772b9b4ff61267f2e7140694c618f96fe7c235df51e244f9ccabddeb8c)
+# Importada con: python tools/gemini/import_art.py <hoja> --cut blobs --size 64 --layer object --margin 1 --scale 7.355 --colors 20 --names "jungle_banana_plant,-,-,-,-"
+
+Very low resolution pixel art game sprites of five different rainforest things for a top-down role-playing game, in one row of five equal cells (5 columns, 1 row). Each one is drawn on a tiny canvas about 32 pixels wide and shown enlarged, so every pixel is a big clearly visible square block: very chunky, simple, bold shapes, no fine detail, no thin lines, no dithering, no noise. Three flat tones per colour (light on the top left, mid, dark on the lower right) and a solid dark outline one block thick around each whole subject. Cell 1: a banana-like plant about 60 blocks tall, a thick green-brown stalk with five huge broad paddle-shaped medium green leaves arching outward and one small hanging bunch of green fruit. Cell 2: a bamboo clump about 60 blocks tall and 28 wide, six thick jointed yellow-green canes growing close together from one base, each cane three blocks thick with dark joint rings, a few short leaves near the top. Cell 3: a hanging curtain of jungle vines about 60 blocks tall and 28 wide, a solid leafy mass of dark and medium green with six thick ropes of liana hanging down to the floor, wider at the bottom. Cell 4: a carnivorous-looking flower about 28 blocks tall, a fat green stalk, a big dull red trap-like bloom with pale teeth, and three broad leaves at its base. Cell 5: a fallen tree log lying on its side, about 30 blocks wide, short and thick, brown bark with a blanket of green moss on top and two pale mushrooms, the cut end showing rings. No ground, no grass, no soil patch, no shadow under the subjects, nothing floating apart from its subject. Draw no lines, borders, boxes or panels between the cells.
+
+Hard technical requirements, these matter more than the art direction:
+- Solid flat magenta background, exactly RGB(255, 0, 255), filling every pixel that is
+  not part of a drawing. No gradient, no vignette, no texture, no shadow cast onto it.
+- Lay the subjects out in an even grid with equal spacing. Every cell the same size.
+  No labels, no captions, no text of any kind anywhere in the image.
+- Every subject fully inside its own cell, centred, touching neither its neighbours nor
+  the edge of the image. In an animation, the same size and the same ground line in
+  every cell.
+- Three-quarter top-down view: the camera looks down from the south at about 45
+  degrees, so the top and the south face of things show. Light from the top left.
+- Pixel art: crisp square pixels, hard edges, no anti-aliasing, no blur, no soft
+  airbrush shading. Limited palette, flat shading in three or four tones, and a dark
+  outline of the local colour (never pure black).
+- Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
+- They are read at 32x32 pixels in game (people at 64x64), so favour a strong
+  silhouette and clear separation of parts over fine detail.

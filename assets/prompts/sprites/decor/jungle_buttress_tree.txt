@@ -1,0 +1,28 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sprites/decor/jungle_buttress_tree.png
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-25
+# Modo: Hydrogen
+# Referencia: assets/sprites/decor/oak_tree.png (sha256 248b268ddca04ae51ea1b87ae0e019ce54e1dd9f0aef820e145f381fafe51b2e)
+# Hoja devuelta: jungle_trees_a.png (sha256 46689d645e739f5b6710e12fa24b4bfa9d0278de3abbabec65d133c47fab2cd9)
+# Importada con: python tools/gemini/import_art.py <hoja> --cut blobs --size 96 --layer object --margin 1 --scale 6.191 --colors 20 --names "-,-,jungle_buttress_tree"
+
+Pixel art game sprites of three different rainforest trees for a top-down role-playing game, in one row of three equal cells (3 columns, 1 row). The attached picture is an oak tree from the same game: match its drawing style exactly (lumpy leaf canopy shaded in three or four dark muted greens, lit from the top left, plain brown trunk with a slightly wider foot, dark outline of the local colour), but draw new jungle species. Cell 1: a broad canopy jungle tree, a wide flat-topped umbrella crown of dense dark leaves on a straight trunk, a few short lianas hanging under the crown. Cell 2: a tall thin jungle tree, a long slender pale grey-brown trunk with a small rounded tuft of foliage at the very top. Cell 3: a giant old rainforest tree with big flaring buttress roots at the base of a thick trunk and a heavy rounded crown. Each tree complete from the foot of the trunk to the top of the crown, trunk clearly visible and much narrower than the crown, standing upright. No ground, no grass, no soil patch, no shadow under the trees, no loose leaves floating apart from the tree. Draw no lines, borders, boxes or panels between the cells.
+
+Hard technical requirements, these matter more than the art direction:
+- Solid flat magenta background, exactly RGB(255, 0, 255), filling every pixel that is
+  not part of a drawing. No gradient, no vignette, no texture, no shadow cast onto it.
+- Lay the subjects out in an even grid with equal spacing. Every cell the same size.
+  No labels, no captions, no text of any kind anywhere in the image.
+- Every subject fully inside its own cell, centred, touching neither its neighbours nor
+  the edge of the image. In an animation, the same size and the same ground line in
+  every cell.
+- Three-quarter top-down view: the camera looks down from the south at about 45
+  degrees, so the top and the south face of things show. Light from the top left.
+- Pixel art: crisp square pixels, hard edges, no anti-aliasing, no blur, no soft
+  airbrush shading. Limited palette, flat shading in three or four tones, and a dark
+  outline of the local colour (never pure black).
+- Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
+- They are read at 32x32 pixels in game (people at 64x64), so favour a strong
+  silhouette and clear separation of parts over fine detail.

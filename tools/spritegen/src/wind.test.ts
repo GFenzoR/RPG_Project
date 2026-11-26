@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createImage, encodePng, fillRect, WIND_HINT_KINDS } from "@rpg/spritepack";
+import { createImage, decodePng, encodePng, fillRect, WIND_HINT_KINDS } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -105,7 +105,11 @@ describe("the wind metadata of the plant recipes", () => {
     expect(sprites["livingworld/plants/reeds"]?.kind).toBe("reed");
     for (const [path, w] of Object.entries(sprites)) {
       expect(w.pivot, path).toBeLessThan(w.top ?? 0);
-      expect(w.top, path).toBeLessThanOrEqual(render(path).height);
+      // A plant no recipe draws (a pack, Gemini) is measured on its committed PNG.
+      const height = RECIPES[path]
+        ? render(path).height
+        : decodePng(readFileSync(join(root, "assets/sprites", `${path}.png`))).height;
+      expect(w.top, path).toBeLessThanOrEqual(height);
     }
   });
 });

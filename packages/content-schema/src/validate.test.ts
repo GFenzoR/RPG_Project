@@ -628,40 +628,40 @@ describe("validator diagnostics", () => {
     expect(wind()).toEqual([]);
     // A new plant item whose sprite says nothing of the wind.
     const fern =
-      "\n- id: jungle_fern\n  kind: decoration\n  sprite: decor/jungle_fern\n  name: item.grass_tuft.name\n  pickupable: false\n";
+      "\n- id: marsh_fern\n  kind: decoration\n  sprite: decor/marsh_fern\n  name: item.grass_tuft.name\n  pickupable: false\n";
     appendFileSync(file("data/items/plants.yaml"), fern);
     let out = wind();
     expect(out).toHaveLength(1);
     expect(out[0]).toContain("plants.yaml");
-    expect(out[0]).toContain('plant "jungle_fern" has no wind metadata');
+    expect(out[0]).toContain('plant "marsh_fern" has no wind metadata');
     expect(out[0]).toContain("make spritegen");
     // Saying none is an answer; so is a type; so is the sprite's own metadata.
-    appendFileSync(file("data/livingworld/plants.yaml"), "  - { item: jungle_fern, wind: none }\n");
+    appendFileSync(file("data/livingworld/plants.yaml"), "  - { item: marsh_fern, wind: none }\n");
     expect(wind()).toEqual([]);
     edit(
       "data/livingworld/plants.yaml",
-      "{ item: jungle_fern, wind: none }",
-      "{ item: jungle_fern, wind: bush }",
+      "{ item: marsh_fern, wind: none }",
+      "{ item: marsh_fern, wind: bush }",
     );
     expect(wind()).toEqual([]);
-    edit("data/livingworld/plants.yaml", "  - { item: jungle_fern, wind: bush }\n", "");
+    edit("data/livingworld/plants.yaml", "  - { item: marsh_fern, wind: bush }\n", "");
     appendFileSync(
       file("data/livingworld/wind_sprites.yaml"),
-      "  decor/jungle_fern: { kind: bush, pivot: 4, top: 20 }\n",
+      "  decor/marsh_fern: { kind: bush, pivot: 4, top: 20 }\n",
     );
     expect(wind()).toEqual([]);
     // A plant by its sprite's folder or by a word inside its name, not only by its id.
     edit(
       "data/items/plants.yaml",
-      "- id: jungle_fern\n  kind: decoration\n  sprite: decor/jungle_fern",
+      "- id: marsh_fern\n  kind: decoration\n  sprite: decor/marsh_fern",
       "- id: green_thing\n  kind: decoration\n  sprite: flora/plants/green_thing",
     );
     out = wind();
     expect(out.some((m) => m.includes('plant "green_thing" has no wind metadata'))).toBe(true);
     // ...and the metadata of a sprite no item uses is stale.
-    expect(
-      out.some((m) => m.includes("wind_sprites.yaml") && m.includes("decor/jungle_fern")),
-    ).toBe(true);
+    expect(out.some((m) => m.includes("wind_sprites.yaml") && m.includes("decor/marsh_fern"))).toBe(
+      true,
+    );
   });
 
   it("wants the pivot of a tree, the generated file and a listed plant's wind", () => {
