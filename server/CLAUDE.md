@@ -559,7 +559,10 @@ server/
   del cliente. Las de interfaz son el documento de `internal/accountopts` (esquema cerrado:
   un campo nuevo se valida ahí y se declara en `OPTIONS`; el test del cliente compara los
   dos) por `httpapi/options.go`; nunca guardes los bytes del cliente, solo `Canonical()`.
-  Un guardado conserva las secciones `devices.<clase>` que no trae (`KeepMissingDevices`).
+  Un guardado conserva las secciones `devices.<clase>` que no trae (`CanonicalKeeping`),
+  dentro de la transacción de `store.UpdateAccountOptions` (bloquea la fila de la cuenta;
+  nada de mutex en `httpapi`). Lo leído de la base se valida con `ParseStored`, no con
+  `Parse`: JSONB lo devuelve espaciado y más largo que `MaxBytes`.
   El cliente mínimo es 0.2.0 (`gateway.DefaultMinClientVersion`): el primero que lee
   `Welcome.options`.
 

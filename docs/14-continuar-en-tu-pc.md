@@ -232,7 +232,9 @@ el punto 5:
     por defecto `0.2.0`): un cliente anterior ignora `Welcome.options` y mostraría el modo
     seguro activado con el servidor teniéndolo apagado. **Hay que volver a armar la app de
     escritorio** (el build web va dentro del exe); una vieja recibe "cliente
-    desactualizado" al entrar al mundo.
+    desactualizado" al entrar al mundo. El orden al desplegar está en docs/09 ("Subir la
+    versión mínima del cliente"); en este PC, el exe de `play/latest` se vuelve a armar
+    junto con el servidor.
   - **Quitar una opción no se propaga del todo:** volver al zoom ajustado o dejar de seguir
     una misión la borra del servidor, pero otro navegador de la misma clase que todavía la
     tenga la vuelve a subir en su próximo login. Si molesta, la salida es guardar "sin

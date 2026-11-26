@@ -189,17 +189,24 @@ guardadas", más abajo). La tabla de qué se guarda dónde está en
 
 - `GET` devuelve el documento de la cuenta de la sesión; `POST` lo reemplaza, **salvo las
   secciones `devices.<clase>` que el pedido no trae**, que quedan como estaban
-  (`Doc.KeepMissingDevices`): un guardado habla por su tipo de pantalla. Una pestaña abierta
+  (`Doc.CanonicalKeeping`): un guardado habla por su tipo de pantalla. Una pestaña abierta
   hace horas en el PC no sabe lo que el teléfono guardó después, y no debe pisarlo con su
   copia vieja. Una sección que sí viene, aunque sea vacía (`{"desktop":{}}`), reemplaza la
   guardada: así se borra una opción de esa pantalla. La lectura, la mezcla y la escritura
-  de una cuenta van de a una (`optionsLocks`). Si con las secciones conservadas el
-  documento pasa los 16 KiB, se rechaza (`400`). No hay id de cuenta en el pedido: sale de
+  de una cuenta van de a una: son una sola transacción que bloquea la fila de la cuenta
+  (`store.UpdateAccountOptions`), así que no depende de que el servidor sea un solo proceso,
+  y un guardado que espera a otro se rinde con su contexto. Un guardado que cabe solo nunca
+  se rechaza por lo que hay guardado: si con las secciones conservadas el documento pasa los
+  16 KiB, se guarda sin ellas (solo llega ahí una sección inflada a mano, mayor que la de
+  cualquier cliente; rechazarlo dejaría a esa pantalla sin poder guardar nada más). No hay
+  id de cuenta en el pedido: sale de
   la sesión (`authed`), nunca del cliente. Es `POST` y no `PUT` porque el puente de la app
   de escritorio solo deja pasar `GET` y `POST`.
-- `account` en la respuesta del `GET` es una etiqueta estable de la cuenta (un hash, no el
-  id; no sirve para nada en la API): el cliente la recuerda junto al caché para no rellenar
-  una cuenta con lo que otra dejó en el mismo navegador.
+- `account` en la respuesta del `GET` es una etiqueta estable de la cuenta (no sirve para
+  nada en la API): el cliente la recuerda junto al caché para no rellenar una cuenta con lo
+  que otra dejó en el mismo navegador. Es un hash sin clave de un id secuencial, así que
+  quien la tenga puede hallar el id probando: **solo se le manda a la propia cuenta**. Si
+  algún día se muestra a terceros, debe pasar a un HMAC con una clave del servidor.
 - **Esquema cerrado, versión 1** (`accountopts.Doc`): una clave desconocida en cualquier
   nivel, un tipo equivocado, un valor fuera de su enum o rango, datos después del
   documento o más de 16 KiB (`accountopts.MaxBytes`) lo rechazan entero. No hay texto
@@ -231,7 +238,11 @@ guardadas", más abajo). La tabla de qué se guarda dónde está en
   codificar en forma canónica (`Doc.Canonical`); la tabla además limita el tamaño (64 KiB
   de JSONB: un documento válido de 16 KiB de texto ocupa cerca del doble como JSONB, así
   que el tope de la tabla es un respaldo y no el límite que encuentra un documento
-  válido). Un documento guardado que el servidor ya no acepta se lee como vacío.
+  válido). Un documento guardado que el servidor ya no acepta se lee como vacío. Al
+  releerlo, JSONB lo devuelve con un espacio tras cada `:` y `,` (hasta un 20 % más largo
+  que la forma canónica): el tope de 16 KiB se aplica a la forma canónica, por eso lo
+  guardado se lee con `accountopts.ParseStored`, que quita ese espaciado antes de validar,
+  y nunca con `Parse` directo.
 - **Límites:** sesión obligatoria; `Content-Type: application/json` (frena formularios
   cross-site, como el resto de la API); 20 guardados de ráfaga y uno cada 3 s por cuenta
   (`DefaultOptionsRateLimit`, `429` con `Retry-After`), aparte del límite por cuenta de

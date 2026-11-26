@@ -27,8 +27,13 @@ import (
 // Version is the document version this server reads and writes.
 const Version = 1
 
-// MaxBytes bounds the document, as sent and as stored.
+// MaxBytes bounds the document as sent and in its canonical form (the one Canonical
+// writes). The database gives it back spaced its own way, longer: ParseStored reads that.
 const MaxBytes = 16 << 10
+
+// maxStoredBytes bounds what ParseStored compacts: a canonical document with a space
+// after every ":" and "," (JSONB's output) is far below it.
+const maxStoredBytes = 4 * MaxBytes
 
 // Bounds of the lists and maps.
 const (
@@ -149,6 +154,23 @@ func Parse(raw []byte) (*Doc, error) {
 	return &d, nil
 }
 
+// ParseStored is Parse for a document read back from the database. The column is JSONB,
+// which returns the document in its own spacing (a space after every ":" and ","): up
+// to a fifth longer than the canonical form that was saved, so a document that fitted
+// MaxBytes when it was saved would not pass Parse as read. The spacing is removed first;
+// the limit and the schema are then the same.
+func ParseStored(raw []byte) (*Doc, error) {
+	if len(raw) > maxStoredBytes {
+		return nil, fmt.Errorf("%w: %d bytes stored, at most %d", ErrInvalid, len(raw), maxStoredBytes)
+	}
+	var compact bytes.Buffer
+	compact.Grow(len(raw))
+	if err := json.Compact(&compact, raw); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalid, err) //nolint:errorlint // the decoder's text only
+	}
+	return Parse(compact.Bytes())
+}
+
 // Canonical is the document as stored and served: only the fields Parse understood, in
 // a fixed order. It fails for a document that would not parse back (too large).
 func (d *Doc) Canonical() ([]byte, error) {
@@ -180,6 +202,32 @@ func (d *Doc) KeepMissingDevices(stored *Doc) {
 		}
 		d.Devices[class] = dev
 	}
+}
+
+// CanonicalKeeping is the canonical form of d with the device sections of stored that d
+// does not bring (KeepMissingDevices); d is not changed. A save that was valid alone
+// never fails because of what is stored: if the document does not fit MaxBytes with the
+// kept sections, it is saved without them (only sections made larger than any client
+// writes get there, and refusing would leave that screen unable to save anything again).
+func (d *Doc) CanonicalKeeping(stored *Doc) ([]byte, error) {
+	own, err := d.Canonical()
+	if err != nil {
+		return nil, err
+	}
+	merged := *d
+	merged.Devices = make(map[string]*Device, len(d.Devices))
+	for class, dev := range d.Devices {
+		merged.Devices[class] = dev
+	}
+	merged.KeepMissingDevices(stored)
+	if len(merged.Devices) == len(d.Devices) {
+		return own, nil
+	}
+	out, err := merged.Canonical()
+	if errors.Is(err, ErrInvalid) {
+		return own, nil
+	}
+	return out, err
 }
 
 // Empty is the document of an account that never saved one.

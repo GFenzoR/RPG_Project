@@ -186,3 +186,105 @@ func TestKeepMissingDevices(t *testing.T) {
 		t.Errorf("nothing stored: %s", got)
 	}
 }
+
+// deviceOf is a device section with n windows of every field in each of its two lists:
+// about 130 bytes of canonical JSON per n.
+func deviceOf(n int) string {
+	var places []string
+	for i := range n {
+		places = append(places, fmt.Sprintf(`"w%d":{"open":true,"collapsed":false,"x":%d,"y":-%d,"w":7,"h":9}`, i, i, i))
+	}
+	p := strings.Join(places, ",")
+	return `{"zoom":2,"windows":{"v":3,"z":[],"win":{` + p + `},"others":{` + p + `}}}`
+}
+
+// asJSONB spells a canonical document the way a JSONB column returns it: a space after
+// every ":" and ",". No string of the schema holds either character.
+func asJSONB(canon []byte) []byte {
+	return []byte(strings.NewReplacer(":", ": ", ",", ", ").Replace(string(canon)))
+}
+
+// A document that fitted when it was saved reads back from the database, which spaces it
+// its own way and makes it longer than MaxBytes.
+func TestParseStoredReadsWhatTheDatabaseReturns(t *testing.T) {
+	var canon []byte
+	for n := 1; n <= accountopts.MaxWindows; n++ {
+		d, err := accountopts.Parse([]byte(`{"v":1,"devices":{"desktop":` + deviceOf(n) + `,"touch":` + deviceOf(n) + `}}`))
+		if err != nil {
+			break // over MaxBytes
+		}
+		if canon, err = d.Canonical(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored := asJSONB(canon)
+	if len(canon) < accountopts.MaxBytes*9/10 || len(stored) <= accountopts.MaxBytes {
+		t.Fatalf("the fullest document is %d bytes, %d as stored: the test needs one that only fits compact", len(canon), len(stored))
+	}
+	if _, err := accountopts.Parse(stored); !errors.Is(err, accountopts.ErrInvalid) {
+		t.Fatalf("Parse of the spaced document = %v, want it over the limit (else this test proves nothing)", err)
+	}
+	d, err := accountopts.ParseStored(stored)
+	if err != nil {
+		t.Fatalf("a document saved within the limit does not read back: %v", err)
+	}
+	if again, err := d.Canonical(); err != nil || string(again) != string(canon) {
+		t.Fatalf("read back differs from what was saved (%v)", err)
+	}
+	// The same schema and the same limit as Parse, whatever the spacing.
+	for name, raw := range map[string]string{
+		"unknown key":  `{"v": 1, "motd": "hi"}`,
+		"markup":       `{"v": 1, "lang": "<script>"}`,
+		"not json":     `v=1`,
+		"two docs":     `{"v": 1} {"v": 1}`,
+		"only padding": `{"v": 1` + strings.Repeat(" ", 5*accountopts.MaxBytes) + `}`,
+		"too large":    `{"v":1,"devices":{"desktop":` + deviceOf(accountopts.MaxWindows) + `,"touch":` + deviceOf(accountopts.MaxWindows) + `}}`,
+	} {
+		if _, err := accountopts.ParseStored([]byte(raw)); !errors.Is(err, accountopts.ErrInvalid) {
+			t.Errorf("%s: ParseStored = %v, want ErrInvalid", name, err)
+		}
+	}
+}
+
+// A save keeps the other screen's section, but never fails because of it: when both do
+// not fit, the save's own document is what is stored.
+func TestCanonicalKeeping(t *testing.T) {
+	parse := func(raw string) *accountopts.Doc {
+		t.Helper()
+		d, err := accountopts.Parse([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	const own = `{"v":1,"lang":"en","devices":{"desktop":{"zoom":3}}}`
+	sent := parse(own)
+	got, err := sent.CanonicalKeeping(parse(`{"v":1,"lang":"es","devices":{"desktop":{"zoom":2},"touch":{"zoom":4}}}`))
+	if want := `{"v":1,"lang":"en","devices":{"desktop":{"zoom":3},"touch":{"zoom":4}}}`; err != nil || string(got) != want {
+		t.Fatalf("kept: %s, %v\nwant %s", got, err, want)
+	}
+	if after, _ := sent.Canonical(); string(after) != own {
+		t.Fatalf("the document sent was changed: %s", after)
+	}
+	if got, err := sent.CanonicalKeeping(nil); err != nil || string(got) != own {
+		t.Fatalf("nothing stored: %s, %v", got, err)
+	}
+
+	// Each section fits alone; together they are over MaxBytes.
+	big := deviceOf(accountopts.MaxWindows)
+	desktop := parse(`{"v":1,"lang":"en","devices":{"desktop":` + big + `}}`)
+	touch := parse(`{"v":1,"devices":{"touch":` + big + `}}`)
+	both := *desktop
+	both.Devices = map[string]*accountopts.Device{"desktop": desktop.Devices["desktop"], "touch": touch.Devices["touch"]}
+	if _, err := both.Canonical(); !errors.Is(err, accountopts.ErrInvalid) {
+		t.Fatalf("the two sections fit together (%v): the test needs larger ones", err)
+	}
+	alone, err := desktop.Canonical()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = desktop.CanonicalKeeping(touch)
+	if err != nil || string(got) != string(alone) {
+		t.Fatalf("a save that fits alone is refused or changed by what is stored: %v", err)
+	}
+}

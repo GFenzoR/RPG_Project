@@ -4,8 +4,10 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -90,8 +92,25 @@ func TestSavedOptionsMigration(t *testing.T) {
 	}
 	// The largest document the API accepts (16 KiB of window places, the densest JSONB
 	// there is in the schema) fits the table's cap.
-	if err := st.SaveAccountOptions(ctx, acc, fullestOptions(t), now); err != nil {
+	fullest := fullestOptions(t)
+	if err := st.SaveAccountOptions(ctx, acc, fullest, now); err != nil {
 		t.Fatalf("a valid document of the largest size is refused by the table: %v", err)
+	}
+	// And reads back: JSONB returns it spaced its own way, longer than the API's limit,
+	// which accountopts.ParseStored accepts and Parse would not.
+	stored, err := st.AccountOptions(ctx, acc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored) <= accountopts.MaxBytes {
+		t.Fatalf("the fullest document reads back as %d bytes: no longer than the limit, so this proves nothing", len(stored))
+	}
+	back, err := accountopts.ParseStored(stored)
+	if err != nil {
+		t.Fatalf("the fullest document does not read back (%d bytes saved, %d read): %v", len(fullest), len(stored), err)
+	}
+	if again, err := back.Canonical(); err != nil || string(again) != string(fullest) {
+		t.Fatalf("the fullest document reads back different (%v)", err)
 	}
 	huge := `{"v":1,"lang":"` + strings.Repeat("x", 100000) + `"}`
 	if err := st.SaveAccountOptions(ctx, acc, []byte(huge), now); err == nil {
@@ -100,6 +119,91 @@ func TestSavedOptionsMigration(t *testing.T) {
 	if err := st.SaveAccountOptions(ctx, acc, []byte(`[1]`), now); err == nil {
 		t.Fatal("a document that is not an object accepted by the table")
 	}
+
+	// UpdateAccountOptions: the merge sees what is stored (nil: never saved), its error
+	// writes nothing, and the saves of one account are one after another.
+	errMerge := errors.New("merge refused")
+	if err := st.UpdateAccountOptions(ctx, other, now, func(stored []byte) ([]byte, error) {
+		if stored != nil {
+			t.Errorf("an account that never saved merges over %q", stored)
+		}
+		return nil, errMerge
+	}); !errors.Is(err, errMerge) {
+		t.Fatalf("the merge's error came back as %v", err)
+	}
+	if doc, err := st.AccountOptions(ctx, other); err != nil || doc != nil {
+		t.Fatalf("a refused merge stored %q, %v", doc, err)
+	}
+	if err := st.UpdateAccountOptions(ctx, 999999, now, func([]byte) ([]byte, error) {
+		t.Error("merge called for an account that does not exist")
+		return []byte(`{"v":1}`), nil
+	}); err == nil {
+		t.Fatal("an account that does not exist saved options")
+	}
+	const saves = 12
+	var wg sync.WaitGroup
+	errs := make(chan error, saves)
+	for range saves {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- st.UpdateAccountOptions(ctx, other, now, func(stored []byte) ([]byte, error) {
+				d := accountopts.Empty()
+				if stored != nil {
+					var err error
+					if d, err = accountopts.ParseStored(stored); err != nil {
+						return nil, err
+					}
+				}
+				n := 0
+				if d.ChatOpacity != nil {
+					n = *d.ChatOpacity
+				}
+				n++
+				d.ChatOpacity = &n
+				return d.Canonical()
+			})
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("a concurrent save: %v", err)
+		}
+	}
+	doc, err = st.AccountOptions(ctx, other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d, err := accountopts.ParseStored(doc); err != nil || d.ChatOpacity == nil || *d.ChatOpacity != saves {
+		t.Fatalf("%d concurrent saves left %s (%v): some read the document before another wrote it", saves, doc, err)
+	}
+	// A save that waits behind another gives up with its context.
+	held, release := make(chan struct{}), make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- st.UpdateAccountOptions(ctx, other, now, func(stored []byte) ([]byte, error) {
+			close(held)
+			<-release
+			return stored, nil
+		})
+	}()
+	<-held
+	short, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	err = st.UpdateAccountOptions(short, other, now, func([]byte) ([]byte, error) {
+		t.Error("the waiting save merged while the other held the account")
+		return []byte(`{"v":1}`), nil
+	})
+	cancel()
+	close(release)
+	if err == nil {
+		t.Fatal("a save behind another did not give up with its context")
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("the save that held the account: %v", err)
+	}
+
 	if err := st.MigrateDownAll(ctx); err != nil {
 		t.Fatal(err)
 	}

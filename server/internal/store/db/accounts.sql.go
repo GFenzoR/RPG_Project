@@ -91,6 +91,20 @@ func (q *Queries) LockAccount(ctx context.Context, id int64) (LockAccountRow, er
 	return i, err
 }
 
+const lockAccountForOptions = `-- name: LockAccountForOptions :one
+SELECT id FROM accounts WHERE id = $1 FOR NO KEY UPDATE
+`
+
+// Serializes the saves of one account's interface options (store.UpdateAccountOptions):
+// account_options may have no row yet to lock, the account always has one. FOR NO KEY
+// UPDATE: the insert into account_options (a FOR KEY SHARE on this row) is not blocked.
+func (q *Queries) LockAccountForOptions(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, lockAccountForOptions, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
 const saveAccountOptions = `-- name: SaveAccountOptions :exec
 INSERT INTO account_options (account_id, doc, updated_at)
 VALUES ($1, $2, $3)

@@ -236,6 +236,10 @@ type Querier interface {
 	LockAccount(ctx context.Context, id int64) (LockAccountRow, error)
 	// Serializes changes to an account's login methods (unlinking the last one).
 	LockAccountForIdentities(ctx context.Context, id int64) (LockAccountForIdentitiesRow, error)
+	// Serializes the saves of one account's interface options (store.UpdateAccountOptions):
+	// account_options may have no row yet to lock, the account always has one. FOR NO KEY
+	// UPDATE: the insert into account_options (a FOR KEY SHARE on this row) is not blocked.
+	LockAccountForOptions(ctx context.Context, id int64) (int64, error)
 	// The account session a password change keeps, locked for the change's transaction: a
 	// "sign out everywhere" that deleted it first makes the change fail; one that comes
 	// after waits for the change and then deletes it too.

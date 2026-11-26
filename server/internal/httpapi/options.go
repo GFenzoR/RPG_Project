@@ -23,9 +23,14 @@ import (
 // AccountOptions stores the interface options document of each account. *store.Store
 // implements it.
 type AccountOptions interface {
-	// AccountOptions returns the stored document, nil if the account never saved one.
+	// AccountOptions returns the stored document as the database spells it
+	// (accountopts.ParseStored reads it), nil if the account never saved one.
 	AccountOptions(ctx context.Context, accountID int64) ([]byte, error)
-	SaveAccountOptions(ctx context.Context, accountID int64, doc []byte, now time.Time) error
+	// UpdateAccountOptions replaces the document with merge(stored), stored being what
+	// AccountOptions would return. The read and the write are one step per account: two
+	// saves of one account never interleave, whatever process they come from. An error of
+	// merge is returned as it is and nothing is written.
+	UpdateAccountOptions(ctx context.Context, accountID int64, now time.Time, merge func(stored []byte) ([]byte, error)) error
 }
 
 // DefaultOptionsRateLimit limits POST /api/account/options per account. The client saves
@@ -53,19 +58,18 @@ func (a *api) optionsLimited(next authedFunc) authedFunc {
 type optionsJSON struct {
 	Options *accountopts.Doc `json:"options"`
 	// Account tells one account from another on a shared browser: the client does not
-	// fill a document with what another account left in localStorage. A tag, not the id.
+	// fill a document with what another account left in localStorage.
 	Account string `json:"account"`
 }
 
-// optionsTag is the tag of an account in optionsJSON: stable, and of no use to the API.
+// optionsTag is the tag of an account in optionsJSON: stable (the client keeps it in
+// localStorage across server restarts) and of no use to the API. It is an unkeyed hash of
+// a sequential id, so whoever holds a tag can find the id by trying them all: it is only
+// ever sent to the account itself. Shown to anyone else it would have to be keyed.
 func optionsTag(accountID int64) string {
 	sum := sha256.Sum256([]byte("rpg-account-options:" + strconv.FormatInt(accountID, 10)))
 	return hex.EncodeToString(sum[:8])
 }
-
-// optionsStripes bounds the locks that make a save's read, merge and write one step per
-// account (the game server is one process: docs/01).
-const optionsStripes = 64
 
 // getOptions answers the account's document, the empty one ({"v":1}) if it never saved.
 // A stored document this server no longer accepts (an older schema) reads as empty: the
@@ -78,7 +82,7 @@ func (a *api) getOptions(w http.ResponseWriter, r *http.Request, accountID int64
 	}
 	doc := accountopts.Empty()
 	if raw != nil {
-		if d, err := accountopts.Parse(raw); err == nil {
+		if d, err := accountopts.ParseStored(raw); err == nil {
 			doc = d
 		}
 	}
@@ -87,7 +91,7 @@ func (a *api) getOptions(w http.ResponseWriter, r *http.Request, accountID int64
 
 // saveOptions replaces the account's document with the one in the body, except the
 // sections of the device classes the body does not bring, which stay as stored (a save
-// speaks for its own kind of screen: accountopts.KeepMissingDevices). Like decode
+// speaks for its own kind of screen: accountopts.CanonicalKeeping). Like decode
 // (Content-Type application/json: no cross-site form can send it), with the document's
 // own size limit and schema.
 func (a *api) saveOptions(w http.ResponseWriter, r *http.Request, accountID int64) {
@@ -111,30 +115,23 @@ func (a *api) saveOptions(w http.ResponseWriter, r *http.Request, accountID int6
 		writeError(w, http.StatusBadRequest, "bad_request")
 		return
 	}
-	// Two saves of one account (the computer and the phone) must not interleave between
-	// the read and the write.
-	lock := &a.optionsLocks[uint64(accountID)%optionsStripes]
-	lock.Lock()
-	defer lock.Unlock()
-	stored, err := a.cfg.Options.AccountOptions(r.Context(), accountID)
-	if err != nil {
-		a.fail(w, r, err)
-		return
-	}
-	if stored != nil {
-		// A stored document this server no longer accepts has nothing worth keeping.
-		if old, err := accountopts.Parse(stored); err == nil {
-			doc.KeepMissingDevices(old)
-		}
-	}
-	// With the kept sections the document may not fit any more: refused, like one sent
-	// too large.
-	canon, err := doc.Canonical()
-	if err != nil {
+	// What the save brings must stand alone; then it is merged with what is stored, in
+	// one step per account (the computer and the phone may save at once).
+	if _, err := doc.Canonical(); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request")
 		return
 	}
-	if err := a.cfg.Options.SaveAccountOptions(r.Context(), accountID, canon, a.cfg.Clock.Now()); err != nil {
+	err = a.cfg.Options.UpdateAccountOptions(r.Context(), accountID, a.cfg.Clock.Now(), func(stored []byte) ([]byte, error) {
+		// A stored document this server no longer accepts has nothing worth keeping.
+		var old *accountopts.Doc
+		if stored != nil {
+			if d, err := accountopts.ParseStored(stored); err == nil {
+				old = d
+			}
+		}
+		return doc.CanonicalKeeping(old)
+	})
+	if err != nil {
 		a.fail(w, r, err)
 		return
 	}

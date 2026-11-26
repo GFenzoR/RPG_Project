@@ -20,7 +20,6 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -208,13 +207,11 @@ type api struct {
 	accountLimiter  *limiter // authed requests per account
 	writeLimiter    *limiter // play and character creation per account
 	optionsLimiter  *limiter // saves of the interface options per account
-	// optionsLocks: one save of the interface options at a time per account (options.go).
-	optionsLocks [optionsStripes]sync.Mutex
-	netLimiter   *limiter // rateLimited routes per network
-	netHashing   *inflight
-	deviceKey    [32]byte
-	healthC      healthCache
-	logs         logSampler
+	netLimiter      *limiter // rateLimited routes per network
+	netHashing      *inflight
+	deviceKey       [32]byte
+	healthC         healthCache
+	logs            logSampler
 }
 
 func orDefault(rl, def RateLimit) RateLimit {

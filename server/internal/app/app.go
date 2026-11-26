@@ -165,6 +165,10 @@ type App struct {
 	handler http.Handler
 }
 
+// New finds the interface options store with a type assertion: a *store.Store that
+// stopped implementing it would silently drop the routes.
+var _ httpapi.AccountOptions = (*store.Store)(nil)
+
 // New builds the stack. Nothing runs until Run.
 func New(cfg Config) (*App, error) {
 	if cfg.Store == nil || cfg.Clock == nil {

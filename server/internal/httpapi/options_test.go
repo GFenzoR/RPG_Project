@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,15 +21,28 @@ type fakeOptions struct {
 	docs map[int64][]byte
 }
 
+// asJSONB spells a document the way the JSONB column of the real store returns it: a
+// space after every ":" and "," (no string of the schema holds either).
+func asJSONB(doc []byte) []byte {
+	if doc == nil {
+		return nil
+	}
+	return []byte(strings.NewReplacer(":", ": ", ",", ", ").Replace(string(doc)))
+}
+
 func (f *fakeOptions) AccountOptions(_ context.Context, id int64) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.docs[id], nil
+	return asJSONB(f.docs[id]), nil
 }
 
-func (f *fakeOptions) SaveAccountOptions(_ context.Context, id int64, doc []byte, _ time.Time) error {
+func (f *fakeOptions) UpdateAccountOptions(_ context.Context, id int64, _ time.Time, merge func([]byte) ([]byte, error)) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	doc, err := merge(asJSONB(f.docs[id]))
+	if err != nil {
+		return err
+	}
 	f.docs[id] = doc
 	return nil
 }
@@ -151,6 +165,65 @@ func TestAccountOptionsSaveKeepsTheOtherDeviceClass(t *testing.T) {
 	save(`{"v":1,"lang":"en","devices":{"desktop":{}}}`)
 	if got := string(opts.docs[1]); got != `{"v":1,"lang":"en","devices":{"desktop":{},"touch":{"touch_pad":true,"zoom":4}}}` {
 		t.Fatalf("after the empty section: %s", got)
+	}
+}
+
+// windowsOf is a device section of n windows with every field, in both of its lists.
+func windowsOf(n int) string {
+	var places []string
+	for i := range n {
+		places = append(places, fmt.Sprintf(`"w%d":{"open":true,"collapsed":false,"x":%d,"y":-%d,"w":7,"h":9}`, i, i, i))
+	}
+	p := strings.Join(places, ",")
+	return `{"zoom":2,"windows":{"v":3,"z":[],"win":{` + p + `},"others":{` + p + `}}}`
+}
+
+// The largest documents: one that only fits the limit in canonical form reads back
+// whole (the database returns it spaced, longer), and a save that fits alone is never
+// refused because the other screen's stored section no longer fits beside it.
+func TestAccountOptionsLargestDocuments(t *testing.T) {
+	h, opts, ana, _ := optionsHarness(t, httpapi.RateLimit{})
+	post := func(body string) int {
+		return h.do(req{method: "POST", path: optionsPath, token: ana, body: body}).Code
+	}
+	read := func() string {
+		t.Helper()
+		w := h.do(req{method: "GET", path: optionsPath, token: ana})
+		expect(t, w, http.StatusOK, "")
+		return optionsOf(t, w)
+	}
+
+	full := `{"v":1,"devices":{"desktop":` + windowsOf(60) + `,"touch":` + windowsOf(60) + `}}`
+	if len(full) > accountopts.MaxBytes || len(asJSONB([]byte(full))) <= accountopts.MaxBytes {
+		t.Fatalf("the document is %d bytes, %d as stored: the test needs one that only fits compact", len(full), len(asJSONB([]byte(full))))
+	}
+	if got := post(full); got != http.StatusNoContent {
+		t.Fatalf("a document within the limit: status %d", got)
+	}
+	if got := read(); got != string(opts.docs[1]) || !strings.Contains(got, `"w59"`) {
+		t.Fatalf("a document saved within the limit reads back as %d bytes, stored %d", len(got), len(opts.docs[1]))
+	}
+	// And the next save still knows the other screen's section.
+	if got := post(`{"v":1,"lang":"en","devices":{"desktop":{"zoom":3}}}`); got != http.StatusNoContent {
+		t.Fatalf("save over the largest document: status %d", got)
+	}
+	if got := read(); !strings.Contains(got, `"touch":{"zoom":2,"windows"`) || !strings.Contains(got, `"desktop":{"zoom":3}`) {
+		t.Fatalf("the other screen's section was lost: %.120s", got)
+	}
+
+	// The phone's section, large, is stored; the computer saves one as large: both do not
+	// fit, the save is accepted and the document is the computer's.
+	big := windowsOf(accountopts.MaxWindows)
+	if got := post(`{"v":1,"devices":{"touch":` + big + `,"desktop":{}}}`); got != http.StatusNoContent {
+		t.Fatalf("the phone's large section: status %d", got)
+	}
+	for range 2 { // again and again: it does not stay refused
+		if got := post(`{"v":1,"lang":"es","devices":{"desktop":` + big + `}}`); got != http.StatusNoContent {
+			t.Fatalf("a save that fits alone, with a large section stored: status %d", got)
+		}
+	}
+	if got := read(); !strings.Contains(got, `"lang":"es"`) || !strings.Contains(got, `"desktop":{"zoom":2,"windows"`) || strings.Contains(got, `"touch"`) {
+		t.Fatalf("after the save that did not fit with the stored section: %.120s", got)
 	}
 }
 
