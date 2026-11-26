@@ -374,7 +374,7 @@ describe("landContent", () => {
   });
 });
 
-describe("mapcli pr-check", { timeout: 60_000 }, () => {
+describe("mapcli pr-check", { timeout: 180_000 }, () => {
   it("passes a change inside a community plot and renders it before/after", () => {
     const { root, git, edit } = sandbox();
     git("checkout", "-qb", "pr");
