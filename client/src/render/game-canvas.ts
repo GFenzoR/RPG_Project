@@ -79,7 +79,8 @@ import { ParticleLayer, stepKindOf } from "./particles.ts";
 import { bodyKindOf, creatureGait, kicksUp, mountLivingWorld, newWalkSample } from "./living.ts";
 import type { StepVoice } from "./living.ts";
 import type { Gait } from "./living.ts";
-import { CastShadows, contactShare } from "./cast-shadows.ts";
+import { CastShadows, contactOf, poseOf } from "./cast-shadows.ts";
+import { LightField, LitObjectShadows } from "./light-shadows.ts";
 import { ObjectShadows } from "./object-shadows.ts";
 import { TargetHalo } from "./target-halo.ts";
 import { roofLookup } from "./roofs.ts";
@@ -283,6 +284,16 @@ export interface GustHook {
 }
 
 /** What the E2E hook `sky()` tells (GameCanvas.sky). */
+export interface LightShadowHook {
+  lights: number;
+  shadows: number;
+  objectShadows: number;
+  /** Whether the tile of the own player is under a roof. */
+  selfIndoor: boolean;
+  /** Opacity of the own player's contact ellipse (0: none, it casts a shadow). */
+  selfContact: number;
+}
+
 export interface SkyHook {
   phase: string;
   ambient: number;
@@ -360,6 +371,12 @@ export interface GameCanvas {
    * in the calm between two gusts now (no plant moves); undefined without wind.
    */
   gust(x: number, y: number, min?: number): GustHook | undefined;
+  /**
+   * E2E: the shadows lamps and fires cast now (render/light-shadows.ts), underground too:
+   * the lights in view, the shadow sprites of creatures and of map objects, whether the own
+   * player stands under a roof and how strong its contact ellipse is drawn.
+   */
+  lightShadows(): LightShadowHook;
   /**
    * E2E: the footfalls of the walks drawn (livingworld/README.md "Huellas"): the footprints
    * on the ground now, and the last feet of the own player that touched the ground, oldest
@@ -749,6 +766,36 @@ export async function createGameCanvas(
   };
   const objectShadows = new ObjectShadows(T, shadowHint);
   castShadows.mount(objectShadows.root);
+  // The shadows of lamps, torches and fires (render/light-shadows.ts): a second layer of the
+  // same kind over the indoor floors, for under a roof, underground and the night.
+  const lightRules = content.livingWorld?.shadows?.lights;
+  const lightField = lightRules ? new LightField(lightRules) : undefined;
+  const lightShadows = new CastShadows();
+  view.litOverlay.addChild(lightShadows.root);
+  const litObjects = new LitObjectShadows(shadowHint);
+  lightShadows.mount(litObjects.root);
+  const litPose = poseOf(0, 0, 0);
+  /** What the contact ellipse keeps where nothing casts a shadow (shadows.yaml unlit_contact). */
+  const unlitContact = lightRules?.unlitContact ?? 1;
+  /** This frame: the lights cast, how much they show under the open sky, the sun's alpha. */
+  let lit = false;
+  let litOpen = 0;
+  let sunAlpha = 0;
+  /**
+   * The shadows of a body at tile (x, y) this frame: sets its contact ellipse and answers
+   * whether the sun casts (1), a light does (2), both (3) or none (0). After a 2 or a 3
+   * lightShadows is aimed for it.
+   */
+  const shade = (figure: CreatureBody, x: number, y: number): number => {
+    const indoor = view.indoorAt(Math.round(x), Math.round(y));
+    const sun = sunAlpha > 0 && !indoor;
+    const glow = lit && lightField ? lightField.at(x, y, indoor, litOpen) : 0;
+    figure.contactRest = unlitContact;
+    figure.contact = contactOf(sun ? sunAlpha : 0, glow * litPose.alpha, unlitContact);
+    if (glow > 0 && lightField)
+      lightShadows.aim(lightField.pose.skewX, lightField.pose.scaleY, glow);
+    return (sun ? 1 : 0) | (glow > 0 ? 2 : 0);
+  };
   const shadowWind = living
     ? {
         version: () => living.windVersion(),
@@ -1450,14 +1497,13 @@ export async function createGameCanvas(
     }
   };
   /**
-   * `casting`: the frame casts shadows; a falling body keeps its own until it fades (and
-   * `contact` of its ellipse meanwhile), unless it fell indoors.
+   * A falling body keeps its shadows until it fades (the sun's, unless it fell indoors, and
+   * the lights').
    */
-  const drawGhosts = (now: number, casting: boolean, contact: number): void => {
+  const drawGhosts = (now: number): void => {
     for (let i = ghosts.length - 1; i >= 0; i--) {
       const g = ghosts[i] as Ghost;
-      const sunlit = casting && !view.indoorAt(Math.round(g.body.x / T), Math.round(g.body.y / T));
-      g.figure.contact = sunlit ? contact : 1;
+      const shaded = shade(g.figure, g.body.x / T, g.body.y / T);
       animInput.now = now;
       const [gx, gy] = delta(g.dir);
       animInput.dir = faceTo(g.state, g.figure.clips.meta, now, gx, gy, false, g.figure.eight);
@@ -1468,7 +1514,10 @@ export async function createGameCanvas(
       animate(g.state, g.figure.clips.meta, animInput, pose);
       g.figure.draw(pose, dirIndex(animInput.dir));
       if (pose.done) dropGhost(i);
-      else if (sunlit) g.figure.castShadow(castShadows, g.body.x, g.body.y);
+      else {
+        if (shaded & 1) g.figure.castShadow(castShadows, g.body.x, g.body.y);
+        if (shaded & 2) g.figure.castShadow(lightShadows, g.body.x, g.body.y);
+      }
     }
   };
 
@@ -1584,8 +1633,18 @@ export async function createGameCanvas(
     // After the map's render and the living world's tick: the chunks and the wind's strips
     // of this frame exist. Placed again only when the map or the sun moved.
     objectShadows.update(view, shadowPose, shadowWind);
-    // A creature casts its shadow or stands on its contact ellipse, never both.
-    const outdoorContact = casting && shadowPose ? contactShare(shadowPose.alpha) : 1;
+    // A creature casts a shadow (the sun's, the moon's, a lamp's) or stands on its contact
+    // ellipse, never both (shade).
+    sunAlpha = casting && shadowPose ? shadowPose.alpha : 0;
+    litOpen = isDark(self.pos.z) ? 1 : (skyNow?.lamps ?? 0);
+    lit = false;
+    if (lightField) {
+      lightField.sync(view);
+      litPose.alpha = lightField.alpha(now, reducedMotion());
+      lit = lightField.count > 0 && lightShadows.begin(litPose);
+    }
+    if (!lit) lightShadows.hide();
+    litObjects.update(view, lit ? lightField : undefined, litOpen);
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
@@ -1614,11 +1673,10 @@ export async function createGameCanvas(
       // fades as one figure (CreatureBody.opacity): the container's alpha would fade a paper
       // doll layer by layer, the skin showing through the tunic.
       const see = c.id === world.selfId && world.invisible ? 0.4 : 1;
-      // No sun under a roof: no cast shadow there, the contact ellipse instead.
-      const sunlit = casting && !view.indoorAt(Math.round(p.x), Math.round(p.y));
       if (s.figure) {
         s.figure.opacity = see;
-        s.figure.contact = sunlit ? outdoorContact : 1;
+        // No sun under a roof: there, underground and at night the lights cast instead.
+        const shaded = shade(s.figure, p.x, p.y);
         animateBody(
           s.figure,
           stateOf(c.id, now),
@@ -1628,7 +1686,8 @@ export async function createGameCanvas(
           s.body.x,
           devicePixels(p.y, T, scale),
         );
-        if (sunlit) s.figure.castShadow(castShadows, s.body.x, s.body.y);
+        if (shaded & 1) s.figure.castShadow(castShadows, s.body.x, s.body.y);
+        if (shaded & 2) s.figure.castShadow(lightShadows, s.body.x, s.body.y);
       }
       s.body.alpha = s.figure ? 1 : see;
       if (lastSeen.get(c.id) !== c.dir) lastSeen.set(c.id, c.dir);
@@ -1722,8 +1781,9 @@ export async function createGameCanvas(
       }
     // The bodies falling or shimmering away cast their shadow too, until they fade below
     // half (CreatureBody.castShadow): it does not vanish the moment a creature dies.
-    drawGhosts(now, casting, outdoorContact);
+    drawGhosts(now);
     if (casting) castShadows.end();
+    if (lit) lightShadows.end();
     world.expire(now);
     drawWalkMark(now, self.pos.z);
     effects.draw(now, self.pos.z, cam, scale, nameScale);
@@ -2150,6 +2210,16 @@ export async function createGameCanvas(
       const g = living?.nextGust(x, y, performance.now(), min);
       return g && living && { at: g.at, strength: g.strength, calm: !living.stats().gusting };
     },
+    lightShadows() {
+      const me = world.self;
+      return {
+        lights: lightField?.count ?? 0,
+        shadows: lightShadows.root.visible ? lightShadows.count : 0,
+        objectShadows: lightShadows.root.visible ? litObjects.count : 0,
+        selfIndoor: me ? view.indoorAt(me.pos.x, me.pos.y) : false,
+        selfContact: sprites.get(world.selfId)?.figure?.contactAlpha ?? 0,
+      };
+    },
     sky() {
       const s = sky.current;
       if (!s || isDark(world.self?.pos.z ?? 0)) return undefined;
@@ -2270,6 +2340,8 @@ export async function createGameCanvas(
       // Before the living world: the trees' shadow meshes share its strips.
       objectShadows.destroy();
       castShadows.destroy();
+      litObjects.destroy();
+      lightShadows.destroy();
       living?.destroy();
       livingObjects.destroy();
       view.destroy();
