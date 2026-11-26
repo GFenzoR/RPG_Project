@@ -773,11 +773,14 @@ type Movement struct {
 const MaxSpeedPerLevelPct = 5
 
 // LevelSpeed returns the speed of a player of level whose vocation's speed at that level
-// is base (Vocation.AtLevel): base × (100 + speed_per_level_pct × (level − 1)) / 100,
-// rounded to the nearest point and at least 1. Level 1 is the vocation's speed.
+// is base (Vocation.AtLevel, with the vocation's own points per level): base × (100 +
+// speed_per_level_pct × (level − 1)) / 100, rounded to the nearest point (halves up) and
+// at least 1. Level 1 is the vocation's speed. Whole numbers like the step timer: the
+// percent is read in thousandths, so a half is a half on every machine.
 func (m Movement) LevelSpeed(base, level int) int {
-	n := float64(max(level, 1) - 1)
-	return max(int(math.Round(float64(base)*(100+m.SpeedPerLevelPct*n)/100)), 1)
+	n := int64(max(level, 1) - 1)
+	milli := int64(math.Round(m.SpeedPerLevelPct * 1000)) // thousandths of a percent
+	return int(max((int64(max(base, 0))*(100_000+milli*n)+50_000)/100_000, 1))
 }
 
 // Experience is the level curve: total XP for level n is a*n^3 + b*n^2 + c*n + d.

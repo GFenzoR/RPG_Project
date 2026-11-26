@@ -5,13 +5,14 @@
 # Capacity is in grams, a realistic human load (owner, 2026-11-23; docs/02 "Unidades"):
 # 40-45 kg at level 1 (the guardian strongest, the arcanist weakest), about 80-120 kg at
 # level 75. TestHuntLootFits (server/internal/sim) checks a hunt's loot still fits.
-# Speed (owner, 2026-11-26): every vocation starts at the same speed and adds no points per
-# level; a player walks faster with its level by balance.yaml movement.speed_per_level_pct.
+# Speed: every vocation starts at the same speed and adds the same points per level; on top
+# of them a player walks balance.yaml movement.speed_per_level_pct faster per level (owner,
+# 2026-11-26), so no level walks slower than it did before that day.
 - id: guardian
   name: vocation.guardian.name
   description: vocation.guardian.desc
   start: { health: 145, mana: 20, capacity: 45000, speed: 205 }
-  per_level: { health: 14, mana: 4, capacity: 1000, speed: 0 }
+  per_level: { health: 14, mana: 4, capacity: 1000, speed: 3 }
   regen: { health: 3, mana: 1, interval_ms: 7000 }
   skill_factors:
     fist: 1.13
@@ -37,7 +38,7 @@
   name: vocation.arcanist.name
   description: vocation.arcanist.desc
   start: { health: 140, mana: 75, capacity: 40000, speed: 205 }
-  per_level: { health: 6, mana: 28, capacity: 700, speed: 0 }
+  per_level: { health: 6, mana: 28, capacity: 700, speed: 3 }
   regen: { health: 1, mana: 3, interval_ms: 4000 }
   skill_factors:
     fist: 1.45
@@ -64,7 +65,7 @@
   name: vocation.ranger.name
   description: vocation.ranger.desc
   start: { health: 145, mana: 40, capacity: 42000, speed: 205 }
-  per_level: { health: 9, mana: 13, capacity: 800, speed: 0 }
+  per_level: { health: 9, mana: 13, capacity: 800, speed: 3 }
   regen: { health: 2, mana: 2, interval_ms: 5500 }
   skill_factors:
     fist: 1.25
@@ -92,7 +93,7 @@
   name: vocation.druid.name
   description: vocation.druid.desc
   start: { health: 140, mana: 75, capacity: 41000, speed: 205 }
-  per_level: { health: 6, mana: 27, capacity: 700, speed: 0 }
+  per_level: { health: 6, mana: 27, capacity: 700, speed: 3 }
   regen: { health: 1, mana: 3, interval_ms: 4000 }
   skill_factors:
     fist: 1.45

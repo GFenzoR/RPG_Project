@@ -218,10 +218,13 @@ func TestFourDirectionsOnePace(t *testing.T) {
 			t.Fatalf("east: step %d at tick %d for %d ms, want tick %d for 435 ms (%v)", i, at, eastMs[i], want, east)
 		}
 	}
-	for name, d := range map[string]pb.Direction{"north": N, "south": S, "west": W} {
-		ticks, ms := run(d, n)
+	for _, c := range []struct {
+		name string
+		dir  pb.Direction
+	}{{"north", N}, {"south", S}, {"west", W}} {
+		ticks, ms := run(c.dir, n)
 		if !slices.Equal(ticks, east) || !slices.Equal(ms, eastMs) {
-			t.Errorf("%s: steps at ticks %v for %v ms, east at %v for %v", name, ticks, ms, east, eastMs)
+			t.Errorf("%s: steps at ticks %v for %v ms, east at %v for %v", c.name, ticks, ms, east, eastMs)
 		}
 	}
 	diag, diagMs := run(SE, n)
