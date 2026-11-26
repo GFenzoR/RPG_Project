@@ -917,7 +917,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   menú ☰ guarda experiencia, ayuda, idioma, opciones y salir. Ese encabezado compacto no
   ensancha la página con una fuente ancha (Linux dibuja `system-ui` con DejaVu Sans: en la
   CI se salía ~20 px a 390 px), en inglés o con números más grandes: sin lugar, cede
-  primero el nombre (hasta sus 3rem) y después el nivel (`.stat.level`), con "…"; vida y
+  primero el nombre (hasta sus 3rem; su letra encoge, `ui/fit-text.ts`, nunca se corta) y
+  después el nivel (`.stat.level`), con "…"; vida y
   maná quedan enteros (solo ellos y el ☰ tienen que entrar). El `flex-shrink` enorme del
   nombre hace que el nivel espere (flex reparte por factor × ancho, y quitarle un pelo al
   nivel ya muestra su "…"). La barra de condiciones vacía no ocupa lugar (`:empty`) y el
@@ -933,8 +934,13 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   se pisa, pierde la línea del gremio, sube una línea o se oculta (salvo propio, objetivo o
   a 1 casilla). Un nombre nunca se acorta ni lleva "…" (dueño, 2026-11-26): si no entra,
   se dibuja más chico (`fitName`; ver "Nombres nítidos y NPCs en dos líneas"). Desde
-  `feat/name-labels` las reglas rigen mientras `zoom < 2 × labelScale` (`labelsFull`): con
-  nombres grandes, a cualquier zoom (ver "La fuente del canvas").
+  `feat/labels-and-steps` las reglas rigen mientras la casilla mide menos de 4 alturas de
+  nombre (`labelsFull(tilePx, fontPx)`): con los tamaños de hoy, solo a zoom 1 ("grande"
+  son 15 px a zoom 2 sobre una casilla de 64). En el DOM (placa del nombre, encabezado
+  compacto, título del menú de acciones) rige lo mismo: `ui/fit-text.ts` (`fitTextRef`,
+  puro en `fitText`, con tests) encoge la letra hasta que el nombre entra, piso de 9 px, y
+  después lo parte en líneas (`data-fit="wrap"`); esas reglas CSS no llevan
+  `text-overflow`. Un nombre nuevo en el DOM lleva `ref={fitTextRef}` y `key` con su texto.
 - Hotbar: con poco ancho muestra los slots enteros que entran, con flechas ‹ › de 44 px y
   deslizamiento nativo; F1–F12 siguen en el DOM. En vertical con pad (`stacked` en
   `ui/Hotbar.tsx`) va a la derecha del pad: flechas y lápiz en una línea, y debajo los

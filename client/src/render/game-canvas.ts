@@ -563,6 +563,8 @@ interface CreatureSprite {
   fitRole: string;
   fitPx: number;
   fitMax: number;
+  /** The floor the name was fitted with (minNamePx of the screen's density). */
+  fitMin: number;
   /** The sizes the lines are drawn at (render/labels.ts stackLabel). */
   lines: LabelLines;
   /** Top of the label as drawn last, canvas px (the E2E hook). */
@@ -1350,6 +1352,7 @@ export async function createGameCanvas(
         fitRole: "",
         fitPx: 0,
         fitMax: 0,
+        fitMin: 0,
         lines: { name: namePx, role: subPx, roleLines: 0, guild: subPx },
         top: 0,
         skull,
@@ -1380,11 +1383,18 @@ export async function createGameCanvas(
     // when the text, the size (a zoom) or the room changed.
     const name = nameOf(c);
     const what = roleOf(c);
-    if (s.fitName !== name || s.fitRole !== what || s.fitPx !== namePx || s.fitMax !== labelMax) {
+    if (
+      s.fitName !== name ||
+      s.fitRole !== what ||
+      s.fitPx !== namePx ||
+      s.fitMax !== labelMax ||
+      s.fitMin !== nameMinPx
+    ) {
       s.fitName = name;
       s.fitRole = what;
       s.fitPx = namePx;
       s.fitMax = labelMax;
+      s.fitMin = nameMinPx;
       const fit = fitName(name, namePx, labelMax, measureName, nameMinPx);
       sizeLine(s.label, fit.fontPx);
       if (s.label.text !== fit.text) s.label.text = fit.text;

@@ -327,7 +327,15 @@ acepta en un evento sintético; el pad captura su dedo.
   `client/e2e/names.ts` (la etiqueta y letras al azar, 16 caracteres como mucho; lanza un
   error si la etiqueta no deja lugar). Ningún spec arma el nombre a mano: una etiqueta de
   8 letras más 8 al azar daba 17 y el servidor contestaba `invalid_name`.
-  `client/vite/e2e-names.test.ts` (vitest, sin levantar nada) lo comprueba en cada spec.
+  `client/vite/e2e-names.test.ts` (vitest, sin levantar nada) lo comprueba: en cada spec y
+  en el smoke de escritorio (`apps/desktop/e2e/smoke.ts`), el nombre de cada personaje que
+  se crea (un `POST /api/characters` o el campo "Nombre" del formulario) sale de
+  `characterName`, sea cual sea la forma en que se arme a mano.
+- **Nombres largos en la interfaz DOM:** `client/src/ui/fit-text.test.ts` prueba, sin
+  navegador, que un nombre de 20 letras encoge hasta entrar en su caja, que en el piso se
+  marca para partirse en líneas, que las reglas de `.vname`, `.hud .name` y
+  `.touch-menu-name` no tienen `text-overflow` ni recorte, y que los tres elementos llevan
+  el `ref` que ajusta.
 - A 1280x800 (escritorio), un nombre de 16 caracteres (el máximo) con experiencia se ve
   entero en la placa sobre el orbe de vida y el mapa en 2x (`__rpgClient.scale()`); sin pad
   ni botones de zoom. Pantalla completa (docs/17 UI-4): el canvas empieza en (0, 0), tiene

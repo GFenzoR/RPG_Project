@@ -429,7 +429,8 @@ func account(prefix string, g int) (email, password string) {
 var validPrefix = regexp.MustCompile(`^[a-z]{2,10}$`)
 
 // maxNameLen is the longest character name the server takes (auth.MaxNameLen, which
-// tools/bots cannot import). Keep them in sync.
+// tools/bots cannot import). TestMaxNameLenIsTheServers parses the server's source and
+// keeps the two equal.
 const maxNameLen = 16
 
 // name returns bot i's character name: "Duo" plus i in base 26 ("Duoaa", "Duoab", ...

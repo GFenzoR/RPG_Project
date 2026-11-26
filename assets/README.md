@@ -492,8 +492,8 @@ Arte, de la hoja al sprite:
    (`<sprite>/<acción>_<dir>_<n>.png`), `make sprites STRICT=1`, y `credit.py`.
 
 **Criaturas animadas de una sola hoja** (así se hicieron las catorce del 2026-11-18: lobo,
-rata de sentina, cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y
-espinoso, y en la segunda tanda reptante hueco, escarabajo de mena y los cinco del Volcán;
+rata de sentina, cangrejo marino, murciélago, araña de musgo, sapo de ciénaga y
+espinoso, y en la segunda tanda reptante hueco, escarabajo y los cinco del Volcán;
 prompts en `assets/prompts/sprites/creatures/`):
 - **El prompt** describe la criatura con nuestros datos (`data/monsters`, su nombre de
   `i18n/`, sus `tags`, `notes`, botín y resistencias: un lobo gris de la costa, una araña

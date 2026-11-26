@@ -3079,6 +3079,18 @@ y abajo qué es lo que hace (Tilde Varga / Provisiones)".
   nombre (invitar al grupo, invitado de una casa: `auth.MaxKnownNameLen` =
   `KNOWN_NAME_MAX_CHARS` = 20, solo para buscar un personaje, nunca para crearlo). El rol del NPC (segunda línea) sigue
   la regla de arriba y tampoco puede llevar "…" (`make validate` lo comprueba).
+- **Lo mismo en la interfaz DOM** (`client/src/ui/fit-text.ts`, puro y con tests): la placa
+  del nombre sobre la barra de experiencia (`.vname`), el encabezado compacto (`.hud .name`)
+  y el título del menú de acciones (`.touch-menu-name`, el nombre de la criatura o del item)
+  ya no cortan con "…" (`text-overflow` se quitó de esas reglas). `fitTextRef` es el `ref`
+  de esos elementos: si el texto es más ancho que su caja, encoge la letra hasta que entra
+  (piso `FIT_MIN_PX` = `NAME_MIN_PX`, 9 px CSS) y, si ni en el piso entra, marca el elemento
+  con `data-fit="wrap"` y la hoja de estilos lo deja partirse en más líneas, en cualquier
+  letra: nunca se pierden letras. Se vuelve a ajustar cuando cambia su caja
+  (`ResizeObserver`), el tamaño de la ventana o llegan las fuentes; el elemento lleva `key`
+  con su texto, así un nombre nuevo parte del tamaño de la hoja de estilos. Un personaje de
+  17 a 20 letras (de antes del límite) se ve entero en la placa; uno de 16 también en un
+  teléfono angosto.
 - **Apilado** (`stackLabel`): sobre la barra de vida va la línea del gremio, encima el rol
   y arriba el nombre; la marca PvP queda a la izquierda del nombre y el globo de diálogo
   (UI-11) se apoya sobre el tope del bloque entero, o sea, sobre las dos líneas. Las

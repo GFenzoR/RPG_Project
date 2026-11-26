@@ -1452,7 +1452,7 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     **radiante** (50+; 600): las venden los herreros (el armero de Puerto y la curtidora de
     Ivernel la menor y la mayor; el herrero de Cinderstead las tres) y caen de algunos monstruos (la
     menor, de saqueadores, mineros ahogados y escarabajos; la mayor, de reptantes
-    huecos, contrabandistas, excavadores de obsidiana y gólems de escoria; la radiante, del
+    huecos, contrabandistas, mineros renegados y gólems de escoria; la radiante, del
     custodio de la forja, 30 %, mientras no haya islas de esas bandas). Ningún NPC las compra:
     no hay vuelta de compra y venta.
   - **ámbar de resguardo** (3000 de valor de referencia): **ningún NPC lo vende ni lo da**

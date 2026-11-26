@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"regexp"
 	"strconv"
 	"testing"
@@ -134,15 +136,61 @@ func TestPerAccountFitsServerCap(t *testing.T) {
 
 // maxNameLen is a copy of the server's auth.MaxNameLen (another module): the two stay equal.
 func TestMaxNameLenIsTheServers(t *testing.T) {
-	raw, err := os.ReadFile("../../../../server/internal/auth/validate.go")
+	got, err := intConst("../../../../server/internal/auth/validate.go", nil, "MaxNameLen")
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := regexp.MustCompile(`MaxNameLen\s+= (\d+)`).FindSubmatch(raw)
-	if m == nil {
-		t.Fatal("auth.MaxNameLen not found")
-	}
-	if got, _ := strconv.Atoi(string(m[1])); got != maxNameLen {
+	if got != maxNameLen {
 		t.Errorf("auth.MaxNameLen = %d, maxNameLen = %d", got, maxNameLen)
+	}
+}
+
+// intConst reads the integer literal a Go file (or `src`, when given) gives the constant
+// `name`. It parses the file, so it does not care how the const block is laid out: a
+// regexp over the text broke with a realigned block or a typed constant.
+func intConst(path string, src any, name string) (int, error) {
+	f, err := parser.ParseFile(token.NewFileSet(), path, src, 0)
+	if err != nil {
+		return 0, err
+	}
+	for _, decl := range f.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for i, id := range vs.Names {
+				if id.Name != name || i >= len(vs.Values) {
+					continue
+				}
+				lit, ok := vs.Values[i].(*ast.BasicLit)
+				if !ok || lit.Kind != token.INT {
+					return 0, fmt.Errorf("%s is not an integer literal", name)
+				}
+				return strconv.Atoi(lit.Value)
+			}
+		}
+	}
+	return 0, fmt.Errorf("constant %s not found in %s", name, path)
+}
+
+func TestIntConstReadsAnyLayout(t *testing.T) {
+	for _, src := range []string{
+		"package auth\nconst (\n\tMinNameLen = 3\n\tMaxNameLen = 16\n)\n",
+		"package auth\nconst (\n\tMinNameLen      = 3\n\tMaxNameLen      = 16 // letters\n\tMaxKnownNameLen = 20\n)\n",
+		"package auth\nconst MaxNameLen int = 16\n",
+		"package auth\nconst MinNameLen, MaxNameLen = 3, 16\n",
+	} {
+		got, err := intConst("validate.go", src, "MaxNameLen")
+		if err != nil || got != 16 {
+			t.Errorf("intConst(%q) = %d, %v; want 16", src, got, err)
+		}
+	}
+	if _, err := intConst("validate.go", "package auth\nconst MaxKnownNameLen = 20\n", "MaxNameLen"); err == nil {
+		t.Error("a file without the constant gave no error")
 	}
 }

@@ -163,14 +163,26 @@ el punto 5:
   validate` lo exige). Diez monstruos en español y uno en inglés se acortaron, con nombres
   gramaticales ("saqueador de naufragios" → "saqueador", "minero de obsidiana" → "minero
   renegado", "sabueso de ceniza" → "sabueso cenizo", "dragoncillo de ascua" →
-  "dragoncillo", "custodio de escoria" → "custodio", "cinder salamander" → "cinder
-  lizard"), y las misiones, los diálogos, los items y docs/02 dicen el mismo nombre (un
-  test de `packages/content-schema` exige que cada paso de matar nombre al monstruo como
-  su etiqueta). Los personajes viejos con 17 a 20 letras conservan su nombre: se ven
-  enteros y más chicos, y se los puede seguir invitando al grupo o a una casa
-  (`auth.MaxKnownNameLen` = `KNOWN_NAME_MAX_CHARS` = 20, solo para buscar). Los E2E arman
+  "dragoncillo", "custodio de escoria" → "custodio", "cinder salamander" → "ember
+  salamander", que conserva la palabra de su botín, "salamander scale"), y las misiones,
+  los diálogos, los items, los créditos y los docs dicen el mismo nombre (dos tests de
+  `packages/content-schema`: cada paso de matar nombra al monstruo como su etiqueta, y un
+  monstruo conserva en inglés la palabra que comparte con su botín). Los personajes viejos
+  con 17 a 20 letras conservan su nombre: se ven enteros y más chicos, en el mapa y en la
+  interfaz (la placa del nombre, el encabezado compacto y el título del menú de acciones
+  ya no cortan con "…": `client/src/ui/fit-text.ts` encoge la letra hasta que entra, con el
+  piso de 9 px de las etiquetas, y si ni así entra parte el nombre en más líneas), y se
+  los puede seguir invitando al grupo o a una casa (`auth.MaxKnownNameLen` =
+  `KNOWN_NAME_MAX_CHARS` = 20, solo para buscar). Los E2E (y el smoke de escritorio) arman
   sus nombres con `characterName` de `client/e2e/names.ts`. Falta el e2e completo de la
-  rama (corre en la verificación final del lote).
+  rama (corre en la verificación final del lote); ningún e2e prueba todavía un nombre de 20
+  letras en la placa (hay que renombrar un personaje con `psql`): lo cubren los tests de
+  `fit-text.test.ts`. **Para el dueño:** (1) amontonadas a zoom 1 y tamaño "grande", un
+  nombre de 16 letras de las más anchas ("Mmmmmmmm Wwwwwww") llega al piso de 9 px y aun
+  así se dibuja más ancho que su lugar (entero, sin romper nada): aceptarlo o bajar el
+  máximo a 14 o 15; (2) confirmar los nombres en español que quedaron genéricos:
+  "murciélago", "escarabajo", "saqueador", "contrabandista", "custodio" (el jefe del
+  capítulo 3) y "dragoncillo".
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:
@@ -416,7 +428,7 @@ el punto 5:
     de `data/vocations.yaml` o bajar el peso de las pieles y el mineral.
   - **Decisión de balance para el dueño, material pesado:** al cubrir todos los niveles
     el test mostró que 60 muertes de espinoso (100 kg: troncos de olmo), de gólem de
-    escoria (112 kg: mineral de ascua y núcleos) y de minero de obsidiana (46 kg) **no
+    escoria (112 kg: mineral de ascua y núcleos) y de minero renegado (46 kg) **no
     entran**; la cuenta a mano anterior ("entran de sobra") estaba mal. Hoy son la
     excepción declarada del test (`heavyHaul`: deben entrar 15 muertes; entran 17, 20 y
     43 al más justo). Si se quiere que entren enteros hay que bajar su botín (p. ej. el
@@ -1052,7 +1064,7 @@ el punto 5:
   - **Para la descripción del PR, textos que cambiaron más allá del género:** los nombres
     de los estados pasaron a sustantivos ("Envenenado" a "Veneno", "Acelerado" a "Prisa",
     etc.), "Náufrago" a "El naufragio" y "no está conectado" a "en línea". El texto de
-    `coffer_smuggler` ("contrabandista del cofre") es mujer, así que todo su spawn sale
+    `coffer_smuggler` ("contrabandista") es mujer, así que todo su spawn sale
     mujer: un spawn no mezcla sexos (decisión de diseño, no un bug).
   - **Revisar en los screenshots** (`20-druid-heal` y `cli.ts sheet --only humans/`) los
     pantalones y las grebas sobre la mujer robusta: su cadera (4.0) queda muy cerca del
@@ -1423,7 +1435,7 @@ el punto 5:
     atascado; solo no puede levantar más hasta soltar algo.
   - **Ids con `feat/item-forge`:** las 35 piezas nuevas tomaron los números 271-305; la
     forja, rebasada encima, corrió `make gen-ids` y sus piedras y el ámbar son 306-309.
-  - **Balance justo:** el minero de obsidiana al nivel 35 queda en 11,0 % de la vida (el piso
+  - **Balance justo:** el minero renegado al nivel 35 queda en 11,0 % de la vida (el piso
     es 10 %; con los atributos del kit su golpe cuerpo a cuerpo subió de 52 a 60). Con el arco de tejo al nivel 5, ningún duelo de Puerto deja al montaraz bajo
     la mitad de su vida y su cura (nivel 4) se usa recién en el Bosque; el chequeo de
     hechizos lo acepta para una cura que sus primeras cazas no necesitan (docs/02,
@@ -1684,10 +1696,10 @@ el punto 5:
       yunque ni los cajones: mirarlos a mano con las coordenadas de arriba (`make play`).
     - **Animales:** todos los monstruos tienen frames, menos la gaviota. Catorce son del
       Gemini del dueño (docs/17 "Hecho: criaturas de Gemini"): lobo, rata de sentina,
-      cangrejo de marea, murciélago lóbrego, araña de musgo, sapo de ciénaga y espinoso
-      (rama `feat/gemini-creatures`), y reptante hueco, escarabajo de mena, sabueso de
-      ceniza, salamandra de brasa, gólem de escoria, dragoncillo de ascua y el custodio de
-      escoria, jefe del Volcán en 96x96 (rama `feat/gemini-creatures-2`). La gaviota sigue
+      cangrejo marino, murciélago, araña de musgo, sapo de ciénaga y espinoso
+      (rama `feat/gemini-creatures`), y reptante hueco, escarabajo, sabueso cenizo,
+      salamandra ígnea, gólem de escoria, dragoncillo y el custodio, jefe del Volcán en
+      96x96 (rama `feat/gemini-creatures-2`). La gaviota sigue
       con un frame de spritegen: hay una hoja de Gemini buena en
       `build/gemini/art/thieving_gull_a.png` del worktree `.wt/gc`, sin commitear ni usar;
       cambiarla es decisión del dueño. Cómo se hace una: `assets/README.md`, "Criaturas
@@ -1707,9 +1719,9 @@ el punto 5:
       worktree `.wt/vf`, no commiteadas). Todas pisan su casilla con la sombra de contacto
       y a escala con la persona de LPC; el custodio (96x96) en la forja, con nombre y barra
       sobre la cabeza y sin recortes; el jabalí y el ciervo de 64x64, el ciervo adulto; el
-      reptante hueco se lee bien sobre la cueva. Para el dueño: el sabueso de ceniza mirando
+      reptante hueco se lee bien sobre la cueva. Para el dueño: el sabueso cenizo mirando
       al norte (su primer frame de caminar) es una silueta angosta y vertical y contrasta
-      poco sobre la ceniza; el escarabajo de mena fuera de la luz del jugador casi no se ve
+      poco sobre la ceniza; el escarabajo fuera de la luz del jugador casi no se ve
       (solo su nombre); la sombra de 20 px bajo el custodio queda chica pero no rara. Los
       martillazos del custodio y los golpes del gólem no se miraron cuadro a cuadro.
     - **Escala (decidida, docs/17 ART-2 "Animales medianos"):** los animales se miden
