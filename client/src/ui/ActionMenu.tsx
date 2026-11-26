@@ -15,6 +15,7 @@ import { corpseSprite } from "../state/corpse-art.ts";
 import type { ItemRef } from "../state/items.ts";
 import { cardLines } from "../state/item-card.ts";
 import { BigIcon, ItemCard } from "./ItemCard.tsx";
+import { fitTextRef } from "./fit-text.ts";
 import "./touch.css";
 
 /** Gap between the finger and the menu, CSS pixels. */
@@ -250,7 +251,11 @@ export function ActionMenu(props: {
                 {...(corpse ? { fit: 64, shrink: true } : {})}
               />
             )}
-            <span class={card?.quest ? "touch-menu-name quest" : "touch-menu-name"}>
+            <span
+              class={card?.quest ? "touch-menu-name quest" : "touch-menu-name"}
+              key={menu.title}
+              ref={fitTextRef}
+            >
               {menu.title}
             </span>
           </div>

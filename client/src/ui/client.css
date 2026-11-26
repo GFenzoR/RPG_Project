@@ -489,8 +489,13 @@ form .link.back {
   flex-shrink: 1;
   min-width: 3rem;
   max-width: 16rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+/* The name is never cut (docs/17 UI-3 "Nombres"): short of room its font shrinks
+   (ui/fit-text.ts) and, at the floor, it breaks onto more lines. */
+.hud .name[data-fit="wrap"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1;
 }
 .hud {
   position: relative;
@@ -3418,7 +3423,8 @@ body.picking-item .map-hint {
 /* The header does not widen the page with a wide font (Linux draws system-ui with DejaVu
    Sans, far wider than Segoe UI or San Francisco: on CI a 390 px iPhone's header stuck out
    ~20 px), English or bigger numbers. When it is short of room the name gives way first,
-   down to its 3rem, and then the level, with an ellipsis; health and mana stay whole (only
+   down to its 3rem (its font shrinks to fit, ui/fit-text.ts: a name is never cut), and
+   then the level, with an ellipsis; health and mana stay whole (only
    they and the menu have to fit). Flex shares a shrink by factor x width, so the name's
    huge factor makes the level wait for it: a hair taken from the level would already show
    its ellipsis. */

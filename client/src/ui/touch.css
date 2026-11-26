@@ -109,8 +109,6 @@ body.picking-item [data-drop] {
   font-family: var(--ui-font-title);
   color: var(--ui-gold-300);
   font-weight: bold;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -302,11 +300,17 @@ body.picking-item [data-drop] {
   align-items: center;
   gap: 8px;
 }
+/* The name is never cut (docs/17 UI-3 "Nombres"): too wide for the menu, its font shrinks
+   (ui/fit-text.ts) and, at the floor, it breaks onto more lines; the menu scrolls inside
+   when that makes it taller than its room. */
 .touch-menu-name {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.touch-menu-name[data-fit="wrap"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.1;
 }
 .touch-menu-name::first-letter {
   text-transform: uppercase;

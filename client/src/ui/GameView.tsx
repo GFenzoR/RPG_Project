@@ -78,6 +78,7 @@ import {
 } from "./window-dom.ts";
 import type { NameSize } from "../render/label-style.ts";
 import type { DragEnv, PageBox, WatchedRef } from "./window-dom.ts";
+import { fitTextRef } from "./fit-text.ts";
 import {
   WINDOWS_STORAGE_KEY,
   WINDOW_KEYS,
@@ -1032,7 +1033,7 @@ export function GameView(props: GameViewProps): JSX.Element {
       data-touch={touch ? "" : undefined}
     >
       <header key="hud" class={layout.compactHeader ? "hud compact" : "hud"} data-tutorial="stats">
-        <span class="name" title={props.characterName}>
+        <span class="name" key={props.characterName} ref={fitTextRef} title={props.characterName}>
           {props.characterName}
         </span>
         {stats && (
