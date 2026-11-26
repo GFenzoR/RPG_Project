@@ -723,8 +723,12 @@ test("sandbox: bigger names at 1x, 2x and 4x by NPCs and monsters; a wall in fro
 // Day and night (livingworld/README.md "Día y noche"): a gm stops the world clock at noon
 // (short shadows under the feet, no tint) and at a full-moon night (silvery blue, the
 // temple's lamps glowing, a faint moon shadow), with the cast shadows drawn under every
-// creature in view; then the low sun of the morning, the dusk, a new-moon night and the dawn
-// after it. It leaves the clock stopped at noon, as the E2E servers start it.
+// creature in view; then the low sun of the morning and of the afternoon, the dusk, a
+// new-moon night and the dawn after it. It leaves the clock stopped at noon, as the E2E
+// servers start it.
+// Owner, 2026-11-25: every object with height casts its own shadow in the sun's pose (the
+// temple's walls, the plaza's oaks, the bushes, the sign), and a creature that casts one has
+// no contact ellipse; inside the temple there is no sun: the ellipse, and no cast shadow.
 test("sandbox day and night: noon and a full-moon night, with cast shadows", async ({
   page,
   playwright,
@@ -750,6 +754,18 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     await page.waitForTimeout(300);
   };
   const sky = () => page.evaluate(() => window.__rpgClient?.sky());
+  const tp = async (x: number, y: number): Promise<void> => {
+    await say.fill(`/tp ${x} ${y} 7`);
+    await say.press("Enter");
+    await expect
+      .poll(async () => {
+        const s = await page.evaluate(() => window.__rpgClient?.self());
+        return s ? `${s.x},${s.y}` : "";
+      }, SLOW)
+      .toBe(`${x},${y}`);
+    await say.blur();
+    await page.waitForTimeout(400);
+  };
 
   // The E2E servers keep the time stopped at noon (-world-time noon in
   // playwright.config.ts); put it back however this test ends, so the specs after it are
@@ -758,11 +774,22 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     await time("speed 0");
     await time("noon");
     await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
+    // Where a new character wakes: inside the temple. No sun under a roof: the own player
+    // stands on its contact ellipse and casts nothing, while the objects outside do.
+    await say.blur();
+    await expect.poll(async () => (await sky())?.selfContact, { timeout: 10_000 }).toBe(true);
+    expect((await sky())?.casters).toBeGreaterThan(0);
+    await shot(page, "99a-daynight-indoors");
+
+    // Out on the plaza, south of the temple's doorway, between its two oaks.
+    await tp(2095, 2095);
+    await expect.poll(async () => (await sky())?.selfContact, { timeout: 10_000 }).toBe(false);
     const noon = await sky();
     expect(noon?.ambient).toBe(0xffffff);
-    expect(noon?.shadows).toBeGreaterThan(0); // the player and the instructor at least
-    await say.blur();
-    await page.waitForTimeout(300);
+    expect(noon?.shadows).toBeGreaterThan(0); // the own player at least
+    expect(noon?.casters).toBeGreaterThan(0);
+    expect(noon?.objectShadows).toBeGreaterThan(0);
+    expect(Math.abs(noon?.shadowX ?? 1)).toBeLessThan(0.05); // straight under the sun
     await shot(page, "99b-daynight-noon");
 
     await time("moon 4");
@@ -773,6 +800,9 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     expect(night?.moon).toBeCloseTo(1);
     expect(night?.ambient).not.toBe(0xffffff);
     expect(night?.shadowAlpha).toBeGreaterThan(0);
+    // The moon casts for the objects too, and the feet stand on that shadow.
+    expect(night?.casters).toBeGreaterThan(0);
+    expect(night?.selfContact).toBe(false);
     await say.blur();
     await page.waitForTimeout(300);
     await shot(page, "99c-daynight-night");
@@ -783,10 +813,23 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     // night, still under the moon of the night before it (phase 7).
     await time("morning");
     await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
-    expect((await sky())?.shadows).toBeGreaterThan(0);
+    const morning = await sky();
+    expect(morning?.shadows).toBeGreaterThan(0);
+    expect(morning?.shadowX).toBeLessThan(0); // to the west
+    expect(morning?.casters).toBeGreaterThan(0);
+    expect(morning?.selfContact).toBe(false);
     await say.blur();
     await page.waitForTimeout(300);
     await shot(page, "99d-daynight-morning");
+
+    await time("afternoon");
+    await expect
+      .poll(async () => (await sky())?.shadowX ?? 0, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    expect((await sky())?.casters).toBeGreaterThan(0);
+    await say.blur();
+    await page.waitForTimeout(300);
+    await shot(page, "99d2-daynight-afternoon");
 
     await time("dusk");
     await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("dusk");
@@ -798,6 +841,11 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
     await time("night");
     await expect.poll(async () => (await sky())?.moon, { timeout: 10_000 }).toBeCloseTo(0);
     expect((await sky())?.phase).toBe("night");
+    // No moon, no cast shadow of anything: the contact ellipse is back under the feet.
+    const dark = await sky();
+    expect(dark?.shadowAlpha).toBe(0);
+    expect(dark?.casters).toBe(0);
+    expect(dark?.selfContact).toBe(true);
     await say.blur();
     await page.waitForTimeout(300);
     await shot(page, "99f-daynight-new-moon");

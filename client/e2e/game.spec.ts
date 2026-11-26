@@ -4046,6 +4046,10 @@ test("account security: change password, sign out everywhere, email prefill", as
 // "Animaciones reducidas" the map's own sprites come back and nothing moves; and the meshes
 // ride the atlas batch, so the trees cost no draw calls of their own (docs/07: fewer than 50
 // a frame).
+// Owner, 2026-11-25: every tree casts its own shadow in the sun's pose, and the crown's
+// shadow sways with the crown (a second mesh on the same strips; a still sprite with reduced
+// motion). The forest is shot in the morning, in the afternoon and under a full moon, and
+// the draw calls are measured with all those shadows in view.
 test("wind: crowns sway over still trunks, reduced motion stops them, draw calls stay in budget", async ({
   page,
   playwright,
@@ -4135,7 +4139,15 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
   // above the tree's (lower than whoever stands behind the tree), the foot of the trunk the
   // lower third of its own.
   const crown = { x: tree.cx - t / 2, y: tree.cy - t * 2, width: t, height: t };
-  const foot = { x: tree.cx - t / 4, y: tree.cy + t / 6, width: t / 2, height: t / 3 };
+  // The lowest quarter of the tile: the foot of the trunk and the first rows of its shadow,
+  // which stay; the crown's shadow, which sways with it, starts above them.
+  const foot = { x: tree.cx - t / 4, y: tree.cy + t / 4, width: t / 2, height: t / 4 };
+  const sky = () => page.evaluate(() => window.__rpgClient?.sky());
+  // Every tree in view casts, and the crowns' shadows sway with the crowns.
+  const windy = await sky();
+  expect(windy?.casters).toBeGreaterThanOrEqual(tree.count);
+  expect(windy?.swayingShadows).toBeGreaterThan(0);
+  expect(windy?.selfContact).toBe(false);
   const frames = async (clip: typeof crown, n: number): Promise<number> => {
     const seen = new Set<string>();
     for (let i = 0; i < n; i++) {
@@ -4157,6 +4169,10 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
   await closeWindow(page, "options");
   await page.waitForTimeout(600);
   expect(await frames(crown, 5), "the crown stands with reduced motion").toBe(1);
+  // The shadows stay, every one of them, and stand still too.
+  const still = await sky();
+  expect(still?.casters).toBeGreaterThanOrEqual(tree.count);
+  expect(still?.swayingShadows).toBe(0);
   await shot(page, `121-wind-reduced-motion`);
   await openWindow(page, "options");
   await page.getByTestId("options").getByTestId("reduced-motion").uncheck();
@@ -4192,13 +4208,11 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
         requestAnimationFrame(tick);
       }),
   );
-  testInfo.annotations.push({
-    type: "wind",
-    description: `${forest?.count ?? 0} trees in view at ${scale}x: ${cost.fps.toFixed(1)} fps, ${cost.draws.toFixed(1)} draw calls a frame`,
-  });
-  console.log(
-    `wind: ${forest?.count ?? 0} trees in view at ${scale}x: ${cost.fps.toFixed(1)} fps, ${cost.draws.toFixed(1)} draw calls a frame`,
-  );
+  const lit = await sky();
+  const measured = `${forest?.count ?? 0} trees in view at ${scale}x, ${lit?.casters ?? 0} objects casting ${lit?.objectShadows ?? 0} shadows (${lit?.swayingShadows ?? 0} swaying): ${cost.fps.toFixed(1)} fps, ${cost.draws.toFixed(1)} draw calls a frame`;
+  testInfo.annotations.push({ type: "wind", description: measured });
+  console.log(`wind and shadows: ${measured}`);
+  expect(lit?.casters).toBeGreaterThanOrEqual(forest?.count ?? 0);
   expect(cost.draws).toBeLessThan(50);
 
   // The same at 1x (Ctrl+wheel down zooms all the way out).
@@ -4213,5 +4227,45 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
     await shot(page, `123-wind-forest-zoom1-${i}`);
     await page.waitForTimeout(400);
   }
+
+  // The forest through the day (the E2E servers keep the clock stopped at noon; put it
+  // back however this ends): long shadows to the west in the morning, to the east in the
+  // afternoon, faint ones under a full moon.
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -100);
+  await page.keyboard.up("Control");
+  await page.waitForTimeout(300);
+  const time = async (args: string): Promise<void> => {
+    await say.fill(`/time ${args}`);
+    await say.press("Enter");
+    await say.blur();
+    await page.waitForTimeout(300);
+  };
+  try {
+    await time("speed 0");
+    await time("morning");
+    await expect.poll(async () => (await sky())?.shadowX ?? 0, { timeout: 10_000 }).toBeLessThan(0);
+    expect((await sky())?.casters).toBeGreaterThanOrEqual(forest?.count ?? 0);
+    await page.waitForTimeout(300);
+    await shot(page, "124-shadows-forest-morning");
+    await time("afternoon");
+    await expect
+      .poll(async () => (await sky())?.shadowX ?? 0, { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    await page.waitForTimeout(300);
+    await shot(page, "125-shadows-forest-afternoon");
+    await time("moon 4");
+    await time("night");
+    await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("night");
+    expect((await sky())?.shadowAlpha).toBeGreaterThan(0);
+    expect((await sky())?.casters).toBeGreaterThanOrEqual(forest?.count ?? 0);
+    await page.waitForTimeout(300);
+    await shot(page, "126-shadows-forest-full-moon");
+  } finally {
+    await time("noon");
+    await time("speed 0");
+  }
+  await expect.poll(async () => (await sky())?.phase, { timeout: 10_000 }).toBe("day");
+  await shot(page, "127-shadows-forest-noon");
   expect(errors).toEqual([]);
 });
