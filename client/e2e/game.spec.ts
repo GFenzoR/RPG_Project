@@ -11,6 +11,7 @@ import { psql } from "./psql.ts";
 import { stepKey } from "./keys.ts";
 import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, puertoClientURL, puertoServerURL, serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -277,7 +278,7 @@ test("log in, enter the world and walk 5 steps", async ({ page, playwright }) =>
   // Account and character through the HTTP API (as the bots do).
   const email = `e2e-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Walker ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Walker");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -507,7 +508,7 @@ test("walk out of town, fight a wolf from the battle list", async ({ page, playw
 
   const email = `e2e-fight-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Fighter ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Fighter");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -781,7 +782,7 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
 
   const email = `e2e-magic-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Mage ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Mage");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -974,8 +975,8 @@ test("T3.1: create a druid in the form and heal; a ranger's arrows in the ammo s
 
   const email = `e2e-voc-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const druidName = `Druid ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
-  const rangerName = `Ranger ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const druidName = characterName("Druid");
+  const rangerName = characterName("Ranger");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1138,7 +1139,7 @@ test("talk to NPCs: dialog options with 1–9 and a shop", async ({ page, playwr
 
   const email = `e2e-npc-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Talker ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Talker");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1311,7 +1312,7 @@ test("die to a wolf: death screen and wake up at the temple", async ({ page, pla
 
   const email = `e2e-death-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Doomed ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Doomed");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1430,7 +1431,7 @@ test("mine an iron vein with a pickaxe", async ({ page, playwright }) => {
 
   const email = `e2e-mine-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Miner ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Miner");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1585,7 +1586,7 @@ test("chat on the local and global channels, then switch the language", async ({
 
   const email = `e2e-chat-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Talker ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Talker");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1707,7 +1708,7 @@ test("a GM announces, a player cannot use staff commands, and a ban disconnects"
   /** Registers an account with one guardian and returns its email and character name. */
   async function account(prefix: string, title: string): Promise<{ email: string; name: string }> {
     const email = `e2e-${prefix}-${Date.now()}-${randomLetters(6)}@example.com`;
-    const name = `${title} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+    const name = characterName(title);
     expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
       201,
     );
@@ -1839,7 +1840,7 @@ test("T3.2: a guardian casts haste: its icon in the status tray, faster speed an
 
   const email = `e2e-haste-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Swift ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Swift");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -1948,7 +1949,7 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   async function account(prefix: string, title: string): Promise<{ email: string; name: string }> {
     const email = `e2e-${prefix}-${Date.now()}-${randomLetters(6)}@example.com`;
-    const name = `${title} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+    const name = characterName(title);
     expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
       201,
     );
@@ -2247,7 +2248,7 @@ test("T3.4: cook a fish at the hearth of Lanternby from the station window", asy
 
   const email = `e2e-cook-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Cook ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Cook");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -2342,7 +2343,7 @@ test("T3.5: sail from Puerto's dock to the test island with the harbor master", 
 
   const email = `e2e-sail-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Sailor ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Sailor");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -2414,7 +2415,7 @@ async function newGuardian(
 ): Promise<{ email: string; password: string; name: string }> {
   const email = `e2e-${tag}-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `${tag} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName(tag);
   const apiCtx = await playwright.request.newContext({ baseURL: base });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
@@ -2925,7 +2926,7 @@ test("T5.1: two players found a guild, invite, talk on its channel and see its n
      INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
      SELECT character_id, id, s, 8, 100 FROM bp, generate_series(0, 19) AS s`,
   ]);
-  const guildName = `Faro ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const guildName = characterName("Faro");
   const errors: string[] = [];
   async function enter(email: string): Promise<Page> {
     const page = await browser.newPage();
@@ -3893,7 +3894,7 @@ test("account stash: one character stores fish, the other online one takes it ou
   // One account, two characters (docs/02 "Baúl de la cuenta"): the second is made with the
   // same token. Both stand by Puerto's stash chest (3170, 6382, next to the market board).
   const owner = await newGuardian(playwright, "Baulero");
-  const alt = `Baulera ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const alt = characterName("Baulera");
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   const login = await apiCtx.post("/api/auth/login", {
     data: { email: owner.email, password: owner.password, token_in_body: true },

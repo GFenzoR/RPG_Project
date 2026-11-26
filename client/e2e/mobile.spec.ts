@@ -15,6 +15,7 @@ import { psql } from "./psql.ts";
 import { openWindow } from "./windows.ts";
 import { stepToward } from "./keys.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -79,7 +80,7 @@ async function settled(page: Page): Promise<Self> {
 async function newGuardian(
   playwright: { request: { newContext: (o: { baseURL: string }) => Promise<APIRequestContext> } },
   tag: string,
-  name = `${tag} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`,
+  name = characterName(tag),
 ): Promise<{ email: string; password: string; name: string }> {
   const email = `e2e-${tag.toLowerCase()}-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
@@ -1052,7 +1053,7 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
 }) => {
   const errors = watchErrors(page);
   // 16 characters, the longest name the server takes (auth.MaxNameLen).
-  const name = `Longname ${randomLetters(7).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Longname");
   const who = await newGuardian(playwright, "Long", name);
   psql([
     databaseUrl,

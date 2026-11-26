@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page, Route } from "@playwright/test";
 import { serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -26,7 +27,7 @@ async function newGuardian(
 ): Promise<{ email: string; password: string }> {
   const email = `e2e-${tag.toLowerCase()}-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `${tag} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName(tag);
   const apiCtx = await playwright.request.newContext({ baseURL: serverURL });
   expect((await apiCtx.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,

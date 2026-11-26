@@ -11,6 +11,7 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { faceKey } from "./keys.ts";
 import { serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -79,7 +80,7 @@ async function addLatency(page: Page, oneWayMs = 75, jitterMs = 40): Promise<voi
 async function enter(page: Page, request: APIRequestContext, tag: string): Promise<void> {
   const email = `e2e-${tag}-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `Fluido ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName("Fluido");
   expect((await request.post("/api/auth/register", { data: { email, password } })).status()).toBe(
     201,
   );

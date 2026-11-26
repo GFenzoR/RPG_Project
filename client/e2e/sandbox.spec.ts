@@ -11,6 +11,7 @@ import { stepKey } from "./keys.ts";
 import { psql } from "./psql.ts";
 import { closeWindow, openWindow } from "./windows.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
+import { characterName } from "./names.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -33,7 +34,7 @@ async function newGuardian(
 ): Promise<{ email: string; password: string; name: string }> {
   const email = `e2e-${tag}-${Date.now()}-${randomLetters(6)}@example.com`;
   const password = "e2e-password-1";
-  const name = `${tag} ${randomLetters(8).replace(/^./, (c) => c.toUpperCase())}`;
+  const name = characterName(tag);
   const api = await playwright.request.newContext({ baseURL: serverURL });
   expect((await api.post("/api/auth/register", { data: { email, password } })).status()).toBe(201);
   const login = await api.post("/api/auth/login", {
