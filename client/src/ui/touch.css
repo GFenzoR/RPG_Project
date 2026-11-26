@@ -202,7 +202,8 @@ body.picking-item [data-drop] {
 }
 .game[data-pad] .hotbar.stacked li button,
 .game[data-pad] .hotbar.stacked li select {
-  width: 3.2rem;
+  /* px, not rem: the root text size (17 px since 2026-11-26) must not cost the fourth slot. */
+  width: 51px;
 }
 /* Over the map and the phone drawer (z-index 8 in client.css), under the windows over the
    map (12: dialog, crafting, market, house, trade). Upright the dialog's sheet can reach
