@@ -465,6 +465,12 @@ export interface ClientContent {
    * its ground (state/portals.ts). Optional so fixtures can leave it out.
    */
   portals?: Record<string, string>;
+  /**
+   * The tiles under a roof, by floor: flat runs [y, x, length, ...] in global tiles, worked
+   * out from world/ at build time (client/vite/roofs.ts, docs/17 "Bajo techo"). Optional so
+   * fixtures can leave it out: the canvas then guesses from the tiles in view.
+   */
+  roofs?: Record<string, number[]>;
   /** Language → key → text. */
   i18n: Record<string, Record<string, string>>;
 }

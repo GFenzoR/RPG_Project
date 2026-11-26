@@ -82,6 +82,7 @@ import type { Gait } from "./living.ts";
 import { CastShadows, contactShare } from "./cast-shadows.ts";
 import { ObjectShadows } from "./object-shadows.ts";
 import { TargetHalo } from "./target-halo.ts";
+import { roofLookup } from "./roofs.ts";
 import type { ObjectShadowHint } from "./object-shadows.ts";
 import { NIGHT_PLAYER_LIGHT, SkyView, dimmed, litSurface } from "./sky.ts";
 import type { ParticleView } from "./particles.ts";
@@ -657,6 +658,8 @@ export async function createGameCanvas(
     floor: world.self?.pos.z ?? 7,
     // Under the sky, the sun's shadows stay out of the buildings (docs/17 ART-5).
     indoors: content.livingWorld?.dayNight ? (z) => !isDark(z) : undefined,
+    // Which tiles those are comes with the build (client/vite/roofs.ts), not from the view.
+    roofs: roofLookup(content.roofs),
   });
   // Ambient particles (A13), in world space under the silhouettes.
   const particles = new ParticleLayer(T);
