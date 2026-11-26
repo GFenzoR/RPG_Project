@@ -446,10 +446,10 @@ export function withStatuses(s: Scene, now: number): Scene {
 }
 
 /** Dead: the death screen over the map. */
-export function withDeath(s: Scene, now: number): Scene {
+export function withDeath(s: Scene, now: number, noviceUntil = 0): Scene {
   const ui = { ...s.ui };
   if (ui.stats) ui.stats = { ...ui.stats, health: 0 };
-  ui.death = { experience: 4120, blessings: 0, noviceUntil: 8, at: now };
+  ui.death = { experience: 4120, blessings: 0, noviceUntil, at: now };
   return { ui, name: "death" };
 }
 

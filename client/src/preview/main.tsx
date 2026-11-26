@@ -249,7 +249,7 @@ function Preview(props: { game: Game }): JSX.Element {
     });
   if (scene === "danger") s = withDanger(s, now);
   if (scene === "status") s = withStatuses(s, now);
-  if (scene === "death") s = withDeath(s, now);
+  if (scene === "death") s = withDeath(s, now, content.death?.noviceMaxLevel ?? 0);
   if (scene === "server")
     s = withServerWindows(content, s, {
       x: Math.round(window.innerWidth * 0.35),

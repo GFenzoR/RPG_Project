@@ -78,6 +78,10 @@ func TestNoviceNotice(t *testing.T) {
 		{"jumps over the last", 7, 10, NoticeEnded},
 		{"already out", 9, 10, NoticeNone},
 		{"no gain", 8, 8, NoticeNone},
+		{"a death back to the last", 9, 8, NoticeRegained},
+		{"a death far back", 10, 7, NoticeRegained},
+		{"a loss inside the protection", 8, 7, NoticeNone},
+		{"a loss outside it", 11, 9, NoticeNone},
 	}
 	for _, c := range cases {
 		if got := NoviceNoticeFor(testDeath, c.from, c.to); got != c.want {

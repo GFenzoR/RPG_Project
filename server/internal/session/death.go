@@ -14,9 +14,12 @@ import (
 const (
 	// msgDied: "You died", with "experience" (lost, number) and "blessings" (consumed).
 	msgDied = "death.died"
-	// msgDiedNovice follows msgDied when the novice protection applied: "level" is
-	// death.novice_max_level, where the protection ends.
+	// msgDiedNovice goes before msgDied when the novice protection applied and nothing
+	// dropped: "level" is death.novice_max_level, where the protection ends.
 	msgDiedNovice = "death.novice"
+	// msgNoviceBack follows msgDied when the death's lost level put the character back
+	// under the novice protection ("level": death.novice_max_level).
+	msgNoviceBack = "death.novice_back"
 	// msgNotOwner: another player's corpse is still reserved for its owner.
 	msgNotOwner = "death.corpse_not_owner"
 )
@@ -52,12 +55,15 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	}
 	blessings := w.Blessings(p)
 	pen := skills.DeathPenalty(d, blessings, p.level)
-	noviceUntil := 0 // the level the novice protection reaches, if it applied to this death
-	if skills.IsNovice(d, p.level) {
-		noviceUntil = d.NoviceMaxLevel
-	}
 	// T5.2: a murderer or an outlaw drops more, whatever its blessings.
 	pen.EquipmentDropPct, pen.BackpackDropPct = w.deathDrop(ctx.Now, p, pen.EquipmentDropPct, pen.BackpackDropPct)
+	// The level the novice protection reaches, if it covered this death. Taken from the
+	// final drops: the notice promises that nothing falls, so a PvP mark that raised them
+	// (possible only if the balance lets a novice fight players) silences it.
+	noviceUntil := 0
+	if skills.IsNovice(d, p.level) && pen.EquipmentDropPct == 0 && pen.BackpackDropPct == 0 {
+		noviceUntil = d.NoviceMaxLevel
+	}
 
 	// Corpse with the dropped items, in slot order (deterministic with the seeded rand).
 	// What the pockets hold falls with the backpack, on its roll, also without a backpack
@@ -105,7 +111,9 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	// Experience and skills.
 	lostXP := p.experience - skills.LoseExperience(p.experience, pen.XPPct)
 	p.experience -= lostXP
+	noviceBack := false // the lost level put p back under the protection
 	if level := skills.LevelFor(w.cfg.Balance.Experience, p.experience, 1); level != p.level {
+		noviceBack = skills.NoviceNoticeFor(d, p.level, level) == skills.NoticeRegained
 		p.level = level
 		p.questDirty = true // the milestones' level marks of the quest log (questRecheck)
 		stats := p.vocation.AtLevel(level)
@@ -140,6 +148,11 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 		p.emit(systemMsg(msgDiedNovice, &pb.TextParam{Name: "level", Value: &pb.TextParam_Number{Number: int64(noviceUntil)}}))
 	}
 	p.emit(died)
+	if noviceBack {
+		p.emit(systemMsg(msgNoviceBack, &pb.TextParam{Name: "level", Value: &pb.TextParam_Number{Number: int64(d.NoviceMaxLevel)}}))
+	}
+	// Only death.died waits for a link-dead player: its novice_until carries the protection
+	// to the death window, the two chat lines around it are lost.
 	w.diedLinkDeadNotice(p, died)
 	w.deathSave(ctx, p)
 }

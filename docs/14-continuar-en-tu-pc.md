@@ -128,8 +128,12 @@ el punto 5:
   digan al principio"; docs/02 "Muerte"):** el tutorial lo dice al abrir la mochila, la
   ventana de muerte y el registro dicen que se aplicó y hasta qué nivel, y al llegar al
   último nivel protegido y al pasarlo hay un aviso de qué se pierde desde entonces y de las
-  bendiciones. El nivel sale de `death.novice_max_level`. Falta mirar en el e2e la ventana
-  de muerte de un novato y el paso de la mochila del tutorial (el texto es más largo).
+  bendiciones. El nivel sale de `death.novice_max_level`. Tras la revisión: la nota del
+  tutorial es una línea aparte (`tutorial-novice`) que no aparece si el balance no protege
+  ningún nivel, una muerte que devuelve al personaje a un nivel protegido lo dice
+  (`death.novice_back`), y un novato que suelta cosas por una marca PvP no recibe el aviso.
+  Falta mirar en el e2e la ventana de muerte de un novato (`death-novice`) y el paso de la
+  mochila del tutorial (el panel tiene un párrafo más: ojo al desborde en móvil).
 - **Viento por ráfagas (hecho, rama `feat/wind-gusts`; el dueño el 2026-11-26, después de
   jugar los lotes 19 y 20: "el movimiento que le agregaste a las plantas es demasiado,
   pareciera que tienen vida o que se están como quemando; tiene que ser un movimiento

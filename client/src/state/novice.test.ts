@@ -1,7 +1,5 @@
 // The novice protection's notices (docs/02 "Muerte"): the death screen reads the level the
-// protection reaches from death.died, and the texts name it with a placeholder, never a
-// literal level.
-import { readFileSync } from "node:fs";
+// protection reaches from death.died. The texts and the balance: client/vite/novice.test.ts.
 import { MessageKind, MessageSchema, TextParamSchema, create } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import { NO_SOUNDS } from "../audio/cues.ts";
@@ -53,25 +51,5 @@ describe("novice protection notices", () => {
     const w = new WorldState(content);
     died(w, { experience: 900, blessings: 2 });
     expect(w.death?.noviceUntil).toBe(0);
-  });
-
-  it.each(["es", "en"])("the %s texts take the level from a parameter", (lang) => {
-    const read = (f: string): string => readFileSync(`../i18n/${lang}/${f}`, "utf8");
-    const client = read("client.yaml");
-    for (const key of [
-      "death.novice",
-      "client.death.novice",
-      "progress.novice_last",
-      "progress.novice_ended",
-    ]) {
-      const line = client.split("\n").find((l) => l.startsWith(`${key}:`));
-      expect(line, key).toBeDefined();
-      expect(line).toMatch(/\{(level|blessing_level)\}/);
-      expect(line).not.toMatch(/\b8\b/);
-    }
-    const step = read("tutorial.yaml")
-      .split("\n")
-      .find((l) => l.startsWith("tutorial.step.open_backpack:"));
-    expect(step).toContain("{novice}");
   });
 });

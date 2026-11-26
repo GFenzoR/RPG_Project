@@ -2,8 +2,10 @@ package session_test
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
@@ -389,6 +391,73 @@ func TestDeathNoviceNotice(t *testing.T) {
 		if novice != c.told || (until != 0) != c.told || c.told && until != int64(max) {
 			t.Errorf("level %d: death.novice %v, novice_until %d", c.level, novice, until)
 		}
+	}
+}
+
+// deathKeys returns the keys of the death.* chat lines in msgs, in order, and death.died's
+// novice_until.
+func deathKeys(msgs []*pb.ServerMessage) (keys []string, until int64) {
+	for _, m := range find(msgs, (*pb.ServerMessage).GetChatMessage) {
+		l := m.GetLocalized()
+		if !strings.HasPrefix(l.GetKey(), "death.") {
+			continue
+		}
+		keys = append(keys, l.GetKey())
+		for _, prm := range l.GetParams() {
+			if l.GetKey() == "death.died" && prm.GetName() == "novice_until" {
+				until = prm.GetNumber()
+			}
+		}
+	}
+	return keys, until
+}
+
+// A novice whose PvP mark makes it drop its things (a balance with pvp.min_level inside
+// the protection) is not told that it loses nothing.
+func TestDeathNoviceNoticeNotForMarked(t *testing.T) {
+	h := deathHarness(t, func(c *session.Config) { c.Balance.PvP = pvpRules() })
+	cl, p := h.geared("Marked", testBalance().Death.NoviceMaxLevel, 0)
+	h.sim.Command(gameFunc(func() {
+		h.w.SetMarkForTest(p, pb.Skull_SKULL_MURDERER, time.Date(2200, 1, 1, 0, 0, 0, 0, time.UTC))
+	}))
+	h.sim.Step()
+	cl.take()
+	h.kill(p)
+	if len(corpseItems(h)) == 0 {
+		t.Fatal("the marked novice dropped nothing: the test covers nothing")
+	}
+	if keys, until := deathKeys(cl.take()); !slices.Equal(keys, []string{"death.died"}) || until != 0 {
+		t.Errorf("marked novice that dropped its things: %v, novice_until %d", keys, until)
+	}
+}
+
+// A death that takes a level away and puts the character back under the protection says
+// so after death.died; that death itself was not protected.
+func TestDeathNoviceRegained(t *testing.T) {
+	max := testBalance().Death.NoviceMaxLevel
+	h := deathHarness(t)
+	cl, p := h.geared("Hero", max+1, 0)
+	cl.take()
+	h.kill(p)
+	if level := skills.LevelFor(testBalance().Experience, p.Experience(), 1); level != max {
+		t.Fatalf("level %d after the death, want %d", level, max)
+	}
+	msgs := cl.take()
+	if keys, until := deathKeys(msgs); !slices.Equal(keys, []string{"death.died", "death.novice_back"}) || until != 0 {
+		t.Errorf("death back into the protection: %v, novice_until %d", keys, until)
+	}
+	for _, m := range find(msgs, (*pb.ServerMessage).GetChatMessage) {
+		if l := m.GetLocalized(); l.GetKey() == "death.novice_back" {
+			if len(l.GetParams()) != 1 || l.GetParams()[0].GetName() != "level" || l.GetParams()[0].GetNumber() != int64(max) {
+				t.Errorf("death.novice_back params: %v", l.GetParams())
+			}
+		}
+	}
+	// A novice's own death (no level crossed) does not say it.
+	cl.take()
+	h.kill(p)
+	if keys, _ := deathKeys(cl.take()); slices.Contains(keys, "death.novice_back") || keys[0] != "death.novice" {
+		t.Errorf("novice death: %v", keys)
 	}
 }
 

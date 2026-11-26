@@ -1953,14 +1953,25 @@ Valores iniciales (balance.yaml):
   bendiciones (pérdida mínima de XP y skills, sin drop).
   **Se avisa al jugador** (el dueño el 2026-11-26: murió varias veces sin perder la mochila y
   creyó que era un fallo; "que te lo digan al principio"). El nivel sale siempre de
-  `death.novice_max_level`, nunca un literal: (1) el tutorial (`tutorial.step.open_backpack`,
-  parámetro `{novice}` desde el contenido del cliente) lo dice al principio; (2) cada muerte
-  protegida envía `death.novice` antes de `death.died` y pone `novice_until` en `death.died`,
-  con lo que la ventana de muerte dice hasta qué nivel dura; (3) al subir al último nivel
-  protegido llega `progress.novice_last` y al pasarlo `progress.novice_ended`, con lo que se
-  pierde desde entonces y que las bendiciones (desde el nivel siguiente) lo reducen
-  (`skills.NoviceNoticeFor`; un salto que se salta el último nivel avisa solo del fin). La
-  regla no cambió; sin cambios de proto (son mensajes localizados con parámetros).
+  `death.novice_max_level`, nunca un literal: (1) el tutorial lo dice al principio, en una
+  línea aparte bajo el paso de la mochila (`tutorial.step.open_backpack.novice`, parámetro
+  `{level}` desde el contenido del cliente; `tutorialNoviceNote` busca `<texto del paso>.novice`
+  y no muestra nada si el balance no protege ningún nivel o el dato falta: nunca "hasta el
+  nivel 0"). Quien cierra el tutorial antes de ese paso lo lee en su primera muerte; (2) cada
+  muerte protegida envía `death.novice` antes de `death.died` y pone `novice_until` en
+  `death.died`, con lo que la ventana de muerte (`DeathScreen`) dice hasta qué nivel dura.
+  "Protegida" se decide con los drops finales: si una marca PvP los subió (solo posible si el
+  balance dejara pelear a un novato: hoy `pvp.min_level` 20 > 8), no se promete nada. Una
+  muerte link-dead guarda solo `death.died` para el próximo login: la ventana lo dice igual,
+  la línea del chat se pierde; (3) al subir al último nivel protegido llega
+  `progress.novice_last` y al pasarlo `progress.novice_ended`, con lo que se pierde desde
+  entonces y que las bendiciones (desde el nivel siguiente) lo reducen
+  (`skills.NoviceNoticeFor`; un salto que se salta el último nivel avisa solo del fin); (4) si
+  una muerte sin protección baja al personaje a un nivel protegido, tras `death.died` llega
+  `death.novice_back` (`NoticeRegained`), y al volver a subir se repite `novice_ended`. Los
+  sacerdotes hablan de "tu protección de novato" sin escribir el nivel; su `level_at_least`
+  debe ser `novice_max_level` + 1 (`client/vite/novice.test.ts`). La regla no cambió; sin
+  cambios de proto (son mensajes localizados con parámetros).
 - El cuerpo (`creature_remains`, contenedor, "cuerpo de <jugador>": `ItemMods.body_of`,
   ver "Restos") queda `corpse_ms` en el suelo con lo que cayó;
   durante `corpse_owner_only_ms` solo el dueño puede sacar, usar o meter algo en él (otros

@@ -49,14 +49,21 @@ const (
 	NoticeNone      NoviceNotice = iota
 	NoticeLastLevel              // reached the last protected level (novice_max_level)
 	NoticeEnded                  // went past it: the protection is over
+	NoticeRegained               // a lost level brought the character back under it
 )
 
-// NoviceNoticeFor returns the notice for a level gain from -> to: the last protected level
-// when to is novice_max_level, and the end when the gain crosses it (a jump over the last
-// level gives only the end).
+// NoviceNoticeFor returns the notice for a level change from -> to: the last protected
+// level when a gain reaches novice_max_level, the end when a gain crosses it (a jump over
+// the last level gives only the end), and the protection regained when a loss (a death)
+// comes back to novice_max_level or below.
 func NoviceNoticeFor(d content.Death, from, to int) NoviceNotice {
 	switch {
-	case d.NoviceMaxLevel <= 0 || to <= from:
+	case d.NoviceMaxLevel <= 0 || to == from:
+		return NoticeNone
+	case to < from:
+		if from > d.NoviceMaxLevel && to <= d.NoviceMaxLevel {
+			return NoticeRegained
+		}
 		return NoticeNone
 	case from <= d.NoviceMaxLevel && to > d.NoviceMaxLevel:
 		return NoticeEnded
