@@ -509,18 +509,30 @@ arte.
   (se mueve el tronco). El sprite se corta en tiras horizontales que se corren de lado por
   el cuadrado de su altura sobre el *pivot* (donde termina el tronco): el tronco no se
   mueve nunca.
-- **Poco:** 1 a 2 px en la punta de un árbol (vaivén lento, de unos 3 s) más un aleteo
-  rápido de la copa de menos de 1 px. Un arbusto, la mitad; hierba y juncos se doblan
-  desde el suelo; un cactus o un árbol seco casi no se mueven. Los números por tipo están
-  en `data/livingworld/wind.yaml`.
+- **Quietas, y cada tanto una ráfaga** (el dueño, 2026-11-26, después de jugar los lotes
+  19 y 20: "el movimiento que le agregaste a las plantas es demasiado, pareciera que
+  tienen vida o que se están como quemando; tiene que ser un movimiento generado por un
+  random y cada cierto rato, como si pasara una ráfaga de viento"). Regla de arte: **una
+  planta que se mueve siempre se lee viva o en llamas; el viento es un suceso, no un
+  estado.** El vaivén constante y el aleteo de la copa se sacaron. Una planta está quieta
+  y, cada 45 s en promedio (al azar: entre 24 y 67 s en un mismo lugar), el frente de una
+  ráfaga cruza el mapa: al llegarle, la planta se inclina, sostiene un segundo, se
+  balancea dos veces cada vez menos y queda quieta otra vez. Fuerza, momento y dirección
+  de cada ráfaga son al azar, e iguales para todos los jugadores (reloj del servidor).
+- **Poco:** 1 a 2 px en la punta de un árbol con una ráfaga mediana, hasta 3 con una
+  fuerte. Un arbusto, la mitad; hierba y juncos se doblan desde el suelo; un cactus o un
+  árbol seco casi no se mueven. Todos los números (cada cuánto, qué tan fuerte, cuántos
+  balanceos, px por tipo) están en `data/livingworld/wind.yaml`.
 - **Píxeles enteros de pantalla.** Cada tira se corre un número entero de px de pantalla al
   zoom actual: el pixel art no se desenfoca ni tiembla. Es el recurso clásico del pixel art
   hecho a mano (correr filas), no un estirado.
-- **Ráfagas que cruzan el mapa.** El viento es un campo que viaja: los árboles de un bosque
-  se inclinan uno tras otro, cada uno con su fase y su tamaño. Nunca todos a la vez.
+- **Ráfagas que cruzan el mapa.** El frente viaja (8 casillas por segundo): los árboles de
+  un bosque se inclinan uno tras otro, cada uno con su tamaño y su ritmo. Nunca todos a la
+  vez.
 - **Según el lugar:** más en la costa y el desierto, menos dentro de un bosque y sobre la
   piedra de un pueblo, nada adentro (pisos de madera) ni en cuevas, un poco menos de noche.
-- **La sombra de la copa se mece con la copa** y la del tronco queda quieta (2026-11-25:
+- **La sombra de la copa se dobla con la copa** en la ráfaga (quieta en la calma) y la del
+  tronco queda quieta (2026-11-25:
   la sombra de un árbol es una segunda malla sobre las mismas tiras; "Sombras de los
   objetos", abajo). Con "Animaciones reducidas" la sombra sigue, quieta.
 - **Estandartes y bandera** siguen con su bucle de frames de ART-7 (una onda que recorre
@@ -544,6 +556,10 @@ Revisado el 2026-11-25 con `make sway-preview` (cada planta en 8 momentos) y `ma
 sway-preview SCENE=forest` y `SCENE=town` (cuatro momentos de un bosque y de una plaza con
 árboles, a zoom 2): los troncos quietos, las copas a 1 o 2 px de su lugar, cada árbol en
 su fase, ninguna silueta rota. Falta mirarlo en movimiento en el juego (E2E del lote).
+Revisado otra vez el 2026-11-26 con las ráfagas: `make sway-preview` muestra ahora cada
+planta quieta y en 10 momentos de **una** ráfaga plena (se inclina, se balancea, termina
+quieta) y `SCENE=forest|town` cuatro momentos alrededor de un frente (1,5 s antes: todo
+quieto; después, el frente cruzando).
 
 ### Mundo vivo (hecho, 2026-11-23, rama `feat/living-ground`, lote 17)
 Pedido del dueño: "el entorno reacciona a los jugadores que pasan, para que el mundo se
@@ -561,8 +577,8 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
   corrección ni al teletransportarse. El sonido del paso, la onda en el agua, el polvo al
   correr y las motas de MOV-7 salen de la misma pisada. Son máscaras blancas
   (`livingworld/fx/footprint_*`) teñidas con el `tint` de su superficie, un tono más oscuro
-  del suelo: se leen sin contorno. Se desvanecen en la segunda mitad de su vida; en la arena
-  el viento las borra antes, en ráfagas que recorren el mapa.
+  del suelo: se leen sin contorno. No tienen tiempo de vida: en la arena las borra el
+  viento, de a una ráfaga (entre dos ráfagas quedan como están).
 - **Plantas que reaccionan:** hierba, hierba alta, flores, juncos, arbustos y jardineras se
   doblan hacia donde va quien pasa y vuelven con un resorte corto (900 ms). Los árboles
   se sacuden 1 px y sueltan alguna hoja (también de vez en cuando, solos). Desde el lote

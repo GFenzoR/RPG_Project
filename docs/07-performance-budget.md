@@ -329,7 +329,7 @@ mientras no se usan). Por frame:
 | Huellas | 64 vivas (la nueva reemplaza a la más gastada; los objetos se reutilizan) | gasto y alfa de cada una |
 | Pisadas (`gait.ts`) | un estado por criatura en vista (256; los viejos se reutilizan) | por criatura dibujada: una resta de fases y los contactos de su andar (2 a 8 comparaciones); nada creado: un `WalkSample` y una `Footfall` reutilizados, los eventos de sonido de cada superficie hechos una vez |
 | Plantas | 48 moviéndose por pasos | el doblez de las plantas en vista; la lista se rearma solo cuando cambia `MapView.version` |
-| Viento (lote 20) | solo las plantas en vista (y 3 casillas de margen); una malla de hasta 17 tiras (68 vértices) por planta, en el batch de los sprites | por planta: una ráfaga (dos ruidos), tres senos y un seno por tira; los vértices se reescriben solo cuando una tira cambia de píxel de pantalla (la mayoría de los frames, ninguna) |
+| Viento (lote 20) | solo las plantas en vista (y 3 casillas de margen); una malla de hasta 17 tiras (68 vértices) por planta, en el batch de los sprites | en la calma entre dos ráfagas (la mayor parte del tiempo), nada: una pregunta por frame (`gustActive`) y ninguna por planta; con una ráfaga en el mapa, por planta: el frente (dos ruidos de una dimensión), una exponencial y un coseno; los vértices se reescriben solo cuando una tira cambia de píxel de pantalla |
 | Ondas y polvo | 24 | frame y alfa |
 | Hojas | 24 | caída y alfa |
 | Bichos | 10 | moverse; buscar hogares recorre la vista cada `SCAN_MS` (1 s), no cada frame |
@@ -349,8 +349,10 @@ navegador se mira en la revisión del E2E final del lote (docs/14).
 
 **Viento, el peor caso** (`livingworld/client/src/wind.test.ts`, "stays inside the frame
 budget"): una pantalla de bosque con un árbol en **cada** casilla de la vista de 31x21 y su
-margen (37x27 = 999 árboles de 64x96, 999 mallas). Medido el 2026-11-25: **0,8 ms por
-frame** en Node (el cálculo y la reescritura de vértices; el test falla sobre 2 ms, el
+margen (37x27 = 999 árboles de 64x96, 999 mallas), **mientras una ráfaga la cruza** (desde
+el 2026-11-26 las plantas están quietas entre ráfagas y ese frame no cuesta nada). Medido
+el 2026-11-25 con el vaivén constante: **0,8 ms por frame** en Node; con las ráfagas el
+peor frame cuesta menos, sin aleteo por tira (el cálculo y la reescritura de vértices; el test falla sobre 2 ms, el
 mismo tope holgado de las sombras proyectadas). Un bosque real del mapa tiene entre 150 y
 300 árboles en vista. La exposición de cada planta (25 casillas de alrededor) y su malla se
 calculan una vez, al armar la lista (cuando entra o sale un chunk), no por frame; las

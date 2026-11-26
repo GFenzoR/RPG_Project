@@ -4044,7 +4044,7 @@ test("account security: change password, sign out everywhere, email prefill", as
   expect(errors).toEqual([]);
 });
 
-// Lote 20 (livingworld/README.md "Viento"): the trees of Ivernel's shore sway in the wind,
+// Lote 20 (livingworld/README.md "Viento"): the trees of Ivernel's shore take the wind,
 // each a mesh of its map sprite: the crown moves and the foot of the trunk does not; with
 // "Animaciones reducidas" the map's own sprites come back and nothing moves; and the meshes
 // ride the atlas batch, so the trees cost no draw calls of their own (docs/07: fewer than 50
@@ -4053,11 +4053,14 @@ test("account security: change password, sign out everywhere, email prefill", as
 // shadow sways with the crown (a second mesh on the same strips; a still sprite with reduced
 // motion). The forest is shot in the morning, in the afternoon and under a full moon, and
 // the draw calls are measured with all those shadows in view.
-test("wind: crowns sway over still trunks, reduced motion stops them, draw calls stay in budget", async ({
+// Owner, 2026-11-26: a tree that always moves "looks alive, or on fire". The trees stand
+// still, and every so often a gust crosses the map and bends them as it passes: the crown
+// is shot still in the calm and moving when the gust front reaches it.
+test("wind: crowns stand still, a gust bends them over still trunks, reduced motion stops them, draw calls stay in budget", async ({
   page,
   playwright,
 }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(420_000);
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
@@ -4162,12 +4165,44 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
     }
     return seen.size;
   };
+  // The gusts (data/livingworld/wind.yaml): the next front to reach a tile, and whether
+  // the map is in the calm between two.
+  const gust = (x: number, y: number, min: number) =>
+    page.evaluate(({ a, b, m }) => window.__rpgClient?.gust(a, b, m), { a: x, b: y, m: min });
+  /** Waits for the calm between two gusts, with at least `ms` of it left at (x, y). */
+  const calm = (x: number, y: number, ms: number): Promise<void> =>
+    expect
+      .poll(
+        async () => {
+          const g = await gust(x, y, 0);
+          return g !== undefined && g.calm && g.at > ms;
+        },
+        { timeout: 60_000, intervals: [500] },
+      )
+      .toBe(true);
+  /** Waits for the next strong gust front to reach (x, y); returns its strength. */
+  const front = async (x: number, y: number): Promise<number> => {
+    const g = await gust(x, y, 0.65);
+    if (!g) throw new Error("no strong gust on its way");
+    await page.waitForTimeout(g.at + 150);
+    return g.strength;
+  };
+  // Between two gusts nothing moves: not the crown, not its shadow.
+  await calm(tree.x, tree.y, 4000);
+  await shot(page, `120-wind-plaza-calm-zoom${scale}`);
+  expect(await frames(crown, 5), "the crown stands still between gusts").toBe(1);
+  // The gust: the crown leans and swings, the foot of the trunk stands.
+  const blew = await front(tree.x, tree.y);
+  testInfo.annotations.push({ type: "wind", description: `gust of ${blew.toFixed(2)}` });
   for (let i = 0; i < 4; i++) {
     await shot(page, `120-wind-plaza-zoom${scale}-${i}`);
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(300);
   }
-  expect(await frames(crown, 6), "the crown sways").toBeGreaterThan(1);
-  expect(await frames(foot, 6), "the foot of the trunk stands").toBe(1);
+  await calm(tree.x, tree.y, 0);
+  await front(tree.x, tree.y);
+  const [crownFrames, footFrames] = await Promise.all([frames(crown, 8), frames(foot, 8)]);
+  expect(crownFrames, "the crown bends in the gust").toBeGreaterThan(1);
+  expect(footFrames, "the foot of the trunk stands").toBe(1);
 
   // Reduced motion: the trees stand whole and still; switched off, they sway again.
   await openWindow(page, "options");
@@ -4183,7 +4218,8 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
   await openWindow(page, "options");
   await page.getByTestId("options").getByTestId("reduced-motion").uncheck();
   await closeWindow(page, "options");
-  expect(await frames(crown, 6), "the crown sways again").toBeGreaterThan(1);
+  // The strips are back (the next gust moves them; it is not waited for again).
+  await expect.poll(async () => (await sky())?.swayingShadows ?? 0).toBeGreaterThan(0);
 
   // The thick of the forest: the screen with the most trees of the island.
   const say = page.getByTestId("say").getByRole("textbox");
@@ -4193,6 +4229,8 @@ test("wind: crowns sway over still trunks, reduced motion stops them, draw calls
   await say.blur();
   await page.waitForTimeout(600);
   const forest = await trees();
+  // The forest as a gust crosses it: the trees lean one after another.
+  await front(4221, 6071);
   for (let i = 0; i < 4; i++) {
     await shot(page, `122-wind-forest-zoom${scale}-${i}`);
     await page.waitForTimeout(400);

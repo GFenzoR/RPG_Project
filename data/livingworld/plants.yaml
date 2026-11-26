@@ -9,10 +9,10 @@
 #             rustle: a tree shakes a pixel or so. Absent: by its wind type
 #   leaves    leaves fall from it now and then, and when someone brushes past
 #   trample   on a tile worn into a path (trail wear, wear.yaml) it lies flattened
-#   wind      how it sways (wind.yaml). Absent: what its sprite says, which is the usual
+#   wind      how it takes a gust of wind (wind.yaml). Absent: what its sprite says, which is the usual
 #             case (wind_sprites.yaml, written by make spritegen from the sprite's recipe).
 #             A plant type (tree, palm, bush, tall_grass, reed, flower, vine, cactus,
-#             dead_tree) or { kind, pivot, stiffness, amplitude, flutter } for a plant
+#             dead_tree) or { kind, pivot, stiffness, amplitude } for a plant
 #             whose sprite says nothing or that differs from its type; none: it never
 #             sways, with the reason in a comment.
 #

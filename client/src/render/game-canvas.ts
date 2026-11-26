@@ -275,6 +275,16 @@ export interface FootfallHook {
 /** How many of the own player's footfalls the E2E hook keeps. */
 const OWN_FOOTFALLS = 16;
 
+/** What the E2E hook `gust()` tells (GameCanvas.gust). */
+export interface GustHook {
+  /** The front reaches the tile in this many ms. */
+  at: number;
+  /** How hard it blows there (data/livingworld/wind.yaml gusts.strength). */
+  strength: number;
+  /** No gust is on the map now: every plant stands still. */
+  calm: boolean;
+}
+
 /** What the E2E hook `sky()` tells (GameCanvas.sky). */
 export interface SkyHook {
   phase: string;
@@ -348,6 +358,12 @@ export interface GameCanvas {
    * many cast shadow sprites the frame drew; undefined underground or without a day and night.
    */
   sky(): SkyHook | undefined;
+  /**
+   * E2E: the next gust of wind to reach tile (x, y) blowing at least `min` there
+   * (livingworld/README.md "Viento"): in how many ms and how hard, and whether the map is
+   * in the calm between two gusts now (no plant moves); undefined without wind.
+   */
+  gust(x: number, y: number, min?: number): GustHook | undefined;
   /**
    * E2E: the footfalls of the walks drawn (livingworld/README.md "Huellas"): the footprints
    * on the ground now, and the last feet of the own player that touched the ground, oldest
@@ -738,6 +754,9 @@ export async function createGameCanvas(
         slot.rate = voice?.rate ?? 1;
       }
     },
+    // The gusts of wind run on the server's clock (livingworld/README.md "Viento"): two
+    // players side by side see the same gust bend the same trees.
+    () => Date.now() + world.clockOffset,
   );
   const ownFalls = Array.from({ length: OWN_FOOTFALLS }, () => ({
     side: 0,
@@ -2180,6 +2199,10 @@ export async function createGameCanvas(
         surface: p.surface,
       }));
       return { footprints: prints.length, total: ownFallCount, own, prints };
+    },
+    gust(x, y, min) {
+      const g = living?.nextGust(x, y, performance.now(), min);
+      return g && living && { at: g.at, strength: g.strength, calm: !living.stats().gusting };
     },
     sky() {
       const s = sky.current;

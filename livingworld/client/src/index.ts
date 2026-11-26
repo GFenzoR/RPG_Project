@@ -29,14 +29,7 @@ import { seededRandom, tileKey } from "./hash.ts";
 import { LeafSim, MAX_LEAVES } from "./leaves.ts";
 import { MAX_PUFFS, PuffSim, RUN_STEP_MS } from "./puffs.ts";
 import { bendPx, rustleOffset, SwaySim } from "./sway.ts";
-import {
-  exposureOf,
-  gustActive,
-  nextGust,
-  snapSteps,
-  stripOffsets,
-  swayAt,
-} from "./wind.ts";
+import { exposureOf, gustActive, nextGust, snapSteps, stripOffsets, swayAt } from "./wind.ts";
 import type { GustFront, PlantWind } from "./wind.ts";
 import { WindMesh } from "./wind-mesh.ts";
 import { MAX_WEAR_DRAWN, TRAMPLE_SCALE, WearMap, wearSprite } from "./wear.ts";
@@ -269,6 +262,8 @@ export interface LivingWorld {
     plants: number;
     /** Plants drawn as wind strips now. */
     windMeshes: number;
+    /** A gust of wind is on the map now (wind.ts gustActive): false in the calm between two. */
+    gusting: boolean;
   };
   destroy(): void;
 }
@@ -524,6 +519,8 @@ export function createLivingWorld(
   /** Night's calmer wind, eased: 1 by day, `field.night` at night. */
   let windScale: number | undefined;
   const windNow = (now: number): number => options.windClock?.() ?? now;
+  /** Whether the last frame had a gust on the map (stats). */
+  let gustingNow = false;
   /**
    * Moves every plant in view: the gust and the bends of the steps, on the same strips.
    * Returns how many trees that drop leaves are in view.
@@ -551,6 +548,7 @@ export function createLivingWorld(
     // The calm between two gusts, most of the time: no plant is asked anything.
     const wnow = windNow(now);
     const gusting = blowing && field !== undefined && gustActive(field, wnow);
+    gustingNow = gusting;
     let trees = 0;
     for (const p of plants) {
       if (p.rule.leaves && p.x >= x0 && p.y >= y0 && p.x <= x1 && p.y <= y1) trees++;
@@ -753,12 +751,7 @@ export function createLivingWorld(
       const trees = movePlants(now, ms, view.zoom ?? 1, x0, y0, x1, y1);
       // The same wind erases the footprints (footprints.ts): none underground, calmer at
       // night, as the plants have it this frame.
-      prints.step(
-        ms,
-        now,
-        (options.sheltered?.() ?? false) ? 0 : (windScale ?? 1),
-        windNow(now),
-      );
+      prints.step(ms, now, (options.sheltered?.() ?? false) ? 0 : (windScale ?? 1), windNow(now));
       if (trees > 0 && random() < leaves.chance(trees, ms)) {
         let pick = Math.floor(random() * trees);
         for (const p of plants) {
@@ -816,6 +809,7 @@ export function createLivingWorld(
         sways: sway.active,
         plants: plants.length,
         windMeshes: meshes.size,
+        gusting: gustingNow,
       };
     },
 

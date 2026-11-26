@@ -349,8 +349,8 @@ palmera, arbusto, hierba, junco, flor, enredadera, cactus, árbol seco) **declar
 metadata de viento**: `wind: plantWind("<tipo>", { pivot })` (`src/wind.ts`). El tipo da
 los valores por defecto (`data/livingworld/wind.yaml` `kinds`); `pivot` es dónde termina
 el tronco o el tallo, en px sobre el borde de abajo del sprite (obligatorio en `tree`,
-`palm`, `cactus` y `dead_tree`; en los demás sale del dibujo); `stiffness`, `amplitude` y
-`flutter` solo si la planta no se parece a su tipo. El cliente la mece sin más código: no
+`palm`, `cactus` y `dead_tree`; en los demás sale del dibujo); `stiffness` y `amplitude`
+solo si la planta no se parece a su tipo. El cliente la dobla cuando pasa una ráfaga, sin más código: no
 se dibujan frames de viento (los `frame_<n>` de los árboles salieron en el lote 20). El
 flujo es automático: `make spritegen` escribe `data/livingworld/wind_sprites.yaml`
 (generado, nunca a mano; entero aunque se use `ONLY=`), con el `pivot` y la fila más alta
@@ -364,9 +364,10 @@ spritegen (pack, Gemini) lleva la misma metadata en `tiles:` de `assets/sprites.
 `<sprite>: { wind: { kind: palm, pivot: 30 } }` (`pivot` obligatorio; `import_art.py
 --wind palm --pivot 30` deja la línea en `import.json` y avisa si un objeto con nombre de
 planta se importa sin `--wind`). **Mirar siempre el vaivén:** `make sway-preview
-[ONLY=<prefijo>]` escribe `build/spritegen/sway.png` (cada planta quieta y en 8 momentos,
-con la matemática del cliente, a zoom 2) y `make sway-preview SCENE=forest|town` cuatro
-momentos de un trozo de mapa (`sway.<n>.png`); se revisan con Read: sutil y orgánico,
+[ONLY=<prefijo>]` escribe `build/spritegen/sway.png` (cada planta quieta y en 10 momentos
+de una ráfaga plena: se inclina, se balancea y queda quieta; con la matemática del
+cliente, a zoom 2) y `make sway-preview SCENE=forest|town` cuatro momentos de un trozo de
+mapa alrededor de un frente de ráfaga (`sway.<n>.png`; el primero, 1,5 s antes: todo quieto); se revisan con Read: sutil y orgánico,
 nunca de goma.
 
 ## spritegen: el motor

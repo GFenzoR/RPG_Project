@@ -65,7 +65,13 @@ import type { NameSize } from "./render/label-style.ts";
 import type { ViewTiles } from "./state/view.ts";
 import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
-import type { FootfallHook, GameCanvas, LabelsShown, SkyHook } from "./render/game-canvas.ts";
+import type {
+  FootfallHook,
+  GameCanvas,
+  GustHook,
+  LabelsShown,
+  SkyHook,
+} from "./render/game-canvas.ts";
 import { locationInit, menuItem, splitCount, splittable, tileUse, topItem } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
@@ -354,6 +360,11 @@ export interface ClientTestHooks {
    * colour, lamps, moon, and how many cast shadow sprites the frame drew.
    */
   sky(): SkyHook | undefined;
+  /**
+   * The next gust of wind to reach a tile blowing at least `min` there: in how many ms and
+   * how hard (GameCanvas.gust). Between two gusts the plants stand still.
+   */
+  gust(x: number, y: number, min?: number): GustHook | undefined;
   /** The footprints on the ground and the own player's last footfalls (GameCanvas.footfalls). */
   footfalls(): FootfallHook;
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
@@ -2254,6 +2265,7 @@ export class Game {
       poses: () => canvas.poses(),
       bubbles: () => canvas.bubbles(),
       sky: () => canvas.sky(),
+      gust: (x, y, min) => canvas.gust(x, y, min),
       footfalls: () => canvas.footfalls(),
       npcs: () =>
         [...world.creatures.values()]

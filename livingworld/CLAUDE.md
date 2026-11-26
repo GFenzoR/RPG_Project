@@ -22,13 +22,15 @@ La fuente única es `livingworld/README.md`: léela antes de tocar nada.
   sobre una criatura o un item suelto; el botín se tira una vez por rotura; su estado es
   transitorio (no se guarda). Ninguno que pida herramienta, empujable o compuerta es el
   único camino de una quest.
-- Viento (`client/src/wind.ts` puro, `wind-mesh.ts`): un campo que viaja por el mapa, nunca
-  azar por planta; la base del sprite plantada y la copa en tiras que se corren px enteros
+- Viento (`client/src/wind.ts` puro, `wind-mesh.ts`): las plantas están **quietas** y solo
+  se doblan cuando pasa una ráfaga (cada tanto, al azar pero determinista del reloj
+  compartido y la semilla: nunca `Math.random`, nunca un vaivén constante ni un aleteo);
+  todos los números en `data/livingworld/wind.yaml`; la base del sprite plantada y la copa en tiras que se corren px enteros
   de pantalla; sin texturas por frame. Toda planta declara su viento en su sprite (receta de
   spritegen o pista de `assets/sprites.yaml`) o dice `wind: none`: `make validate` falla si
   no. `data/livingworld/wind_sprites.yaml` es generado (`make spritegen`): nunca a mano.
 - Huellas y pasos (`footprints.ts`, `footsteps.ts`): una huella no tiene tiempo de vida; la
-  borran el viento (el mismo campo de `wind.ts`, por exposición), las olas en la arena
+  borran el viento (las mismas ráfagas de `wind.ts`, por exposición; nada entre dos), las olas en la arena
   mojada, el pie de otra criatura o el tope (las más viejas se desvanecen, nunca saltan).
   Los dos pies dejan marca y suenan, cada uno con su voz y sin repetir la toma; el volumen
   es `steps.volume` de `surfaces.yaml`. Todo sale de la posición, el reloj y los datos.

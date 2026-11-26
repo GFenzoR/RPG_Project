@@ -156,16 +156,20 @@ según las olas, dinámico." Una huella guarda cuánto se borró (`wear`, de 0 a
 `depth × (1 − wear)`. Nada la gasta por sí solo. Todo sale de su posición, del reloj y de
 `data/livingworld` (sin azar y sin estado del servidor: dos clientes con el mismo reloj ven
 la misma playa).
-- **Viento.** El mismo campo que mece las plantas (`wind.ts`: `gustAt`, `strengthAt`).
+- **Viento.** Las mismas ráfagas que doblan las plantas (`wind.ts`: `gustAt`, la fuerza
+  de la ráfaga sobre un lugar: 0 en la calma, hasta la fuerza de la ráfaga mientras su
+  cuerpo pasa, unos 2 s), con su mismo reloj (`windClock`).
   Cada huella guarda la exposición de su lugar al nacer (`exposureOf` sobre las 5x5
   casillas: arena y orilla soplan fuerte, madera y piedra casi nada, un bosque denso
-  calma). Por segundo se borra `prints.wind × (fuerza − still)²` (`windErosion`); bajo
-  `prints.still` (0,45) no se toca. En una playa abierta (exposición ~1,3) una ráfaga
-  llena se lleva una huella de arena en unos 4 s de soplar y un rastro dura de unos
-  segundos a menos de un minuto, según cuándo llegue la ráfaga; como las ráfagas son un patrón que viaja con el
-  viento, el rastro se va **desde barlovento**: lo que borra aquí borra río abajo un
-  momento después (un test lo comprueba con el desfase exacto). En un rincón al abrigo
-  (exposición bajo 0,45) la fuerza nunca pasa de `still`: la huella queda hasta el tope.
+  calma). Por segundo se borra `prints.wind × (fuerza − still)²` (`windErosion`), con
+  fuerza = exposición × ráfaga; bajo `prints.still` (0,35) no se toca. **Entre dos
+  ráfagas la fuerza es 0: solo una ráfaga borra** (desde el 2026-11-26; antes soplaba
+  siempre un poco). En una playa abierta (exposición ~1,3) una ráfaga mediana se lleva
+  más de la mitad de una huella de arena (`wind: 1,4`) y una fuerte, casi toda: un rastro
+  dura de una a tres ráfagas, de medio minuto a un par de minutos. Como el frente viaja,
+  el rastro se va **huella por huella**, cada una cuando el frente llega a su casilla (un
+  test lo comprueba contra `nextGust`). En un rincón al abrigo (exposición bajo 0,35) la
+  fuerza nunca pasa de `still`: la huella queda hasta el tope.
   De noche el viento es más suave (`field.night`); bajo tierra no hay (`sheltered`).
 - **Olas.** En `wet_sand` (`waves: true`) junto al agua. Hay una ola cada
   `waves.period_ms` (7680 ms: ocho vueltas del bucle del agua, 4 frames de 240 ms, así
@@ -409,31 +413,62 @@ solo draw call). La malla ocupa el lugar del sprite del mapa (mismo padre, posic
 `zIndex`, ordenada justo después), que queda oculto; `MapView` no sabe nada de esto. Las
 mallas se conservan mientras vive su sprite: al entrar un chunk solo se crean las suyas.
 
-**El viento es un campo, no un dado por planta** (`wind.ts`, puro). `gustAt(campo, x, y,
-ms)` es un ruido suave de la posición que **viaja** en la dirección del viento a su
-velocidad: lo que sopla en una casilla sopla `speed` casillas viento abajo un segundo
-después, así los árboles vecinos se mueven uno tras otro. Sobre esa ráfaga cada planta
-suma dos movimientos:
-- **el vaivén** (`swayOf`): una inclinación viento abajo que va y viene con la ráfaga, más
-  un balanceo a su propio período (dos senos que nunca coinciden), con fase, período y
-  tamaño propios del hash de su casilla: nunca se mueven todas juntas como un coro. De 1 a
-  2 px en la punta de un árbol, nunca más que su `amplitude`;
-- **el aleteo** (`flutterOf`, `flutterPhase`): una onda rápida (`FLUTTER_MS`, 430 ms) que
-  sube por las tiras de la copa, de menos de 1 px, más fuerte en la ráfaga.
+**Quietas, salvo cuando pasa una ráfaga** (`wind.ts`, puro; el dueño, 2026-11-26: "el
+movimiento que le agregaste a las plantas es demasiado, pareciera que tienen vida o que se
+están como quemando; tiene que ser un movimiento generado por un random y cada cierto
+rato, como si pasara una ráfaga de viento"). El vaivén constante y el aleteo de la copa
+del lote 20 ya no existen. Una planta está **quieta** (exactamente en su lugar: ninguna
+tira se reescribe) hasta que le llega el frente de una ráfaga:
+
+- **Cuándo viene una ráfaga.** El reloj se parte en tramos de `gusts.every_s` (45 s) y
+  cada tramo tiene **una** ráfaga, la número *k*. De *k* y de `gusts.seed` (un hash, sin
+  `Math.random`) salen su momento dentro del tramo (`jitter`: dos ráfagas quedan entre 0,7
+  y 1,3 tramos una de otra, nunca como un metrónomo), su fuerza (`strength: [0,6, 1,0]`),
+  su dirección (`field.direction` ± `spread` grados) y dónde nace.
+- **Cómo cruza el mapa.** El frente es una línea atravesada a la dirección de la ráfaga,
+  un poco ondulada (`FRONT_WOBBLE`, 3 casillas) y con tramos más flojos; avanza a
+  `field.speed` (8 casillas por segundo), recorre `travel_tiles` (64, unas dos pantallas)
+  y muere: nace y se apaga de a poco (el 15 % de cada punta), así que una ráfaga puede
+  "levantarse" en medio de la pantalla. Cada casilla la recibe exactamente una vez.
+  `nextGust(campo, x, y, ms, min)` dice cuándo y con qué fuerza llega la próxima a una
+  casilla (tests, E2E y la vista previa; un frame nunca lo pregunta).
+- **Qué hace la planta** (`gustShape`, `gustLean`, `swayAt`): al llegar el frente entra a
+  la inclinación con suavidad (`rise_ms`, 450 ms), la sostiene mientras la ráfaga le sopla
+  encima (`hold_ms`, 1,1 s) y al soltarla hace `swings` (2) balanceos a su propio período,
+  cada uno menor que el anterior (el primero vuelve a un 67 % hacia el otro lado), hasta
+  quedar **exactamente quieta** un balanceo y medio después. Tamaño y período propios del
+  hash de su casilla: las vecinas no se mueven como un coro. Nunca más que su `amplitude`.
+- **La calma es larga y es un dato.** Con los números de hoy, una casilla ve una ráfaga
+  cada 24 a 67 s y la planta más lenta (un árbol) se mueve unos 7 s: un árbol a campo
+  abierto está quieto más del 80 % del tiempo. `make validate` exige que entre el último
+  balanceo de una ráfaga y el frente de la siguiente queden **al menos 10 s** en cualquier
+  casilla (`checkWindGusts`); si `every_s` baja o `travel_tiles` sube demasiado, falla.
+- **Deriva en la calma (`drift`, apagada).** Cada tipo puede derivar menos de 1 px, lento
+  (`gusts.drift_ms`), entre ráfagas. Hoy es **0 para todos los tipos**: a zoom 2 medio
+  píxel de sprite ya es un píxel de pantalla que va y viene, y en muchas plantas a la vez
+  se lee como el hormigueo que el dueño pidió sacar. Queda como perilla; nunca para
+  plantas chicas del suelo.
+- **Igual para todos.** Todo sale de la casilla, del reloj, de la semilla y de los datos.
+  El reloj de las ráfagas es `windClock`, que el cliente del juego llena con **el reloj
+  del servidor** (`Date.now() + clockOffset` del `Welcome`): dos jugadores lado a lado ven
+  la misma ráfaga doblar los mismos árboles en el mismo momento. Sin `windClock` (tests,
+  herramientas) se usa el reloj del frame.
+- **Costo.** `gustActive` dice si hay alguna ráfaga viva en el mapa; en la calma (la
+  mayor parte del tiempo) el frame no le pregunta nada a ninguna planta.
 
 Un arbusto se mueve menos que un árbol; un cactus o un árbol seco, casi nada: `stiffness`
-hace que una planta rígida ignore la brisa y solo ceda a una ráfaga fuerte.
+hace que una planta rígida ignore una ráfaga floja y solo ceda a una fuerte.
 
 **Dónde sopla** (`exposureOf`, calculado una vez por planta al armar la lista, no por
 frame): el promedio de `exposure` de las superficies de las 25 casillas de alrededor (así
 la costa sopla unas casillas tierra adentro): más en arena, arena mojada, agua baja, ceniza
 y nieve, normal en el pasto, la mitad sobre piedra (pueblos) y **nada sobre madera** (los
 pisos de adentro); menos dentro de un bosque (`forest`: los árboles de alrededor lo
-calman hasta un 40 %); **nada bajo tierra** (`sheltered`, las cuevas); y un 20 % menos de
+calman hasta un 25 %); **nada bajo tierra** (`sheltered`, las cuevas); y un 20 % menos de
 noche (`night`, con una transición de 20 s). No hay clima todavía: cuando lo haya, es un
 factor más sobre la fuerza.
 
-**Sombras:** la sombra de un árbol se mece con él: es una segunda malla del cliente sobre
+**Sombras:** la sombra de un árbol se dobla con él en la ráfaga y queda quieta en la calma: es una segunda malla del cliente sobre
 las mismas tiras (`windStrips`; "Sombras de los objetos" en "Día y noche"), así la de la
 copa se mueve y la del tronco no. La sombra dibujada (`<sprite>/shadow`) ya no se usa en
 el juego. Las sombras proyectadas de las criaturas no cambian.
@@ -441,13 +476,18 @@ el juego. Las sombras proyectadas de las criaturas no cambian.
 **Con "Animaciones reducidas"** (o `prefers-reduced-motion`) no hay mallas: vuelven los
 sprites quietos del mapa.
 
-**Datos.** `data/livingworld/wind.yaml`: `field` (`direction` en grados, `speed` en
-casillas por segundo, `gust_tiles`, `calm`, `exposure` por superficie, `open`, `forest`,
-`night`) y `kinds`, los valores por **tipo de planta** (`tree`, `palm`, `bush`,
-`tall_grass`, `reed`, `flower`, `vine`, `cactus`, `dead_tree`): `stiffness` (0 a 1),
-`amplitude` (px en la punta con ráfaga plena, hasta 4), `flutter` (px, menos de 1),
-`period_ms` y `pivot` (la parte del alto que queda plantada cuando el sprite no lo dice).
-Un árbol nuevo no necesita ningún número.
+**Datos.** Todo está en `data/livingworld/wind.yaml` (ningún número del movimiento vive
+en el código): `field` (`direction` en grados, `speed` del frente en casillas por
+segundo, `exposure` por superficie, `open`, `forest`, `night`); `gusts` (`every_s`,
+`jitter`, `strength: [mín, máx]`, `spread` en grados, `travel_tiles`, `rise_ms`,
+`hold_ms`, `swings`, `drift_ms`, `seed`); y `kinds`, los valores por **tipo de planta**
+(`tree`, `palm`, `bush`, `tall_grass`, `reed`, `flower`, `vine`, `cactus`,
+`dead_tree`): `stiffness` (0 a 1), `amplitude` (px en la punta con ráfaga plena, hasta
+4), `drift` (px de deriva en la calma, menos de 1; hoy 0), `period_ms` (un balanceo
+después de la ráfaga) y `pivot` (la parte del alto que queda plantada cuando el sprite no
+lo dice). Un árbol nuevo no necesita ningún número. **Para afinarlo sin código:** más o
+menos seguido, `gusts.every_s`; más o menos fuerte, `gusts.strength` o
+`kinds.<tipo>.amplitude`; más o menos balanceo, `gusts.swings`.
 
 **De dónde sale el viento de cada planta** (`resolveWind`), de menos a más específico:
 1. los valores de su tipo (`wind.yaml` `kinds`);
@@ -457,7 +497,7 @@ Un árbol nuevo no necesita ningún número.
    receta de `tools/spritegen` y de las pistas `wind` de `assets/sprites.yaml` (sprites de
    packs o de Gemini);
 3. lo que dice **su item** en `plants.yaml` (`wind: <tipo>`, `wind: { kind, pivot,
-   stiffness, amplitude, flutter }` o `wind: none`).
+   stiffness, amplitude }` o `wind: none`).
 
 Un item cuyo sprite tiene metadata se mece **aunque no esté en `plants.yaml`** (reacciona
 al paso según su tipo: los de tronco se sacuden, el resto se dobla). Los estandartes y la
@@ -481,7 +521,7 @@ spritegen).
      `plantWind("reed")` alcanza para lo que se dobla desde el suelo; un árbol, una
      palmera, un cactus o un árbol seco dicen su `pivot` (px sobre el borde de abajo donde
      termina el tronco). Solo si la planta no se parece a su tipo: `stiffness`,
-     `amplitude`, `flutter`;
+     `amplitude`;
    - **de un pack o de Gemini:** el PNG en `assets/sprites/` (con su fila en
      `assets/CREDITS.md`) y, en `tiles:` de `assets/sprites.yaml`,
      `<sprite>: { wind: { kind: <tipo>, pivot: N } }` (el `pivot` es obligatorio;
@@ -690,13 +730,19 @@ la superficie de un suelo y la reacción de una planta en la paleta.
   blanca: el cliente la tiñe) en `recipes/living.ts`.
 
 ## Cómo probar
-- Viento: `livingworld/client/src/wind.test.ts` (el campo: determinista, coherente entre
-  vecinas, viaja en la dirección del viento a su velocidad; la exposición por superficie,
-  bosque e interior; el vaivén por tipo y su tope; el desplazamiento: cero en la base, crece
-  con el cuadrado de la altura, en px enteros de pantalla; el aleteo de menos de 1 px; los
-  datos por tipo y su unión con sprites e items; la malla sobre sprites reales de Pixi, el
-  roce de una criatura sin saltos, "Animaciones reducidas", cuevas e interiores, los
-  chunks que entran y salen; y el presupuesto de un frame con 999 árboles),
+- Viento: `livingworld/client/src/wind.test.ts` (las ráfagas: una planta exactamente
+  quieta en la calma; al pasar el frente entra suave, se inclina, se balancea cada vez
+  menos y queda en cero; deterministas, iguales en otro cliente y distintas con otra
+  semilla; tantas por hora como dice `every_s`, nunca como un reloj; el frente viaja a
+  `speed` y cada ráfaga viene de su lado; la exposición por superficie, bosque e
+  interior; el tope por tipo; la deriva solo si el tipo la pide; los datos reales del
+  juego: deriva 0 y un árbol quieto más del 80 % del tiempo; el desplazamiento: cero en
+  la base, crece con el cuadrado de la altura, en px enteros de pantalla, y nada que
+  subir mientras está quieta; los datos por tipo y su unión con sprites e items; la malla
+  sobre sprites reales de Pixi, el reloj compartido (`windClock`), el roce de una
+  criatura sin saltos, solo y sumado a una ráfaga, "Animaciones reducidas", cuevas e
+  interiores, los chunks que entran y salen; y el presupuesto de un frame con 999 árboles
+  mientras una ráfaga los cruza),
   `tools/spritegen/src/wind.test.ts` (toda receta de planta declara su viento, las reglas
   de dibujo, el archivo generado al día, las pistas de `sprites.yaml`, el preview),
   `packages/content-schema/src/validate.test.ts` (ninguna planta sin viento),

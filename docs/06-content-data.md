@@ -1776,7 +1776,7 @@ toca al contenido:
   bloques obligatorios:
   - `prints`: qué borra las huellas en todas partes (una huella no tiene tiempo de vida;
     `livingworld/README.md` "Huellas: qué las borra"): `still` (fuerza del viento bajo la
-    que no se toca ninguna), `fade_ms` (lo que tarda en desvanecerse una que pasó el tope),
+    que no se toca ninguna; entre dos ráfagas la fuerza es 0), `fade_ms` (lo que tarda en desvanecerse una que pasó el tope),
     `tread_px` (a qué distancia el pie de otra criatura la pisa) y `waves` (`period_ms`,
     una ola cada tanto; `reach_tiles`, hasta dónde sube la más grande; `lag_ms` por
     casilla a lo largo de la costa; `wash_ms`, lo que tarda en borrarla);
@@ -1805,17 +1805,28 @@ toca al contenido:
   vez, con `reaction` o con `wind`. `trample`: sobre una casilla con desgaste de senderos
   se dibuja aplastada. `wind`: cómo se mece (lote 20): ausente, lo que dice su sprite; un
   tipo de planta (`tree`, `palm`, `bush`, `tall_grass`, `reed`, `flower`, `vine`,
-  `cactus`, `dead_tree`); un mapa `{ kind, pivot?, top?, stiffness?, amplitude?,
-  flutter? }`; o `none` (nunca se mece). La clave `idle` del lote 17 ya no existe.
-- **`data/livingworld/wind.yaml`** (`livingworld-wind.schema.json`): el viento. `field`:
-  `direction` (grados; 0 este, 90 sur), `speed` (casillas por segundo), `gust_tiles`,
-  `calm` (0 a 1), `exposure` (fuerza por superficie, 0 a 2), `open`, `forest` (0 a 1) y
-  `night`. `kinds`: por cada tipo de planta, `stiffness` (0 a 1), `amplitude` (px en la
-  punta, hasta 4), `flutter` (px, hasta 0,95), `period_ms` y `pivot` (parte del alto que
-  queda plantada, 0 a 0,95). Los nueve tipos son obligatorios.
+  `cactus`, `dead_tree`); un mapa `{ kind, pivot?, top?, stiffness?, amplitude? }`; o
+  `none` (nunca se mece). La clave `idle` del lote 17 ya no existe.
+- **`data/livingworld/wind.yaml`** (`livingworld-wind.schema.json`): el viento. Las
+  plantas están quietas y se doblan cuando pasa una ráfaga (desde el 2026-11-26; las
+  claves `field.gust_tiles`, `field.calm` y `kinds.<tipo>.flutter` ya no existen).
+  `field`: `direction` (grados; 0 este, 90 sur), `speed` (del frente de una ráfaga,
+  casillas por segundo, 0,5 a 40), `exposure` (fuerza por superficie, 0 a 2), `open`,
+  `forest` (0 a 1) y `night`. `gusts` (obligatorio): `every_s` (una ráfaga por tramo de
+  tantos segundos, 5 a 3600), `jitter` (en qué parte de su tramo empieza, 0 a 0,95),
+  `strength` (`[mín, máx]`, 0 a 1,5), `spread` (grados que se aparta de `direction`),
+  `travel_tiles` (cuánto recorre un frente, 8 a 512), `rise_ms`, `hold_ms`, `swings`
+  (balanceos hasta quedar quieta, 0 a 6) y, opcionales, `drift_ms` y `seed`. `kinds`: por
+  cada tipo de planta, `stiffness` (0 a 1), `amplitude` (px en la punta, hasta 4), `drift`
+  (px de deriva en la calma, hasta 0,95; 0: quieta del todo), `period_ms` (un balanceo) y
+  `pivot` (parte del alto que queda plantada, 0 a 0,95). Los nueve tipos son
+  obligatorios. `make validate` exige además que `strength` vaya de menor a mayor y que
+  quede una **calma de al menos 10 s** entre dos ráfagas en cualquier casilla:
+  `every_s × (1 − jitter)` menos lo que tarda un frente en recorrer `travel_tiles` y la
+  planta más lenta en dejar de balancearse.
 - **`data/livingworld/wind_sprites.yaml`** (`livingworld-wind_sprites.schema.json`):
   **generado** por `make spritegen`, nunca a mano. `sprites`: por ruta de sprite, `{ kind,
-  pivot, top, stiffness?, amplitude?, flutter? }` (`pivot` y `top` en px sobre el borde de
+  pivot, top, stiffness?, amplitude? }` (`pivot` y `top` en px sobre el borde de
   abajo del sprite). `make validate` exige que **todo item que es una planta** tenga
   metadata de viento (aquí, por su sprite, o en `plants.yaml`) o un `wind: none`
   explícito, que un árbol declarado a mano diga su `pivot` y que cada sprite del archivo

@@ -104,6 +104,36 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Viento por ráfagas (hecho, rama `feat/wind-gusts`; el dueño el 2026-11-26, después de
+  jugar los lotes 19 y 20: "el movimiento que le agregaste a las plantas es demasiado,
+  pareciera que tienen vida o que se están como quemando; tiene que ser un movimiento
+  generado por un random y cada cierto rato, como si pasara una ráfaga de viento";
+  `livingworld/README.md` "Viento", docs/17 "Mundo vivo: el viento"):** el vaivén
+  constante y el aleteo de la copa se sacaron. Las plantas están quietas y, cada 45 s en
+  promedio (al azar, igual para todos: reloj del servidor y semilla), el frente de una
+  ráfaga cruza el mapa y cada planta se inclina, se balancea dos veces y queda quieta.
+  Las sombras de las copas y el borrado de huellas siguen las mismas ráfagas (una huella
+  solo se gasta mientras una ráfaga le pasa encima). Con "Animaciones reducidas", nada se
+  mueve. Sin cambios de servidor ni de protocolo. Queda:
+  - **Mirarlo en el juego** (E2E del lote y playtest del dueño): que la calma se lea como
+    calma y la ráfaga como un suceso que cruza la pantalla. Todo se afina en
+    `data/livingworld/wind.yaml` sin código: cada cuánto (`gusts.every_s`, `jitter`), qué
+    tan fuerte (`gusts.strength`, `kinds.<tipo>.amplitude`), cuánto balanceo
+    (`gusts.swings`, `kinds.<tipo>.period_ms`), qué tan rápido cruza (`field.speed`).
+  - **Decisiones para revisar:** la deriva en la calma (`kinds.<tipo>.drift`) quedó en 0
+    para todos los tipos (quietas del todo); el bosque denso calma el viento un 25 % (era
+    40 %: con ráfagas, adentro casi no se veía); los árboles pasaron de 2 a 3 px de
+    amplitud y las palmeras de 3 a 4 (ahora es el tope de una ráfaga fuerte, no un vaivén).
+  - **Huellas:** con el viento solo en ráfagas, un rastro en la playa dura de una a tres
+    ráfagas (medio minuto a un par de minutos; antes, menos de un minuto). Las tasas
+    (`surfaces.yaml` `prints.wind`, `prints.still`) se subieron para eso; mirar si es
+    mucho.
+  - **Una ráfaga puede nacer o morir en medio de la pantalla** (recorre 64 casillas y se
+    apaga): es a propósito, pero mirarlo. Sin sonido propio: la ráfaga no se oye (el
+    ambiente de viento sigue siendo una capa por zona).
+  - **E2E:** el test del viento y el de las huellas ahora esperan una ráfaga real (hasta
+    un par de minutos en el peor caso); si resultan lentos, bajar `every_s` solo en el
+    arnés pide un contenido de prueba aparte, que hoy no hay.
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:
@@ -113,9 +143,8 @@ el punto 5:
   de spritegen, o la pista `wind` de `assets/sprites.yaml`) y `make validate` falla si
   falta. Sin cambios de servidor ni de protocolo. Queda:
   - **Mirarlo en movimiento** (E2E del lote y playtest del dueño): un bosque y un pueblo
-    con árboles, a zoom 2 y a zoom 1; que se lea sutil y orgánico. Si es mucho o poco, los
-    números están en `data/livingworld/wind.yaml` (`kinds.<tipo>.amplitude`, `field.calm`,
-    `field.speed`); no hace falta código.
+    con árboles, a zoom 2 y a zoom 1; que se lea sutil y orgánico. **Resuelto el
+    2026-11-26:** el dueño lo encontró demasiado (arriba, "Viento por ráfagas").
   - **Arreglo de paso:** las plantas del lote 17 nunca reaccionaban en el juego real (el
     pegamento le daba al módulo el número del item y los datos van por id); ahora sí se
     doblan al pasar. Mirar que el doblez de hierba y arbustos (hasta ~6 px en la punta) no
@@ -123,7 +152,7 @@ el punto 5:
   - **Tiempo de frame en el navegador** sobre un bosque: medido solo en Node (0,8 ms con
     999 árboles, docs/07); falta el número real con GPU.
   - **Sin clima:** cuando haya lluvia o tormenta, es un factor más sobre la fuerza del
-    viento (`strengthAt`). Las hojas que caen no derivan con el viento.
+    viento (la exposición que recibe `swayAt`). Las hojas que caen no derivan con el viento.
   - **Estandartes y bandera** siguen con su bucle de frames; no siguen las ráfagas.
   - **El editor de mapas** no muestra el vaivén (no monta el mundo vivo): los árboles se
     ven quietos ahí, ya sin los frames viejos.

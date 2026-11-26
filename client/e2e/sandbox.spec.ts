@@ -926,7 +926,7 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
   page,
   playwright,
 }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(480_000);
   const errors: string[] = [];
   const who = await newGuardian(playwright, "Caminante");
   psql([
@@ -1091,7 +1091,8 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
 
   // What erases the prints (livingworld/README.md "Huellas: qué las borra"): no clock of
   // their own. A fresh trail on the dry sand, shot, and shot again once the wind's gusts
-  // have worn it (the beach is open: it takes a gust or two).
+  // have worn it (the beach is open: it takes a gust or two, and a gust comes every 45 s
+  // or so: between two of them the prints stay as they are).
   await tp(runs.east.x, runs.east.y);
   await standing();
   await page.keyboard.down("ArrowRight");
@@ -1111,7 +1112,7 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
   const worn = (list: { wear: number }[]): number =>
     list.reduce((a, q) => a + q.wear, 0) + (fresh0.length - list.length);
   await expect
-    .poll(async () => worn(await dry()), { timeout: 90_000, intervals: [500] })
+    .poll(async () => worn(await dry()), { timeout: 240_000, intervals: [500] })
     .toBeGreaterThan(fresh0.length * 0.5);
   await around("99l-footprints-after-gust", trailEnd.x - 2, trailEnd.y);
 
