@@ -1,5 +1,6 @@
 id: pruebas_trainer
 name: npc.pruebas_trainer.name
+role: npc.pruebas_trainer.role
 sprite: npcs/pruebas_trainer
 look:
   sex: female

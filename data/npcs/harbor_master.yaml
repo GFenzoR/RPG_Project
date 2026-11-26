@@ -1,5 +1,6 @@
 id: harbor_master
 name: npc.harbor_master.name
+role: npc.harbor_master.role
 sprite: npcs/harbor_master
 look:
   sex: female

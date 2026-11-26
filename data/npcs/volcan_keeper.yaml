@@ -1,5 +1,6 @@
 id: volcan_keeper
 name: npc.volcan_keeper.name
+role: npc.volcan_keeper.role
 sprite: npcs/volcan_keeper
 look:
   sex: female

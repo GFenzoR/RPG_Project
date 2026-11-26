@@ -1,5 +1,6 @@
 id: puerto_foreman
 name: npc.puerto_foreman.name
+role: npc.puerto_foreman.role
 sprite: npcs/puerto_foreman
 look:
   sex: male

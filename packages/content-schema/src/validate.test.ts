@@ -1272,7 +1272,7 @@ describe("validator diagnostics", () => {
     edit("data/npcs/puerto_armorer.yaml", "open_shop: armorer_shop", "open_shop: armorr_shop");
     const out = messages(root);
     expect(out).toContain(
-      'error data/npcs/harbor_master.yaml:65:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
+      'error data/npcs/harbor_master.yaml:66:11 dialog.nodes.greet.options[6].goto: unknown dialog node "islnd" (did you mean "island"?)',
     );
     expect(
       out.some((m) => m.includes('unknown shop "armorr_shop" (did you mean "armorer_shop"?)')),
@@ -1462,6 +1462,52 @@ describe("validator diagnostics", () => {
     ).toBe(true);
   });
 
+  it('wants a role text for every NPC, short, and the name without it (docs/06 "NPCs")', () => {
+    const roles = (): string[] =>
+      messages(root).filter((m) => /has no role|longer than \d+ characters|after a comma/.test(m));
+    expect(roles()).toEqual([]);
+    // The foreman names his role; without it his services (a quest) still give him one.
+    edit("data/npcs/puerto_foreman.yaml", "role: npc.puerto_foreman.role\n", "");
+    expect(roles()).toEqual([]);
+    // The keeper of records with no role of her own and no service to name her by.
+    const keeper = readFileSync(file("data/npcs/volcan_keeper.yaml"), "utf8");
+    writeFileSync(
+      file("data/npcs/volcan_keeper.yaml"),
+      keeper
+        .replace("role: npc.volcan_keeper.role\n", "")
+        .replace(/start_quest/g, "set_flag_was_start_quest"),
+    );
+    expect(roles().filter((m) => m.includes("volcan_keeper"))).toEqual([
+      expect.stringMatching(/^error data\/npcs\/volcan_keeper\.yaml.*has no role/),
+    ]);
+    writeFileSync(file("data/npcs/volcan_keeper.yaml"), keeper);
+    // A default nobody translated is a missing key like any other.
+    edit("i18n/en/npcs.yaml", 'npc_role.healer: "Blessings and healing"\n', "");
+    expect(messages(root).filter((m) => m.includes("npc_role.healer"))).not.toEqual([]);
+    edit("i18n/es/npcs.yaml", 'npc_role.healer: "Bendiciones y sanación"\n', "");
+    expect(
+      messages(root).filter((m) => m.includes('"npc_role.healer" is missing in: es, en')),
+    ).not.toEqual([]);
+    cpSync(join(REPO, "i18n"), join(root, "i18n"), { recursive: true });
+    // A role or a name too long for the label, and a name that says the role again.
+    edit(
+      "i18n/es/npcs.yaml",
+      'npc.puerto_armorer.role: "Armero"',
+      'npc.puerto_armorer.role: "Armero mayor de la cofradía del puerto viejo"',
+    );
+    edit(
+      "i18n/en/npcs.yaml",
+      'npc.puerto_armorer.name: "Bastian Roe"',
+      'npc.puerto_armorer.name: "Bastian Roe, armorer"',
+    );
+    expect(roles()).toEqual([
+      expect.stringMatching(
+        /puerto_armorer\.yaml.*\(npc\.puerto_armorer\.role, es\) is longer than 28/,
+      ),
+      expect.stringMatching(/puerto_armorer\.yaml.*\(npc\.puerto_armorer\.name, en\) says what/),
+    ]);
+  });
+
   it("only lets NPCs placed on dev_only islands use dev-only actions (train_skill, restore_mana) or be dev_only", () => {
     const devErrors = (): string[] =>
       messages(root).filter((m) => m.startsWith("error") && m.includes("dev-only"));
@@ -1593,7 +1639,7 @@ describe("validator diagnostics", () => {
     // stay below the sandbox shop's too (its ferry takes players there).
     expect(out).toContainEqual(
       expect.stringMatching(
-        /^error data\/npcs\/puerto_provisioner\.yaml:57:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
+        /^error data\/npcs\/puerto_provisioner\.yaml:58:21 shop\.buys\[0\]\.price: shop "provisions_shop" buys "rope" for 45 but shop "pruebas_shop" sells it for 45: buy prices must be lower than every sell price$/,
       ),
     );
     expect(

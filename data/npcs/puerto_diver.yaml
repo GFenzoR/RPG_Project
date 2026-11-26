@@ -1,5 +1,6 @@
 id: puerto_diver
 name: npc.puerto_diver.name
+role: npc.puerto_diver.role
 sprite: npcs/puerto_diver
 look:
   sex: male

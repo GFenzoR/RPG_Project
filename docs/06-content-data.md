@@ -646,11 +646,29 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   ninguna comida pura dure más que su `max_ms` (no se podría comer nunca).
 
 ## NPC con diálogo de ventana
+**Nombre y rol.** Sobre la cabeza de un NPC el juego muestra dos líneas: su nombre
+(`name`) y, debajo, qué hace (`role`, una clave de i18n: "Tilde Varga" / "Provisiones";
+docs/17 "Hecho: nombres nítidos y los NPCs en dos líneas"). `role` es opcional: sin él vale
+el rol por defecto de lo que el NPC ofrece, el primero de esta lista que tenga
+(`packages/content-schema/src/npc-role.ts`, la misma regla que usa el cliente):
+| Lo que ofrece | Clave por defecto | es / en |
+|---|---|---|
+| un nodo con `boat_routes: true` | `npc_role.captain` | Pasajes en barco / Boat passage |
+| `shop` o `open_shop` | `npc_role.merchant` | Comercio / Trade |
+| `bless` o `heal` | `npc_role.healer` | Bendiciones y sanación / Blessings and healing |
+| `train_skill` | `npc_role.trainer` | Entrenamiento / Training |
+| `start_quest` | `npc_role.quest_giver` | Encargos / Errands |
+`make validate` falla si un NPC no termina con un rol (no ofrece nada de la lista y no
+declara `role`), si el rol pasa de 28 caracteres o el nombre de 22 en algún idioma (el
+cartel nunca los corta: el rol se parte en dos líneas por sus palabras), o si el nombre
+dice el oficio después de una coma ("Tilde Varga, provisiones": eso va en `role`).
+
 Extracto recortado de `data/npcs/puerto_foreman.yaml` (las tiendas, de
 `data/npcs/puerto_provisioner.yaml`). Los archivos reales son la referencia completa.
 ```yaml
 id: puerto_foreman
 name: npc.puerto_foreman.name
+role: npc.puerto_foreman.role     # qué hace ("Capataz"): la segunda línea de su nombre
 sprite: npcs/puerto_foreman     # su retrato quieto (el del diálogo), dibujado de su look
 look:                           # una persona: humanoide del motor ("Looks")
   body: sturdy

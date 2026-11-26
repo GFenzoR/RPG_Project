@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { isLicenseFile, registeredPacks } from "./credits.ts";
 import { checkIdsLock } from "./ids.ts";
+import { NPC_NAME_MAX_CHARS, NPC_ROLE_MAX_CHARS, npcRoleKey } from "./npc-role.ts";
 import { SCHEMA_DIR, SchemaSet } from "./schemas.ts";
 import type { RefKind, SchemaName, Usage } from "./schemas.ts";
 import { loadYaml, parseYaml, suggest } from "./source.ts";
@@ -2695,6 +2696,7 @@ class Validator {
       }
     }
 
+    this.checkNpcRoles(catalogs);
     // Every key referenced from data/ exists in every language.
     const used = new Set<string>();
     for (const k of this.index.i18nKeys) {
@@ -2722,6 +2724,51 @@ class Validator {
       if (!used.has(key) && dataPrefixes.some((p) => key.startsWith(p))) {
         this.warn(entry.src, [key], `i18n key "${key}" is not used by any file in data/`);
       }
+    }
+  }
+
+  /**
+   * Every NPC ends up with a role text (docs/06 "NPCs"): the line under its name in the
+   * game ("Tilde Varga" / "Provisiones"). Its own `role` key, else the default of what it
+   * offers (npc-role.ts); one with neither is refused. The label never cuts an NPC's
+   * lines, so the name and the role stay short in every language, and the name does not
+   * repeat the role after a comma.
+   */
+  private checkNpcRoles(catalogs: Map<string, Map<string, { text?: unknown }>>): void {
+    for (const src of this.npcs) {
+      const npc = isObj(src.data) ? src.data : undefined;
+      if (!npc) continue;
+      const key = npcRoleKey(npc);
+      if (key === undefined) {
+        this.error(
+          src,
+          [],
+          "has no role: it offers no shop, boat, blessing, training or quest to name it by; add `role` (an i18n key, what it does in two or three words)",
+        );
+        continue;
+      }
+      // A default is not written in the file: count it as used and check it exists.
+      if (npc["role"] !== key) this.index.i18nKeys.push({ value: key, path: [], src });
+      const lines: [string, number, PathSegment[]][] = [[key, NPC_ROLE_MAX_CHARS, ["role"]]];
+      if (typeof npc["name"] === "string") lines.push([npc["name"], NPC_NAME_MAX_CHARS, ["name"]]);
+      for (const [k, max, path] of lines)
+        for (const lang of LANGUAGES) {
+          const text = catalogs.get(lang)?.get(k)?.text;
+          if (typeof text !== "string") continue;
+          const at = npc[path[0] as string] === k ? path : [];
+          if ([...text].length > max)
+            this.error(
+              src,
+              at,
+              `"${text}" (${k}, ${lang}) is longer than ${max} characters: an NPC's label shows its name and its role whole, on two lines`,
+            );
+          if (path[0] === "name" && text.includes(","))
+            this.error(
+              src,
+              at,
+              `"${text}" (${k}, ${lang}) says what the NPC does after a comma: that goes in its role, under the name`,
+            );
+        }
     }
   }
 

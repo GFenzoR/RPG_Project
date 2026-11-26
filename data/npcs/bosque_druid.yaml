@@ -1,5 +1,6 @@
 id: bosque_druid
 name: npc.bosque_druid.name
+role: npc.bosque_druid.role
 sprite: npcs/bosque_druid
 look:
   sex: female
