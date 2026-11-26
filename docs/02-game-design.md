@@ -679,13 +679,16 @@ Implementado en T3.4 (`server/internal/session/crafting.go`, recetas en `data/re
   encaja con él, y los humanos llevan raciones; los no muertos, construcciones y
   elementales no sueltan nada. Comida nueva (`kind: consumable`, `food_ms`, sin curar; vale
   2 a 4 de oro, así que nunca supera a las monedas del mismo monstruo, lo comprueba
-  `TestAnimalFoodDrops`): carne cruda (120 s), carne de ciervo (200 s), ancas de sapo (90 s),
-  carne de cangrejo (100 s), bayas de espino (80 s), cecina salada (140 s). Tabla:
+  `TestAnimalFoodDrops`): carne cruda (50 s), carne de ciervo (70 s), ancas de sapo (40 s),
+  carne de cangrejo (45 s), bayas de espino (35 s), cecina salada (60 s). Tabla:
   lobo y sabueso de ceniza, carne cruda 40 % y 35 %; ciervo, carne de ciervo 30 %; jabalí,
   carne de jabalí 40 % (antes 35 %); gaviota, carne cruda 20 %; sapo, ancas 40 %; cangrejo, carne de
   cangrejo 40 % y pescado crudo 20 %; cría de dragón, carne cruda 35 % (1 a 3); salamandra,
   carne cruda 25 %; espinoso, bayas 35 %; contrabandista, saqueador y excavador, cecina
-  (25 %, 20 %, 30 %). Pesan poco (20 a 50 g: porciones, no piezas enteras) porque el presupuesto de carga de `TestHuntLootFits` ya iba justo. Ratas, arañas, murciélagos e insectos no sueltan comida.
+  (25 %, 20 %, 30 %). Pesan poco (20 a 50 g: porciones, no piezas enteras) porque el presupuesto de carga de `TestHuntLootFits` ya iba justo. **Cazar no reemplaza a la cocina** (revisión final del lote 20d): como pesan tan poco, estas comidas
+  alimentan poco por unidad; una comida que solo se consigue de botín (ninguna receta la produce ni la usa) dura menos
+  de la mitad que la comida cocinada más corta (pescado a la brasa, 150 s), y `TestAnimalFoodDrops` lo comprueba
+  (la galleta de barco, ración del proveedor, queda fuera de la regla). Ninguna tiene receta todavía. Ratas, arañas, murciélagos e insectos no sueltan comida.
 - **Intento:** el servidor comprueba receta, estación en esa casilla, distancia (1 casilla,
   mismo piso), nivel mínimo del oficio, herramienta llevada, ingredientes en los
   contenedores (no lo equipado), capacidad (el peso de los ingredientes cuenta como

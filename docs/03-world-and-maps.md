@@ -666,7 +666,9 @@ entre meter el piso (repintar la casilla con `mapcli paint`) o extender el muro 
   cuarto, pero la pieza del muro es más angosta que la casilla: el renderer parte esa
   casilla por la mitad y dibuja en la mitad que da a otro suelo el suelo de ese vecino
   (`groundSplit` en `packages/renderer/src/tile-art.ts`; igual en el juego, el editor y
-  `mapcli render`). El umbral de una entrada se parte igual. Es solo dibujo: el suelo de la
+  `mapcli render`). El umbral de una entrada se parte igual. En el juego y el editor no se corta una mitad
+  de un suelo animado (agua, lava): quedaría quieta al lado del resto; ese lado conserva el
+  suelo de la casilla. Es solo dibujo: el suelo de la
   casilla para el servidor (velocidad, superficie) sigue siendo el pintado.
 - Al crear una casa o edificio: pinta el piso dentro del muro y en la casilla del muro,
   deja la entrada como un hueco de hasta 3 casillas, valida y renderiza el área.

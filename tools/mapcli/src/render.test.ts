@@ -1,8 +1,15 @@
 import { createImage, decodePng, fillRect, GLYPH_H, textWidth } from "@rpg/spritepack";
 import type { Image, Rgba } from "@rpg/spritepack";
-import { CHUNK_SIZE, chunkKey, emptyChunk } from "@rpg/map-format";
+import { CHUNK_SIZE, DOORWAY_TILES, chunkKey, emptyChunk } from "@rpg/map-format";
 import type { ContentIndex, ItemInfo, World } from "@rpg/map-format";
-import { groundDecal, groundLook, groundTone, pickVariant, tileHash } from "@rpg/renderer/tile-art";
+import {
+  DOORWAY_TILES as RENDERER_DOORWAY_TILES,
+  groundDecal,
+  groundLook,
+  groundTone,
+  pickVariant,
+  tileHash,
+} from "@rpg/renderer/tile-art";
 import type { TileArt } from "@rpg/renderer/tile-art";
 import { describe, expect, it } from "vitest";
 import { renderArea } from "./render.ts";
@@ -312,5 +319,13 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     expect(at(img, 4, 2, 16, 30)).toEqual([250, 220, 0]); // on the ground: the bottom rows
     expect(at(img, 2, 2, 16, 30)).toEqual([120, 80, 40]); // on the crate: 8 px up
     expect(at(img, 2, 2, 16, 22)).toEqual([250, 220, 0]);
+  });
+});
+
+// The validator (map-format floors.ts) and the renderer (tile-art.ts groundSplit) each keep
+// their own copy: neither package depends on the other. A doorway is the same gap in both.
+describe("DOORWAY_TILES", () => {
+  it("is the same in the map validator and in the renderer", () => {
+    expect(DOORWAY_TILES).toBe(RENDERER_DOORWAY_TILES);
   });
 });

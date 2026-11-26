@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func TestLoadBalanceRepoData(t *testing.T) {
@@ -527,9 +529,71 @@ func TestAnimalFoodDrops(t *testing.T) {
 			t.Errorf("%s should drop food", id)
 		}
 	}
-	for _, id := range []string{"drowned_miner", "slag_golem", "slagbound_warden"} {
-		if ms[id] != nil && hasFood(id) {
-			t.Errorf("%s (undead, construct or elemental) must not drop food", id)
+	// Nothing without flesh drops food: every monster tagged undead, construct or elemental
+	// (the tags are read from the YAML; the server does not load them).
+	files, err := filepath.Glob(filepath.Join(dir, "monsters", "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fleshless := 0
+	for _, f := range files {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			ID   string   `yaml:"id"`
+			Tags []string `yaml:"tags"`
+		}
+		if err := yaml.Unmarshal(raw, &doc); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		for _, tag := range doc.Tags {
+			if tag != "undead" && tag != "construct" && tag != "elemental" {
+				continue
+			}
+			fleshless++
+			if ms[doc.ID] == nil {
+				t.Errorf("%s: tagged %s but not loaded", doc.ID, tag)
+			} else if hasFood(doc.ID) {
+				t.Errorf("%s (%s) must not drop food", doc.ID, tag)
+			}
+		}
+	}
+	if fleshless < 3 {
+		t.Errorf("only %d undead, construct or elemental monsters found: are the tags still read?", fleshless)
+	}
+	// Hunting does not replace the stove: a food that only drops (no recipe makes it or
+	// uses it) feeds for less than half of the least cooked food, per unit.
+	recipes, err := LoadRecipes(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inRecipe := map[string]bool{}
+	leastCooked := 0
+	for _, r := range recipes {
+		for _, in := range r.Inputs {
+			inRecipe[in.Item] = true
+		}
+		inRecipe[r.Output.Item] = true
+		if isFood(r.Output.Item) {
+			if ms := items[r.Output.Item].Consumable.FoodMs; leastCooked == 0 || ms < leastCooked {
+				leastCooked = ms
+			}
+		}
+	}
+	if leastCooked == 0 {
+		t.Fatal("no recipe cooks food")
+	}
+	for id, m := range ms {
+		for _, l := range m.Loot {
+			if !isFood(l.Item) || inRecipe[l.Item] || l.Item == "ship_biscuit" {
+				continue // the biscuit is the provisioner's ration, older than this rule
+			}
+			if got := items[l.Item].Consumable.FoodMs; got*2 > leastCooked {
+				t.Errorf("%s drops %s: %d ms of food, more than half of the least cooked food (%d ms)",
+					id, l.Item, got, leastCooked)
+			}
 		}
 	}
 	for id, m := range ms {

@@ -107,8 +107,8 @@ el punto 5:
 - **Comida de monstruos (hecho, rama `feat/animal-food`; el dueño: "algunos monstruos deberían
   botar comida, especialmente los animales")**: seis comidas nuevas y 13 monstruos que las
   sueltan (docs/02 "Oficios", Cocina). Pendiente: sprites propios; por ahora reusan los
-  de Dungeon Crawl (CC0: trozo de carne, fresa, cecina), y carne cruda, de ciervo, ancas y
-  de cangrejo comparten el mismo trozo. Sin recetas de cocina para las nuevas todavía.
+  de Dungeon Crawl (CC0: trozo de carne, fresa, cecina), y carne cruda, de ciervo y de cangrejo
+  comparten el mismo trozo (las ancas usan el trozo verdoso del pack). Sin recetas de cocina para las nuevas todavía.
 - **Pisos de edificio dentro del muro (rama `fix/floor-audit`; el dueño el 2026-11-26:
   "hay edificios en los que el piso sale hacia afuera del muro")**. La causa era de dibujo:
   la casilla del muro lleva el piso del cuarto y la pieza del muro lateral es más angosta

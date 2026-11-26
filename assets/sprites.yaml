@@ -36,9 +36,11 @@ sprites:
   tools/felling_axe: { source: vendor/dungeon-crawl/item/weapon/hand_axe2.png }
   tools/smithing_hammer: { source: vendor/dungeon-crawl/UNUSED/weapons/hammer1.png }
   materials/tree_resin: { source: vendor/dungeon-crawl/item/food/lump_of_royal_jelly.png }
+  # raw_meat, venison, crab_meat and the older boar_meat share the pack's one meat chunk:
+  # placeholders until the sprite engine draws each cut (the pack has no other raw meat).
   food/raw_meat: { source: vendor/dungeon-crawl/item/food/chunk.png }
   food/venison: { source: vendor/dungeon-crawl/item/food/chunk.png }
-  food/frog_legs: { source: vendor/dungeon-crawl/item/food/chunk.png }
+  food/frog_legs: { source: vendor/dungeon-crawl/item/food/chunk_rotten.png }
   food/crab_meat: { source: vendor/dungeon-crawl/item/food/chunk.png }
   food/thorn_berries: { source: vendor/dungeon-crawl/item/food/strawberry.png }
   food/salted_jerky: { source: vendor/dungeon-crawl/item/food/beef_jerky.png }

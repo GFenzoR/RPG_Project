@@ -756,6 +756,9 @@ export class MapView {
             const side = splitSide(bit);
             const other = groundAt(x + side.dx, y + side.dy) as string;
             const oart = this.art?.(other);
+            // An animated ground (water, lava) keeps moving: a half cut from one frame
+            // would stand still beside it, so that side keeps the tile's own ground.
+            if (oart?.frames) continue;
             let otex = oart?.base ?? this.texture(other);
             if (oart?.variants) otex = oart.variants[groundLook(oart, x, y, z)] ?? otex;
             const h = splitHalf(bit);

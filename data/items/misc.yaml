@@ -586,7 +586,7 @@
   stackable: true
   max_stack: 100
   tradeable: true
-  consumable: { food_ms: 120000 }
+  consumable: { food_ms: 50000 }
   value: 2
 
 - id: venison
@@ -598,7 +598,7 @@
   stackable: true
   max_stack: 100
   tradeable: true
-  consumable: { food_ms: 200000 }
+  consumable: { food_ms: 70000 }
   value: 4
 
 - id: frog_legs
@@ -610,7 +610,7 @@
   stackable: true
   max_stack: 100
   tradeable: true
-  consumable: { food_ms: 90000 }
+  consumable: { food_ms: 40000 }
   value: 2
 
 - id: crab_meat
@@ -622,7 +622,7 @@
   stackable: true
   max_stack: 100
   tradeable: true
-  consumable: { food_ms: 100000 }
+  consumable: { food_ms: 45000 }
   value: 2
 
 - id: thorn_berries
@@ -634,7 +634,7 @@
   stackable: true
   max_stack: 100
   tradeable: true
-  consumable: { food_ms: 80000 }
+  consumable: { food_ms: 35000 }
   value: 2
 
 - id: salted_jerky
@@ -646,5 +646,5 @@
   stackable: true
   max_stack: 100
   tradeable: true
-  consumable: { food_ms: 140000 }
+  consumable: { food_ms: 60000 }
   value: 3

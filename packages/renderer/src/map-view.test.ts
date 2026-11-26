@@ -765,4 +765,35 @@ describe("MapView ground under a wall", () => {
     expect(other.texture).toBe(half.texture);
     v.destroy();
   });
+
+  it("cuts no half from an animated ground", () => {
+    // The same wall with water to its west: a still half would freeze beside the waves.
+    const ground = new Array<string | null>(32 * 32).fill("water");
+    const items: { x: number; y: number; stack: string[] }[] = [];
+    for (let y = 0; y < 32; y++) {
+      for (let x = 4; x < 32; x++) ground[y * 32 + x] = "boards";
+      items.push({ x: 4, y, stack: ["wall"] });
+    }
+    const chunks = new Map<string, ChunkData>([["7/0/0", { ground, items }]]);
+    const waterArt: TileArt<Texture> = {
+      base: grass,
+      frames: [grass, boards],
+      ms: 250,
+      sync: "world",
+      joinsWalls: false,
+      light: 0,
+      anchorX: 1,
+    };
+    const v = new MapView({
+      source: { chunk: (z, cx, cy) => chunks.get(`${z}/${cx}/${cy}`) },
+      texture: (id) => (id === "boards" ? boards : grass),
+      art: (id) => (id === "wall" ? wallArt : id === "water" ? waterArt : undefined),
+      tileSize: T,
+      floor: 7,
+    });
+    v.render({ x: 0, y: 0, zoom: 1 }, { width: 2048, height: 1024 });
+    const sprites = (layer(v, 0).children[0] as Container).children as Sprite[];
+    expect(sprites).toHaveLength(32 * 32);
+    v.destroy();
+  });
 });
