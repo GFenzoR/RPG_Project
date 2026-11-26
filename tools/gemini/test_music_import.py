@@ -141,6 +141,17 @@ class ThePicks(unittest.TestCase):
             asked = [slot["id"] for slot in json.load(h)["slots"]]
         self.assertEqual(sorted(asked), sorted(SLOT))
 
+    def test_every_delivered_version_ships_by_default(self):
+        # The budget went to 24 MiB on 2026-11-26: all seven delivered versions are default extras.
+        self.assertEqual(SLOT["title"].extras, ("vigil", "embers"))
+        self.assertEqual(SLOT["town_puerto"].extras, ("dusk",))
+        self.assertEqual(SLOT["boss_forge"].extras, ("bellows",))
+        self.assertEqual(SLOT["cave"].extras[-1], "echo")
+        self.assertEqual(mi.extras_choice(SLOT["title"], {}), (("vigil_1", "embers_1"), True))
+        # vigil_1 is title_vigil_2.mp4 (its first ask came back with text only).
+        self.assertEqual(mi.source_name("title", "vigil_1"), "title_vigil_2")
+        self.assertEqual(mi.source_name("title", "embers_1"), "title_embers_1")
+
     def test_every_version_of_the_asks_is_an_extra_version_of_its_slot(self):
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "music_slots.json"), encoding="utf-8") as h:
             book = json.load(h)

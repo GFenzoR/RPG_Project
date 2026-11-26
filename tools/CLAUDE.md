@@ -280,8 +280,8 @@ instrumento principal, ánimo o tempo. Las de `music_slots.json` `versions` (`id
 `<id>_1.mp4`; si la primera respuesta no trajo tema, el archivo es `<id>_2.mp4` y va en
 `ALIASES`). El importador las toma como versiones extra de su lugar (`<lugar>_pool` en
 `picks.json`: `"bosque_pool": ["mist", "hollow"]`; sonido `music_bosque_mist`, archivo
-`bosque_mist_1.ogg`). **`Slot.extras` lleva solo las que caben en el presupuesto** (docs/07
-"Audio": 16 MiB en total): esas suenan como provisionales hasta que el dueño las escuche;
+`bosque_mist_1.ogg`). **`Slot.extras` lleva las versiones entregadas que caben en el presupuesto** (docs/07
+"Audio": 24 MiB en total): esas suenan como provisionales hasta que el dueño las escuche;
 las demás quedan en `build/music-gemini/` y entran cuando él las liste (si no caben, `make
 music-gemini` falla en el presupuesto: sacar otra o subir el tope en `BUDGET` y docs/07).
 

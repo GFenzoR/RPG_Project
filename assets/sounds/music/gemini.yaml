@@ -13,9 +13,10 @@ slots:
     sound: "music_title"
     pick: "1"
     provisional: false
+    extras: ["vigil_1", "embers_1"]
     file: "sounds/music/gemini/title_1.ogg"
     volume: 0.7
-    pool: ["music_title"]
+    pool: ["music_title", "music_title_vigil", "music_title_embers"]
     tracks:
       - take: "1"
         sound: "music_title"
@@ -35,14 +36,51 @@ slots:
         lufs: -14
         kbps: 48
         bytes: 1092969
+      - take: "vigil_1"
+        sound: "music_title_vigil"
+        file: "sounds/music/gemini/title_vigil_1.ogg"
+        volume: 0.72
+        provisional: true
+        source: "title_vigil_2.mp4"
+        source_sha256: "14587d619144a5178c9b75c2c3e8431e973417b0e9719981eebd4932e346c268"
+        title: "Where The Light Withdrew"
+        made: "2026-11-25"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/title_vigil_1.txt"
+        seconds: 179.3
+        end: 175.3
+        entries: [16, 31.7, 46.7, 66.1, 81.1, 96.3, 112, 127.7]
+        longest_quiet: 0
+        lufs: -14.29
+        kbps: 48
+        bytes: 1119559
+      - take: "embers_1"
+        sound: "music_title_embers"
+        file: "sounds/music/gemini/title_embers_1.ogg"
+        volume: 0.7
+        provisional: true
+        source: "title_embers_1.mp4"
+        source_sha256: "79267639a9c9ff816fd6bb96f4a846c72368a7316710647f69322065001a8f79"
+        title: "Where the Stones Still Weep"
+        made: "2026-11-25"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/title_embers_1.txt"
+        seconds: 170.62
+        end: 166.82
+        entries: [10, 26.1, 41.1, 57.5, 75.9, 90.9, 108.2, 132.7]
+        longest_quiet: 0
+        lufs: -14
+        kbps: 48
+        bytes: 1063902
   town_puerto:
     sound: "music_puerto"
     pick: ["1", "2", "3"]
     provisional: false
+    extras: ["dusk_1"]
     file: "sounds/music/gemini/town_puerto_1.ogg"
     volume: 0.7
     fallback: "sounds/music/puerto.ogg"
-    pool: ["music_puerto", "music_puerto_2", "music_puerto_3"]
+    pool: ["music_puerto", "music_puerto_2", "music_puerto_3", "music_puerto_dusk"]
     tracks:
       - take: "1"
         sound: "music_puerto"
@@ -97,6 +135,24 @@ slots:
         lufs: -14
         kbps: 48
         bytes: 1109558
+      - take: "dusk_1"
+        sound: "music_puerto_dusk"
+        file: "sounds/music/gemini/town_puerto_dusk_1.ogg"
+        volume: 0.7
+        provisional: true
+        source: "town_puerto_dusk_1.mp4"
+        source_sha256: "95d011742285fc0fb2f2404f7719182c9133bf3b4ac9f211dcbbdfd807a3533e"
+        title: "Saltwater Lament"
+        made: "2026-11-25"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/town_puerto_dusk_1.txt"
+        seconds: 181.19
+        end: 169.89
+        entries: [15.1, 45, 67.5, 89.9, 105, 120, 135]
+        longest_quiet: 0.1
+        lufs: -14
+        kbps: 48
+        bytes: 1159190
   bosque:
     sound: "music_bosque"
     pick: "1"
@@ -193,11 +249,11 @@ slots:
     sound: "music_cueva"
     pick: "1"
     provisional: false
-    extras: ["mine_1", "crystal_1", "flooded_1", "abyss_1", "ossuary_1", "ember_1"]
+    extras: ["mine_1", "crystal_1", "flooded_1", "abyss_1", "ossuary_1", "ember_1", "echo_1"]
     file: "sounds/music/gemini/cave_1.ogg"
     volume: 0.73
     fallback: "sounds/music/cueva.ogg"
-    pool: ["music_cueva", "music_cueva_mine", "music_cueva_crystal", "music_cueva_flooded", "music_cueva_abyss", "music_cueva_ossuary", "music_cueva_ember"]
+    pool: ["music_cueva", "music_cueva_mine", "music_cueva_crystal", "music_cueva_flooded", "music_cueva_abyss", "music_cueva_ossuary", "music_cueva_ember", "music_cueva_echo"]
     tracks:
       - take: "1"
         sound: "music_cueva"
@@ -325,6 +381,24 @@ slots:
         lufs: -14.49
         kbps: 40
         bytes: 879565
+      - take: "echo_1"
+        sound: "music_cueva_echo"
+        file: "sounds/music/gemini/cave_echo_1.ogg"
+        volume: 0.79
+        provisional: true
+        source: "cave_echo_1.mp4"
+        source_sha256: "d4bbc953a3adffcce80cca06405a43a76f3ac63b197837e352a06b724fba839e"
+        title: "Beneath the Salted Rock"
+        made: "2026-11-25"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/cave_echo_1.txt"
+        seconds: 178.82
+        end: 170.22
+        entries: [12.3, 36, 65.5, 84, 101.1, 119.4, 137.6]
+        longest_quiet: 0
+        lufs: -15.09
+        kbps: 40
+        bytes: 936761
   combat:
     sound: "music_combat"
     pick: "none"
@@ -333,9 +407,10 @@ slots:
     sound: "music_boss_forge"
     pick: "1"
     provisional: false
+    extras: ["bellows_1"]
     file: "sounds/music/gemini/boss_forge_1.ogg"
     volume: 0.7
-    pool: ["music_boss_forge"]
+    pool: ["music_boss_forge", "music_boss_forge_bellows"]
     tracks:
       - take: "1"
         sound: "music_boss_forge"
@@ -355,3 +430,21 @@ slots:
         lufs: -14.01
         kbps: 48
         bytes: 1059870
+      - take: "bellows_1"
+        sound: "music_boss_forge_bellows"
+        file: "sounds/music/gemini/boss_forge_bellows_1.ogg"
+        volume: 0.74
+        provisional: true
+        source: "boss_forge_bellows_1.mp4"
+        source_sha256: "d3db7ad3db8761789d5273517ff15803cf5bb66503570d5bbd390271e6e401ac"
+        title: "The Iron Warden's Wake"
+        made: "2026-11-25"
+        mode: "Hydrogen"
+        prompt: "prompts/sounds/music/gemini/boss_forge_bellows_1.txt"
+        seconds: 182.69
+        end: 179.39
+        entries: [10.2, 30.8, 46.7, 64, 79.8, 94.8, 113.6, 140.8]
+        longest_quiet: 0
+        lufs: -14.44
+        kbps: 48
+        bytes: 1049289

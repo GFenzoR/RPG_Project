@@ -24,7 +24,8 @@ is editing that file and running it again:
   whose take passes the measures (`music_convert.piece_problems`) ships,
   marked `provisional`. `Slot.extras` holds what fits the size budget
   (docs/07 "Audio"): a version delivered but not named there waits in
-  `build/music-gemini/` for the owner to list it.
+  `build/music-gemini/` for the owner to list it. A listed `<slot>_pool`
+  REPLACES that default, so it must name every version to keep.
 - **A slot that is missing is not picked yet**: its take 1 plays, marked
   `provisional` (in the manifest and in its CREDITS.md row).
 - **`none` (or `off`) keeps what played before Gemini**: the soundgen theme of
@@ -121,22 +122,23 @@ class Slot:
 
 
 ## The slots of music_slots.json, in the order sounds.yaml lists them. `extras`: the six
-## cave versions of 2026-11-18, and of the versions of 2026-11-25 (`versions` in
-## music_slots.json: twelve asked for, seven delivered) the two that fit under the 16 MiB
-## of docs/07 "Audio": one more track for each island that had a single one. The other
-## five wait in build/music-gemini/ for the owner to list them (`<slot>_pool`) once the
-## budget allows.
+## cave versions of 2026-11-18, and the versions of 2026-11-25 (`versions` in
+## music_slots.json: twelve asked for, seven delivered), all shipped now that the owner
+## raised the budget to 24 MiB (docs/07 "Audio"). The five still to be asked wait for
+## Gemini; once delivered they are listed here or by the owner (`<slot>_pool`).
 SLOTS = (
-    Slot("title", "music_title", "la pantalla de título (login y personajes)", rule="title"),
+    Slot("title", "music_title", "la pantalla de título (login y personajes)", rule="title",
+         extras=("vigil", "embers")),
     Slot("town_puerto", "music_puerto", "Puerto (también la isla de inicio y la de pruebas)",
-         "sounds/music/puerto.ogg", 0.7),
+         "sounds/music/puerto.ogg", 0.7, extras=("dusk",)),
     Slot("bosque", "music_bosque", "Selvaine", "sounds/music/bosque.ogg", 0.7, extras=("mist",)),
     Slot("volcan", "music_volcan", "Karvask", "sounds/music/volcan.ogg", 0.75, extras=("cinder",)),
     Slot("cave", "music_cueva", "las minas y cuevas (pisos bajo el mar)", "sounds/music/cueva.ogg", 0.8,
          ambient=True,
-         extras=("mine", "crystal", "flooded", "abyss", "ossuary", "ember")),
+         extras=("mine", "crystal", "flooded", "abyss", "ossuary", "ember", "echo")),
     Slot("combat", "music_combat", "los combates", off=True),
-    Slot("boss_forge", "music_boss_forge", "el guardián de la forja", rule="bosses.slagbound_warden"),
+    Slot("boss_forge", "music_boss_forge", "el guardián de la forja", rule="bosses.slagbound_warden",
+         extras=("bellows",)),
 )
 
 ## Takes delivered under another name: town_puerto's third is the probe the

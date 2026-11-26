@@ -84,9 +84,12 @@ sounds:
 
   # gemini-music:sounds:begin (make music-gemini rewrites these lines from the owner's picks)
   music_title: { file: sounds/music/gemini/title_1.ogg, channel: music, volume: 0.7, seconds: 176.54, end: 161.14, entries: [12, 27.4, 48.1, 64.1, 79.9, 107.8, 123.1] }
+  music_title_vigil: { file: sounds/music/gemini/title_vigil_1.ogg, channel: music, volume: 0.72, seconds: 179.3, end: 175.3, entries: [16, 31.7, 46.7, 66.1, 81.1, 96.3, 112, 127.7] }
+  music_title_embers: { file: sounds/music/gemini/title_embers_1.ogg, channel: music, volume: 0.7, seconds: 170.62, end: 166.82, entries: [10, 26.1, 41.1, 57.5, 75.9, 90.9, 108.2, 132.7] }
   music_puerto: { file: sounds/music/gemini/town_puerto_1.ogg, channel: music, volume: 0.7, seconds: 176.43, end: 171.83, entries: [10, 26.7, 53.4, 73.4, 100, 126.7, 141.7] }
   music_puerto_2: { file: sounds/music/gemini/town_puerto_2.ogg, channel: music, volume: 0.7, seconds: 181.23, end: 171.93, entries: [10.1, 26.7, 46.7, 73.4, 100.1, 126.7, 141.7] }
   music_puerto_3: { file: sounds/music/gemini/town_puerto_3.ogg, channel: music, volume: 0.7, seconds: 176.56, end: 172.36, entries: [15.5, 31.3, 46.7, 66.7, 87.1, 107.7, 133.9] }
+  music_puerto_dusk: { file: sounds/music/gemini/town_puerto_dusk_1.ogg, channel: music, volume: 0.7, seconds: 181.19, end: 169.89, entries: [15.1, 45, 67.5, 89.9, 105, 120, 135] }
   music_bosque: { file: sounds/music/gemini/bosque_1.ogg, channel: music, volume: 0.7, seconds: 179.58, end: 160.18, entries: [16, 42.1, 62.4, 81.8, 105.9, 122] }
   music_bosque_mist: { file: sounds/music/gemini/bosque_mist_1.ogg, channel: music, volume: 0.74, seconds: 173.85, end: 171.05, entries: [10.2, 31.5, 51.2, 67.4, 82.8, 106.1, 121.5, 138.2] }
   music_volcan: { file: sounds/music/gemini/volcan_2.ogg, channel: music, volume: 0.77, seconds: 179.98, end: 176.18, entries: [16, 32, 47.9, 64, 80.9, 97.1, 119.7, 135.7] }
@@ -98,7 +101,9 @@ sounds:
   music_cueva_abyss: { file: sounds/music/gemini/cave_abyss_1.ogg, channel: music, volume: 0.76, seconds: 180, end: 169.1, entries: [22.4, 38.4, 65.8, 84.8, 99.8, 115.2, 137.6] }
   music_cueva_ossuary: { file: sounds/music/gemini/cave_ossuary_1.ogg, channel: music, volume: 0.77, seconds: 171.66, end: 166.57, entries: [10.4, 28.8, 44.8, 63.9, 80, 105.5, 131.3] }
   music_cueva_ember: { file: sounds/music/gemini/cave_ember_1.ogg, channel: music, volume: 0.74, seconds: 177.4, end: 173, entries: [10.6, 25.6, 41.6, 60.8, 78.7, 95.7, 112, 139.5] }
+  music_cueva_echo: { file: sounds/music/gemini/cave_echo_1.ogg, channel: music, volume: 0.79, seconds: 178.82, end: 170.22, entries: [12.3, 36, 65.5, 84, 101.1, 119.4, 137.6] }
   music_boss_forge: { file: sounds/music/gemini/boss_forge_1.ogg, channel: music, volume: 0.7, seconds: 179.49, end: 174.79, entries: [16.1, 34.7, 52.1, 72, 87, 103.4, 120.9, 138.3] }
+  music_boss_forge_bellows: { file: sounds/music/gemini/boss_forge_bellows_1.ogg, channel: music, volume: 0.74, seconds: 182.69, end: 179.39, entries: [10.2, 30.8, 46.7, 64, 79.8, 94.8, 113.6, 140.8] }
   # gemini-music:sounds:end
   # The ambience's loops (data/livingworld/ambience.yaml sets their mix): volume 1 here.
   amb_volcan: { file: sounds/ambient/volcan.ogg, channel: ambient }
@@ -192,12 +197,12 @@ music:
   underground: cave
   pools:
     # gemini-music:pools:begin (make music-gemini rewrites these lines from the owner's picks)
-    title: [music_title]
-    town_puerto: [music_puerto, music_puerto_2, music_puerto_3]
+    title: [music_title, music_title_vigil, music_title_embers]
+    town_puerto: [music_puerto, music_puerto_2, music_puerto_3, music_puerto_dusk]
     bosque: [music_bosque, music_bosque_mist]
     volcan: [music_volcan, music_volcan_cinder]
-    cave: [music_cueva, music_cueva_mine, music_cueva_crystal, music_cueva_flooded, music_cueva_abyss, music_cueva_ossuary, music_cueva_ember]
-    boss_forge: [music_boss_forge]
+    cave: [music_cueva, music_cueva_mine, music_cueva_crystal, music_cueva_flooded, music_cueva_abyss, music_cueva_ossuary, music_cueva_ember, music_cueva_echo]
+    boss_forge: [music_boss_forge, music_boss_forge_bellows]
     # gemini-music:pools:end
   # gemini-music:rules:begin (make music-gemini rewrites these lines from the owner's picks)
   title: title

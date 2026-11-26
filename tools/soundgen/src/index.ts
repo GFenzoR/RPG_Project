@@ -94,10 +94,10 @@ export function buildSounds(root: string, only?: string): { path: string; bytes:
 // owner's request: no one-minute loops; client/src/audio/engine.ts): a take is ~0.8–1.1 MiB
 // at 40–48 kbps, nothing of it is in the initial download, and a zone fetches the track it
 // plays and the next one. So a music file may be 1.5 MiB, a pool (everything a player who
-// stays in one zone ends up fetching) 8 MiB, and all the files together 16 MiB.
+// stays in one zone ends up fetching) 8 MiB, and all the files together 24 MiB (raised from 16 on 2026-11-26 by the owner).
 export const BUDGET = {
   /** All files referenced by assets/sounds.yaml together. */
-  totalBytes: 16 * 1024 * 1024,
+  totalBytes: 24 * 1024 * 1024,
   /** One file, by its channel in sounds.yaml. */
   fileBytes: { sfx: 32 * 1024, ui: 16 * 1024, music: 1536 * 1024, ambient: 96 * 1024 },
   /** The files of one pool of sounds.yaml music.pools together. */

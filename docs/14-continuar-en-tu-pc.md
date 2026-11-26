@@ -2168,13 +2168,11 @@ el punto 5:
     `bosque_mist_1`, `volcan_cinder_1`, `cave_echo_1`, `boss_forge_bellows_1`, todas `.mp4`
     y dentro de las medidas) y después contestó tres pedidos seguidos con texto y sin tema
     ("no music generation tool is available"), así que la cola se cortó. Lo que queda:
-    - **Solo dos están en el juego**, provisionales: `bosque_mist` (Selvaine) y
-      `volcan_cinder` (Karvask). El total de audio quedó en ~15,8 de 16 MiB (docs/07
-      "Audio"): para sumar las otras cinco (~5,1 MiB) el dueño tiene que subir
-      `BUDGET.totalBytes` (`tools/soundgen/src/index.ts`) y la tabla de docs/07, listarlas
-      (`"title_pool": ["vigil", "embers"], "town_puerto_pool": ["dusk"], "bosque_pool":
-      ["mist"], "volcan_pool": ["cinder"], "cave_pool": [las seis de antes y "echo"],
-      "boss_forge_pool": ["bellows"]`) y correr `make music-gemini`.
+    - **Las siete están en el juego** (2026-11-26), provisionales: el dueño subió el tope de
+      audio a 24 MiB (`BUDGET.totalBytes`, docs/07 "Audio"; ~20,9 MiB en total) y son
+      `Slot.extras` de `tools/gemini/music_import.py`. Un `<lugar>_pool` en `picks.json`
+      REEMPLAZA esa lista: `cave_pool` tiene que nombrar también las seis de antes
+      (`"cave_pool": ["mine", "crystal", "flooded", "abyss", "ossuary", "ember", "echo"]`).
     - **Faltan pedir cinco:** `python tools/gemini/music_queue.py run --into
       build/music-gemini --takes 1 --retries 1 --slots
       bosque_hollow,volcan_ridge,cave_roots,boss_forge_slag` (y `town_puerto_tide`, que ya
@@ -2216,7 +2214,7 @@ el punto 5:
       de presupuesto.
   - **Presupuesto de audio (revisado el 2026-11-18, docs/07 "Audio"):** temas enteros en
     estéreo a 48 kbps (40 las cuevas): ~13,3 MiB de música en total, ~6 MiB la pool de las
-    cuevas, dentro de los nuevos topes de 16 MiB en total y 8 MiB por pool. Nada de eso
+    cuevas, dentro de los topes de 16 MiB en total (24 MiB desde el 2026-11-26) y 8 MiB por pool. Nada de eso
     está en la descarga inicial: cada zona baja el tema que suena y el siguiente. Caben
     unas dos versiones más de cueva; más que eso, subir el tope de la pool o bajar a 32 kbps.
   - **Volumen:** los temas enteros quedan a -14 LUFS (el peor, Karvask, a -14,8 con

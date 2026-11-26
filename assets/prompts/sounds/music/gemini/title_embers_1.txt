@@ -1,0 +1,9 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sounds/music/gemini/title_embers_1.ogg
+# Herramienta: Gemini web app (owner's account), music_web.py
+# Fecha: 2026-11-25
+# Modo: Hydrogen
+
+Main menu theme. Brooding and weary with a faint thread of hope, about 70 bpm, minor key. A fingerpicked nylon-string acoustic guitar trades a slow, sparse melody with a low wooden flute over a low cello drone; a few soft hammered dulcimer notes answer now and then; distant wordless choir; a feeling of an old, cursed world waiting.
+
+Instrumental only: no vocals, no lyrics, no spoken words (a wordless choir pad is fine where asked). Original composition for a dark medieval fantasy role-playing game set on cursed islands. Acoustic, organic instruments with a dusty, reverb-drenched, slightly lo-fi production; no electronic beats, no synth leads, no modern pop or cinematic trailer sound. Loopable background music: steady texture from start to end, no long fade-in or fade-out, no big ending. Around three minutes.

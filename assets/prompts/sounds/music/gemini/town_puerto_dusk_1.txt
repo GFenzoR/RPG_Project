@@ -1,0 +1,9 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sounds/music/gemini/town_puerto_dusk_1.ogg
+# Herramienta: Gemini web app (owner's account), music_web.py
+# Fecha: 2026-11-25
+# Modo: Hydrogen
+
+Harbour town theme at dusk. Melancholic and calm but haunted, about 66 bpm, minor key. Fingerpicked acoustic guitar (slightly detuned, twelve-string colour) with gentle open chords, a slow solo fiddle melody far back in the room, a quiet sea-wind ambience bed, lots of room reverb.
+
+Instrumental only: no vocals, no lyrics, no spoken words (a wordless choir pad is fine where asked). Original composition for a dark medieval fantasy role-playing game set on cursed islands. Acoustic, organic instruments with a dusty, reverb-drenched, slightly lo-fi production; no electronic beats, no synth leads, no modern pop or cinematic trailer sound. Loopable background music: steady texture from start to end, no long fade-in or fade-out, no big ending. Around three minutes.
