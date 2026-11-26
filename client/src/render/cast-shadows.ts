@@ -3,16 +3,20 @@
 // doll layer: body, outfit and equipment, in the frame it is in) laid on the ground from
 // its feet toward where the sun or the moon sends it (livingworld/client/src/sky.ts,
 // through render/sky.ts): long to the west in the morning, short under the feet at noon,
-// long to the east in the afternoon, faint under the moon. Its small contact ellipse
-// (creature-body.ts) stays on at all times, so feet never float.
+// long to the east in the afternoon, faint under the moon. It starts on the line the
+// creature stands on (the atlas's `stance` of its facing), so the feet touch it; the small
+// contact ellipse (creature-body.ts) is for where there is no cast shadow at all
+// (underground, indoors, a moonless night): the two are never drawn together (owner,
+// 2026-11-25: "the round shadow under the character ruins the new one").
 //
 // One container over the grounds (MapView.groundOverlay, world space) under the items and
 // the creatures. Its sprites are opaque and dark, and the container fades as a whole
 // through one AlphaFilter: a doll's overlapping layers and two shadows crossing make one
 // even shade, never a darker patch. Cheap (docs/07): a pooled sprite per layer of each
 // creature in view, sharing the creature's own textures; nothing is made per frame once
-// the pool is big enough. Placing a crowd's 540 is ~0.035 ms of JS a frame (docs/07); the
-// filter pass and the frame time in a browser are not measured yet (docs/14).
+// the pool is big enough. Placing a crowd's 540 is ~0.035 ms of JS a frame (docs/07). The
+// shadows of the map's objects (render/object-shadows.ts) are mounted in this same
+// container, under the creatures', and share its one filter pass.
 import { AlphaFilter, Container, Sprite } from "pixi.js";
 import type { Texture } from "pixi.js";
 import { CAST_SHADOW_TINT, MISSING_TEXTURE } from "@rpg/renderer";
@@ -24,6 +28,31 @@ export interface ShadowPose {
   scaleY: number;
   /** Opacity of the whole layer (0: no cast shadows). */
   alpha: number;
+  /**
+   * The same transform as a vector: where the tip of a caster one px high lands, px east
+   * (+) or west (-) and px north of its base (sky.ts ShadowCast). The walls' box shadows
+   * are built from it (render/object-shadows.ts).
+   */
+  x: number;
+  y: number;
+}
+
+/** A pose from its transform alone (tests, callers that only lay sprites down). */
+export function poseOf(skewX: number, scaleY: number, alpha: number): ShadowPose {
+  return { skewX, scaleY, alpha, x: -Math.sin(skewX) * scaleY, y: Math.cos(skewX) * scaleY };
+}
+
+/** The layer's opacity under which a cast shadow is too faint to stand on. */
+export const CONTACT_GONE = 0.06;
+
+/**
+ * How much of its contact ellipse a creature shows (creature-body.ts): none while it casts
+ * a shadow, all of it without one, and a short crossfade while the cast shadow is fainter
+ * than CONTACT_GONE (the sun rising, a thin moon), so nothing pops.
+ */
+export function contactShare(castAlpha: number): number {
+  if (!(castAlpha > 0)) return 1;
+  return castAlpha >= CONTACT_GONE ? 0 : 1 - castAlpha / CONTACT_GONE;
 }
 
 /** What a creature body hands its shadow: one call per drawn layer. */
@@ -93,10 +122,21 @@ export class CastShadows implements ShadowSink {
   private readonly lean = { skewX: 0, scaleY: 0 };
   /** Sprites made since the layer was created (a test reads it). */
   made = 0;
+  /** The map objects' shadows, when mounted: the layer shows while they do. */
+  private objects: Container | undefined;
 
   constructor(makeFade: () => AlphaFilter = newShadowFade) {
     this.fade = makeFade();
     this.root.filters = [this.fade];
+  }
+
+  /**
+   * Mounts the shadows of the map's objects under the creatures': same container, same
+   * fade, so shadows that cross make one shade.
+   */
+  mount(objects: Container): void {
+    this.objects = objects;
+    this.root.addChildAt(objects, 0);
   }
 
   /** Starts a frame with `pose`; false when there is nothing to cast (the layer hides). */
@@ -146,7 +186,8 @@ export class CastShadows implements ShadowSink {
   /** Hides the sprites this frame did not use and shows the layer. */
   end(): void {
     for (let i = this.used; i < this.pool.length; i++) (this.pool[i] as Sprite).visible = false;
-    this.root.visible = this.used > 0;
+    const objects = this.objects;
+    this.root.visible = this.used > 0 || (objects?.visible === true && objects.children.length > 0);
   }
 
   /** Sprites drawn in the last frame (tests, perf). */

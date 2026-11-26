@@ -80,24 +80,32 @@ describe("SkyView", () => {
     expect(v.night()).toBe(true);
   });
 
-  it("casts no shadows with reduced effects, at any hour", () => {
-    for (const m of [90, 200]) {
-      const v = new SkyView(d, clockAt(m)); // noon, full-moon night
+  it("gives the pose as a transform and as the vector the walls' boxes are swept by", () => {
+    for (const m of [20, 90, 160, 200]) {
+      const v = new SkyView(d, clockAt(m)); // morning, noon, afternoon, full-moon night
       const s = v.update(0);
-      expect(v.shadowPose(s)).toBeDefined();
-      expect(v.shadowPose(s, true)).toBeUndefined();
+      const pose = v.shadowPose(s);
+      expect(pose).toBeDefined();
+      if (!pose || !s) continue;
+      expect(pose.alpha).toBe(s.shadow.alpha);
+      expect(pose.x).toBe(s.shadow.x);
+      expect(pose.y).toBe(s.shadow.y);
+      // The tip of an upright sprite one px high lands on that vector.
+      expect(-Math.sin(pose.skewX) * pose.scaleY).toBeCloseTo(pose.x);
+      expect(Math.cos(pose.skewX) * pose.scaleY).toBeCloseTo(pose.y);
     }
-  });
-
-  it("fades the baked shadows of trees and buildings with the sun", () => {
+    // West in the morning, east in the afternoon.
     const at = (m: number): number => {
       const v = new SkyView(d, clockAt(m));
-      return v.staticShadows(v.update(0));
+      return v.shadowPose(v.update(0))?.x ?? 0;
     };
-    expect(at(90)).toBeCloseTo(1);
-    expect(at(210)).toBeLessThan(0.6);
-    expect(at(0)).toBe(0);
-    expect(new SkyView(undefined, new WorldClockState()).staticShadows(undefined)).toBe(1);
+    expect(at(20)).toBeLessThan(-0.5);
+    expect(at(160)).toBeGreaterThan(0.5);
+  });
+
+  it("shows no baked shadow art with a day and night: every object casts its own", () => {
+    expect(new SkyView(d, clockAt(90)).staticShadows()).toBe(0);
+    expect(new SkyView(undefined, new WorldClockState()).staticShadows()).toBe(1);
   });
 
   it("reuses its sky and its shadow pose (a frame allocates nothing)", () => {

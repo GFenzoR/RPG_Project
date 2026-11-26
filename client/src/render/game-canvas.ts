@@ -78,7 +78,9 @@ import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
 import { bodyKindOf, creatureGait, kicksUp, mountLivingWorld, newWalkSample } from "./living.ts";
 import type { Gait } from "./living.ts";
-import { CastShadows } from "./cast-shadows.ts";
+import { CastShadows, contactShare } from "./cast-shadows.ts";
+import { ObjectShadows } from "./object-shadows.ts";
+import type { ObjectShadowHint } from "./object-shadows.ts";
 import { NIGHT_PLAYER_LIGHT, SkyView, dimmed, litSurface } from "./sky.ts";
 import type { ParticleView } from "./particles.ts";
 import {
@@ -130,7 +132,13 @@ import { BubbleLayer } from "./bubble-layer.ts";
 import type { BubbleAnchor } from "./bubble-layer.ts";
 import { admitSpeech } from "./bubbles.ts";
 import type { BubbleStyle } from "./bubbles.ts";
-import { mapItemArt, mapItemId, mapItemTexture } from "../state/corpse-art.ts";
+import {
+  corpseSprite,
+  mapItemArt,
+  mapItemId,
+  mapItemTexture,
+  parseMapItemKey,
+} from "../state/corpse-art.ts";
 import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
@@ -235,7 +243,20 @@ export interface SkyHook {
   lamps: number;
   moon: number;
   shadowAlpha: number;
+  /** Cast shadow sprites of the creatures drawn this frame (one per paper-doll layer). */
   shadows: number;
+  /** Where the tip of a caster one unit high lands: east (+) or west (-), and north. */
+  shadowX: number;
+  shadowY: number;
+  /** Shadow sprites and meshes of the map's objects, and how many objects cast them. */
+  objectShadows: number;
+  casters: number;
+  /** Of those, the plants whose shadow sways with them in the wind (none with reduced motion). */
+  swayingShadows: number;
+  /** Creatures drawn with their contact ellipse (none of those that cast a shadow). */
+  contacts: number;
+  /** Whether the own player is drawn with its contact ellipse (indoors, a moonless night). */
+  selfContact: boolean;
 }
 
 export interface GameCanvas {
@@ -562,6 +583,8 @@ export async function createGameCanvas(
     elevation: (id) => content.items[mapItemId(id)]?.elevation ?? 0,
     tileSize: T,
     floor: world.self?.pos.z ?? 7,
+    // Under the sky, the sun's shadows stay out of the buildings (docs/17 ART-5).
+    indoors: content.livingWorld?.dayNight ? (z) => !isDark(z) : undefined,
   });
   // Ambient particles (A13), in world space under the silhouettes.
   const particles = new ParticleLayer(T);
@@ -662,10 +685,36 @@ export async function createGameCanvas(
   /** A drawing gliding over a correction further than this (sprite px) leaves no prints. */
   const slidePx = content.livingWorld?.gaits?.slidePx ?? 0;
   // The creatures' cast shadows (render/cast-shadows.ts): over the ground and the living
-  // world's footprints, under the items and the creatures; off with reduced motion and
-  // underground (no sun there: the contact ellipse stays).
+  // world's footprints, under the items and the creatures; none underground or indoors (no
+  // sun there: the contact ellipse stays).
   const castShadows = new CastShadows();
   view.groundOverlay.addChild(castShadows.root);
+  // The map objects' (render/object-shadows.ts), in the same layer: how each item casts is
+  // its ItemDef.shadow (data/livingworld/shadows.yaml), and its base the row its drawing
+  // ends on (atlas.json `feet`; a corpse's is its own sprite's).
+  const shadowHints = new Map<string, ObjectShadowHint | null>();
+  const shadowHint = (key: string): ObjectShadowHint | undefined => {
+    let h = shadowHints.get(key);
+    if (h === undefined) {
+      const { itemId, remainsOf } = parseMapItemKey(key);
+      const def = content.items[itemId];
+      const corpse = remainsOf ? corpseSprite(remainsOf) : undefined;
+      const sprite = corpse !== undefined && atlas.has(corpse) ? corpse : def?.sprite;
+      h = def?.shadow
+        ? { ...def.shadow, foot: sprite === undefined ? 0 : atlas.foot(sprite) }
+        : null;
+      shadowHints.set(key, h);
+    }
+    return h ?? undefined;
+  };
+  const objectShadows = new ObjectShadows(T, shadowHint);
+  castShadows.mount(objectShadows.root);
+  const shadowWind = living
+    ? {
+        version: () => living.windVersion(),
+        strips: (sprite: Sprite) => living.windStrips(sprite),
+      }
+    : undefined;
   // The living objects' effects (render/living.ts): over the map.
   const livingObjects = mountLivingObjects(view.overlay, {
     tileSize: T,
@@ -1282,10 +1331,15 @@ export async function createGameCanvas(
       if (s) leave(d.id, now, leaveStyle(d.reason, s.drawnHealth));
     }
   };
-  /** `casting`: the frame casts shadows; a falling body keeps its own until it fades. */
-  const drawGhosts = (now: number, casting: boolean): void => {
+  /**
+   * `casting`: the frame casts shadows; a falling body keeps its own until it fades (and
+   * `contact` of its ellipse meanwhile), unless it fell indoors.
+   */
+  const drawGhosts = (now: number, casting: boolean, contact: number): void => {
     for (let i = ghosts.length - 1; i >= 0; i--) {
       const g = ghosts[i] as Ghost;
+      const sunlit = casting && !view.indoorAt(Math.round(g.body.x / T), Math.round(g.body.y / T));
+      g.figure.contact = sunlit ? contact : 1;
       animInput.now = now;
       const [gx, gy] = delta(g.dir);
       animInput.dir = faceTo(g.state, g.figure.clips.meta, now, gx, gy, false, g.figure.eight);
@@ -1296,7 +1350,7 @@ export async function createGameCanvas(
       animate(g.state, g.figure.clips.meta, animInput, pose);
       g.figure.draw(pose, dirIndex(animInput.dir));
       if (pose.done) dropGhost(i);
-      else if (casting) g.figure.castShadow(castShadows, g.body.x, g.body.y);
+      else if (sunlit) g.figure.castShadow(castShadows, g.body.x, g.body.y);
     }
   };
 
@@ -1406,8 +1460,14 @@ export async function createGameCanvas(
     livingObjects.onTick(now, self.pos.z);
     drawnBoxes.reset();
     const skyNow = isDark(self.pos.z) ? sky.none() : sky.update(now);
-    view.castShadowStrength = sky.staticShadows(skyNow);
-    const casting = castShadows.begin(sky.shadowPose(skyNow, reducedMotion()));
+    view.castShadowStrength = sky.staticShadows();
+    const shadowPose = sky.shadowPose(skyNow);
+    const casting = castShadows.begin(shadowPose);
+    // After the map's render and the living world's tick: the chunks and the wind's strips
+    // of this frame exist. Placed again only when the map or the sun moved.
+    objectShadows.update(view, shadowPose, shadowWind);
+    // A creature casts its shadow or stands on its contact ellipse, never both.
+    const outdoorContact = casting && shadowPose ? contactShare(shadowPose.alpha) : 1;
 
     const seen = new Set<number>();
     const boxes: LabelBox[] = [];
@@ -1428,8 +1488,11 @@ export async function createGameCanvas(
       // fades as one figure (CreatureBody.opacity): the container's alpha would fade a paper
       // doll layer by layer, the skin showing through the tunic.
       const see = c.id === world.selfId && world.invisible ? 0.4 : 1;
+      // No sun under a roof: no cast shadow there, the contact ellipse instead.
+      const sunlit = casting && !view.indoorAt(Math.round(p.x), Math.round(p.y));
       if (s.figure) {
         s.figure.opacity = see;
+        s.figure.contact = sunlit ? outdoorContact : 1;
         animateBody(
           s.figure,
           stateOf(c.id, now),
@@ -1439,7 +1502,7 @@ export async function createGameCanvas(
           s.body.x,
           devicePixels(p.y, T, scale),
         );
-        if (casting) s.figure.castShadow(castShadows, s.body.x, s.body.y);
+        if (sunlit) s.figure.castShadow(castShadows, s.body.x, s.body.y);
       }
       s.body.alpha = s.figure ? 1 : see;
       if (lastSeen.get(c.id) !== c.dir) lastSeen.set(c.id, c.dir);
@@ -1526,7 +1589,7 @@ export async function createGameCanvas(
       }
     // The bodies falling or shimmering away cast their shadow too, until they fade below
     // half (CreatureBody.castShadow): it does not vanish the moment a creature dies.
-    drawGhosts(now, casting);
+    drawGhosts(now, casting, outdoorContact);
     if (casting) castShadows.end();
     // A creature mostly hidden by a taller one in front (a wolf right north of a player),
     // and a body falling or shimmering away behind one.
@@ -1955,6 +2018,13 @@ export async function createGameCanvas(
         moon: s.moon,
         shadowAlpha: s.shadow.alpha,
         shadows: castShadows.root.visible ? castShadows.count : 0,
+        shadowX: s.shadow.x,
+        shadowY: s.shadow.y,
+        objectShadows: castShadows.root.visible ? objectShadows.count : 0,
+        casters: castShadows.root.visible ? objectShadows.casters : 0,
+        swayingShadows: castShadows.root.visible ? objectShadows.swaying : 0,
+        contacts: [...sprites.values()].filter((sp) => sp.figure?.contactShown).length,
+        selfContact: sprites.get(world.selfId)?.figure?.contactShown === true,
       };
     },
     drawnFacing(id) {
@@ -2052,6 +2122,8 @@ export async function createGameCanvas(
       effects.destroy();
       speech.destroy();
       lights.destroy();
+      // Before the living world: the trees' shadow meshes share its strips.
+      objectShadows.destroy();
       castShadows.destroy();
       living?.destroy();
       livingObjects.destroy();

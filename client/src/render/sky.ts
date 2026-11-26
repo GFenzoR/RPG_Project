@@ -2,8 +2,9 @@
 // the game client that reads the day and night from @rpg/living-world. It runs the world
 // clock the server sent (state/world-clock.ts) on between syncs and hands the canvas what
 // it draws: the light colour and the lamps over the surface (render/light-layer.ts), the
-// ground transform of the creatures' cast shadows (render/cast-shadows.ts), how strong the
-// baked shadows of trees and buildings are, and night for the fireflies. The sky model
+// ground transform of the cast shadows of creatures and map objects (render/cast-shadows.ts,
+// render/object-shadows.ts), whether the map's baked shadow art shows, and night for the
+// fireflies. The sky model
 // itself lives in livingworld/client/src/sky.ts. A frame allocates nothing.
 import { advance, newSky, shadowTransform, skyAt } from "@rpg/living-world";
 import type { DayNightData, Sky, WorldTime } from "@rpg/living-world";
@@ -19,7 +20,7 @@ export const NIGHT_PLAYER_LIGHT = 0.55;
 
 export class SkyView {
   private readonly sky: Sky = newSky();
-  private readonly pose: ShadowPose = { skewX: 0, scaleY: 0, alpha: 0 };
+  private readonly pose: ShadowPose = { skewX: 0, scaleY: 0, alpha: 0, x: 0, y: 0 };
   private readonly time: WorldTime = { day: 0, cycleMs: 0 };
   private drawn = false;
 
@@ -66,24 +67,28 @@ export class SkyView {
   }
 
   /**
-   * The creatures' cast shadows under `sky` (reused object); undefined: none. `reduced`
-   * ("Animaciones reducidas", docs/16): no cast shadows at all, only the contact ellipse.
+   * The cast shadows of creatures and map objects under `sky` (reused object); undefined:
+   * none (no sky over the floor, or neither sun nor moon gives any). "Animaciones
+   * reducidas" keeps them: a shadow is no animation; only the wind's sway stops, with the
+   * wind itself.
    */
-  shadowPose(sky: Sky | undefined, reduced = false): ShadowPose | undefined {
-    if (reduced || !sky || sky.shadow.alpha <= 0) return undefined;
+  shadowPose(sky: Sky | undefined): ShadowPose | undefined {
+    if (!sky || sky.shadow.alpha <= 0) return undefined;
     shadowTransform(sky.shadow, this.pose);
     this.pose.alpha = sky.shadow.alpha;
+    this.pose.x = sky.shadow.x;
+    this.pose.y = sky.shadow.y;
     return this.pose;
   }
 
   /**
-   * How strong the baked shadows of trees and buildings are (MapView.castShadowStrength):
-   * full under a high sun, fading at sunrise and sunset, faint under the moon.
+   * How strong the baked shadow art of the map is (MapView.castShadowStrength): none at all
+   * with a day and night, where every object casts its own under the sun
+   * (render/object-shadows.ts; nothing has two shadows, and there is none underground);
+   * full without one (a build with no data/livingworld/daynight.yaml).
    */
-  staticShadows(sky: Sky | undefined): number {
-    const d = this.data;
-    if (!sky || !d || d.sunShadow <= 0) return 1;
-    return Math.min(1, sky.shadow.alpha / d.sunShadow);
+  staticShadows(): number {
+    return this.data ? 0 : 1;
   }
 }
 
