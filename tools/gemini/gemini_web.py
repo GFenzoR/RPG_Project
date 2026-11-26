@@ -99,6 +99,7 @@ TOOLS_OPENER = (
     " button[aria-label*='upload' i], button[aria-label*='tools' i]"
 )
 IMAGE_TOOL = ("Crear imagen", "Create image")
+MORE_TOOLS = ("Más herramientas", "More tools")
 
 ## How long a drawing is waited for, how often the page is read, and how long
 ## an answer that has arrived is given to stop changing.
@@ -454,6 +455,10 @@ def choose_tool(page, words: tuple[str, ...]) -> dict | None:
         opener.click()
         page.wait_for_timeout(1500 * (attempt + 1))
         chosen = page.evaluate(CLICK_TOOL_JS, list(words))
+        if not chosen and page.evaluate(CLICK_TOOL_JS, list(MORE_TOOLS)):
+            # Since 2026-11-26 the menu keeps some tools (music among them) one level down.
+            page.wait_for_timeout(1500)
+            chosen = page.evaluate(CLICK_TOOL_JS, list(words))
         if chosen:
             break
     page.wait_for_timeout(800)

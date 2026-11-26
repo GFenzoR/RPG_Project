@@ -155,6 +155,8 @@ copian a mano después de mirarlos, y ningún tema entra sin que el dueño lo ha
 - **Herramientas:** "Crear música", "Crear imagen", "Crear video", "Canvas" y "Deep
   Research", en "Cargas y herramientas", son `<gem-menu-item role=menuitemcheckbox>`, no
   botones (`gemini_web.CLICK_TOOL_JS`).
+- **"Más herramientas" (2026-11-26):** el menú deja "Crear música" un nivel más abajo, en
+  "Más herramientas"; `choose_tool` entra ahí si no la ve en el primero (`MORE_TOOLS`).
 - **Imagen (verificado el 2026-11-18, diez pedidos):** `image` elige "Crear imagen" en
   Hydrogen y la hoja llega en ~30 s, una sola imagen de 1024x572 a 765x1024 (el formato lo
   elige Gemini); ninguno topó con la cuota. Ni los trece de la segunda tanda (ese mismo día,
