@@ -68,6 +68,7 @@ class FakePanner extends FakeNode implements PannerLike {
 class FakeSource extends FakeNode implements SourceLike {
   buffer: BufferLike | null = null;
   loop = false;
+  readonly playbackRate = { value: 1 };
   started: number | undefined;
   offset = 0;
   stopped: number | undefined;
@@ -403,6 +404,35 @@ describe("AudioEngine", () => {
     expect(engine.play(["many"])).toBe("a");
     setRandom(0.99);
     expect(engine.play(["many"])).toBe("b");
+  });
+
+  it("plays a footstep with its voice: the take asked for, its loudness and its pitch", async () => {
+    const { ctx, engine, setRandom } = setup();
+    await unlockNow(engine);
+    // Load both takes first, then let them end.
+    engine.play(["many"], undefined, undefined, { pick: () => 0 });
+    engine.play(["many"], undefined, undefined, { pick: () => 1 });
+    await flush();
+    ctx.currentTime = 50;
+    setRandom(0.1); // would pick "a"
+    const voice = { gain: 0.5, rate: 0.97, pick: (n: number) => n - 1 };
+    const at = ctx.sources.length;
+    expect(engine.play(["many"], undefined, undefined, voice)).toBe("b");
+    const src = ctx.sources[at];
+    expect(src?.playbackRate.value).toBeCloseTo(0.97);
+    // The voice is one object reused by the next step: changing it later changes nothing.
+    voice.rate = 2;
+    voice.gain = 9;
+    expect(src?.playbackRate.value).toBeCloseTo(0.97);
+    // Its gain multiplies the sound's own volume.
+    engine.play(["many"], undefined, undefined, { pick: () => 1 });
+    const half = (ctx.sources[at]?.outputs[0] as FakeGain).gain.value;
+    const full = (ctx.sources[at + 1]?.outputs[0] as FakeGain).gain.value;
+    expect(half).toBeCloseTo(full / 2);
+    expect(ctx.sources[at + 1]?.playbackRate.value).toBe(1);
+    // A take out of range is clamped, never undefined.
+    expect(engine.play(["many"], undefined, undefined, { pick: () => 99 })).toBe("b");
+    expect(engine.play(["many"], undefined, undefined, { pick: () => -3 })).toBe("a");
   });
 
   it("does not spend a voice on a muted channel", async () => {

@@ -77,6 +77,7 @@ import { DrawnBoxes } from "./creature-hits.ts";
 import type { DrawnBox } from "./creature-hits.ts";
 import { ParticleLayer, stepKindOf } from "./particles.ts";
 import { bodyKindOf, creatureGait, kicksUp, mountLivingWorld, newWalkSample } from "./living.ts";
+import type { StepVoice } from "./living.ts";
 import type { Gait } from "./living.ts";
 import { CastShadows, contactShare } from "./cast-shadows.ts";
 import { ObjectShadows } from "./object-shadows.ts";
@@ -259,8 +260,16 @@ export interface FootfallHook {
   footprints: number;
   /** How many feet of the own player touched the ground since the canvas was made. */
   total: number;
-  /** The last of them (at most OWN_FOOTFALLS), oldest first. */
-  own: { side: number; x: number; y: number }[];
+  /**
+   * The last of them (at most OWN_FOOTFALLS), oldest first: which foot, where, the sound
+   * event of the ground under it and the rate its take played at.
+   */
+  own: { side: number; x: number; y: number; sound: string; rate: number }[];
+  /**
+   * The prints on the ground: which foot left each, where, and how much of it the wind,
+   * the waves or other feet have erased (0 fresh, 1 gone).
+   */
+  prints: { side: number; x: number; y: number; wear: number; surface: string }[];
 }
 
 /** How many of the own player's footfalls the E2E hook keeps. */
@@ -385,9 +394,10 @@ export interface GameCanvasOptions {
   playSound?(id: string, at: { x: number; y: number; z: number }): void;
   /**
    * A foot of the own player touched the ground in the walk drawn (render/living.ts):
-   * the sound events of a step there, most specific first. The list is reused.
+   * the sound events of a step on the ground under that foot, most specific first, and
+   * how that foot sounds (its take, loudness and pitch). Both are reused.
    */
-  footstep?(events: readonly string[]): void;
+  footstep?(events: readonly string[], voice: StepVoice | undefined): void;
   /**
    * docs/17 UI-6: the tile's menu with its item's card (a right click in the menu controls,
    * Shift+right click in both), at page coordinates (cx, cy).
@@ -714,20 +724,28 @@ export async function createGameCanvas(
     () => isDark(world.self?.pos.z ?? 0),
     // A foot on the ground (livingworld gait.ts): the ground's motes (MOV-7) fly from
     // under it, and the own player's is the step's sound.
-    (fall, events) => {
+    (fall, events, voice) => {
       if (kicksUp(fall)) kickUp(fall.x, fall.y, fall.z);
       if (!fall.self) return;
-      opts.footstep?.(events);
+      opts.footstep?.(events, voice);
       // A ring of the last ones, written over (nothing made per footfall).
       const slot = ownFalls[ownFallCount++ % OWN_FOOTFALLS];
       if (slot) {
         slot.side = fall.side;
         slot.x = fall.x;
         slot.y = fall.y;
+        slot.sound = events[0] ?? "";
+        slot.rate = voice?.rate ?? 1;
       }
     },
   );
-  const ownFalls = Array.from({ length: OWN_FOOTFALLS }, () => ({ side: 0, x: 0, y: 0 }));
+  const ownFalls = Array.from({ length: OWN_FOOTFALLS }, () => ({
+    side: 0,
+    x: 0,
+    y: 0,
+    sound: "",
+    rate: 1,
+  }));
   let ownFallCount = 0;
   /** The creature drawn, as the living world reads its walk (reused: docs/07). */
   const walkSample = newWalkSample();
@@ -2154,7 +2172,14 @@ export async function createGameCanvas(
         const f = ownFalls[i % OWN_FOOTFALLS];
         if (f) own.push({ ...f });
       }
-      return { footprints: living?.stats().footprints ?? 0, total: ownFallCount, own };
+      const prints = (living?.footprints() ?? []).map((p) => ({
+        side: p.side,
+        x: p.x,
+        y: p.y,
+        wear: p.wear,
+        surface: p.surface,
+      }));
+      return { footprints: prints.length, total: ownFallCount, own, prints };
     },
     sky() {
       const s = sky.current;

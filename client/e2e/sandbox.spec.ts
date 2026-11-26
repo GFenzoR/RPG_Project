@@ -922,11 +922,11 @@ test("sandbox day and night: noon and a full-moon night, with cast shadows", asy
 // the own player's prints are dropped by the walk drawn, one per footfall, alternating
 // either side of the path and a stride apart, straight and on a diagonal. The screenshots
 // are cut round the player, mid-walk and at the end of each trail.
-test("sandbox footprints: one print per footfall on sand, straight and diagonal", async ({
+test("sandbox footprints: one print per footfall on sand, both feet, straight and diagonal; the wind and a wave erase them", async ({
   page,
   playwright,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(300_000);
   const errors: string[] = [];
   const who = await newGuardian(playwright, "Caminante");
   psql([
@@ -1077,5 +1077,81 @@ test("sandbox footprints: one print per footfall on sand, straight and diagonal"
   const still = (await falls())?.total;
   await page.waitForTimeout(800);
   expect((await falls())?.total).toBe(still);
+
+  // Both feet (owner, 2026-11-25): the left foot and the right each sounded, on the
+  // sand's own sample, a little apart in pitch; and each left its mark.
+  const heard = (await falls())?.own ?? [];
+  for (const side of [-1, 1]) {
+    const foot = heard.filter((f) => f.side === side);
+    expect(foot.length, `footfalls of side ${side}`).toBeGreaterThanOrEqual(2);
+    for (const f of foot) expect(f.sound).toMatch(/^step\.self\.[a-z_]+$/);
+  }
+  expect(heard.some((f) => f.sound === "step.self.sand")).toBe(true);
+  expect(new Set(heard.map((f) => f.rate.toFixed(3))).size).toBeGreaterThan(2);
+
+  // What erases the prints (livingworld/README.md "Huellas: qué las borra"): no clock of
+  // their own. A fresh trail on the dry sand, shot, and shot again once the wind's gusts
+  // have worn it (the beach is open: it takes a gust or two).
+  await tp(runs.east.x, runs.east.y);
+  await standing();
+  await page.keyboard.down("ArrowRight");
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+      timeout: 15_000,
+    })
+    .toBeGreaterThanOrEqual(runs.east.x + runs.east.n - 1);
+  await page.keyboard.up("ArrowRight");
+  const trailEnd = await standing();
+  const dry = async (): Promise<{ side: number; wear: number }[]> =>
+    ((await falls())?.prints ?? []).filter((p) => p.surface === "sand");
+  const fresh0 = await dry();
+  expect(fresh0.some((p) => p.side === 1)).toBe(true);
+  expect(fresh0.some((p) => p.side === -1)).toBe(true);
+  await around("99k-footprints-before-gust", trailEnd.x - 2, trailEnd.y);
+  const worn = (list: { wear: number }[]): number =>
+    list.reduce((a, q) => a + q.wear, 0) + (fresh0.length - list.length);
+  await expect
+    .poll(async () => worn(await dry()), { timeout: 90_000, intervals: [500] })
+    .toBeGreaterThan(fresh0.length * 0.5);
+  await around("99l-footprints-after-gust", trailEnd.x - 2, trailEnd.y);
+
+  // Wet sand by the water: the next wave that runs that far wipes the prints.
+  const shore = await page.evaluate(
+    ({ x0, y0 }) => {
+      const c = window.__rpgClient;
+      const wet = c?.itemNumber("wet_sand");
+      const water = [c?.itemNumber("water_shallow"), c?.itemNumber("water_shoal")];
+      const isWet = (x: number, y: number): boolean =>
+        c?.tile(x, y, 7)?.[0] === wet && c?.walkable(x, y, 7) === true;
+      const isWater = (x: number, y: number): boolean => water.includes(c?.tile(x, y, 7)?.[0]);
+      for (let y = y0 - 8; y <= y0 + 8; y++)
+        for (let x = x0 - 12; x <= x0 + 12; x++) {
+          if (!isWet(x, y) || !isWet(x + 1, y) || !isWet(x + 2, y)) continue;
+          if (isWater(x + 1, y + 1) || isWater(x + 1, y - 1)) return { x, y };
+        }
+      return undefined;
+    },
+    { x0: runs.east.x, y0: runs.east.y },
+  );
+  if (shore) {
+    await tp(shore.x, shore.y);
+    await standing();
+    await page.keyboard.down("ArrowRight");
+    await expect
+      .poll(async () => (await page.evaluate(() => window.__rpgClient?.self()))?.x, {
+        timeout: 15_000,
+      })
+      .toBeGreaterThanOrEqual(shore.x + 2);
+    await page.keyboard.up("ArrowRight");
+    const wetEnd = await standing();
+    const wetPrints = async (): Promise<number> =>
+      ((await falls())?.prints ?? []).filter((p) => p.surface === "wet_sand" && p.wear < 0.5)
+        .length;
+    // A wave may already be on its way: the shot is right after the walk.
+    await around("99m-wet-sand-before-wave", wetEnd.x - 1, wetEnd.y);
+    // A wave every 7.7 s; one that reaches the first tile from the water comes soon.
+    await expect.poll(wetPrints, { timeout: 60_000, intervals: [250] }).toBe(0);
+    await around("99n-wet-sand-after-wave", wetEnd.x - 1, wetEnd.y);
+  } else console.log("no run of wet sand by the water near the beach");
   expect(errors).toEqual([]);
 });

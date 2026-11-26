@@ -20,6 +20,7 @@ import type {
   LivingObjects,
   LivingPos,
   LivingWorld,
+  StepVoice,
   SurfaceLookup,
 } from "@rpg/living-world";
 import { LivingObjectKind } from "@rpg/protocol";
@@ -30,7 +31,14 @@ import type { ClientContent, ItemDef } from "../content-types.ts";
 import { mapItemId } from "../state/corpse-art.ts";
 import type { Pos } from "../state/geometry.ts";
 
-export type { Footfall, Gait, LivingObjects, LivingWorld, WalkSample } from "@rpg/living-world";
+export type {
+  Footfall,
+  Gait,
+  LivingObjects,
+  LivingWorld,
+  StepVoice,
+  WalkSample,
+} from "@rpg/living-world";
 export { newWalkSample };
 
 /** The part of the world state the living world reads: the ground of a tile. */
@@ -75,7 +83,7 @@ export function mountLivingWorld(
   reduced: () => boolean,
   night: () => boolean = () => false,
   sheltered: () => boolean = () => false,
-  onFootfall?: (fall: Footfall, events: readonly string[]) => void,
+  onFootfall?: (fall: Footfall, events: readonly string[], voice: StepVoice | undefined) => void,
 ): LivingWorld | undefined {
   const data = content.livingWorld;
   if (!data) return undefined;

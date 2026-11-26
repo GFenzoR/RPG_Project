@@ -2119,8 +2119,8 @@ export class Game {
       frame: (now) => this.frame(now),
       playSound: (id, at) => this.opts.audio?.playId(id, at, this.world.self?.pos),
       // The own step's sound, on the footfall of the walk drawn (render/living.ts).
-      footstep: (events) => {
-        this.opts.audio?.play(events);
+      footstep: (events, voice) => {
+        this.opts.audio?.play(events, undefined, undefined, voice);
       },
       clickTile: (x, y, z) => {
         // A picked item (the menu's "Move", docs/17 UI-6) goes where the mouse clicks.
