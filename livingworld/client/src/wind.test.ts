@@ -569,14 +569,17 @@ describe("the wind over the map's sprites", () => {
     const { lw, view } = forest(37, 27);
     lw.onTick(0, view);
     expect(lw.stats().windMeshes).toBe(999);
-    // The best of a few batches: the machine running the whole suite at once is not the
-    // game's frame.
+    // The best of many short batches: the machine running the whole suite at once is not
+    // the game's frame. A batch is short enough (some 6 ms alone) to fit in one turn of the
+    // scheduler: with every core taken by other test files, a batch of 60 frames was always
+    // cut in the middle and read 2.04 ms for a frame that costs 0.64 ms.
+    const FRAMES = 10;
     let perFrame = Infinity;
     let f = 1;
-    for (let batch = 0; batch < 6; batch++) {
+    for (let batch = 0; batch < 60; batch++) {
       const start = performance.now();
-      for (let n = 0; n < 60; n++) lw.onTick(f++ * 16.7, view);
-      perFrame = Math.min(perFrame, (performance.now() - start) / 60);
+      for (let n = 0; n < FRAMES; n++) lw.onTick(f++ * 16.7, view);
+      perFrame = Math.min(perFrame, (performance.now() - start) / FRAMES);
     }
     expect(perFrame).toBeLessThan(2);
   });
