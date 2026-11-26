@@ -374,8 +374,9 @@ decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
   `cast-shadows.test.ts` cuenta una multitud de 60 muñecos durante 120 frames: 540 sprites
   hechos en el primero y ninguno más), con las texturas de la propia criatura (ninguna
   textura nueva por frame), y **una** pasada de filtro (`AlphaFilter`) sobre el contenedor
-  entero, no una por criatura. Con "Animaciones reducidas" y bajo tierra, nada. Las
-  sombras dibujadas de árboles y casas solo cambian el alfa de su capa.
+  entero, no una por criatura. Bajo tierra y bajo techo, nada. Las sombras dibujadas de
+  árboles y casas ya no se dibujan en el juego (su capa queda invisible): las reemplazan
+  las de los objetos, abajo.
   **Medido solo del lado JS:** colocar las 540 sombras de una multitud de 60 muñecos
   (`CastShadows.begin`/`part`/`end`: textura, ancla, posición, skew y escala de cada
   sprite) cuesta ~0,035 ms por frame en Node en la PC del dueño (2026-11-24), el 0,2 % de
@@ -385,6 +386,36 @@ decodificados (tabla de "Audio"): por eso el tope de voces y el tope liviano.
   pasada del filtro, casi del tamaño de la pantalla, y de noche se suma el mapa de luz.
   Ningún test mide el tiempo de frame en el navegador. Medirlo ahí (multitud de noche,
   móvil) o aceptar el costo es una decisión pendiente del dueño (docs/14).
+
+**Sombras de los objetos del mapa** (2026-11-25, `client/src/render/object-shadows.ts`,
+docs/17 "Sombras de los objetos"): el riesgo es un bosque denso, con cientos de objetos en
+vista.
+- **Qué se dibuja:** un sprite por objeto con silueta (del pool de `ObjectShadows`, con la
+  textura del propio item: ninguna textura nueva, mismo atlas, mismo batch); una malla por
+  árbol que se mece, sobre la **misma geometría** de tiras que ya mueve el viento (nada se
+  calcula de más por frame: cuando el viento corre las tiras, la sombra se corre sola);
+  uno o dos sprites de la textura blanca por casilla de muro (el barrido norte no se hace
+  si hay otro muro al norte, que lo tapa). Todo dentro del contenedor de las sombras de
+  las criaturas: **la misma única pasada de filtro**, ninguna más.
+- **Cuándo se trabaja:** las sombras se crean cuando `MapView` arma un chunk y se devuelven
+  al pool cuando lo suelta (primero las que se van, así el chunk que entra usa los sprites
+  del que salió); se vuelven a colocar solo cuando cambió el mapa o cuando el sol se movió
+  `POSE_STEP` (1/64 de altura; el sol tarda minutos en moverlo, un `/time` lo hace al
+  instante). Entre medio, un frame no toca nada.
+- **Medido en Node** (PC del dueño, 2026-11-25, `object-shadows.test.ts` "stays inside the
+  frame budget", 600 objetos de 64x96 en vista): **0,0001 ms por frame** sin cambios y
+  **0,06 ms** recolocar las 600 (el test falla sobre 0,05 ms y 2 ms). Las casillas "bajo
+  techo" se calculan una vez por chunk (una inundación sobre 64x64 casillas), no por
+  frame.
+- **Draw calls y fps en el navegador:** el test E2E del viento (`client/e2e/game.spec.ts`,
+  "wind: crowns sway…") mide el bosque más denso (51 árboles en vista de Ivernel) con
+  todas las sombras puestas, anota cuántos objetos proyectan y cuántas sombras se mecen, y
+  exige menos de 50 draw calls por frame. **Los números del navegador con sombras quedan
+  por anotar aquí tras el E2E final del lote** (esta rama no corre el E2E; docs/14). Antes
+  de las sombras de objetos el mismo test daba el frame dentro del presupuesto.
+- **Si no entrara:** degradar por distancia o tamaño (no proyectar lo que mide menos de
+  una casilla lejos del jugador) y anotar los números; nunca quitar objetos en silencio.
+  Hoy no se degrada nada.
 
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.

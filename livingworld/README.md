@@ -22,6 +22,7 @@ pegamento, dónde viven datos, assets y protocolo, cómo agregar algo y cómo pr
 | Mensajes | `proto/game/v1/livingworld.proto` (buf quiere los archivos de un paquete en su carpeta) | `TrailWear` (`ServerMessage.trail_wear` = 49 y `MapArea.wear`), `WorldClock` (`ServerMessage.world_clock` = 53) |
 | Viento (árboles, arbustos y toda planta se mecen) | `livingworld/client/src/wind.ts` (puro) y `wind-mesh.ts` (tiras de Pixi), `data/livingworld/wind.yaml` y `wind_sprites.yaml` (lo escribe `make spritegen`), `tools/spritegen/src/wind.ts` | hecho (`feat/wind-flora`, lote 20); ver "Viento" |
 | Día y noche (reloj, luz, luna, sombras proyectadas) | `livingworld/server/daynight` (reloj), `livingworld/client/src/sky.ts` (cielo), `data/livingworld/daynight.yaml` | hecho (`feat/day-night-shadows`); ver "Día y noche" |
+| Sombras de los objetos del mapa (qué proyecta y cómo) | `livingworld/client/src/shadows.ts` (puro), `data/livingworld/shadows.yaml`; las dibuja el cliente (`client/src/render/object-shadows.ts`) | hecho (`feat/object-shadows`); ver "Sombras de los objetos" |
 | Persistencia | tabla `trail_wear` (migración `server/migrations/00027_trail_wear.sql`) | una fila con el desgaste codificado |
 
 ## Contrato del cliente
@@ -246,18 +247,62 @@ el renderer del cliente dibuja:
 - la luz (`render/light-layer.ts`): en la superficie, el `ambient` del cielo como fondo del
   mapa de luz y las luces del jugador y de cada item con `light` atenuadas por `lamps`; de
   día, ninguna pasada. Las cuevas no cambian;
-- las sombras proyectadas (`render/cast-shadows.ts`, `CreatureBody.castShadow`): las capas
-  del frame de cada criatura del piso, oscuras, desde los pies, en un contenedor sobre
-  `MapView.groundOverlay` que se desvanece entero con un `AlphaFilter`; la sombra de
-  contacto queda siempre. Un cuerpo que cae muerto o se desvanece sigue proyectando la suya
-  hasta bajar de media opacidad. Con "Animaciones reducidas", y bajo tierra, no hay (la
-  luz y el tinte de la noche sí siguen con "Animaciones reducidas": no son movimiento);
-- las sombras dibujadas de árboles y casas, que se desvanecen con el sol
-  (`MapView.castShadowStrength`);
+- las sombras proyectadas de las criaturas (`render/cast-shadows.ts`,
+  `CreatureBody.castShadow`): las capas del frame de cada criatura del piso, oscuras,
+  desde la línea donde está parada (`stance` de `atlas.json`), en un contenedor sobre
+  `MapView.groundOverlay` que se desvanece entero con un `AlphaFilter`. La sombra de
+  contacto (la elipse) solo se dibuja donde no hay sombra proyectada (bajo tierra, bajo
+  techo, noche sin luna, un cuerpo a menos de media opacidad): nunca las dos juntas
+  (dueño, 2026-11-25). Un cuerpo que cae muerto o se desvanece sigue proyectando la suya
+  hasta bajar de media opacidad. Bajo tierra y bajo techo no hay. "Animaciones reducidas"
+  no las apaga (ni la luz ni el tinte de la noche: no son movimiento);
+- las sombras de los objetos del mapa (`render/object-shadows.ts`), en el mismo
+  contenedor: "Sombras de los objetos", abajo. Las sombras dibujadas de árboles y casas
+  (`<sprite>/shadow`) ya no se ven en el juego (`MapView.castShadowStrength` 0);
 - `night()` del mundo vivo (luciérnagas).
 
 Sin `daynight.yaml` no hay `WorldClock` ni cielo; antes del primer `WorldClock` (o con un
 servidor viejo) el cliente dibuja el mediodía.
+
+### Sombras de los objetos
+
+Pedido del dueño (2026-11-25): la sombra dinámica "para todos los objetos, incluidos los
+árboles". Dirección de arte y decisiones en docs/17 "Sombras de los objetos"; costo en
+docs/07. Cosmético: el servidor no lee nada de esto.
+
+**Datos** (`data/livingworld/shadows.yaml`, esquema `livingworld-shadows.schema.json`):
+quién proyecta se dice por regla, no por lista. Una sombra es `none`, `silhouette` (el
+dibujo del objeto tumbado desde su base), `block` (la caja que llena su casilla: muros y
+portones, que se unen en una sombra continua) o un mapa `{ cast, length, height }`
+(`length` 0,1..1,5: la parte del largo a la que se dibuja una silueta; `height` 1..96: el
+alto de la caja en px, por defecto lo que el dibujo sube sobre su casilla). Se resuelve en
+este orden, el primero que aplique:
+1. `items`: el id del item;
+2. `families`: una palabra del id (partido en `_`, en singular o plural); gana la primera
+   palabra del id que tenga familia;
+3. `kinds`: el `kind` del item.
+
+Por familia o por `kind` solo proyecta lo que está fijo en el mapa (`pickupable: false`, y
+los muros); un item suelto no proyecta salvo que `items` lo nombre. `make validate` exige
+que cada `kind` y cada item existan, que cada familia sea una palabra del id de algún
+objeto fijo, y que un objeto con dos familias que no coinciden (`cut_bush`: `cut` no
+proyecta, un `bush` sí lo haría) tenga su línea en `items`.
+
+**Código puro** (`livingworld/client/src/shadows.ts`): `parseShadows`, `shadowFamilies` y
+`shadowOf(reglas, { id, kind, fixed })` → `ObjectShadow | undefined`. El plugin de Vite del
+cliente resuelve la sombra de cada item al construir (`ItemDef.shadow`); el lienzo no
+conoce las reglas.
+
+**Viento:** `LivingWorld.windStrips(sprite)` da la malla de tiras de un sprite que se mece
+ahora (o `undefined`) y `windVersion()` cambia cada vez que una malla nace o muere. El
+cliente monta la sombra de ese árbol como una segunda malla sobre **la misma geometría**:
+la sombra de la copa se mece con la copa y la del tronco queda quieta. La geometría es del
+viento: quien la comparte nunca la destruye, y no la guarda más allá de un cambio de
+`windVersion`.
+
+**Cómo agregar:** un objeto nuevo fijo en el mapa proyecta solo, por su `kind`. Si es plano
+(una alfombra, un charco, una placa) o cuelga de un muro, sumar su familia con `none` (o
+el item en `items`). Si es parte de un muro, `block`.
 
 ## Viento
 
@@ -302,10 +347,10 @@ calman hasta un 40 %); **nada bajo tierra** (`sheltered`, las cuevas); y un 20 %
 noche (`night`, con una transición de 20 s). No hay clima todavía: cuando lo haya, es un
 factor más sobre la fuerza.
 
-**Sombras:** la sombra dibujada de un árbol (`<sprite>/shadow`) **se queda quieta**. Sale
-del pie del tronco, que no se mueve, y es una mancha blanda al 32 %: 1 o 2 px de vaivén no
-se leerían y moverla costaría otra malla por árbol. Las sombras proyectadas de las
-criaturas no cambian.
+**Sombras:** la sombra de un árbol se mece con él: es una segunda malla del cliente sobre
+las mismas tiras (`windStrips`; "Sombras de los objetos" en "Día y noche"), así la de la
+copa se mueve y la del tronco no. La sombra dibujada (`<sprite>/shadow`) ya no se usa en
+el juego. Las sombras proyectadas de las criaturas no cambian.
 
 **Con "Animaciones reducidas"** (o `prefers-reduced-motion`) no hay mallas: vuelven los
 sprites quietos del mapa.
@@ -485,6 +530,9 @@ la reemplaza el viento.
 
 `data/livingworld/wind.yaml` y `data/livingworld/wind_sprites.yaml` (generado): "Viento",
 arriba.
+
+`data/livingworld/shadows.yaml` (cliente): qué objeto del mapa proyecta sombra y cómo
+(`kinds`, `families`, `items`): "Sombras de los objetos", arriba.
 
 `data/livingworld/ambience.yaml` (cliente, "Ambiente" abajo): `radius`, `fade_ms`,
 `voices`, `voices_lite`, `rescan_ms`, `beds` (por id: `sound`, `volume`, `floors`, `full`,
@@ -902,8 +950,9 @@ determinista):
   sonido de paso es solo el del jugador propio.
 - Sonidos de paso propios por superficie: sin ffmpeg no se pudieron generar; los eventos ya
   existen y caen en `step`.
-- Día y noche: las sombras de árboles y casas no giran con el sol (solo se desvanecen);
-  una sombra no se aleja de una fogata cercana; no hay hora en el HUD (docs/14).
+- Día y noche: una sombra no se aleja de una fogata cercana; no hay hora en el HUD; bajo
+  techo no se ven las huellas ni las ondas (el suelo de adentro tapa la capa); las
+  criaturas con sombra pintada en el sprite la llevan además de la proyectada (docs/14).
 - Plantas nuevas sin colocar en los mapas.
 - Viento: no hay clima (lluvia, tormenta) que cambie su fuerza ni su dirección; las hojas
   que caen no derivan con él; estandartes y bandera siguen con su bucle de frames, sin

@@ -1789,6 +1789,19 @@ toca al contenido:
   metadata de viento (aquí, por su sprite, o en `plants.yaml`) o un `wind: none`
   explícito, que un árbol declarado a mano diga su `pivot` y que cada sprite del archivo
   lo use algún item (`livingworld/README.md` "Viento").
+- **`data/livingworld/shadows.yaml`** (`livingworld-shadows.schema.json`; cliente): qué
+  objeto del mapa proyecta sombra bajo el sol y la luna, y cómo (docs/17 "Sombras de los
+  objetos", `livingworld/README.md` "Sombras de los objetos"). Cada entrada es `none`,
+  `silhouette` (el dibujo del objeto tumbado desde su base), `block` (la caja de su
+  casilla: muros y portones) o `{ cast, length?, height? }` (`length` 0,1 a 1,5: la parte
+  del largo de una silueta; `height` 1 a 96 px: el alto de la caja). Tres tablas, de la
+  más general a la más precisa: `kinds` (por `kind` del item), `families` (por una
+  palabra del id, en singular o plural; gana la primera palabra del id con familia) e
+  `items` (por id). Por `kind` o familia solo proyectan los objetos fijos
+  (`pickupable: false` y los muros). `make validate` exige que cada `kind`, familia e item
+  nombrado exista y que un objeto con dos familias que no coinciden tenga su línea en
+  `items`. **Un objeto nuevo con altura proyecta sin escribir nada; uno plano o colgado
+  de un muro necesita `none`** (por familia o por item).
 - **`data/livingworld/wear.yaml`** (`livingworld-wear.schema.json`): el desgaste de
   senderos, que lee el **servidor** (`livingworld/server/trail`, docs/02 "Senderos"):
   `surfaces` (las superficies que se gastan), `player_step` y `monster_step` (puntos por

@@ -398,6 +398,11 @@ dibujan lo mismo; nada cambia en el mapa ni en el servidor):
     (`CAST_SHADOW_ALPHA`) y cada sombra va teñida hacia el azul violeta
     (`CAST_SHADOW_TINT`), así dos sombras que se pisan no se oscurecen el doble. La tienen
     los árboles, el arbusto, la roca, la fragua, la fuente y el brasero.
+    **Desde el 2026-11-25 el juego no las dibuja:** cada objeto con altura proyecta su
+    propia sombra según el sol (abajo, "Sombras de los objetos"). El arte `<sprite>/shadow`
+    queda para el editor de mapas y `mapcli render`, que no tienen hora;
+  - la **sombra de contacto** de una criatura solo se dibuja donde no hay sombra
+    proyectada (bajo tierra, bajo techo, noche sin luna): nunca las dos juntas.
 
 ### ART-6 Paleta y valores
 - **Paleta maestra:** si se integra LPC, la de LPC Revised (~170 colores) es la referencia.
@@ -515,8 +520,9 @@ arte.
   se inclinan uno tras otro, cada uno con su fase y su tamaño. Nunca todos a la vez.
 - **Según el lugar:** más en la costa y el desierto, menos dentro de un bosque y sobre la
   piedra de un pueblo, nada adentro (pisos de madera) ni en cuevas, un poco menos de noche.
-- **Las sombras dibujadas de los árboles quedan quietas** (salen del pie del tronco, que no
-  se mueve; a 1 o 2 px y al 32 % no se leería).
+- **La sombra de la copa se mece con la copa** y la del tronco queda quieta (2026-11-25:
+  la sombra de un árbol es una segunda malla sobre las mismas tiras; "Sombras de los
+  objetos", abajo). Con "Animaciones reducidas" la sombra sigue, quieta.
 - **Estandartes y bandera** siguen con su bucle de frames de ART-7 (una onda que recorre
   la tela): ya se mueven bien y no son plantas.
 
@@ -612,19 +618,85 @@ sol: a la mañana para un lado, a la tarde para el otro". Contrato en `livingwor
   tarde. Más larga cuanto más bajo el sol (hasta 1,4 alturas) y más tenue al salir y al
   ponerse. De noche la proyecta la luna, tenue (0,16) y según su fase (nada con luna
   nueva). Toda la capa se desvanece junta (un `AlphaFilter`): dos sombras que se cruzan o
-  las capas de un muñeco no hacen manchas más oscuras. La **sombra de contacto** (la
-  elipse) sigue siempre: los pies nunca flotan. Un cuerpo que cae muerto conserva su
-  sombra hasta desvanecerse a la mitad. Con "Animaciones reducidas" no hay sombra
-  proyectada (solo la de contacto); el tinte y las luces de la noche siguen.
-- **Árboles y edificios:** sus sombras dibujadas (ART-5) se desvanecen con el sol (un alfa
-  sobre su capa); no giran con él (pendiente en docs/14).
+  las capas de un muñeco no hacen manchas más oscuras. Un cuerpo que cae muerto conserva su
+  sombra hasta desvanecerse a la mitad. "Animaciones reducidas" **no** apaga las sombras
+  (una sombra quieta no es movimiento): solo detiene el vaivén del viento.
+- **Sombra de contacto (la elipse), solo sin sombra proyectada** (dueño, 2026-11-25: "la
+  sombra circular abajo del personaje arruina la nueva" y "está muy alejada del personaje
+  y parece que flota"). Una criatura que proyecta sombra no dibuja la elipse; la elipse
+  queda bajo tierra, bajo techo y en una noche sin luna, y para un cuerpo a menos de media
+  opacidad (que no proyecta). Entre una y otra hay un fundido corto cuando la sombra
+  proyectada es casi invisible (`CONTACT_GONE`, opacidad 0,06: el sol asomando, una luna
+  fina), sin saltos. Donde queda, **toca los pies**: va en la línea donde el cuerpo está
+  parado mirando hacia donde mira (`stance` de `atlas.json`, abajo), centrada bajo los
+  pies y tan ancha como ellos más 8 px (entre 12 y 56 px): chica bajo una rata, ancha bajo
+  el custodio.
+- **Dónde está parado cada sprite (`stance`):** `foot` de `atlas.json` es lo más bajo que
+  llega la caminata, y el pie que avanza hacia la cámara baja 3 a 5 px más que el cuerpo
+  parado (el humanoide del motor: `foot` 3, parado a 6-8). Por eso la elipse quedaba
+  despegada. `tools/spritepack` mide ahora, por orientación (las 8 del humanoide), la pose
+  parada (los frames de `idle`, o los de `walk`): `stance: { s: [pie, x0, x1], … }`, las
+  filas vacías bajo el píxel más bajo y las columnas que ocupa su base (el 15 % inferior
+  del dibujo, mínimo 3 filas). La elipse y la sombra proyectada salen las dos de esa
+  línea: la sombra arranca en las suelas, sin hueco. Un muñeco de capas se apoya en su
+  cuerpo y su calzado (la punta de una espada no pisa el suelo).
+
+#### Sombras de los objetos (hecho, 2026-11-25, rama `feat/object-shadows`)
+Pedido del dueño: "quiero asegurarme que consideraste esta sombra dinámica para todos los
+objetos, incluidos los árboles".
+- **Todo objeto del mapa con altura proyecta la suya**, con la misma pose del sol o de la
+  luna que las criaturas (dirección, largo, opacidad) y en la misma capa (un solo
+  `AlphaFilter`: la sombra de un árbol que cruza la de un muro o la de un personaje hace
+  un tono parejo, nunca una mancha más oscura): árboles, arbustos, rocas, postes,
+  faroles, carteles, barriles, cajas, mesas, puestos, pozos, fuentes, fraguas, cofres,
+  muros, portones, los objetos del mundo vivo (rompibles, empujables) y los restos de las
+  criaturas. Sale de la **silueta dibujada** del objeto, apoyada en su base (la fila
+  donde termina su dibujo: `feet` de `atlas.json`).
+- **Qué proyecta lo dicen los datos**, no una lista en el código:
+  `data/livingworld/shadows.yaml` (docs/06). Por defecto según el `kind` del item
+  (`decoration` y `container`: silueta; `wall`: bloque), luego por familia (una palabra
+  del id: `gate` es bloque; `border`, `stairs`, `rubble`, `torch`… no proyectan) y por
+  último el item. Solo proyecta lo que está fijo en el mapa (`pickupable: false` y los
+  muros): una espada tirada queda plana. Lo plano (bordes, placas, escombros, pasto,
+  flores, telarañas) y lo colgado de un muro (antorchas, estandartes) no proyecta. Un
+  cuerpo tendido (los restos) proyecta corto (`length: 0.4`).
+- **Muros y edificios: sombra de bloque.** Cada casilla de muro proyecta la caja que
+  ocupa (32 px de alto, lo que su dibujo sube sobre su casilla): el barrido de su borde
+  norte y el de su borde este u oeste a lo largo de la sombra. Los barridos de casillas
+  vecinas coinciden exactamente, así una pared entera hace una sola sombra continua, sin
+  huecos; y como toda la capa se desvanece junta, donde se pisan no oscurecen el doble.
+  Es una proyección de verdad (gira y se alarga con el sol), no la sombra horneada
+  movida a pasos. Un portón se une a la sombra de su muro.
+- **Árboles con viento:** la sombra es una segunda malla sobre las mismas tiras de la
+  copa (`LivingWorld.windStrips`): se mece con ella y la del tronco queda quieta, sin
+  costo por frame de más. Con "Animaciones reducidas" es un sprite quieto.
+- **Bajo techo y bajo tierra, ninguna.** Bajo tierra no hay cielo. Los mapas no tienen
+  techos: "adentro" son las casillas que los muros encierran (`indoorTiles` en
+  `packages/renderer/src/tile-art.ts`). Una puerta, un portón o un vano de hasta 3
+  casillas en un muro cierran el cuarto (casi todos los edificios tienen un vano sin
+  puerta); un pasillo entre dos edificios no es un vano; un patio amurallado de más de
+  400 casillas es cielo abierto. Adentro ni los muebles ni las criaturas proyectan (las
+  criaturas llevan la elipse), y el suelo de adentro se dibuja **encima** de la capa de
+  sombras, así la sombra de un muro o de un árbol nunca entra a la casa.
+- **Sobre qué caen:** solo sobre el suelo. La capa va bajo los items y las criaturas; una
+  sombra que llega a un muro más alto queda tapada por el dibujo del muro (se corta ahí,
+  no trepa). Decisión tomada así por simple y porque se lee bien.
+- **Límites conocidos** (docs/14): las huellas y ondas del mundo vivo no se ven bajo techo
+  (el suelo de adentro las tapa); las criaturas con sombra pintada en el sprite (las de
+  Dungeon Crawl) la conservan además de la proyectada; un objeto apilado sobre una mesa
+  proyecta desde su altura, no desde el suelo.
+- Capturas del E2E: `99a-daynight-indoors` (dentro del templo: elipse, sin sombra),
+  `99b…99g` y `99d2-daynight-afternoon` en la plaza de Thimblewick (muros del templo,
+  robles, arbustos, cartel), y `124-shadows-forest-morning`,
+  `125-shadows-forest-afternoon`, `126-shadows-forest-full-moon` y
+  `127-shadows-forest-noon` en el bosque de Ivernel.
 - La sombra gira en la **línea de los pies** del sprite, no en el borde de abajo de la
   textura: un lobo o un thornling tienen filas vacías bajo los pies (`foot`) y su sombra
   sale de las patas a cualquier hora. Si el cuerpo se dibuja inclinado (`skewX` de la
   pose), la sombra se inclina con él.
 - Capturas del E2E, una por hora: `99b-daynight-noon`, `99c-daynight-night` (luna llena),
-  `99d-daynight-morning`, `99e-daynight-dusk`, `99f-daynight-new-moon` y
-  `99g-daynight-dawn`. **Pendiente mirarlas** en el E2E final del lote (docs/14): la
+  `99d-daynight-morning`, `99d2-daynight-afternoon`, `99e-daynight-dusk`,
+  `99f-daynight-new-moon` y `99g-daynight-dawn`. **Pendiente mirarlas** en el E2E final del lote (docs/14): la
   revisión visual de esta rama se hizo sobre una vista previa local, sin capturas
   guardadas.
 ## 3. Animación de criaturas y personajes (ANI)

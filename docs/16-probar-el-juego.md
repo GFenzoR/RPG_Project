@@ -342,12 +342,15 @@ noche anterior (`/time moon 4` y luego `/time dawn` dice luna 3). Al revés tamb
 producción): hora detenida al mediodía (un reloj detenido se manda al entrar y tras cada
 `/time`, no cada minuto); el test de día y noche la deja así al terminar, aunque falle.
 Todos los jugadores reciben el cambio en el acto. Qué mirar: a la mañana las sombras de los
-personajes largas hacia el oeste, al mediodía cortas bajo los pies, a la tarde hacia el
-este; de noche la superficie azul, las fogatas y faroles encendidos, luciérnagas en el pasto
-y una sombra tenue de la luna (ninguna con luna nueva); con "Animaciones reducidas", solo la
-sombra de contacto (la luz de la noche sigue). Un cuerpo a menos de media opacidad (tu personaje invisible, que se ve
-al 40 %, o uno que se desvanece) no proyecta sombra a propósito: le queda solo la de
-contacto. Bajo tierra todo sigue igual.
+personajes **y de todo objeto con altura** (árboles, muros, faroles, barriles, carteles)
+largas hacia el oeste, al mediodía cortas, a la tarde hacia el este; de noche la superficie
+azul, las fogatas y faroles encendidos, luciérnagas en el pasto y una sombra tenue de la
+luna (ninguna con luna nueva). Un personaje con sombra proyectada no lleva la elipse bajo
+los pies; la elipse vuelve dentro de un edificio, bajo tierra y con luna nueva, pegada a
+los pies. La sombra de la copa de un árbol se mece con la copa. Con "Animaciones
+reducidas" las sombras siguen, sin vaivén. Un cuerpo a menos de media opacidad (tu
+personaje invisible, que se ve al 40 %, o uno que se desvanece) no proyecta sombra a
+propósito: le queda solo la de contacto. Bajo tierra no hay sombras del sol.
 
 ## 5. Hacerse personal (GM o admin)
 Los roles los da solo el operador, con la base de datos (con `make play` corriendo o no):

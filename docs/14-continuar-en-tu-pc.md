@@ -515,9 +515,40 @@ el punto 5:
     al azar entre las tres).
   - **Día y noche (hecho, rama `feat/day-night-shadows`):** reloj del servidor, luz,
     lámparas, luna y sombras proyectadas (`livingworld/README.md` "Día y noche"). Queda:
-    - **Sombras de objetos altos que giren con el sol:** árboles, pilares y casas tienen
-      su sombra dibujada (ART-5), que solo se desvanece con el sol; girarlas pide una
-      silueta por objeto como la de las criaturas.
+    - **Sombras de los objetos (hecho, 2026-11-25, rama `feat/object-shadows`):** todo
+      objeto con altura proyecta su sombra con la pose del sol o de la luna
+      (`data/livingworld/shadows.yaml`, docs/17 "Sombras de los objetos"); la sombra de la
+      copa de un árbol se mece con ella; la elipse de contacto solo queda donde no hay
+      sombra proyectada y va en la línea real de los pies (`stance` de `atlas.json`); bajo
+      techo y bajo tierra no hay sombras del sol; "Animaciones reducidas" las conserva,
+      quietas (era la decisión pendiente de abajo: el dueño pidió conservarlas). Queda:
+      - **Mirar las capturas del E2E final** (esta rama no lo corrió): `99a` a `99g` y
+        `99d2` en la plaza de Thimblewick, y `124` a `127` en el bosque de Ivernel. Qué
+        mirar: cada objeto con **una** sombra del lado contrario al sol, ningún personaje
+        con elipse al sol, los pies tocando su sombra, la sombra de un muro continua, y
+        nada de sol dentro del templo.
+      - **Anotar en docs/07 los fps y draw calls del navegador** que imprime el test del
+        viento ("wind and shadows: N trees…") con las sombras puestas; el tope del test
+        es 50 draw calls. Si no entrara: degradar por distancia o tamaño, nunca en
+        silencio.
+      - **"Bajo techo" es una heurística** (los mapas no tienen techos): casillas
+        encerradas por muros, con vanos de hasta 3 casillas, hasta 400 casillas. Un
+        edificio con un vano más ancho o un patio chico amurallado se leen mal (uno con
+        sol adentro, el otro sin sombras). Si molesta: marcar el interior en el mapa
+        (una zona `indoor`), que es un cambio de formato.
+      - **Bajo techo no se ven huellas ni ondas del mundo vivo:** el suelo de adentro se
+        dibuja encima de `groundOverlay` para tapar las sombras, y tapa también eso.
+        Hoy los interiores son de madera y piedra (sin huellas); un interior de arena o
+        con agua las perdería.
+      - **Criaturas con sombra pintada** (`shadow: baked`, las de Dungeon Crawl): llevan
+        la pintada y además la proyectada. Sacar la pintada es repintar esos sprites.
+      - **Voladores:** la sombra proyectada de un murciélago sale del cuerpo en el aire,
+        no del suelo bajo él.
+      - **Items animados o apilados:** la sombra toma la textura del item al colocarse,
+        no cada frame (una fuente animada proyecta un frame fijo); un objeto sobre una
+        mesa proyecta desde su altura.
+      - **Editor y `mapcli render`** siguen con la sombra horneada (`<sprite>/shadow`):
+        no tienen hora.
     - **Sombra que se aleja de una luz fuerte:** de noche, junto a una fogata, la sombra
       sigue a la luna; apuntarla lejos del fuego queda para después.
     - **Medir en el navegador (decisión del dueño):** el pedido era un sprite más por
@@ -530,21 +561,17 @@ el punto 5:
       muñeco en una textura (un sprite por criatura). El `AlphaFilter` de
       `castShadows.root` es una pasada offscreen del tamaño de todas las sombras (casi la
       pantalla) y de noche se suma la del mapa de luz.
-    - **Sombras que se cruzan:** las de criaturas van en `groundOverlay`, debajo de las
-      horneadas; donde se cruzan con la de un árbol o una casa se suman y queda una mancha
-      más oscura. Revisarlo en las capturas.
+    - **Sombras que se cruzan (resuelto, 2026-11-25):** las de criaturas y las de objetos
+      van en el mismo contenedor con un solo filtro; donde se cruzan queda un tono parejo.
     - **Mirar las capturas:** el E2E saca `99b-daynight-noon`, `99c-daynight-night`,
       `99d-daynight-morning`, `99e-daynight-dusk`, `99f-daynight-new-moon` y
       `99g-daynight-dawn`; nadie las miró todavía en esta rama (sin E2E en la revisión).
       Mirarlas en el E2E final del lote y, aparte, un lobo o un thornling con sol bajo
       (`/time morning`): sus sprites tienen filas vacías bajo los pies (`foot` 8 y 10) y
       la sombra ahora gira en la línea de los pies, no en el borde de la textura.
-    - **Efectos reducidos sin sombra proyectada (decisión del dueño):** con "Animaciones
-      reducidas" o `prefers-reduced-motion` (común en móvil) solo queda la elipse de
-      contacto, aunque una sombra quieta no es movimiento. Confirmar si se quiere así. El
-      tinte del cielo y el mapa de luz de la noche (lámparas, fogatas) **no** se apagan
-      con efectos reducidos: no se mueven ni parpadean, y sin ellos no habría noche;
-      confirmar también eso.
+    - **Efectos reducidos (resuelto, 2026-11-25):** el dueño pidió que "Animaciones
+      reducidas" conserve las sombras, sin vaivén. El tinte del cielo y el mapa de luz de
+      la noche tampoco se apagan: no se mueven ni parpadean, y sin ellos no habría noche.
     - **Luna nueva contra el piso de luminancia (mirar en las capturas):** el color
       `night_new_moon` (`#58648c`, luminancia ~0,40) queda bajo `floor` 0,5, así que
       nunca se dibuja tal cual: `withFloor` lo aclara. La diferencia real entre luna nueva
@@ -1560,9 +1587,9 @@ el punto 5:
       la casilla y la sombra de contacto como el resto; desde el motor de sprites son
       modelos a esa escala. La gaviota queda de
       32x32 con su sombra pintada hasta que el dueño elija su arte.
-    - **La sombra de contacto es de un solo tamaño** (`SHADOW_W` = 20 px): bajo el custodio
-      (77 px de ancho) o el gólem queda chica. Una sombra que escale con el ancho del
-      dibujo (`top` y el ancho del frame están en `atlas.json`) sería un cambio del cliente.
+    - **La sombra de contacto escala con los pies (hecho, 2026-11-25):** su ancho es el
+      de la base del cuerpo más 8 px (12 a 56 px) y va en la línea donde está parado
+      (`stance` de `atlas.json`); solo se ve donde no hay sombra proyectada.
     - **Click sobre la cabeza** de un personaje alto: hecho (rama `feat/world-art-2`,
       ART-2). Elige a la criatura antes que la casilla; el propio jugador queda fuera.
       Y una criatura que otra más alta tapa desde adelante (el lobo al norte del jugador
