@@ -88,7 +88,7 @@ lw.destroy();
   enredaderas se mecen con un viento que recorre el mapa. Ver "Viento".
 - **Ondas y polvo** (`puffs.ts`): anillos que se abren donde un pie pisa agua (`ripple`,
   en vez de huella) y una nube de polvo bajo el pie al correr (`dust`, paso de
-  `RUN_STEP_MS` = 260 ms o menos). Tope `MAX_PUFFS` (24). Las motas de MOV-7
+  `RUN_STEP_MS` = 232 ms o menos: los 260 de antes con el +15 % del 2026-11-26). Tope `MAX_PUFFS` (24). Las motas de MOV-7
   (`client/src/render/particles.ts`) salen también de la pisada, bajo el pie: en cada una
   si el cuerpo anda en dos pies, en una de cada dos si tiene más (`kicksUp` del pegamento).
 - **Hojas** (`leaves.ts`): caen de los árboles con `leaves` en vista (`LEAF_RATE` por árbol y
@@ -204,8 +204,9 @@ sin relación con los pies. Ahora:
   `Pose.walk` dónde va el ciclo dibujado, de 0 a 1 (con clip: por sus frames; sin clip, el
   salto de un paso, ANI-5), o -1 si la criatura no camina sobre sus patas ese frame (quieta,
   entre pasos, con un clip de ataque o muriendo, o voladora). `walkCyclesPerStep` dice
-  cuántos ciclos hace un paso (8/8 al este, 13,86/8 al norte, 16/8 en diagonal para el
-  humanoide), de donde sale `cyclePx`.
+  cuántos ciclos hace un paso (para el humanoide, 8/8 en los cuatro sentidos y 11,31/8 en
+  diagonal desde el 2026-11-26: un solo ritmo, docs/17 "La regla de la zancada"; antes
+  13,86/8 al norte y 16/8 en diagonal), de donde sale `cyclePx`.
 - **Cuándo toca cada pie.** Un andar (`Gait`, de `data/livingworld/gaits.yaml`) lista los
   contactos de un ciclo: `at` (cuándo), `side` (qué lado) y `along` (a qué altura del
   cuerpo). El humanoide del motor apoya el pie derecho desde el frame 0 y el izquierdo
@@ -219,13 +220,14 @@ sin relación con los pies. Ahora:
 - **Dónde.** El lugar del cuerpo cuando el pie tocó (el frame puede llegar un poco después:
   se retrocede lo que el ciclo se pasó, así el resultado no depende de los FPS ni de la
   velocidad), más `reach` × `cyclePx` hacia adelante (el pie del humanoide cae media zancada
-  delante de la cadera: 8 px al este, 4,6 al norte), más `stance` hacia su lado y `along`
+  delante del cuerpo: 8 px en los cuatro sentidos; al norte y al sur el pie dibujado patina
+  6,8 px bajo el cuerpo y la huella queda en el medio de ese recorrido), más `stance` hacia su lado y `along`
   a lo largo del cuerpo (`footOffset`). La vista 3/4 acorta el eje norte-sur (`view.depth`,
   0,577): caminando al este los pies quedan 1,3 px arriba y abajo de la línea; en diagonal
   el cuerpo está girado 60° y los pies se separan según eso. `rise` sube del borde inferior
   del sprite al punto del suelo bajo el cuerpo. La huella gira a la dirección real del
-  movimiento (8 direcciones) y queda separada por la zancada real: 16 px al este, 9,2 al
-  norte, (8; 8) en diagonal.
+  movimiento (8 direcciones) y queda separada por lo que el cuerpo avanza entre pisadas: 16 px
+  en los cuatro sentidos, (11,3; 11,3) en diagonal.
 - **Deslizamientos.** Una corrección del servidor desliza el dibujo sin que camine
   (`Slide` de `client/src/state/motion.ts`): mientras al deslizamiento le falten más de
   `slide_px` (2 px), la pisada no deja huella, onda ni polvo (el sonido sigue).

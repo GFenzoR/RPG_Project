@@ -83,9 +83,40 @@ el doble click o Ctrl+click derecho.
   recorre √2 casillas en √2 veces el tiempo, así la velocidad en pantalla y el ritmo de
   los pasos son los mismos en las 8 direcciones (pedido del dueño, 2026-11-23; antes era
   ×1.5 como en Tibia clásico y la diagonal se sentía más lenta). El A* del servidor y del
-  cliente pesan la diagonal igual. Redondeo a ticks en `05-network-protocol.md` "Caminar".
-- Duración de un paso = `base_step_ms × terreno / velocidad`. La velocidad crece con el
-  nivel y con condiciones (haste, paralyze; ver "Condiciones" en Combate).
+  cliente pesan la diagonal igual. Norte, sur, este y oeste cuestan lo mismo: ni el
+  servidor ni el cliente distinguen un eje del otro (ver "Velocidad" abajo).
+- Duración de un paso = `base_step_ms × terreno / velocidad`, en milisegundos (el detalle
+  en `05-network-protocol.md` "Caminar"). La velocidad crece con el nivel y con
+  condiciones (haste, paralyze; ver "Condiciones" en Combate).
+- **Velocidad (pedido del dueño, 2026-11-26).**
+  - **+15 % para todos:** `base_step_ms` pasó de 1000 a 891. Es el número por el que
+    caminan todas las criaturas, así que jugadores, monstruos y NPCs se aceleraron por el
+    mismo factor y perseguir y huir quedan como estaban. Un jugador de nivel 1 (velocidad
+    205) tardaba 500 ms por casilla y tarda 435 (500 / 1,15).
+  - **+0,2 % por nivel:** la velocidad de un jugador es la de su vocación ×
+    (100 + `movement.speed_per_level_pct` × (nivel − 1)) / 100, redondeada al punto
+    (`content.Movement.LevelSpeed`). Nivel 1 = la base. Nivel 50: +9,8 % (225 puntos,
+    396 ms por casilla); nivel 100: +19,8 % (246, 363 ms). **Sin tope** propio: el único
+    límite es `experience.max_level` (nivel 1000: el triple, 146 ms por casilla; si un día
+    molesta, se agrega un tope en `balance.yaml`). Reemplaza a los 3 puntos por nivel de
+    las vocaciones (`per_level.speed` quedó en 0 en `vocations.yaml`), que eran +1,5 %
+    por nivel: **a nivel alto se camina más lento que antes** (nivel 50: 352 puntos y
+    300 ms por casilla antes, 225 y 396 ahora). El equipo (`speed`, "+N de velocidad") y
+    las condiciones se suman encima como siempre.
+  - **Pasos al milisegundo:** antes un paso se redondeaba hacia arriba a ticks de 50 ms,
+    y por eso unos pocos puntos de velocidad no cambiaban nada (de 205 a 222 puntos se
+    caminaba igual, y con 223 de golpe un 11 % más rápido). Ahora el paso dura lo que da
+    la fórmula y el servidor reparte los ticks entre los pasos de una caminata
+    (`05-network-protocol.md` "Caminar"): cada punto de velocidad cuenta, y el 0,2 % por
+    nivel se nota de a poco.
+  - **Arriba y abajo igual que a los costados:** medido, el paso dura lo mismo en los
+    cuatro sentidos en el servidor (`TestFourDirectionsOnePace`) y el cliente lo dibuja a
+    los mismos px por segundo (`world.test.ts`; las casillas son cuadradas y la cámara usa
+    una sola escala). Lo que se veía más rápido era la animación: mirando al norte o al
+    sur las piernas daban 1,73 ciclos por casilla contra 1 al este (docs/17 "La regla de la
+    zancada"). Ahora es un ciclo por casilla en todas las direcciones.
+  - Ningún texto del juego muestra la velocidad (ver "Unidades"), así que no hubo nada
+    que cambiar en la interfaz.
 - **Click para caminar** (máx. 100 casillas): el cliente arma el camino con A* sobre las
   casillas que conoce (rodea criaturas, muros, escaleras, agujeros y teletransportes salvo
   el destino) y lo camina paso a paso como una tecla mantenida: cada paso sale como `Walk`
@@ -535,7 +566,8 @@ hechizo se lance, `TestVocationCareers` (`server/internal/sim/balance_vocations_
 - Curva cúbica propia, ajustable: `xp(nivel) = a·n³ + b·n² + c·n` con coeficientes en
   balance.yaml. Objetivo de ritmo: nivel 8 en ~1 h, nivel 20 en ~8 h, nivel 50 en ~80 h
   (`experience.pace` en balance.yaml; la detección de bots lo usa como ritmo esperado).
-- Al subir de nivel: +HP, +MP, +capacidad, +velocidad según vocación.
+- Al subir de nivel: +HP, +MP y +capacidad según vocación, y +0,2 % de velocidad
+  (`movement.speed_per_level_pct`, "Movimiento").
 
 ## Skills que suben con el uso
 Cada skill tiene nivel y progreso (%). Sube **solo al usarla**, y cada nivel cuesta
@@ -567,7 +599,7 @@ Implementado en T1.7 (`server/internal/skills` y `server/internal/session/progre
   o hechizos (hasta T1.9) cuentan como que no responden.
 - Nivel: el que corresponde a la XP total por la curva, hasta `experience.max_level`. Al
   subir, máximos de vida/maná, capacidad y velocidad pasan a los de la vocación en ese
-  nivel, y la vida y el maná actuales suben lo mismo que subió el máximo.
+  nivel (la velocidad, con el +0,2 % por nivel de "Movimiento"), y la vida y el maná actuales suben lo mismo que subió el máximo.
 - Regeneración: cada `regen.interval_ms` (evento del scheduler por jugador) recupera
   `regen.health` y `regen.mana` sin pasar del máximo. **Comida** (auditoría de contenido
   m2, 2026-11): con la condición `well_fed` cada tick recupera
@@ -784,7 +816,7 @@ umbrales en `01-architecture.md`, "Detección de bots"):
   - **Apilado:** `refresh` = queda el mayor tiempo (o golpes) y el daño mayor; `add` = se
     suman hasta el máximo. Una sola instancia por condición y criatura.
   - **Velocidad:** `velocidad = base × (100 + Σ speed_pct) / 100` (mínimo 1). Cambia
-    `StepTicks` desde el paso siguiente; los clientes animan con la `duration_ms` del
+    `StepMs` desde el paso siguiente; los clientes animan con la `duration_ms` del
     servidor.
   - **Skill:** `keen_eye` sube la skill de distancia que usan los ataques y los hechizos
     (`per_skill`), no la que se entrena ni la del panel. Es la mejora de puntería del

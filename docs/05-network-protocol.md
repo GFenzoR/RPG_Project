@@ -806,18 +806,29 @@ una acción hecha sobre una vista desactualizada del tile o contenedor.
 ### Caminar (T1.4, `server/internal/session`)
 - El servidor marca el ritmo: un paso empieza cuando terminó el anterior. Duración de un
   paso recto = `base_step_ms × terreno% / velocidad`, con terreno el `ground.speed` de la
-  casilla **de destino** (100 por defecto), redondeada hacia arriba a ticks de 50 ms (al
-  menos uno). Un paso en diagonal dura esos ticks × `diagonal_cost` (√2, leído en
-  milésimas: 1.414), redondeado al tick más cercano y nunca menos que el recto: así un
-  paso recto de 10 ticks es uno diagonal de 14, no de 15, y la velocidad por casilla de
-  distancia es la misma en las 8 direcciones. Una excepción: si el paso recto dura un solo
-  tick, el diagonal dura dos (√2 redondearía a uno y la diagonal rendiría √2 veces más
-  distancia por tick; solo pasa a velocidades que hoy nadie alcanza: 2000 en suelo normal,
-  1000 en camino). `diagonal_cost` va de 1 a 2 (`world.MaxDiagonalCost`: con más, el costo
-  de una ruta no cabría en el A*). `CreatureMove.duration_ms` es esa duración
-  ya redondeada; el cliente predice la misma con aritmética entera
-  (`client/src/state/step-time.ts`, igual que `StepTicks`). La posición cambia al
+  casilla **de destino** (100 por defecto), redondeada hacia arriba al milisegundo y nunca
+  menos que un tick (50 ms). Un paso en diagonal dura eso × `diagonal_cost` (√2, leído en
+  milésimas: 1.414), redondeado al milisegundo más cercano y nunca menos que el recto: la
+  velocidad por casilla de distancia es la misma en las 8 direcciones, y norte, sur, este
+  y oeste cuestan lo mismo. `diagonal_cost` va de 1 a 2 (`world.MaxDiagonalCost`: con
+  más, el costo de una ruta no cabría en el A*). `CreatureMove.duration_ms` es esa
+  duración, **sin redondear a ticks** (desde el 2026-11-26; el mensaje no cambió, solo
+  deja de ser múltiplo de 50); el cliente predice la misma con aritmética entera
+  (`client/src/state/step-time.ts`, igual que `World.StepMs`). La posición cambia al
   **empezar** el paso.
+- **El ritmo en ticks (`pace`, `session/move.go`).** El loop solo puede esperar ticks
+  enteros: para un paso de `ms` espera `(ms + lo que debe la caminata) / 50` ticks,
+  redondeado hacia abajo (al menos uno), y lo que sobra lo debe el paso siguiente **de la
+  misma caminata** (el que empieza en el tick en que termina este). Un paso de 435 ms son
+  8, 9, 9, 8, 9... ticks: n pasos tardan n × 435 ms, menos de un tick de diferencia y
+  nunca de más. Un paso después de una pausa (aunque sea de un tick) no debe nada, así
+  que parar y arrancar nunca rinde más que caminar seguido: un paso suelto dura sus ticks
+  enteros más la pausa, que es más que `ms`. Jugadores y monstruos usan lo mismo.
+  El cliente dibuja cada paso con su `duration_ms` entero, uno detrás del otro: el del
+  servidor llega hasta un tick antes de que termine de dibujarse el anterior, y eso es el
+  ritmo, no atraso (`Walk.rest` en `client/src/state/world.ts`; solo lo que pase de ahí
+  se recupera con `PLAYOUT_CATCH_UP`). Así una caminata se ve a una sola velocidad y no
+  alternando pasos de 400 y 450 ms.
 - **`Walk` encola un paso de teclado** detrás de los pasos de teclado que ya esperan, como
   mucho `movement.max_queued_steps` (`balance.yaml`, 4; el `Welcome` se lo dice al
   cliente, así un cambio del YAML no necesita recompilar el cliente); si en la cola hay un

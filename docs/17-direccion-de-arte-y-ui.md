@@ -585,7 +585,8 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
   2026-11-24: "tienen que coincidir con los pasos que da el personaje; si no, se ve muy
   falso"; `livingworld/README.md` "Huellas que coinciden con los pasos"). Pies
   alternados a cada lado de la línea del camino, giradas a la dirección real (las 8) y
-  separadas por la zancada real (16 px al este, 9 al norte o al sur, 8 y 8 en diagonal:
+  separadas por lo que el cuerpo avanza entre pisadas (16 px en los cuatro sentidos, 11 y 11
+  en diagonal:
   "La regla de la zancada" abajo); las bestias dejan cuatro patas por ciclo, las grandes
   más grandes y más hondas, arañas y cangrejos dos líneas de puntos, y las voladoras nada.
   Ninguna con el pie en el aire, quieto, girando en el lugar, deslizándose por una
@@ -599,7 +600,7 @@ sienta vivo". La parte visual es del cliente y vive en `livingworld/client`
   se sacuden 1 px y sueltan alguna hoja (también de vez en cuando, solos). Desde el lote
   20 el doblez se suma al viento sobre las mismas tiras del sprite (abajo).
 - **Agua y polvo:** anillos achatados que se abren en el agua baja; una nube de polvo al
-  correr (paso de 260 ms o menos) por tierra, arena o ceniza, las dos bajo el pie que pisa.
+  correr (paso de 232 ms o menos) por tierra, arena o ceniza, las dos bajo el pie que pisa.
   Las motas de MOV-7 siguen, también desde la pisada.
 - **Bichos:** pájaros y mariposas por el pasto que huyen cuando el jugador se acerca,
   luciérnagas de noche y sombras de peces en el agua. Pocos (10) y
@@ -1317,15 +1318,25 @@ casilla: cada pie está apoyado medio ciclo, mientras el cuerpo pasa sobre él m
 (`STRIDE`, 16 px), así el pie se corre hacia atrás exactamente lo que el cuerpo avanza.
 Frames por casilla = frames × 32 / (2 × zancada) = 8 (`walkPerTile`); los frames están medio
 frame corridos del contacto, así en cada uno hay un pie apoyado (a +6, +2, −2 y −6 px de la
-cadera). Mirando al norte o al sur, la vista 3/4 acorta la profundidad del modelo (0,58 px por
-unidad) y la casilla del mapa no: el ciclo dura más en pantalla, 8 / 0,58 = 13,86 frames por
-casilla (`perTileNS`, `per_tile_ns` en `assets/sprites.yaml`, que el cliente usa con
-`AnimActionMeta.perTileNS`). Un paso en diagonal recorre una casilla de ancho y una de alto en
-pantalla: el ciclo avanza por distancia, hypot(8; 13,86) = 16 frames por paso
-(`walkPerStep`, también para las criaturas de 4 direcciones: un animal hace √2 veces su
-`perTile`). `humanoid.test.ts` mide el contacto del pie, píxel por píxel, en las ocho
-direcciones contra lo que avanza el cliente: se queda a 1 px de su punto del suelo (en las
-diagonales, en x y en y).
+cadera). **Un solo ritmo en todas las direcciones (dueño, 2026-11-26).** Mirando al norte o
+al sur, la vista 3/4 acorta la profundidad del modelo (0,58 px por unidad) y la casilla del
+mapa no. Hasta el lote 20 el ciclo se alargaba ahí para que el pie no patinara: 8 / 0,58 =
+13,86 frames por casilla (`perTileNS`), o sea 1,73 ciclos por casilla contra 1 al este. A los
+mismos px por segundo las piernas se movían un 73 % más rápido, y el dueño lo vio como que
+"arriba y abajo se camina más rápido que a los costados". Ahora los humanoides del motor no
+llevan `per_tile_ns` en `assets/sprites.yaml`: un ciclo (dos pisadas) por casilla en los
+cuatro sentidos, y en diagonal 8 × √2 = 11,31 frames en un paso que dura √2 veces más, la
+misma cadencia por segundo (`walkPerStep`, también para las criaturas de 4 direcciones: un
+animal hace √2 veces su `perTile`). **El costo, a sabiendas:** al norte y al sur el pie
+apoyado patina hacia adelante 16 × (1 − 0,58) = 6,8 px por apoyo (2,5 px en diagonal); visto
+de frente o de espaldas se nota mucho menos que dos velocidades distintas. El arte no puede
+dar las dos cosas: un pie que no patine con un ciclo por casilla necesitaría una zancada de
+28 unidades de profundidad, más que la pierna. Si se prefiere el pie firme, es una línea
+(`HUMANOID_PER_TILE_NS` = `HUMANOID_PER_TILE_NS_HOLD` en `specs/humanoid/index.ts` y el
+`per_tile_ns` de vuelta en el YAML). `perTileNS` sigue en el motor para un arte que lo pida.
+`humanoid.test.ts` mide el contacto del pie, píxel por píxel, en las ocho direcciones contra
+lo que avanza el cliente: al este y al oeste se queda a 1 px de su punto del suelo; en las
+demás, no patina más que lo dicho.
 La cadera baja ~1 px cuando la pierna apoyada está más lejos (contacto) y sube cuando pasa por
 debajo; los brazos van contra las piernas (22°) y el tronco se inclina 4°. **La pausa de 100 ms entre pasos (ANI-3)** no cambió: con pasos encadenados
 el siguiente empieza donde termina el anterior (el colchón de jitter y la predicción de
@@ -1555,8 +1566,9 @@ vale esto.**
   - `Game.frame` (`client/src/game.ts`) no hace nada mientras `world.pending` exista, y
     `WorldState.canStep` exige `pending === undefined`. El paso siguiente sale cuando
     terminó la animación del anterior **y** llegó el `CreatureMove` que lo confirma.
-  - Al nivel 1 un paso dura 500 ms (`base_step_ms` 1000, velocidad 205, terreno 100,
-    redondeado a ticks de 50 ms), así que casi no se nota.
+  - Al nivel 1 un paso duraba 500 ms (`base_step_ms` 1000, velocidad 205, terreno 100,
+    redondeado a ticks de 50 ms; desde el 2026-11-26, 435 ms sin redondear), así que casi
+    no se nota.
   - A nivel alto o con haste (pasos de 200–300 ms), un RTT de 150 ms más la espera al tick
     alcanzan para frenar al jugador en cada casilla.
 - **Cada paso pierde un frame.** `predictStep` empieza el paso nuevo en `now` (la hora del
@@ -1632,8 +1644,9 @@ teclado (ver "Hecho: A6, primera parte" y docs/05 "Caminar").
   - Una marca animada en la casilla destino del click (anillo de 300 ms).
   - Polvo y ondas al pisar (ART-7).
   - El texto de la acción por defecto junto al cursor (UI-5).
-- **MOV-8 Velocidad (👤 decisión del dueño, no cambia sin él).** Al nivel 1 se camina a 2
-  casillas por segundo. Bajar `base_step_ms` de 1000 a 800 da 400 ms por paso (2,5
+- **MOV-8 Velocidad (👤 decisión del dueño; resuelta el 2026-11-26: +15 % para todas las
+  criaturas, `base_step_ms` 891, y +0,2 % por nivel para los jugadores; docs/02
+  "Movimiento").** Al nivel 1 se caminaba a 2 casillas por segundo (ahora 2,3). Bajar `base_step_ms` de 1000 a 800 da 400 ms por paso (2,5
   casillas/s). Toca balance:
   - la persecución de los monstruos;
   - el kiteo de los arqueros;

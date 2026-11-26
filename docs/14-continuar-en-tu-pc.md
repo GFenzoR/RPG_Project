@@ -54,7 +54,7 @@ seguir con Claude Code en tu computador. El entorno local está en
 | Cuentas de Apple y Google Play (opcional) | Apps móviles nativas (T5.6) | `15-movil.md` |
 | Elegir el proveedor de pagos | T5.7 en producción | brief de T5.7 |
 | Decidir si la vocación "Druida" / "Druid" cambia de nombre: es igual a la de Tibia (regla legal). La auditoría de contenido (m12) renombró los hechizos parecidos, pero el nombre de una vocación es decisión tuya. Si cambia, es solo `vocation.druid.name` en `i18n/*/vocations.yaml` y los textos que la nombran (el id `druid` se queda) | Regla legal | `02-game-design.md` "Vocaciones (nombres provisionales)" |
-| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (`base_step_ms` 1000 → 800, MOV-8); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2; resuelta el 2026-11-19: el dueño los quiere proporcionados, 36-40 px, docs/17 "Humanoides del motor"); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
+| Las decisiones abiertas de la dirección de arte: (1) caminar más rápido al nivel bajo (MOV-8; resuelta el 2026-11-26: +15 %, `base_step_ms` 891, y +0,2 % por nivel); (2) que el click derecho abra un menú por defecto y lo "clásico" quede como opción (UI-6); (3) humanoides de 1,25 a 1,5 casillas de alto, como LPC (ART-2; resuelta el 2026-11-19: el dueño los quiere proporcionados, 36-40 px, docs/17 "Humanoides del motor"); (4) antes de publicar en tiendas móviles, revisar lo de DRM con assets CC-BY y CC-BY-SA (SRC-1) | Prueba del 2026-11-17 | `17-direccion-de-arte-y-ui.md` |
 
 ## Orden sugerido
 No quedan tareas del roadmap para la IA. Lo que sigue es tuyo (tabla de arriba), salvo
@@ -258,6 +258,37 @@ el punto 5:
 - **Texto de la UI +1 px, globos +2 px, Enter para el chat, inventario compacto (hecho, rama
   `feat/ui-text-and-chat`; docs/17 "Texto de la interfaz, globos y chat"):** falta revisar en el e2e
   que ninguna ventana se corte a 1280x720 y 1920x1080 con la raíz en 17 px.
+- **Velocidad de movimiento (hecho, rama `feat/movement-speed`; el dueño el 2026-11-26,
+  después de jugar los lotes 19 y 20: "arriba y abajo creo que es más rápido que hacia los
+  costados", "+15 % en todas las direcciones", "+0,2 % por nivel"; docs/02 "Movimiento",
+  docs/05 "Caminar", docs/17 "La regla de la zancada"):**
+  - **Medido:** el servidor cobra lo mismo por un paso en los cuatro sentidos y el cliente
+    lo dibuja a los mismos px/s. La diferencia estaba en la animación: 1,73 ciclos de
+    piernas por casilla al norte y al sur contra 1 al este. Ahora es 1 en todas. A cambio
+    el pie apoyado patina 6,8 px por apoyo mirando al norte o al sur (2,5 en diagonal).
+    **Para mirar al jugar:** si ese patinaje molesta más que la diferencia de ritmo, se
+    vuelve atrás con una línea (docs/17). Otra cosa que puede seguir dando la sensación y
+    no se tocó: la vista es de 31 × 21 casillas, así que una casilla hacia arriba es una
+    parte más grande del alto de la pantalla que una hacia el costado del ancho.
+  - **+15 % a todas las criaturas** (`base_step_ms` 1000 → 891): nivel 1, de 500 a 435 ms
+    por casilla. Los monstruos y NPCs también, por el mismo número, para no tocar el
+    balance de perseguir y huir. Como además los pasos dejaron de redondearse hacia arriba
+    a ticks, cada monstruo ganó entre 12 % y 21 % según cuánto le tocaba de redondeo (el
+    lobo, 550 → 469 ms; el gólem de escoria, 850 → 743): **conviene probar a mano que
+    huir de un lobo o alcanzar a un ladrón se siga sintiendo bien.**
+  - **+0,2 % por nivel**, sin tope (docs/02). Reemplazó a los 3 puntos por nivel de las
+    vocaciones, que eran +1,5 % por nivel: **un personaje de nivel alto camina más lento
+    que antes** (nivel 50: 300 → 396 ms por casilla). Si el dueño quería sumar el 0,2 %
+    a lo que había y no reemplazarlo, es `per_level.speed` en `data/vocations.yaml`.
+  - **Pasos al milisegundo:** `CreatureMove.duration_ms` ya no es múltiplo de 50; el
+    servidor reparte los ticks entre los pasos de una caminata y el cliente los dibuja
+    seguidos. Probado con simulación (`walking.test.ts`, un paso de 435 ms con 0 a 80 ms de
+    RTT y con jitter); **falta verlo en una red real** con RTT alto: con más de ~50 ms de
+    ida el servidor arranca cada paso cuando llega el `Walk` y no en el tick exacto (no se
+    ve en el cliente propio, que predice; un observador podría ver un paso unos ms tarde).
+  - El polvo al correr pasó de 260 a 232 ms por paso (`RUN_STEP_MS`), el mismo umbral de
+    velocidad de antes. `client/e2e/movement.spec.ts` espera pasos de 435 ms (no se corrió
+    acá: lo corre el e2e final del lote).
 - **Viento en árboles, arbustos y plantas (hecho, rama `feat/wind-flora`, lote 20; el dueño
   el 2026-11-24: "que el mundo vivo anime también lo grande del mapa, poco pero orgánico, y
   que toda planta nueva lo herede"; `livingworld/README.md` "Viento", docs/17 "Mundo vivo:
@@ -1187,7 +1218,9 @@ el punto 5:
   pieles para jugadores, seis peinados, nueve colores de pelo, tres barbas) y un muñeco de
   capas que muestra lo que llevan (`data/looks.yaml`, `worn` en las 76 piezas que se ven,
   `look` en los 19 NPCs personas y los 4 monstruos humanoides). El caminar sale de la zancada
-  (un ciclo por casilla, 8 frames; 13,86 al norte y al sur): el pie apoyado no patina. El
+  (un ciclo por casilla, 8 frames; hasta el 2026-11-26 eran 13,86 al norte y al sur para que el
+  pie no patinara ahí, ver "Velocidad de movimiento" en "Pendientes conocidos"): el pie
+  apoyado no patina al este ni al oeste. El
   ataque se juega con el arma (arco y ballesta disparan, varita y vara conjuran). El pack
   `assets/vendor/ulpc/` salió del repo. Lo que arregló la revisión de la rama: el arma y el
   escudo van sobre la ropa en las cuatro direcciones (el arco mirando al oeste y la hoja
@@ -2100,9 +2133,9 @@ el punto 5:
     animadas", arriba) salvo la gaviota, que sigue con un frame de spritegen y la
     animación procedural de ANI-5 (el saltito por casilla de `packages/renderer/src/anim.ts`;
     el viejo `walkBob` ya no existe).
-  - **Velocidad base:** a nivel 1 un paso dura 500 ms (2 casillas/s). Se siente lento al
-    lado de Diablo 2, pero es balance (`base_step_ms`, `speed` de las vocaciones): no se
-    tocó.
+  - **Velocidad base:** a nivel 1 un paso duraba 500 ms (2 casillas/s). Se sentía lento al
+    lado de Diablo 2; el dueño la subió el 2026-11-26 (435 ms, "Velocidad de movimiento"
+    en "Pendientes conocidos").
   - **Medirlo en una red real:** la simulación cubre RTT de 2 a 300 ms con jitter, un
     corte de 1 s y `Walk` perdidos, y el E2E `e2e/movement.spec.ts` corre con ~150 ms de
     latencia simulada en el WebSocket; falta jugarlo por el hosting de pruebas (docs/13) y

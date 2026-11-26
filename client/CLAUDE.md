@@ -751,7 +751,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `shoot`, varita y vara `cast`, un hechizo `cast`, el resto `attack`), si se sabe qué
   lleva (`CreatureSprite.held`: lo que tiene en la mano cualquier muñeco, también otro
   jugador). Un cuerpo que no es muñeco juega el clip de su tipo (`attackAction`). Caminar usa `perTileNS` mirando al norte o
-  al sur (la regla de la zancada, `anim.ts`); la fase se cuenta en frames, así girar en
+  al sur si el clip lo trae (`anim.ts`; los humanoides del motor ya no: un solo ritmo en
+  todas las direcciones desde el 2026-11-26, docs/17 "La regla de la zancada"); la fase se cuenta en frames, así girar en
   medio de una caminata no hace saltar las piernas.
 
 ## Personalización (rama `feat/character-look`, lote 13; docs/02 "Apariencia")

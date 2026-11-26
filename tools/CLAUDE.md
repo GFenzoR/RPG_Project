@@ -471,14 +471,15 @@ torso por cuerpo, piernas, pies, escudos y armas; un arma gira su empuñadura po
 `Grip`). `index.ts` da un spec por capa (`HUMANOID_LAYERS`): el cuerpo, y cada capa con
 `layer: { draw, occlude }` (`renderSpec` proyecta las partes de `occlude` sin pintarlas: el
 cuerpo tapa lo que está detrás; el borde de la capa contra él lleva el pliegue), `perTile` y
-`perTileNS` (frames de caminar por casilla, de la zancada) y `trim`. `compose.ts` apila las
+(frames de caminar por casilla, de la zancada; sin `perTileNS` desde el 2026-11-26: un solo
+ritmo en todas las direcciones, docs/17 "La regla de la zancada") y `trim`. `compose.ts` apila las
 capas teñidas como el cliente (`LAYER_ORDER` de `packages/renderer/src/look.ts`), para las
 hojas y los tests; `previews.ts` arma los quietos de los atuendos y los retratos de los NPCs
 (lee los YAML de `data/` del repo, o de `--root`: `recipesAt(root)` de `recipes/index.ts`,
 que usan `build`, `check` y `preview`); `review.ts`, las hojas. Las puertas de figura se aplican al cuerpo; una capa
 pasa solo las de imagen (paleta, alfa, tramado salvo en piezas finas, borde), y
 `humanoid.test.ts` juzga la figura compuesta (proporciones, el pie apoyado contra el
-`perTile` del cliente en las ocho direcciones (`HUMANOID_DIRS`; en diagonal, hypot(perTile, perTileNS)), el lugar de cada arma y escudo en la pila
+`perTile` del cliente en las ocho direcciones (`HUMANOID_DIRS`; en diagonal, perTile × √2; al norte, al sur y en diagonal el pie patina lo que dice docs/17 y no más), el lugar de cada arma y escudo en la pila
 contra el modelo dibujado como una sola figura, `measureHeld`, varios aspectos de pie sobre
 la fila del suelo y `data/looks.yaml` igual a las capas). Un arma o un escudo nuevo entra solo
 en esa medida: si su lugar en `LAYER_ORDER` deja de ser el mejor (más de un 10 %), falla. Una forma
