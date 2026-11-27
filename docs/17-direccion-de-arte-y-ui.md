@@ -1009,7 +1009,7 @@ patas (64 px por ciclo sobre su zancada). Los ms por casilla son `89100 / speed`
 | `ore_beetle` | many_legs | 4 | 3 + espejo | 14 | ×4,6 | 636 | 2,29 |
 | `slag_golem` | biped | 4 | 3 + espejo | 30 | ×2,1 | 743 | 1,07 |
 | `slagbound_warden` | biped | 4 | 3 + espejo | 52 | ×1,2 | 636 | 0,62 |
-| `thieving_gull` | flyer | no tiene | 1 imagen, se espeja | no pisa | solo flotaba | 424 | por tiempo |
+| `thieving_gull` | flyer | 4 (alas) | 3 + espejo (de perfil) | no pisa | solo flotaba | 424 | por tiempo |
 | `thornling` | biped | 4 | 3 + espejo | 24 | ×2,7 | 594 | 1,33 |
 | `tide_crab` | many_legs | 4 | 3 + espejo | 14 | ×4,6 | 594 | 2,29 |
 | `wolf` | quadruped | 4 | 3 + espejo | 40 | ×1,6 | 469 | 0,80 |
@@ -1190,7 +1190,7 @@ persona de LPC). Se miran con Read.
   procedural de ANI-5 (destello y retroceso) ya se ve; sumarla es un cambio del cliente y
   de spritepack.
 - **El eco no tiene ataque ni muerte:** es un NPC (los NPCs solo están quietos y caminan).
-- **La gaviota sigue a mano** hasta que el dueño elija su arte.
+- **La gaviota** era la última a mano; desde el 2026-11-27 es una hoja de Gemini (`creatures/thieving_gull/`, 64x64, escala 6,5: vuelo al sur, norte y oeste, quieto con dos frames del vuelo, picotazo de perfil y muerte al sur; sin ataque al sur ni al norte, lo hace la embestida procedural; los frames parados de la hoja no se usan porque en el juego siempre vuela).
 - **Un prop del motor reemplaza al dibujado solo si se lee claramente mejor** en su suelo,
   a 1x, junto a una persona de LPC; si empata, queda el de antes (el bolardo). Para
   objetos chicos rinden pocas piezas, un material cálido que contraste con el suelo y
@@ -3313,8 +3313,8 @@ caída "siempre al sur"; todo lo demás de esas dos secciones sigue igual.
   | Arte de la criatura | Caída y cadáver por dirección | Quiénes |
   |---|---|---|
   | Muerte dibujada en las cuatro direcciones (`death_s/e/n/w`) | **Arte propio** en las cuatro: el último frame de la muerte de esa dirección | `bristleback_boar`, `bramble_stag` (motor de sprites) y todo humanoide del motor: `coffer_smuggler`, `drowned_miner`, `obsidian_delver`, `wreck_looter`, y el cuerpo de un jugador (hombre y mujer) |
-  | Muerte dibujada solo al sur (`death_s`) | **Derivado**: sur y este, los frames como son; norte y oeste, los mismos espejados (toda la caída, no solo el final). Dos cuerpos distintos, no cuatro | las 14 criaturas de Gemini: `ash_hound`, `bilge_rat`, `cinder_salamander`, `ember_wyrmling`, `gloom_bat`, `hollow_crawler`, `mire_toad`, `moss_spider`, `ore_beetle`, `slag_golem`, `slagbound_warden`, `thornling`, `tide_crab`, `wolf` |
-  | Una sola imagen (sin clip) | **Derivado**: volcada en el sentido del reloj al sur (la de siempre), en contra al oeste, y la imagen espejo de cada una al norte y al este. Cuatro cuerpos distintos | `thieving_gull` |
+  | Muerte dibujada solo al sur (`death_s`) | **Derivado**: sur y este, los frames como son; norte y oeste, los mismos espejados (toda la caída, no solo el final). Dos cuerpos distintos, no cuatro | las 15 criaturas de Gemini: `ash_hound`, `bilge_rat`, `cinder_salamander`, `ember_wyrmling`, `gloom_bat`, `hollow_crawler`, `mire_toad`, `moss_spider`, `ore_beetle`, `slag_golem`, `slagbound_warden`, `thieving_gull`, `thornling`, `tide_crab`, `wolf` |
+  | Una sola imagen (sin clip) | **Derivado**: volcada en el sentido del reloj al sur (la de siempre), en contra al oeste, y la imagen espejo de cada una al norte y al este. Cuatro cuerpos distintos | ninguna hoy: la gaviota era la única y desde el 2026-11-27 tiene su hoja de Gemini (muerte al sur). La regla sigue en `fallArt`, probada con una imagen de prueba en `corpses.test.ts` |
 
   Un test de spritegen (`corpses.test.ts`, "have their own art...") fija esta tabla: si una
   criatura gana una muerte en otra dirección, pasa sola a "arte propio" y el test avisa.

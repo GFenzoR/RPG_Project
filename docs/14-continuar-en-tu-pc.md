@@ -196,6 +196,10 @@ Tres fondos de Gemini que rotan detrás del login y el nombre del juego en letra
   - **Que el dueño lo mire jugando.** Las zancadas son estimaciones sobre los 4 frames de
     cada monstruo. Si alguno todavía patina (zancada muy larga) o pedalea (muy corta), se
     cambia su `stride` y se corre `make sprites`; no hay código que tocar.
+  - **La gaviota ya tiene su hoja (2026-11-27, `feat/title-art`):** `creatures/thieving_gull/`
+    (Gemini, 64x64): vuelo sur, norte y oeste, quieto, picotazo de perfil y muerte al sur. Sus
+    cadáveres salen ahora del clip (derivado, dos cuerpos). Lo que sigue más abajo sobre su
+    imagen única y su vuelco ya no aplica. Revisar en el juego que vuele al tamaño de antes.
   - **Frames dibujados que faltan.** La gaviota (`creatures/thieving_gull`) sigue con una
     sola imagen, parada y con las alas plegadas: flota, y "bate" achatándose 1 px. Necesita
     un ciclo de vuelo dibujado (3 direcciones, 4 frames), con spritegen o con el Gemini del

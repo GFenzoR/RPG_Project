@@ -329,7 +329,7 @@ describe.skipIf(!built)("the fall ends on the corpse, in the real atlas (make sp
         checked++;
       }
     }
-    expect(checked).toBe(16 * 4);
+    expect(checked).toBe(17 * 4);
   });
 
   it("every humanoid monster and a player's body of each sex: the doll's layers together", () => {
@@ -371,8 +371,10 @@ describe.skipIf(!built)("the fall ends on the corpse, in the real atlas (make sp
       }
   });
 
-  it("a single image (the gull) tips onto its corpse: the same box, the four ways", () => {
-    let checked = 0;
+  // No creature is a single image today (the gull has its Gemini sheet): this holds a
+  // future one to the same rule. The tip of a fixture image is checked in spritegen's
+  // corpses.test.ts, which does not need the atlas.
+  it("a single image, if there is one, tips onto its corpse: the same box, the four ways", () => {
     for (const mon of monsters) {
       const id = str(mon["id"]);
       const name = str(mon["sprite"]);
@@ -398,9 +400,7 @@ describe.skipIf(!built)("the fall ends on the corpse, in the real atlas (make sp
         // mirror image nor the other tip.
         expect(strays(fall, corpse), `${id} fallen facing ${dir}`).toBe(0);
         expect(strays(corpse, fall), `${id} fallen facing ${dir}`).toBe(0);
-        checked++;
       }
     }
-    expect(checked).toBe(4);
   });
 });

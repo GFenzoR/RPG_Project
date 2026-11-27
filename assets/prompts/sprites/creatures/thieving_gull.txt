@@ -1,0 +1,39 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/sprites/creatures/thieving_gull/*.png
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-27
+# Modo: Hydrogen
+# Hoja devuelta: thieving_gull_b.png (sha256 7582591b52806545a5fdae032cb301e99c5f34dfcff8993103d9100560d06e96)
+# Importada con: python tools/gemini/import_art.py <hoja> --cut blobs --size 64 --layer creature --margin 1 --scale 6.5 --colors 16 --shared-colours --names "walk_s_0+idle_s_0,walk_s_1,walk_s_2+idle_s_1,walk_s_3,walk_n_0+idle_n_0,walk_n_1,walk_n_2+idle_n_1,walk_n_3,walk_w_0+idle_w_0,walk_w_1,walk_w_2+idle_w_1,walk_w_3,-,-,-,-,-,-,-,-,-,-,-,-,attack_w_0,attack_w_1,attack_w_2,death_s_0,death_s_1,death_s_2" --mirror "attack_w_0,attack_w_1,attack_w_2,idle_w_0,idle_w_1,walk_w_0,walk_w_1,walk_w_2,walk_w_3"
+
+A pixel-art animation sprite sheet of one creature for a dark fantasy top-down role-playing game: a thieving gull of the harbour, a scruffy sea gull that steals fish from the piers. White head and belly, slate grey wings with darker grey tips, a dull yellow beak with a small dark hook, pale yellow legs, a small dark eye. It is always in the air, a little above the ground.
+
+Eight rows of frames, each row a separate strip, every frame the same gull at the same scale on the same ground line. The camera always looks down at it from about 45 degrees, so its top shows in every view. Draw no lines, borders, boxes or panels between the frames:
+- Row 1, four frames: the gull flying, flapping its wings, straight toward the camera, head-on, seen from above and in front (we see its face, beak and the fronts of its wings, with its back above them; wings up, level, down, level), never turned to the side.
+- Row 2, four frames: the gull flying, flapping its wings, away from the camera, seen from above and behind (we see its back, tail and the backs of its wings; wings up, level, down, level).
+- Row 3, four frames: the gull flying, flapping its wings, to the right, in profile facing right.
+- Row 4, six frames: the gull hovering in place, beating its wings slowly: two frames facing the camera, two frames seen from behind, two frames in profile facing right.
+- Row 5, three frames: the gull pecking toward the camera, seen from above and in front (draws back, darts in with its beak open, pulls away).
+- Row 6, three frames: the gull pecking away from the camera, seen from above and behind (draws back, darts in, pulls away).
+- Row 7, three frames: the gull pecking to the right, in profile facing right (draws back, darts in with its beak open, pulls away).
+- Row 8, three frames: the gull dying, seen from the front (falls out of the air, crumples, lies still on the ground with its wings spread).
+
+The same silhouette, proportions, colours and size in every frame: only the pose and the facing change.
+
+Hard technical requirements, these matter more than the art direction:
+- Solid flat magenta background, exactly RGB(255, 0, 255), filling every pixel that is
+  not part of a drawing. No gradient, no vignette, no texture, no shadow cast onto it.
+- Lay the subjects out in an even grid with equal spacing. Every cell the same size.
+  No labels, no captions, no text of any kind anywhere in the image.
+- Every subject fully inside its own cell, centred, touching neither its neighbours nor
+  the edge of the image. In an animation, the same size and the same ground line in
+  every cell.
+- Three-quarter top-down view: the camera looks down from the south at about 45
+  degrees, so the top and the south face of things show. Light from the top left.
+- Pixel art: crisp square pixels, hard edges, no anti-aliasing, no blur, no soft
+  airbrush shading. Limited palette, flat shading in three or four tones, and a dark
+  outline of the local colour (never pure black).
+- Dark fantasy colours: muted and earthy, with one brighter accent at most. Nothing in
+  a subject may be magenta, pink, purple or violet: those hues are the background key.
+- They are read at 32x32 pixels in game (people at 64x64), so favour a strong
+  silhouette and clear separation of parts over fine detail.

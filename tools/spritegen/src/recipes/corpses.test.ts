@@ -178,7 +178,8 @@ describe("monster corpses", () => {
   it("have their own art where the creature's death is drawn that way, derived elsewhere", () => {
     // docs/17's table: the engine draws the boar's and the stag's deaths (and every
     // humanoid's) in the four facings; the hand-made monsters fall facing south only, so
-    // their other bodies are that one mirrored; the gull, one image, is tipped four ways.
+    // their other bodies are that one mirrored. No monster is one image any more (the gull
+    // has its Gemini sheet); the tip of a single image is tested on a fixture below.
     const coded = RECIPES;
     const own: Record<string, FallDir[]> = {};
     for (const file of monsterIds(root)) {
@@ -197,7 +198,7 @@ describe("monster corpses", () => {
       "obsidian_delver",
       "wreck_looter",
     ]);
-    expect(Object.keys(own).filter((id) => own[id]?.length === 0)).toEqual(["thieving_gull"]);
+    expect(Object.keys(own).filter((id) => own[id]?.length === 0)).toEqual([]);
     // Everyone else: the south only.
     for (const [id, dirs] of Object.entries(own))
       if (dirs.length !== 4 && dirs.length !== 0) expect(dirs, id).toEqual(["s"]);
@@ -259,8 +260,8 @@ describe("monster corpses", () => {
         checked++;
       }
     }
-    // The 16 monsters with a death clip, four ways each.
-    expect(checked).toBe(16 * 4);
+    // The 17 monsters with a death clip (the gull among them), four ways each.
+    expect(checked).toBe(17 * 4);
   });
 
   it("tip a single image four ways, as the client's tip draws each (tipPlacement)", () => {
@@ -388,10 +389,7 @@ describe("monster corpses", () => {
     });
     try {
       const fresh = recipesAt(dir);
-      for (const [id, same] of [
-        ["fresh_boar", "bristleback_boar"],
-        ["fresh_gull", "thieving_gull"],
-      ] as const) {
+      for (const [id, same] of [["fresh_boar", "bristleback_boar"]] as const) {
         const recipe = fresh[corpsePath(id)];
         expect(recipe, id).toBeDefined();
         if (!recipe) continue;
