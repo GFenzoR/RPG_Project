@@ -14,13 +14,17 @@ import type { Translate } from "../i18n/i18n.ts";
 import {
   CARDINALS,
   MINIMAP_SCALES,
+  clickTile,
   hintMarker,
   paintTerrain,
   panBy,
+  pressIsClick,
+  pressMove,
+  pressStart,
   tileToPixel,
   viewTiles,
 } from "../state/minimap.ts";
-import type { MinimapView } from "../state/minimap.ts";
+import type { MinimapPress, MinimapView } from "../state/minimap.ts";
 import { optionStorage } from "../state/option-storage.ts";
 import "./minimap.css";
 
@@ -133,6 +137,20 @@ export function MinimapMarks(props: {
           </text>
         </g>
       )}
+      {mm.dest &&
+        (() => {
+          const at = tileToPixel(view, mm.dest.x, mm.dest.y);
+          return (
+            <path
+              class="minimap-dest"
+              data-testid="minimap-dest"
+              data-x={mm.dest.x}
+              data-y={mm.dest.y}
+              d="M-3,-3 L3,3 M-3,3 L3,-3"
+              transform={`translate(${at.px} ${at.py})`}
+            />
+          );
+        })()}
       {mm.party.map((p) => {
         const at = tileToPixel(view, p.x, p.y);
         return <circle key={p.id} class="minimap-party" cx={at.px} cy={at.py} r={2.5} />;
@@ -149,7 +167,7 @@ export function MinimapMarks(props: {
 
 export function Minimap(props: {
   t: Translate;
-  game: Pick<Game, "minimapSource" | "minimapRequest"> | undefined;
+  game: Pick<Game, "minimapSource" | "minimapRequest" | "minimapWalk"> | undefined;
   mm: MinimapUi | undefined;
   /** A phone: starts folded (the map is small). */
   phone: boolean;
@@ -160,7 +178,8 @@ export function Minimap(props: {
   // Bumped when an unanswered request may go again: the effect below looks once more.
   const [retry, setRetry] = useState(0);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const drag = useRef<{ x: number; y: number; id: number } | undefined>(undefined);
+  // A press that never dragged the map is a click: it walks there (state/minimap.ts).
+  const drag = useRef<MinimapPress | undefined>(undefined);
   const update = (p: MinimapPrefs): void => {
     setPrefs(p);
     savePrefs(p);
@@ -254,19 +273,25 @@ export function Minimap(props: {
             class="minimap-map"
             style={{ width: `${MINIMAP_PX}px`, height: `${MINIMAP_PX}px` }}
             onPointerDown={(e) => {
-              drag.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+              drag.current = pressStart(e.pointerId, e.button, e.clientX, e.clientY);
               (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
             }}
             onPointerMove={(e) => {
               const d = drag.current;
               if (!d || d.id !== e.pointerId) return;
-              const dx = e.clientX - d.x;
-              const dy = e.clientY - d.y;
-              if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-              drag.current = { ...d, x: e.clientX, y: e.clientY };
-              setPan((p) => panBy(p, dx, dy, prefs.scale));
+              const { press, dx, dy } = pressMove(d, e.clientX, e.clientY);
+              drag.current = press;
+              if (dx !== 0 || dy !== 0) setPan((p) => panBy(p, dx, dy, prefs.scale));
             }}
-            onPointerUp={() => (drag.current = undefined)}
+            onPointerUp={(e) => {
+              const d = drag.current;
+              drag.current = undefined;
+              if (!d || d.id !== e.pointerId) return;
+              if (!pressIsClick(d, e.clientX, e.clientY)) return;
+              const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              const tile = clickTile(view, box, e.clientX, e.clientY);
+              if (tile) game?.minimapWalk(tile.x, tile.y);
+            }}
             onPointerCancel={() => (drag.current = undefined)}
           >
             <canvas

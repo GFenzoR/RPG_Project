@@ -540,6 +540,10 @@ func (w *World) moveItem(ctx *game.TickContext, p *Player, m *pb.MoveItem) {
 		return
 	}
 	if !it.def.CanPickUp() {
+		if c := w.corpseOf(it); c != nil { // the one fixture that moves: a tile at a time
+			w.dragCorpse(ctx, p, c, m)
+			return
+		}
 		p.emit(systemMsg(msgCannotMove))
 		return
 	}

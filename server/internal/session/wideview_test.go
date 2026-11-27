@@ -1,6 +1,7 @@
 package session_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
 	"github.com/GFenzoR/RPG_Project/server/internal/session"
+	"github.com/GFenzoR/RPG_Project/server/internal/sim"
 	"github.com/GFenzoR/RPG_Project/server/internal/world"
 	"github.com/GFenzoR/RPG_Project/server/internal/world/worldtest"
 )
@@ -113,36 +115,232 @@ func TestMonsterSightStaysClassic(t *testing.T) {
 	}
 }
 
-// A respawn waits only while a player stands within the classic window of the spawn tile
-// (InSight's rectangle, on the floors seen together), not the wide view: a player hunting
-// one spawn does not hold back its neighbours 12-20 tiles away, so the world's capacity
-// (docs/07) stays as measured with 15x11 (docs/02 "Respawns").
-func TestRespawnWaitsOnlyForTheClassicWindow(t *testing.T) {
+// Nothing respawns in a player's view (owner, 2026-11-26; docs/02 "Respawns"): a spawn
+// whose timer is due waits while a player has its tile in the whole window, margin
+// included, and brings its monster back once nobody does. One tile beyond the window it
+// does not wait.
+func TestRespawnWaitsForTheWholeView(t *testing.T) {
 	for _, c := range []struct {
 		name   string
 		dx, dy int
 		waits  bool
 	}{
-		{"east edge of the classic window", session.SightHalfW, 0, true},
-		{"south edge of the classic window", 0, session.SightHalfH, true},
-		{"one beyond, east", session.SightHalfW + 1, 0, false},
-		{"one beyond, south", 0, session.SightHalfH + 1, false},
-		{"12 tiles east, in the wide view", 12, 0, false},
+		{"next to it", 1, 0, true},
+		{"12 tiles east", 12, 0, true},
+		{"east edge of the view", session.ViewHalfW, 0, true},
+		{"south edge of the view", 0, session.ViewHalfH, true},
+		{"corner of the view", -session.ViewHalfW, -session.ViewHalfH, true},
+		{"one beyond, east", session.ViewHalfW + 1, 0, false},
+		{"one beyond, south", 0, session.ViewHalfH + 1, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			wolf := wolfDef()
 			wolf.Behavior.Aggressive = false
 			h := wideHarness(t, wolf, spawnAt("wolf", 40, 30, 0, 5))
-			_, ana := h.join("Ana", at(40+c.dx, 30+c.dy))
+			cl, ana := h.join("Ana", at(40+c.dx, 30+c.dy))
 			h.sim.Step()
 			w := onlyMonster(t, h)
-			if !ana.Knows(w.ID()) {
-				t.Fatalf("Ana at %v does not see the spawn tile", ana.Pos())
+			if ana.Knows(w.ID()) != c.waits {
+				t.Fatalf("Ana at %v knows the wolf on the spawn tile: %v", ana.Pos(), !c.waits)
 			}
 			h.do(func(ctx *game.TickContext) { h.w.DamageMonsterForTest(ctx, w, ana, 1000) })
-			h.sim.RunFor(20 * time.Second) // well past respawn_seconds
+			cl.take()
+			h.sim.RunFor(60 * time.Second) // well past respawn_seconds: the spawn is due
 			if n := len(h.w.Monsters()); (n == 0) != c.waits {
-				t.Fatalf("Ana at %v: %d monsters 20 s after the kill, want the respawn to wait %v", ana.Pos(), n, c.waits)
+				t.Fatalf("Ana at %v: %d monsters 60 s after the kill, want the respawn to wait %v", ana.Pos(), n, c.waits)
+			}
+			if !c.waits {
+				return
+			}
+			for _, k := range kinds(cl.take()) {
+				if k == "creature_appear" {
+					t.Fatal("a creature appeared to Ana")
+				}
+			}
+			// Ana steps out of sight: the due spawn appears on its next retry.
+			h.do(func(*game.TickContext) { h.w.Teleport(ana, pos(90, 60)) })
+			h.sim.RunFor(6 * time.Second)
+			if got := onlyMonster(t, h).Pos(); got != pos(40, 30) {
+				t.Fatalf("respawned at %v", got)
+			}
+		})
+	}
+}
+
+// A player that sees part of a spawn's area does not stop the spawn: its monster comes
+// back on a tile of the area nobody sees, every time, so an AFK player at the edge of a
+// hunting ground does not starve it. Ana sees the tiles from x = 42 on; the area is
+// x 37..43. A wall along x = 42 keeps the wolf from wandering into her view on the tick
+// it appears (the tiles at x = 43 are free and seen: a random tile would take them).
+func TestRespawnTakesAnUnseenTileOfTheArea(t *testing.T) {
+	wolf := wolfDef()
+	wolf.Behavior.Aggressive = false
+	open := strings.Repeat(".", 96)
+	rows := make([]string, 64)
+	for y := range rows {
+		rows[y] = open
+		if y >= 15 && y <= 45 {
+			rows[y] = open[:42] + "#" + open[43:]
+		}
+	}
+	m := worldtest.Map(t, 0, 0, 7, rows...)
+	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 40, 30, 3, 5)}
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Monsters = content.Monsters{"wolf": wolf}
+		c.Items = testItems()
+	})
+	cl, ana := h.join("Ana", at(42+session.ViewHalfW, 30))
+	h.sim.Step()
+	for i := range 12 {
+		w := onlyMonster(t, h)
+		h.do(func(ctx *game.TickContext) { h.w.DamageMonsterForTest(ctx, w, ana, 1000) })
+		cl.take()
+		h.sim.RunUntil(func() bool { return len(h.w.Monsters()) == 1 }, sim.MaxSeconds(6))
+		got := onlyMonster(t, h).Pos()
+		if session.Sees(ana.Pos(), got) || got.X < 36 || got.Y < 26 || got.Y > 34 { // one wander step at most
+			t.Fatalf("respawn %d at %v: in Ana's view (she stands at %v) or out of the area", i, got, ana.Pos())
+		}
+		for _, k := range kinds(cl.take()) {
+			if k == "creature_appear" {
+				t.Fatalf("respawn %d appeared to Ana", i)
+			}
+		}
+	}
+}
+
+// Floors: above ground every floor is seen together, so a player on a roof holds back the
+// spawn under it; underground only the own floor is seen, so a cave's spawn right under a
+// player on the surface comes back.
+func TestRespawnWatchedAcrossFloors(t *testing.T) {
+	row := strings.Repeat(".", 12)
+	rows := []string{row, row, row, row}
+	m := worldtest.Floors(t, 0, 0,
+		worldtest.Layer{Z: 6, Rows: rows}, worldtest.Layer{Z: 7, Rows: rows}, worldtest.Layer{Z: 8, Rows: rows})
+	ground, cave := spawnAt("wolf", 5, 2, 0, 5), spawnAt("wolf", 5, 2, 0, 5)
+	cave.ID, cave.Center.Z = "cave_spawn", 8
+	m.Islands()[0].Spawns = []world.Spawn{ground, cave}
+	wolf := wolfDef()
+	wolf.Behavior.Aggressive = false
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Monsters = content.Monsters{"wolf": wolf}
+		c.Items = testItems()
+	})
+	_, ana := h.join("Ana", &world.Pos{X: 5, Y: 2, Z: 6})
+	h.sim.Step()
+	ms := h.w.Monsters()
+	if len(ms) != 2 {
+		t.Fatalf("%d monsters, want one per floor", len(ms))
+	}
+	h.do(func(ctx *game.TickContext) {
+		for _, w := range ms {
+			h.w.DamageMonsterForTest(ctx, w, ana, 1000)
+		}
+	})
+	h.sim.RunFor(60 * time.Second)
+	if got := onlyMonster(t, h).Pos(); got.Z != 8 {
+		t.Fatalf("with Ana on floor 6 the monster back is at %v, want only the cave's", got)
+	}
+}
+
+// The floors the other way round: a player in a cave sees only its own floor, so the spawn
+// on the surface right above it comes back and the cave's own waits.
+func TestRespawnUnderARoofOfRock(t *testing.T) {
+	row := strings.Repeat(".", 12)
+	rows := []string{row, row, row, row}
+	m := worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 7, Rows: rows}, worldtest.Layer{Z: 8, Rows: rows})
+	ground, cave := spawnAt("wolf", 5, 2, 0, 5), spawnAt("wolf", 5, 2, 0, 5)
+	cave.ID, cave.Center.Z = "cave_spawn", 8
+	m.Islands()[0].Spawns = []world.Spawn{ground, cave}
+	wolf := wolfDef()
+	wolf.Behavior.Aggressive = false
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Monsters = content.Monsters{"wolf": wolf}
+		c.Items = testItems()
+	})
+	_, ana := h.join("Ana", &world.Pos{X: 6, Y: 2, Z: 8})
+	h.sim.Step()
+	ms := h.w.Monsters()
+	if len(ms) != 2 {
+		t.Fatalf("%d monsters, want one per floor", len(ms))
+	}
+	h.do(func(ctx *game.TickContext) {
+		for _, w := range ms {
+			h.w.DamageMonsterForTest(ctx, w, ana, 1000)
+		}
+	})
+	h.sim.RunFor(60 * time.Second)
+	if got := onlyMonster(t, h).Pos(); got.Z != 7 {
+		t.Fatalf("with Ana in the cave the monster back is at %v, want only the surface's", got)
+	}
+}
+
+// A link-dead character (its connection closed in a fight) still stands in the world and
+// still sees: the spawn it looks at waits until the character is taken out.
+func TestRespawnWaitsForALinkDeadWatcher(t *testing.T) {
+	def := wolfDef()
+	def.Behavior.FleeAtHealthPct, def.Loot = 0, nil
+	def.Attacks[0].Min, def.Attacks[0].Max = 15, 15
+	m := worldtest.Open(t, 0, 0, 64, 64)
+	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 20, 20, 0, 5)}
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Monsters = content.Monsters{"wolf": def}
+		c.Items = testItems()
+	}, blockMs)
+	cl, p := h.hunter("Watcher", 1) // stands at 21,20, next to the spawn
+	h.bitten(p)
+	wolf := onlyMonster(t, h)
+	h.do(func(ctx *game.TickContext) { h.w.DamageMonsterForTest(ctx, wolf, p, 1_000_000) })
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	if !p.LinkDead() {
+		t.Fatal("the watcher is not link-dead after leaving in a fight")
+	}
+	held := 0
+	for ; h.w.PlayerByCharacter(p.CharacterID()) == p; held++ {
+		if held > 20*600 {
+			t.Fatal("the link-dead watcher never left the world")
+		}
+		if n := len(h.w.Monsters()); n != 0 {
+			t.Fatalf("%d monsters respawned in front of a link-dead character (tick %d)", n, held)
+		}
+		h.sim.Step()
+	}
+	if held < 20*6 {
+		t.Fatalf("the watcher left after %d ticks: the test did not outlast respawn_seconds", held)
+	}
+	h.sim.RunUntil(func() bool { return len(h.w.Monsters()) == 1 }, sim.MaxSeconds(10))
+}
+
+// Staff walking invisible inspects the world without changing it: its view does not hold
+// a respawn back. A visible staff member does, and so does a player made invisible by
+// anything else (no camping a spawn unseen to farm it in sight).
+func TestRespawnIgnoresInvisibleStaff(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		role      session.Role
+		invisible bool
+		waits     bool
+	}{
+		{"invisible GM", session.RoleGM, true, false},
+		{"invisible admin", session.RoleAdmin, true, false},
+		{"visible GM", session.RoleGM, false, true},
+		{"invisible player", session.RolePlayer, true, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			wolf := wolfDef()
+			wolf.Behavior.Aggressive = false
+			h := wideHarness(t, wolf, spawnAt("wolf", 40, 30, 0, 5))
+			_, gm := h.join("Gema", at(43, 30))
+			h.sim.Step()
+			w := onlyMonster(t, h)
+			h.do(func(ctx *game.TickContext) {
+				h.w.SetRoleForTest(gm, c.role)
+				h.w.SetInvisibleForTest(gm, c.invisible)
+				h.w.DamageMonsterForTest(ctx, w, gm, 1000)
+			})
+			h.sim.RunFor(60 * time.Second)
+			if n := len(h.w.Monsters()); (n == 0) != c.waits {
+				t.Fatalf("%d monsters 60 s after the kill, want the respawn to wait %v", n, c.waits)
 			}
 		})
 	}

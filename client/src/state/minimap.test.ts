@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
   CARDINALS,
+  CLICK_SLOP_PX,
+  MINIMAP_SCALES,
   MinimapState,
   REQUEST_RETRY_MS,
   SECTOR_BYTES,
+  clickTile,
   colourItem,
   edgeArrow,
   hintMarker,
+  isMinimapClick,
+  minimapPassable,
   paintTerrain,
   panBy,
+  pressIsClick,
+  pressMove,
+  pressStart,
   parseHex,
   pixelToTile,
   roughDistance,
@@ -332,5 +340,92 @@ describe("cardinal labels", () => {
       "client.minimap.south",
       "client.minimap.west",
     ]);
+  });
+});
+
+describe("a click on the minimap", () => {
+  const box = { left: 300, top: 40, width: 160, height: 160 };
+  it("maps the pointer to the tile under it at every zoom, panned or not", () => {
+    for (const scale of MINIMAP_SCALES)
+      for (const pan of [0, 7.25]) {
+        const v = view({ scale, width: 160, height: 160, cx: 100.5 + pan, cy: 200.5 - pan });
+        // The centre of the box is the tile at the view's centre.
+        expect(clickTile(v, box, 380, 120)).toEqual({
+          x: Math.floor(v.cx),
+          y: Math.floor(v.cy),
+        });
+        // Every pixel of a tile's square on the map gives that tile back.
+        for (const [tx, ty] of [
+          [100, 200],
+          [100 - Math.floor(60 / scale), 200 + Math.floor(50 / scale)],
+          [100 + Math.floor(70 / scale), 200 - Math.floor(70 / scale)],
+        ] as const) {
+          const { px, py } = tileToPixel(v, tx, ty);
+          const half = scale / 2 - 0.01;
+          for (const [ox, oy] of [
+            [0, 0],
+            [-half, -half],
+            [half, half],
+          ] as const) {
+            const cx = box.left + px + ox;
+            const cy = box.top + py + oy;
+            if (px + ox < 0 || py + oy < 0 || px + ox >= 160 || py + oy >= 160) continue;
+            expect(clickTile(v, box, cx, cy)).toEqual({ x: tx, y: ty });
+          }
+        }
+      }
+  });
+  it("follows a minimap drawn at another size than its pixels, and ignores the outside", () => {
+    const v = view({ scale: 2, width: 160, height: 160 });
+    const big = { left: 0, top: 0, width: 320, height: 320 };
+    expect(clickTile(v, big, 160, 160)).toEqual({ x: 100, y: 200 });
+    expect(clickTile(v, big, 164, 160)).toEqual({ x: 101, y: 200 });
+    expect(clickTile(v, big, -1, 10)).toBeUndefined();
+    expect(clickTile(v, big, 10, 320)).toBeUndefined();
+    expect(clickTile(v, { ...big, width: 0 }, 10, 10)).toBeUndefined();
+  });
+  it("a press that moved is a drag, not a click", () => {
+    expect(isMinimapClick(10, 10, 10, 10)).toBe(true);
+    expect(isMinimapClick(10, 10, 12, 12)).toBe(true);
+    expect(isMinimapClick(10, 10, 10 + CLICK_SLOP_PX, 10)).toBe(false);
+    expect(isMinimapClick(10, 10, 4, 18)).toBe(false);
+  });
+
+  it("a press released where it began walks; one that dragged the map never does", () => {
+    // down / up: a click.
+    const click = pressStart(1, 0, 50, 50);
+    expect(pressMove(click, 51, 52)).toEqual({ press: click, dx: 0, dy: 0 });
+    expect(pressIsClick(click, 51, 52)).toBe(true);
+    // down / move away / up: the map follows the pointer, nothing walks.
+    let p = pressStart(1, 0, 50, 50);
+    const away = pressMove(p, 80, 50);
+    expect(away).toMatchObject({ dx: 30, dy: 0 });
+    p = away.press;
+    expect(pressIsClick(p, 80, 50)).toBe(false);
+    // ...and back to where it began: still a drag, and the map keeps following it.
+    const back = pressMove(p, 51, 50);
+    expect(back).toMatchObject({ dx: -29, dy: 0 });
+    expect(pressIsClick(back.press, 51, 50)).toBe(false);
+    // The other buttons never walk.
+    expect(pressIsClick(pressStart(1, 2, 50, 50), 50, 50)).toBe(false);
+  });
+  it("routes only over explored tiles that can be walked", () => {
+    const m = new MinimapState();
+    m.revealView(100, 200, 7, 5, 5);
+    m.noteTile(100, 200, 7, 1);
+    m.noteTile(101, 200, 7, 2);
+    m.noteTile(102, 200, 7, 3);
+    const defs: Record<number, { ground: boolean; walkable: boolean; blocks: boolean }> = {
+      1: { ground: true, walkable: true, blocks: false },
+      2: { ground: false, walkable: false, blocks: true },
+      3: { ground: true, walkable: false, blocks: false },
+    };
+    const item = (id: number) => defs[id] as never;
+    expect(minimapPassable(m, item, 100, 200, 7)).toBe(true);
+    expect(minimapPassable(m, item, 101, 200, 7)).toBe(false); // a wall
+    expect(minimapPassable(m, item, 102, 200, 7)).toBe(false); // water
+    expect(minimapPassable(m, item, 100, 201, 7)).toBe(false); // explored, colour unknown
+    expect(minimapPassable(m, item, 300, 200, 7)).toBe(false); // unexplored
+    expect(minimapPassable(m, item, 100, 200, 8)).toBe(false); // another floor
   });
 });

@@ -208,7 +208,9 @@ items:
   una casilla es un metro.
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
   un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera
-  entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
+  entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0),
+  `corpse_move_cooldown_ms` (opcional: espera entre dos arrastres de un cuerpo por un
+  jugador, `02-game-design.md` "Arrastrar un cuerpo"; 0 o ausente, sin espera) y
   `reach` (de 1 a 6: el medio alto de la ventana clásica de 15x11 + 1, lo que nota un
   monstruo; la vista ancha de 31x21 no lo estiró, `02-game-design.md` "La vista"; el esquema
   y `content.MaxReach` lo exigen) y `pocket_slots` (lote 13: los bolsillos propios de todo
@@ -890,9 +892,13 @@ unos rectángulos de unos pisos): ver "Música de una quest importante", en "Son
 Un paso puede decir dónde lo estima el minimapa (docs/02 "Minimapa") con `hint_area`: un
 punto (`x`, `y`, `z`) y cuántas casillas alrededor (`radius`, Chebyshev, 0 a 32). Es
 opcional: sin él, el servidor lo saca del paso (el NPC de un `dialog_action`, el spawn más
-cercano del monstruo de un `kill`, el lugar de un `reach`, las placas de un `sigils`). Un
-`has_item` o un `flag_equals` sin `hint_area` no muestra estimación; con él, por ejemplo
-dónde se consigue el item:
+cercano del monstruo de un `kill`, el spawn más cercano de un monstruo que suelta el item de
+un `has_item`, el NPC cuyo diálogo pone la marca de un `flag_equals`, el lugar de un
+`reach`, las placas de un `sigils`). **Todo paso tiene que tener un lugar**: un `has_item`
+cuyo item no suelta ningún monstruo con spawn (se cosecha, se compra, sale de un cofre) o
+un `flag_equals` cuya marca no pone ningún NPC del mapa necesita su `hint_area`, o falla
+`TestEveryObjectiveMarkHoldsARealTarget` (`server/internal/session`). El `hint_area` gana
+siempre, por ejemplo para apuntar a dónde se consigue el item:
 ```yaml
   - id: gather_ore
     description: quest.foreman_ore.step_gather_ore
@@ -960,6 +966,13 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
   una quest que ya se juega corre a los personajes que van por ella a otro paso. Agrega
   pasos nuevos al final o, si van en el medio, asegúrate de que nadie quede trabado en el
   paso que pasa a ocupar su índice (así se insertó `reach_gate` en `ch3_gate`, docs/14).
+
+Varias quests pueden compartir `chapter`: la cadena del Capítulo 1 son seis
+(`ch1_shipwreck` → `ch1_castaways` → `ch1_false_light` → `ch1_bosun_trail` →
+`ch1_west_wood` → `ch1_wreckers`, docs/02 "Historia"). Una quest nueva con
+`chapter: 1` tiene que ofrecerse con `quest_state` `completed` de la última de la
+cadena y mantener la suma de experiencia entre el nivel 8 y el 9
+(`TestIslandQuestChain`).
 
 Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1), la cadena del Capítulo 2
 (`ch2_roots` → `ch2_coffer`, T3.6: la segunda se ofrece con `quest_state` de la primera
@@ -1196,7 +1209,7 @@ party:
   share_distance: 24        # casillas (Chebyshev, mismo piso) desde la muerte del monstruo
   contribution_ms: 75000    # ventana de "contribuyó hace poco"
   level_range_pct: 70       # nivel mínimo, en % del más alto que comparte (anti-carry)
-  level_gap_always: 3       # o a lo sumo estos niveles por debajo
+  level_gap_always: 5       # o a lo sumo estos niveles por debajo (siempre comparten)
   shared_by_default: true   # un grupo nuevo empieza compartiendo (el líder puede apagarla)
   bonus_pct_by_sharers: [5, 10, 15, 20]  # bonus del pozo con 2, 3, 4 y 5+ que comparten;
                             # más que escalones toman el último (el tope). Solo cuenta

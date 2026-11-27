@@ -822,7 +822,14 @@ export class MapView {
           sprite.tint = groundTone(x, y, z);
           (under(s.x, s.y) ? roofedFlats : flats).push(sprite);
         } else {
-          sprite.position.set(ox + (s.x + ax) * T, oy + (s.y + 1) * T - raised);
+          const k = art?.scale ?? 1;
+          // A scaled item (TileArt.scale) stays centred on its tile, whole pixels.
+          const inset = Math.round((T * (1 - k)) / 2);
+          if (k !== 1) sprite.scale.set(k);
+          sprite.position.set(
+            ox + (s.x + ax) * T - (ax === 1 ? inset : 0),
+            oy + (s.y + 1) * T - raised - inset,
+          );
           sprite.zIndex = itemZIndex(x, y, i);
           items.push(sprite);
           itemTiles.push(x, y);

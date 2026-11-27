@@ -2024,7 +2024,13 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     // Shared experience is on from the start (docs/02 "Grupos"), but nobody fought yet:
     // no sharing, no bonus, and the panel says why.
     await expect(page.getByTestId("party-shared")).toContainText(
-      "Experiencia compartida: activada, sin reparto",
+      "Experiencia compartida: activada, pero ahora nadie comparte",
+    );
+    // ...and what to do about it: the player's own reason and a tag next to the other name.
+    await expect(page.getByTestId("party-block")).toContainText("Todavía no compartes: pégale");
+    await expect(page.getByTestId("party-member-block")).toHaveCount(1);
+    await expect(page.getByTestId("party-member-block").first()).toContainText(
+      "No comparte: no está peleando",
     );
     await expect(page.getByTestId("party-bonus")).toHaveCount(0);
     await expect(page.getByTestId("game-log")).toContainText("El grupo comparte la experiencia");
@@ -2037,7 +2043,7 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   );
   await leadPage.getByTestId("party-share").click();
   await expect(matePage.getByTestId("party-shared")).toContainText(
-    "Experiencia compartida: activada, sin reparto",
+    "Experiencia compartida: activada, pero ahora nadie comparte",
   );
   await expect(matePage.getByTestId("game-log")).toContainText(
     "El líder activó la experiencia compartida.",
@@ -4201,7 +4207,11 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
     return g.strength;
   };
   // Between two gusts nothing moves: not the crown, not its shadow.
-  await calm(tree.x, tree.y, 4000);
+  // The calm may already be there on arrival (the gusts run on the server's clock), and
+  // then the frames below came while a creature behind the crown (the druid stands north
+  // of this tree) was still in the 300 ms fade of its first frame: the settle outlasts it.
+  await calm(tree.x, tree.y, 4500);
+  await page.waitForTimeout(500);
   await shot(page, `120-wind-plaza-calm-zoom${scale}`);
   expect(await frames(crown, 5), "the crown stands still between gusts").toBe(1);
   // The gust: the crown leans and swings, the foot of the trunk stands.

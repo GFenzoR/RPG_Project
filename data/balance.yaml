@@ -124,6 +124,7 @@ inventory:
   max_open_containers: 16     # container windows a player can have open at once
   use_cooldown_ms: 1000       # between two uses of a consumable
   door_cooldown_ms: 500       # between two uses of a map door by one player, refused or not
+  corpse_move_cooldown_ms: 300  # between two drags of a body by one player (docs/02 "Arrastrar un cuerpo")
   reach: 1                    # tiles (Chebyshev, same floor) to take, drop, open or use on the ground
   pocket_slots: 4             # built-in pocket cells of every character (docs/02 "Bolsillos"); never lower it
 
@@ -157,11 +158,13 @@ party:                      # T3.3 (docs/02-game-design.md, "Grupos")
   # `share_distance` tiles (Chebyshev) of it, contributed (damage to a monster, healing a
   # member, or a monster's attack taken) within `contribution_ms`, and whose level is at
   # least `level_range_pct` % of the highest of them (or at most `level_gap_always`
-  # levels below it, so that low levels can share).
+  # levels below it, so that low levels can share). The texts client.party.help and
+  # client.party.block_you.level (i18n) quote these two numbers: change them together
+  # (TestPartyTextsQuoteTheBalance fails otherwise).
   share_distance: 24
   contribution_ms: 75000
   level_range_pct: 70
-  level_gap_always: 3
+  level_gap_always: 5
   # A new party starts sharing experience (the leader can turn it off).
   shared_by_default: true
   # Bonus % of the shared pot by the number of sharers: 2, 3, 4, then 5 or more (the last

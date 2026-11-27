@@ -76,3 +76,30 @@ func TestPartySharedEach(t *testing.T) {
 		}
 	}
 }
+
+// The owner's level rule (2026-11-26): up to 5 levels of difference always share; above
+// that the percentage rule (70 % of the highest) decides.
+func TestPartyLevelRange(t *testing.T) {
+	b, err := LoadBalance(filepath.Join("..", "..", "..", "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		level, top int
+		want       bool
+	}{
+		{7, 7, true},
+		{3, 7, true},   // the owner's pair: 4 below
+		{2, 7, true},   // 5 below: the boundary
+		{1, 7, false},  // 6 below and 14 %
+		{15, 20, true}, // 5 below
+		{14, 20, true}, // 6 below, 70 %
+		{13, 20, false},
+		{70, 100, true},
+		{69, 100, false},
+	} {
+		if got := b.Party.InLevelRange(c.level, c.top); got != c.want {
+			t.Errorf("level %d with top %d: %v, want %v", c.level, c.top, got, c.want)
+		}
+	}
+}

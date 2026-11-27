@@ -439,6 +439,25 @@ test("sandbox: the quest log, a lectern's book and a reward chest that gives onc
   });
   await closeWindow(page, "quests");
 
+  // A click on the minimap walks there (docs/17 "Minimapa"): the tile south of the lectern,
+  // 4 tiles east and 1 north of the player, at the default zoom (2 px a tile; the middle
+  // of the map is the player's tile). The destination is marked while the walk lasts and
+  // only normal Walk steps go out.
+  const mapBox = await minimap.locator(".minimap-map").boundingBox();
+  if (!mapBox) throw new Error("no minimap");
+  const px = mapBox.width / 160;
+  await page.mouse.click(
+    mapBox.x + mapBox.width / 2 + 8 * px,
+    mapBox.y + mapBox.height / 2 - 2 * px,
+  );
+  // One look for the mark with both coordinates: the walk lasts about a second.
+  await expect(
+    minimap.locator('[data-testid="minimap-dest"][data-x="2099"][data-y="2085"]'),
+  ).toBeAttached();
+  await minimap.screenshot({ path: join(shots, "96e-minimap-walk.png") });
+  await standsOn(2099, 2085, 7);
+  await expect(minimap.getByTestId("minimap-dest")).toHaveCount(0);
+
   // Next to the lectern (2099,2084) and the chest (2098,2084), inside the temple.
   const lectern = await item("book_lantern_rowers");
   const chest = await item("chest_pruebas");
@@ -1067,9 +1086,17 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
     // Every stride inside the run, and only those: the keys come up some time after the
     // last tile of the run is reached, and past it the diagonal may be closed (the walk
     // then slides along one key: a straight stride).
-    const start = from
-      ? after.findLastIndex((f) => f.x === from.x && f.y === from.y && f.side === from.side)
+    // The last print before the run, counted from the end; -1 when the list no longer
+    // holds it (it is capped: the oldest prints go), and then every stride counts.
+    const back = from
+      ? [...after]
+          .reverse()
+          .findIndex(
+            (f: { x: number; y: number; side: number }) =>
+              f.x === from.x && f.y === from.y && f.side === from.side,
+          )
       : -1;
+    const start = back < 0 ? -1 : after.length - 1 - back;
     const inRun = (f: { x: number }): boolean =>
       f.x > (d.x + 0.5) * 32 && f.x < (d.x + d.n - 0.5) * 32;
     let strides = 0;

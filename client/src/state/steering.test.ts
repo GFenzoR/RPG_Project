@@ -9,11 +9,18 @@ import {
   TileSchema,
   create,
 } from "@rpg/protocol";
+import { FAR_MAX_REACH, farScratchCells } from "./far-path.ts";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
 import { delta } from "./geometry.ts";
 import { PREDICT_TIMEOUT_MS, STEP_LEAD_MS } from "./motion.ts";
-import { NO_WAY_MS, ROUTE_REFUSALS, ROUTE_REPLANS, Steering } from "./steering.ts";
+import {
+  FAR_REPLAN_STEPS,
+  NO_WAY_MS,
+  ROUTE_REFUSALS,
+  ROUTE_REPLANS,
+  Steering,
+} from "./steering.ts";
 import type { StepChoice } from "./steering.ts";
 import { WorldState } from "./world.ts";
 import type { CreatureState } from "./world.ts";
@@ -494,5 +501,158 @@ describe("Steering: the mouse held on the map (docs/17 MOV-3)", () => {
     expect(s.next(w, 0, { key: Direction.NORTH, ...cursor(w, 3, 0)(0) })).toMatchObject({
       dir: Direction.NORTH,
     });
+  });
+});
+
+describe('Steering: a click on the minimap (docs/17 "Minimapa")', () => {
+  // The minimap knows row 0 up to x = 20 beyond the map the client holds.
+  const explored = (x: number, y: number): boolean => y === Y0 && x >= X0 && x <= X0 + 20;
+  const far = () => new Steering({ diagonalCost: 1.414, maxPathTiles: 100, farPassable: explored });
+
+  it("routes over explored tiles beyond the view and sends normal Walk steps", () => {
+    const w = world(["@......."]);
+    const s = far();
+    expect(s.walkFar(w, { x: X0 + 15, y: Y0 }, 1000)).toEqual(at(15, 0));
+    expect(s.farGoal).toEqual(at(15, 0));
+    expect(s.goal).toEqual(at(15, 0));
+    expect(s.mark).toEqual({ pos: at(15, 0), at: 1000, reachable: true });
+    expect(s.next(w, 1000, {})).toEqual({ kind: "walk", dir: Direction.EAST, seq: 1 });
+  });
+
+  it("walks to the tile and the mark goes when it arrives", () => {
+    const w = world(["@......", "...#...", "......."]);
+    const s = far();
+    expect(s.walkFar(w, { x: X0 + 6, y: Y0 + 2 }, 0)).toEqual(at(6, 2));
+    run(w, s, 0, 6000);
+    expect(self(w).pos).toEqual(at(6, 2));
+    expect(s.farGoal).toBeUndefined();
+    expect(w.unconfirmed).toBe(0);
+  });
+
+  it("a blocked or unexplored tile leads to the nearest reachable one", () => {
+    const w = world(["@...#..."]);
+    const s = far();
+    // The crate at x = 4 closes the row: the tile before it is the nearest.
+    expect(s.walkFar(w, { x: X0 + 4, y: Y0 }, 0)).toEqual(at(3, 0));
+    // Unexplored (row 5 is not on the minimap): the nearest tile of what is known.
+    const open = world(["@......."]);
+    expect(s.walkFar(open, { x: X0 + 30, y: Y0 + 5 }, 0)).toEqual(at(20, 0));
+    // Nowhere nearer than the own tile: no route, no mark of a way.
+    const shut = world(["@#"]);
+    const none = new Steering({ diagonalCost: 1.414, maxPathTiles: 100 });
+    expect(none.walkFar(shut, { x: X0 + 1, y: Y0 }, 0)).toBeUndefined();
+    expect(none.farGoal).toBeUndefined();
+    expect(none.mark?.reachable).toBe(false);
+  });
+
+  it("never crosses unexplored tiles without the minimap's word", () => {
+    const w = world(["@......."]);
+    const s = steer(); // no farPassable: only the map the client holds
+    expect(s.walkFar(w, { x: X0 + 15, y: Y0 }, 0)).toEqual(at(7, 0));
+  });
+
+  it("a key, a click on the map, Escape and a teleport cancel it", () => {
+    const w = world(["@.......", "........"]);
+    const s = far();
+    s.walkFar(w, { x: X0 + 15, y: Y0 }, 0);
+    expect(s.next(w, 0, { key: Direction.SOUTH })).toMatchObject({ dir: Direction.SOUTH });
+    expect(s.farGoal).toBeUndefined();
+
+    s.walkFar(w, { x: X0 + 15, y: Y0 }, 0);
+    s.walkTo(w, at(3, 1), 0);
+    expect(s.farGoal).toBeUndefined();
+    expect(s.goal).toEqual(at(3, 1));
+    expect(s.cancelFar()).toBe(false); // a click's own route is not Escape's to end
+    expect(s.goal).toEqual(at(3, 1));
+
+    s.walkFar(w, { x: X0 + 15, y: Y0 }, 0);
+    expect(s.cancelFar()).toBe(true);
+    expect(s.farGoal).toBeUndefined();
+    expect(s.cancelFar()).toBe(false);
+
+    s.walkFar(w, { x: X0 + 15, y: Y0 }, 0);
+    s.heard({ case: "fullMapView", value: { $typeName: "game.v1.FullMapView", walkEpoch: 3 } });
+    expect(s.farGoal).toBeUndefined();
+  });
+
+  it("the mouse held on the map takes over", () => {
+    const w = world(["@.......", "........"]);
+    const s = far();
+    s.walkFar(w, { x: X0 + 15, y: Y0 }, 0);
+    s.next(w, 0, { toward: { x: X0 + 0.5, y: Y0 + 1.5 } });
+    expect(s.farGoal).toBeUndefined();
+  });
+
+  it("plans round a step the server refused; the second refusal ends it", () => {
+    const w = world(["@.......", "........"]);
+    const s = far();
+    s.walkFar(w, { x: X0 + 15, y: Y0 }, 0);
+    expect(s.next(w, 0, {})).toMatchObject({ dir: Direction.EAST });
+    refuse(w, s, X0, Y0, Direction.EAST, 100);
+    expect(s.farGoal).toEqual(at(15, 0));
+    const round = s.next(w, 200, {});
+    expect(round?.kind).toBe("walk");
+    expect(round?.dir).not.toBe(Direction.EAST); // off the tile refused
+    refuse(w, s, X0, Y0, round?.dir ?? Direction.SOUTH, 300);
+    expect(s.farGoal).toBeUndefined();
+    expect(ROUTE_REFUSALS).toBe(2);
+  });
+
+  /** A monster shows up at tile x, y of the world (it was not there when the way was planned). */
+  const appear = (w: WorldState, x: number, y: number): void =>
+    w.apply(
+      {
+        case: "creatureAppear",
+        value: {
+          $typeName: "game.v1.CreatureAppear",
+          creature: create(CreatureSchema, {
+            id: 77,
+            kind: CreatureKind.MONSTER,
+            name: "m",
+            pos: { x: X0 + x, y: Y0 + y, z: 7 },
+            speed: 100,
+          }),
+        },
+      },
+      0,
+    );
+
+  it("looks again every FAR_REPLAN_STEPS steps: a creature seen on the way is walked round", () => {
+    // Two corridors that only meet at both ends; the way planned takes the upper one.
+    const w = world(["@...........", ".##########.", "............"]);
+    const s = far();
+    expect(s.walkFar(w, { x: X0 + 11, y: Y0 }, 0)).toEqual(at(11, 0));
+    appear(w, 9, 0); // shuts the upper corridor far ahead
+    const seen: string[] = [];
+    const sent = run(w, s, 0, 20000, () => {
+      seen.push(`${self(w).pos.x - X0},${self(w).pos.y - Y0}`);
+      return {};
+    });
+    expect(self(w).pos).toEqual(at(11, 0));
+    expect(sent.length).toBeGreaterThan(FAR_REPLAN_STEPS);
+    // It turned back at the look after FAR_REPLAN_STEPS steps, not at the creature.
+    expect(seen).toContain(`${FAR_REPLAN_STEPS},0`);
+    expect(seen).not.toContain("8,0");
+    expect(seen).toContain("5,2");
+  });
+
+  it("a block far ahead with no way round does not end the walk before it gets there", () => {
+    const w = world(["@............"]);
+    const s = far();
+    expect(s.walkFar(w, { x: X0 + 12, y: Y0 }, 0)).toEqual(at(12, 0));
+    appear(w, 10, 0); // someone stands in the corridor, far ahead
+    run(w, s, 0, 20000);
+    // The steps planned stay until the next one is shut: it ends in front of the block.
+    expect(self(w).pos).toEqual(at(9, 0));
+    expect(s.farGoal).toBeUndefined();
+  });
+
+  it("a click farther than FAR_MAX_REACH tiles walks toward it, never planning that far", () => {
+    const w = world(["@......."]);
+    const s = far();
+    // The minimap dragged to another island: the way known ends at x = 20.
+    expect(s.walkFar(w, { x: X0 + 40_000_000, y: Y0 + 10_000_000 }, 0)).toEqual(at(20, 0));
+    expect(s.farGoal).toEqual(at(20, 0));
+    expect(farScratchCells()).toBeLessThanOrEqual((FAR_MAX_REACH + 81) ** 2);
   });
 });

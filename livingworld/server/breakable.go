@@ -88,7 +88,7 @@ func (w *World) OnAttackObject(p Pos, h Hit, rnd Rand) HitResult {
 }
 
 // breakableTimer runs when o's timer is due: debris fades (the respawn timer goes on from
-// the break), and a gone object stands again once its tile is free.
+// the break), and a gone object stands again once nobody sees its tile and it is free.
 func (w *World) breakableTimer(o *object) {
 	switch o.st {
 	case debris:
@@ -97,9 +97,10 @@ func (w *World) breakableTimer(o *object) {
 		// The respawn counts from the break: debris_seconds <= respawn_seconds (checked).
 		w.schedule(o, w.tick+max(o.k.respawn-o.k.debris, 1))
 	case gone:
-		// Never on a creature (try again in a second); loose items (its own loot nobody
-		// took, a coin dropped on the debris) are moved aside first (room).
-		if !w.room(o.pos) {
+		// Never in a player's view, nor on a creature (try again in a second); loose items
+		// (its own loot nobody took, a coin dropped on the debris) are moved aside first
+		// (room). Watched goes first: a watched tile keeps its items where they lie.
+		if w.host.Watched(o.pos) || !w.room(o.pos) {
 			w.schedule(o, w.tick+w.cat.retry)
 			return
 		}

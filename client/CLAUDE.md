@@ -2064,6 +2064,13 @@ de estados y placa del nombre").
   1280x800 a long name" (la placa).
 
 ## Notas del minimapa (rama `feat/minimap`, docs/02 y docs/17 "Minimapa")
+- **Click para ir** (rama `feat/minimap-nav`): `ui/Minimap.tsx` llama `Game.minimapWalk`
+  con la casilla de `clickTile` si la presión fue un click (`isMinimapClick`); el camino es
+  `Steering.walkFar` + `state/far-path.ts` (`findFarPath`), sobre el mapa que se tiene y,
+  más allá, `minimapPassable` (`SteerConfig.farPassable`). Es un camino más del `Steering`
+  (`Route.far`): mismos `Walk` predichos, mismas cancelaciones, más `cancelFar` (Escape en
+  `Game.onKeyDown`) y `farGoal` → `MinimapUi.dest` → `minimap-dest`. Tests:
+  `far-path.test.ts`, `steering.test.ts` ("a click on the minimap"), `minimap.test.ts`.
 - `WorldState.minimap` (`state/minimap.ts`, puro y con tests) guarda lo explorado del
   servidor (`MinimapIndex`, `MinimapSectors`) y la pista (`ObjectiveHint`); `Game.publish`
   explora la vista propia (`revealView`, la misma regla que el servidor) y publica

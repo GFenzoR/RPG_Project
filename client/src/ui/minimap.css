@@ -156,3 +156,13 @@
   right: auto;
   left: 6px;
 }
+
+/* Where a click on the minimap is walking to. */
+.minimap-dest {
+  fill: none;
+  stroke: var(--ui-gold-300);
+  stroke-width: 1.5;
+  stroke-linecap: square;
+  paint-order: stroke;
+  filter: drop-shadow(0 0 1px #000);
+}

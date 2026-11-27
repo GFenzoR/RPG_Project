@@ -329,15 +329,46 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
 - **PvP:** la visión es la ventana entera, igual para todos. Quien juega con el mapa
   acercado (o en un teléfono, que por defecto muestra menos) tiene en la lista de batalla
   todo lo que su cliente conoce. La cámara va centrada en el jugador, sin "mirar adelante".
-- **Respawns:** un monstruo no reaparece en una casilla con algún jugador dentro de su
-  ventana clásica (8 casillas a los lados y 6 arriba y abajo, en los pisos que se ven
-  juntos; `session.watched`), no de la ventana entera. Si fuera la entera, quien caza en
-  un spawn frenaría los respawns de los spawns vecinos (están a unas 12–20 casillas) y la
-  capacidad del mundo (`07`, "Capacidad del mundo", medida con 15x11) quedaría corta. A
-  cambio, un monstruo puede aparecer dentro de lo que ve un jugador, a 9–16 casillas a
-  los lados o 7–11 arriba y abajo. Cada spawn bloqueado reintenta cada 5 s en otra casilla
-  de su radio. Es reversible en una línea (`watched` con `eachObserver`) si el dueño
-  prefiere que nada aparezca a la vista.
+- **Respawns (decisión del dueño del 2026-11-26: "si el jugador está viendo un área el
+  respawn no debiese pasar"):** nada reaparece a la vista. Un monstruo cuyo respawn ya
+  venció no aparece en una casilla que algún jugador tenga dentro de su ventana entera
+  (`Sees`: 31x21 más el margen, en los pisos que se ven juntos; `session.watched`), así
+  que un respawn no le manda `CreatureAppear` a nadie. Reglas:
+  - **Otra casilla del área.** Si hay jugadores mirando parte del área del spawn (su
+    `radius`), el monstruo aparece en una casilla del área que ninguno ve, elegida al azar
+    entre todas las libres (`unseenSpawnTile`). Si la ven entera, el respawn queda vencido
+    y reintenta cada 5 s; aparece en cuanto queda una casilla sin ver.
+  - **Sin tope.** Un lugar vigilado no repone nunca a la vista, por más que se espere. Un
+    jugador AFK parado en un spawn lo deja vacío mientras lo vea entero (los spawns tienen
+    radio 3–5 y la ventana ±16 x ±11); los spawns vecinos, a 12–20 casillas, reponen en
+    sus casillas fuera de su vista. Quien caza tiene que moverse, y al volver encuentra
+    los monstruos que vencieron mientras no miraba.
+    **Quests de matar:** las áreas de todos los spawns de un monstruo que una quest pide
+    matar no caben juntas en una sola ventana (33x23), así que un jugador quieto nunca
+    frena todos los respawns de un objetivo de misión
+    (`TestRepoQuestKillsCannotBeHeldBackByOneWatcher`, sobre el mapa real). La excepción son
+    los jefes de una sola sala (`slagbound_warden`): quien espera dentro frena su vuelta y
+    tiene que esperar fuera de su vista.
+  - **Pisos.** En la superficie los pisos se ven juntos: quien está en un techo frena el
+    spawn de abajo. Bajo tierra solo cuenta el propio piso.
+  - **Staff.** Un GM o admin que camina invisible no cuenta (inspecciona sin cambiar el
+    mundo). Un staff visible sí, y también un jugador invisible por cualquier otro medio.
+  - **Mundo vivo.** Lo mismo para los objetos que vuelven: un objeto roto no vuelve a
+    estar y una roca empujada no vuelve a su lugar mientras alguien los vea ("Mundo vivo").
+    La roca tiene un tope: a las dos veces su `reset_seconds` desde el último empuje
+    vuelve aunque la miren, para que nadie quede encerrado detrás de ella.
+  - **Aparecer no es entrar.** La regla es sobre dónde aparece un monstruo, no sobre
+    dónde camina después: uno que reaparece en una casilla sin ver puede entrar caminando
+    a la vista en el mismo tick (deambula o persigue como cualquier otro). El jugador lo
+    ve llegar, no materializarse.
+  - **Desconectados en combate.** Un personaje que quedó en el mundo tras cerrar la
+    conexión en combate (link-dead) sigue viendo: frena los respawns hasta que sale.
+  - **Capacidad.** Antes (lote 6) el bloqueo miraba solo la ventana clásica de 15x11 para
+    no frenar a los vecinos; la casilla alternativa lo compensa en parte, pero la
+    "Eficiencia 2/3" de `07` "Capacidad del mundo" se midió con la regla vieja y queda por
+    volver a medir (`07`, "Respawns").
+  Tests: `TestRespawnWaitsForTheWholeView`, `TestRespawnTakesAnUnseenTileOfTheArea`,
+  `TestRespawnWatchedAcrossFloors`, `TestRespawnIgnoresInvisibleStaff`.
 
 ## Minimapa (pedido del dueño del 2026-11-23)
 "Un minimapa como el de Tibia: hay que explorar para verlo, muestra los puntos cardinales y,
@@ -354,16 +385,40 @@ si tenemos un objetivo activo, una estimación de dónde está."
   O (W en inglés) en los lados del marco: el norte siempre arriba.
 - **Moverse por el minimapa:** arrastrarlo lo corre; "volver a centrar" lo devuelve al
   jugador. Se pliega a su barra (en los teléfonos empieza plegado).
+- **Click para ir** (pedido del dueño del 2026-11-26: "si haces click en el minimapa te
+  debería llevar para allá"): un click (o un toque) en el minimapa lleva al personaje a esa
+  casilla, caminando por lo que ya exploró. Si la casilla está bloqueada (un muro, agua) o
+  sin explorar, va a la casilla alcanzable más cercana a ella. Un click a más de 256
+  casillas (con el minimapa arrastrado lejos) camina hacia allá hasta esa distancia. Si
+  más adelante alguien tapa el paso, sigue hasta llegar ahí y recién entonces busca otro
+  camino. Solo por el piso propio: el
+  minimapa no muestra otros pisos y el camino no usa escaleras, agujeros ni
+  teletransportes (los rodea, salvo que sean el destino). Una cruz dorada marca el destino
+  mientras dura. Lo cancelan una tecla o el pad, un click o el mouse mantenido sobre el
+  mapa, Escape, un teletransporte o cambio de piso y el segundo paso rechazado. Arrastrar
+  el minimapa (4 px o más, aunque se suelte donde empezó) y los botones de zoom no caminan. El servidor no sabe nada de
+  esto: recibe los mismos `Walk` de siempre, uno por paso, y valida cada uno.
 - **Objetivo seguido:** el diario de misiones tiene "Seguir en el mapa" en cada quest en
   curso (una a la vez). El minimapa muestra una **estimación**, nunca la casilla: un círculo
   alrededor de un punto cercano al lugar del paso actual, que lo contiene entero. Si el
   círculo queda fuera del minimapa, una flecha en el borde apunta hacia él con la distancia
   aproximada (de a 5 casillas hasta 50, después de a 10); si está en otro piso, ▲ (arriba) o
-  ▼ (abajo). El lugar es el NPC con quien hablar, el spawn más cercano del monstruo que hay
-  que cazar (se vuelve a elegir al cambiar de piso, teletransportarse, viajar en barco o
-  despertar en el templo; no al caminar), el lugar al que hay que llegar o las placas de un hito, o el `hint_area` del
-  paso (docs/06). Un paso que se cumple en cualquier lado (llevar un item, una marca) no
-  tiene círculo. La estimación no revela mapa: el círculo y la flecha se dibujan sobre lo
+  ▼ (abajo). **El círculo siempre contiene un objetivo real y entero del paso** (pedido del
+  dueño del 2026-11-25: "prefiero que se marque un área más grande pero que el objetivo
+  esté dentro de esa marca, a que se marque algo y que ni siquiera esté"): el NPC con quien
+  hablar o a quien entregar; el área de un spawn del monstruo que hay que cazar; para
+  juntar un item, el área de un spawn de un monstruo que lo suelta; para una marca
+  (`flag_equals`), el NPC cuyo diálogo la pone; el lugar al que hay que llegar (de una zona,
+  el rectángulo más cercano que tenga dónde pararse, alrededor de una casilla pisable);
+  las placas de un hito; o el `hint_area` del paso (docs/06). Con varios lugares posibles
+  se marca el más cercano, primero los del piso propio (se vuelve a elegir al cambiar de
+  piso, teletransportarse, viajar en barco o despertar en el templo; no al caminar). El
+  radio es el doble del área del objetivo más 4 casillas, 8 como mínimo y 24 como máximo
+  (un área de más de 12 casillas lo agranda lo justo para caber entera), y el centro se
+  corre dentro del círculo para no delatar el punto exacto. Solo un paso sin ningún lugar
+  en el mapa no tiene círculo, y un test recorre todos los pasos de `data/quests` sobre el
+  mapa real para que no haya ninguno
+  (`TestEveryObjectiveMarkHoldsARealTarget`). La estimación no revela mapa: el círculo y la flecha se dibujan sobre lo
   que haya, y lo no explorado sigue negro. Es la misma para el mismo personaje, paso y
   lugar, así que pedirla muchas veces no la afina; cada spawn de un mismo monstruo se corre
   distinto, así que conocer uno no ubica los demás.
@@ -1063,6 +1118,38 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   deja su cuerpo caído (`corpse` en `data/monsters`: la bestia de costado, el artrópodo
   panza arriba, el montón de escoria...); sin `corpse`, los restos por defecto
   (`creature_remains`, que es también el cuerpo de un jugador).
+- **Arrastrar un cuerpo** (pedido del dueño del 2026-11-26: "los cuerpos muertos de los
+  enemigos se deberían poder mover, porque puede caer uno encima de otro"): los restos de
+  una criatura siguen sin poder levantarse, pero se **arrastran** con el mismo gesto que
+  mueve un item (`MoveItem`; `session/corpsemove.go` `dragCorpse`):
+  - **De a una casilla.** El jugador tiene que estar junto al cuerpo (a 1 casilla, o encima)
+    y el destino es una casilla **vecina a donde está el cuerpo**, del mismo piso, caminable
+    y con lugar (`inventory.tile_full`). No se tira lejos como un item liviano: para
+    llevarlo más allá se arrastra otra vez. Entre dos arrastres de un jugador pasan
+    `inventory.corpse_move_cooldown_ms` (300 ms; cada uno manda dos casillas a todos los que
+    miran, como una puerta): antes, `inventory.corpse_not_ready`.
+  - **Sigue siendo el mismo contenedor:** mismo botín, mismo dueño, misma reserva y mismo
+    reloj. Desaparece a los `monster_corpse_ms` (o `corpse_ms`) de la **muerte**, esté
+    donde esté; arrastrarlo no lo renueva. La ventana abierta de quien ya no lo alcanza se
+    cierra (nadie saquea de lejos).
+  - **El cuerpo de un jugador sigue la regla de su botín:** mientras está reservado a quien
+    cayó (`corpse_owner_only_ms`, o la reserva de un guardado pendiente, T5.3) solo ese
+    jugador lo arrastra (`death.corpse_not_owner` para los demás); después, cualquiera.
+    Arrastrarlo no acorta ni alarga la reserva y no deja abrirlo antes.
+  - **Lo que no se puede** (`inventory.corpse_drag`): meterlo en un contenedor, la mochila
+    o un slot (ni llevárselo ni esconderlo); arrastrarlo a la casilla de una **puerta** (no
+    dejaría cerrarla, y uno reservado no lo podría sacar nadie más), a la entrada de una
+    **escalera, un agujero o un teletransporte** (un item ahí cae al otro piso: un cuerpo
+    no cambia de piso) ni a una **casa**. De una de esas casillas sí se saca (una criatura
+    puede morir ahí). A una casilla no caminable, `inventory.not_possible`.
+  - **Varios cuerpos en una casilla:** el arrastrado queda **arriba** de la pila. Se abre
+    el de arriba; arrastrarlo a otra casilla deja a la vista el siguiente (no hay "revisar
+    casilla": el servidor acepta cualquier `stack_index`, pero el cliente solo apunta al de
+    arriba).
+  - **Cliente:** un item fijo con `remains_of` o `body_of` cuenta como movible
+    (`state/items.ts` `immovable`): se arrastra desde el mapa como cualquier item y el menú
+    de la casilla ofrece "Mover". El sprite sigue al cuerpo porque el servidor manda las
+    dos casillas.
 - **Los restos dicen de quién son** (pedido del dueño del 2026-11-23): el contenedor sigue
   siendo el de la familia (mismas reglas de botín, 10 lugares, no se apila ni se levanta),
   pero el servidor lo marca con el monstruo que cayó (`ItemMods.remains_of`, docs/05
@@ -1681,9 +1768,9 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     monstruos comunes no cambian. El custodio pasó a 1800 de vida y 0–60 cuerpo a cuerpo
     para seguir en 30–90 s y 60–200 % de la vida a nivel 44 (71,6 s y 170 %; antes 71,2 s
     y 162 %).
-- Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
-  jugador está dentro de la ventana clásica de 15x11 + 1 alrededor del punto (evita
-  aparecer en la cara; no la vista ancha: "La vista", "Respawns"): se reintenta cada 5 s.
+- Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre en una
+  casilla que algún jugador tenga a la vista (la ventana entera de 31x21 + 1; "La vista",
+  "Respawns"): toma otra casilla del área que nadie vea o, si no hay, reintenta cada 5 s.
 - **Correa** (`balance.yaml combat.monster_leash_tiles`, 6; 0 o sin la clave = sin correa,
   el comportamiento anterior). El **área de casa** de un monstruo es el radio de su spawn
   (distancia Chebyshev al centro); su **área de correa**, ese radio más
@@ -2787,6 +2874,42 @@ que la da distingue si está disponible o si todavía espera. Las tareas de caza
 y Cinderstead están en "Tareas" (abajo); la de práctica de Thimblewick espera tres
 minutos (docs/16).
 
+**Capítulo 1 "Náufrago" (Velmara; cadena ampliada el 2026-11-26 por pedido del dueño).**
+Seis quests encadenadas, todo en datos (`data/quests/ch1_*.yaml` y los diálogos de los
+NPCs de Lanternby): cada una se ofrece cuando la anterior está `completed`. La regla de
+ritmo: **la experiencia de las quests sola, sin contar ninguna muerte, lleva a un personaje
+nuevo al nivel 8** (4704 XP) y no llega al 9; del 8 al **10**, que es lo que pide el barco
+a Selvaine (`data/boat_routes.yaml`, `puerto_to_bosque`: nivel 10 y `ch1_shipwreck`),
+se sube cazando. Ninguna recompensa vale mucho más de un nivel y medio al entregarla.
+
+| # | Quest | La da | Pasos | XP | Monedas | Solo quests (XP → nivel) | Con las muertes que pide |
+|---|---|---|---|---|---|---|---|
+| 1 | `ch1_shipwreck` "El naufragio" | Maren Holt | 6 lobos, 5 murciélagos, Doran, bitácora a Maren | 800 | 150 | 800 → 4,70 | 5,16 |
+| 2 | `ch1_castaways` "Los que llegaron a la orilla" | Hermana Liora | 6 cangrejos marinos, mantas de Tilde, volver | 500 | 60 | 1300 → 5,40 | 6,00 |
+| 3 | `ch1_false_light` "La luz falsa" | Hermana Liora | llegar a la punta al este de Grakkun, preguntar a Tilde por el aceite, volver | 550 | 80 | 1850 → 6,04 | 6,45 |
+| 4 | `ch1_bosun_trail` "El rastro del contramaestre" | Doran Pike | 8 murciélagos, llegar bajo el socavón de Saltwrack (piso 8), volver | 800 | 120 | 2650 → 6,69 | 7,20 |
+| 5 | `ch1_west_wood` "Por detrás de Saltwrack" | Corvo | 6 jabalíes cerdosos, llegar al borde norte del bosque del oeste, volver | 900 | 150 | 3550 → 7,31 | 7,93 |
+| 6 | `ch1_wreckers` "Los del farol" | Corvo | 3 saqueadores, llegar al casco del Alba Tardía, hablar con Liora | 1250 | 250 | 4800 → 8,04 | 8,63 |
+
+La historia sigue la del naufragio sin cambiarla: los sobrevivientes duermen en el templo;
+un grumete vio la luz falsa en la punta de piedra al este de la mina; el aceite de esa
+hoguera lo compraron los saqueadores de Saltwrack; al contramaestre, único testigo, lo
+subieron por el socavón de la playa; se lo espía desde el bosque del oeste y se lo rescata
+distrayendo a los saqueadores. Edric cuenta que quien pagó el triple por el cofre pagó
+también la hoguera y se fue con él en el bote sin bandera: el gancho del Capítulo 2 queda
+igual. No hay items, monstruos, NPCs ni mapas nuevos. Maren no da las quests nuevas (su
+saludo ya tiene las 9 opciones que admite el esquema): al cerrar la bitácora manda al
+jugador al templo. La primera recompensa (800 XP) quedó como estaba: son 1,63 niveles
+contando sus 11 muertes, la más grande de la cadena; las nuevas dan menos de un nivel
+cada una. Contando las muertes que la propia cadena pide (1295 XP), un personaje termina
+en 6095 XP, nivel 8,63, y le faltan unas 3600 XP de caza para el 10. Las secundarias de
+la isla siguen aparte: `diver_locket` (nivel 8, 900 XP) y `foreman_ore` (nivel 10).
+Lo vigila `TestIslandQuestChain` (`server/internal/sim/balance_island_chain_test.go`,
+determinista; `DEBUG_BALANCE=1` imprime la tabla): la cadena es una sola línea desde
+`ch1_shipwreck` con todas las quests de `chapter: 1`, suma entre el nivel 8 y el 9,
+ningún `min_level` ni `level_at_least` de quien la da supera lo que dan las quests
+anteriores, y la ruta de salida pide nivel 10.
+
 **Capítulo 2 "Raíces" (T3.6, Selvaine).** Lo da Velia Musgo, la druida de Ivernel,
 a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
 (`data/quests/ch2_*.yaml`, `data/npcs/bosque_druid.yaml`):
@@ -3263,16 +3386,47 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
      murió (Chebyshev). Vivo.
   2. **Contribuyó** en los últimos `contribution_ms` (75 s): hizo daño a un monstruo,
      curó a otro miembro herido, o un monstruo lo atacó (tanquear).
-  3. **Nivel:** al menos `level_range_pct` (70 %) del nivel más alto entre los que cumplen
-     1 y 2, o a lo sumo `level_gap_always` (3) niveles por debajo.
+  3. **Nivel:** a lo sumo `level_gap_always` (5) niveles por debajo del nivel más alto
+     entre los que cumplen 1 y 2, o al menos `level_range_pct` (70 %) de ese nivel. Hasta 5
+     niveles de diferencia se comparte **siempre** (decisión del dueño 2026-11-26: con 3,
+     dos personajes nuevos de niveles 3 y 7 no compartían y parecía que había que ser del
+     mismo nivel); el porcentaje manda más arriba (14 con 20 sí, 13 con 20 no; 70 con 100
+     sí, 69 con 100 no). La cuenta es `content.Party.InLevelRange`.
+
+  La ventana de grupo dice **por qué** no comparte quien no comparte (`ShareBlock`, la
+  primera razón que aplica): muy lejos (en otro piso o a más de `share_distance` del que
+  mira; **no** es "fuera de vista": la vista es más chica que `share_distance`, y un
+  miembro que no se ve pero está en rango figura como "Comparte"), muerto, no está peleando
+  (no cumple 2), nivel muy bajo (no cumple 3), misma cuenta (otro personaje de su cuenta
+  ya comparte) o sin nadie con quien compartir (califica, pero hacen falta dos). Junto a
+  cada nombre va la etiqueta corta, y bajo el indicador la frase del propio jugador, con
+  lo que tiene que hacer ("pégale a un monstruo, cura a un miembro..."); el propio jugador
+  no lleva además la etiqueta. El indicador responde "¿quién compartiría una presa que
+  muere a mi lado?" (la cuenta del pozo con la posición del que mira); el reparto real
+  se mide desde el monstruo, así que dos miembros muy separados pueden diferir en una
+  presa que cae entre los dos.
+
+  El crédito de quest de quien comparte sin haber pegado es solo el objetivo de matar:
+  no cuenta como "matar" para el tutorial ni para el registro de eventos del jugador
+  (anti-bot), que siguen siendo de quien pegó.
 
   Si comparten dos o más, los shares de daño de los que comparten forman un **pozo** que
   crece con el **bonus de grupo** y se divide en partes iguales entre ellos (también a
   quien no le pegó, como un sanador). Los miembros que no comparten cobran su propio share.
   Si comparte uno solo, no hay pozo: cada uno cobra lo suyo. El share de quien salió del
   mundo (logout o relogueo) se pierde: cuenta en el total pero no lo cobra nadie, así que
-  terminar el monstruo de otro no da su experiencia. Quests: cuenta la muerte quien le
-  hizo daño, como antes.
+  terminar el monstruo de otro no da su experiencia.
+- **Quests en grupo** (decisión del dueño 2026-11-26): la muerte cuenta para los objetivos
+  de **matar** de quien le hizo daño, como siempre, y además de los miembros que
+  **comparten la experiencia** de esa muerte con alguno de ellos (`questSharers`: la
+  misma lista del pozo, calculada antes de pagar la experiencia). Es la misma
+  elegibilidad, sin reglas aparte: experiencia compartida prendida, vivo, en el piso y a
+  `share_distance`, contribuyó, en rango de nivel, uno por cuenta. Así no cuenta para
+  quien está lejos, muerto, parado sin pelear, fuera de rango de nivel o fuera del grupo,
+  ni con la experiencia compartida apagada; nadie cuenta dos veces la misma muerte (el que
+  pegó y además comparte suma una). Los objetivos de **juntar** no se duplican: el botín
+  es uno y va a quien hizo más daño. Las quests de hito (placas, lote 15) no cambian: sus
+  requisitos se revisan sobre las placas, no sobre el grupo.
 - **Bonus de grupo** (`bonus_pct_by_sharers`, decidido por el dueño: hasta +20 %). Solo
   importa **cuántos** comparten, no sus vocaciones:
 
@@ -3339,7 +3493,10 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
     "126 (+6 grupo)". Esa parte solo la ven el que la cobra y los miembros de su grupo; un
     extraño al lado ve solo "126".
 - **Información (auditoría, `01-architecture.md` "Trampas y anti-bot"):** de cada miembro
-  viajan nombre, vocación, nivel e isla. Vida, maná (en %) y la marca "comparte" solo
+  viajan nombre, vocación, nivel e isla, y si compartiría una presa que muere junto al
+  que mira ("comparte" o la razón; lo mismo que ya le dice la experiencia de sus presas:
+  de un miembro en otro piso o a más de `share_distance` solo llega "muy lejos"). Vida y
+  maná (en %) solo
   mientras está en la vista del que mira (lo que el AOI ya le manda; un invisible no está
   en la vista). Nunca viajan
   la posición, el piso ni la vida de un miembro fuera de vista. Nivel e isla sí viajan, y
@@ -3952,10 +4109,11 @@ para avanzar. Todo el detalle (contrato, datos, números) está en
   objeto (o usando la herramienta sobre él), al ritmo de los oficios. Una forma equivocada
   no gasta el golpe y dice `living.wrong_way`.
 - **Restos.** Roto, deja restos caminables que se desvanecen (`debris_seconds`) y vuelve a
-  estar `respawn_seconds` después de romperse, solo si no hay una criatura en su casilla
-  (si no, lo intenta cada segundo). Los items sueltos que haya ahí (el botín que nadie
-  levantó, una moneda tirada para trabarlo) se corren a una casilla vecina libre; solo
-  unos restos de criatura, que se pudren solos, lo hacen esperar.
+  estar `respawn_seconds` después de romperse, solo si ningún jugador ve su casilla
+  ("Respawns") y no hay una criatura en ella (si no, lo intenta cada segundo). Los items
+  sueltos que haya ahí (el botín que nadie levantó, una moneda tirada para trabarlo) se
+  corren a una casilla vecina libre; solo unos restos de criatura, que se pudren solos, lo
+  hacen esperar.
 - **Botín.** Algunos tienen una tabla chica (monedas, una galleta, una poción, seda): se tira
   una vez por rotura y cae en la casilla, a nombre de quien la rompió para la economía.
   Queda en el suelo sin dueño, a propósito: a diferencia de los restos de un monstruo,
@@ -3963,8 +4121,11 @@ para avanzar. Todo el detalle (contrato, datos, números) está en
 - **Empujar.** Una roca musgosa o un cajón pesado se empujan caminando contra ellos (en
   línea recta): se mueven una casilla si la de atrás está libre; el jugador no se mueve. Dos
   empujes en el mismo tick: el primero gana. Vuelven a su lugar `reset_seconds` después del
-  último empuje, cuando no hay nadie en ese lugar (el puzzle se arma solo para el
-  siguiente); los items sueltos que haya ahí se corren a una casilla vecina.
+  último empuje, cuando no hay nadie en ese lugar y ningún jugador los ve (el puzzle se
+  arma solo para el siguiente); los items sueltos que haya ahí se corren a una casilla
+  vecina. La vista los retiene como mucho hasta las dos veces `reset_seconds` desde el
+  último empuje: después vuelven aunque los miren, porque quien quedó del lado ciego de una
+  roca no puede empujarla de vuelta y su propia vista lo dejaría encerrado.
 - **Placas y compuertas.** Una placa de presión se hunde con una criatura o un objeto
   empujable encima; un rastrillo se abre mientras todas sus placas (las que están a su
   radio) están presionadas y se cierra cuando una se libera, si no hay nadie debajo (un

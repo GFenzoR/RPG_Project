@@ -976,6 +976,14 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   segura" en T5.3), y `portal.no_room` (un item tirado sobre una escalera, un agujero o un
   teletransporte no tiene dónde caer del otro lado).
 - **`MoveItem`:** `count` de 1 al tamaño de la pila para apilables (se ignora en los demás).
+  **Restos de una criatura** (los únicos items no levantables que acepta): solo destino
+  `pos`, una casilla vecina a donde están, con el jugador junto a ellos; si no,
+  `inventory.corpse_drag` (también a una puerta, una casa o la entrada de una escalera, un
+  agujero o un teletransporte), `death.corpse_not_owner` (el cuerpo de otro jugador,
+  todavía reservado) o `inventory.corpse_not_ready` (otro arrastre hace menos de
+  `inventory.corpse_move_cooldown_ms`). Si sale bien llegan los dos `TileUpdate`, y un
+  `ContainerClose` a quien lo tenía abierto y ya no lo alcanza (`02-game-design.md`
+  "Arrastrar un cuerpo"). El mensaje no cambió.
   Destino `pos`: un tile caminable al alcance. Destino `slot` o `container` con un
   contenedor en ese lugar: adentro de ese contenedor. Mover dentro del mismo contenedor
   no reordena (ignorado). Un destino `pos` que es la entrada de una escalera, un agujero
@@ -1379,6 +1387,9 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   `dialog.quest_updated`, `dialog.quest_kills` (`{monster} {count}/{total}`) y
   `dialog.quest_completed`, con el parámetro `content_id` `quest` (el cliente muestra
   `quest.<id>.name`).
+  Al completarse, cada recompensa se dice aparte, antes de entregarla:
+  `dialog.reward_xp` (número `amount`) y `dialog.reward_item` (un parámetro de item, que el
+  cliente muestra como `{items}`, igual que `dialog.quest_drop`).
 
 ### Minimapa (`server/internal/session/minimap.go`, pedido del dueño del 2026-11-23)
 Lo explorado vive en el servidor, por personaje (docs/02 "Minimapa"): un bit por casilla,
@@ -1439,12 +1450,21 @@ por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
   pedirlo muchas veces no lo promedia, y conocer un spawn de un `kill` no da el corrimiento
   de los otros), y el lugar del paso entra entero en el círculo. Un centro que caería
   fuera del mapa se refleja al otro lado del lugar (nunca se recorta encima de él). Con `quest_id` y sin `center`: se sigue la quest
-  pero su paso no tiene lugar (un `has_item` o un `flag_equals` sin `hint_area`, docs/06).
-  El lugar sale del YAML (`hint_area`) o del paso: el NPC de un `dialog_action` (los NPCs
-  no se mueven), el spawn más cercano del monstruo de un `kill` (su piso primero; el más
+  pero su paso no tiene ningún lugar en este mapa (ningún paso de `data/quests` queda así:
+  lo vigila `TestEveryObjectiveMarkHoldsARealTarget`).
+  El lugar sale del YAML (`hint_area`) o del paso (`stepTargets` de `session/minimap.go`,
+  calculado una vez por paso; desde el 2026-11-26 el radio del círculo es el doble del área
+  del lugar más 4, mínimo 8): el NPC de un `dialog_action` (los NPCs
+  no se mueven), el de un `flag_equals` es el NPC cuyo diálogo pone esa marca con ese
+  valor, el de un
+  `has_item` el área de un spawn de un monstruo que suelta el item, el spawn más cercano
+  del monstruo de un `kill` (entre varios lugares, su piso primero; el más
   cercano a donde el jugador empezó a seguir, avanzó la quest o se reubicó por última vez:
-  caminar por el mismo piso no lo recalcula), el lugar de un `reach` (una zona: su
-  rectángulo envolvente), las placas de un `sigils`. La pista no revela mapa: el
+  caminar por el mismo piso no lo recalcula), el lugar de un `reach` (una zona: cada
+  uno de sus rectángulos, anclado en la casilla pisable más cercana a su centro;
+  `findTargets`, `standNear`), las placas de un `sigils`. El radio tiene tope 24, salvo
+  cuando el área del lugar pasa de 12 casillas (un `hint_area` o un spawn ancho): ahí el
+  círculo crece lo necesario para contenerla entera, hasta 24 más el doble del área. La pista no revela mapa: el
   cliente dibuja solo el círculo o la flecha, nunca casillas sin explorar.
 - Todo agregado sin romper nada: un cliente viejo ignora los campos nuevos y un servidor
   viejo nunca los manda.
@@ -1528,10 +1548,21 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   Lo reciben el que la cobra y los miembros de su grupo; cualquier otro que mira recibe 0.
   El cliente escribe `client.party.xp_bonus` ("126 (+6 grupo)").
 - **`PartyMember{creature_id, name, vocation, level, in_view, health_percent,
-  mana_percent, island, sharing}`**. Auditoría de información: `health_percent`,
-  `mana_percent` y `sharing` valen 0/falso si `in_view` es falso (el que mira no conoce a esa criatura: fuera
-  de la ventana o invisible). Fuera de vista solo viaja la isla (`""` en el mar). El mensaje
-  no tiene posición ni piso.
+  mana_percent, island, sharing, share_block}`**. Auditoría de información: `health_percent` y
+  `mana_percent` valen 0 si `in_view` es falso (el que mira no conoce a esa criatura: fuera
+  de la ventana o invisible). Fuera de vista viajan la isla (`""` en el mar) y si compartiría
+  (`sharing`, `share_block`). El mensaje no tiene posición ni piso. `sharing` es si el
+  miembro compartiría **una presa que muere junto al que mira**: la misma cuenta que el
+  pozo (`sharers` con la posición del que mira: mismo piso, `party.share_distance`), no
+  la vista, que es más chica que `share_distance` en vertical (un miembro a 20 casillas
+  al sur no se ve y sí comparte). No dice más que la experiencia que el que mira ya
+  recibe de sus presas. `share_block` (campo 10, agregado sin romper nada) es por qué
+  no comparte un miembro con `sharing` falso mientras la experiencia compartida está
+  prendida: `FAR` (está en otro piso o a más de `party.share_distance` del que mira; no dice nada más de él), `DEAD`, `IDLE` (no
+  contribuyó), `LEVEL`, `ACCOUNT` (otro personaje de su cuenta ya comparte; solo se le dice a un miembro de esa misma cuenta, a los demás les llega `UNSPECIFIED`: que dos personajes son de una cuenta no se revela) o `ALONE`
+  (califica, pero no hay otro); `UNSPECIFIED` si comparte o está apagada. Las razones de
+  un miembro salen de lo que quien mira ya ve o de lo que el reparto de sus presas ya le
+  dice (vida, nivel, si pelea). El propio jugador nunca recibe `FAR`.
 - **Chat:** `Say{channel: PARTY}` → `Message{kind: PARTY, speaker_id, speaker_name, text}`
   sin `pos` a todos los miembros. Sin grupo → `party.none`.
 - Mensajes de sistema: `party.invited`, `party.player_not_found` (`name`),

@@ -168,6 +168,12 @@ func (p Party) SharedEach(pot int64, n int) (each, extra int64) {
 	return each, each - pot/int64(n)
 }
 
+// InLevelRange reports whether a member of that level shares with a highest sharer of
+// level top: at most LevelGapAlways levels below it, or at least LevelRangePct % of it.
+func (p Party) InLevelRange(level, top int) bool {
+	return top-level <= p.LevelGapAlways || level*100 >= top*p.LevelRangePct
+}
+
 // MaxBonusPct is the highest bonus % of the shared pot: the last step.
 func (p Party) MaxBonusPct() int { return p.BonusPct(p.MaxMembers) }
 
@@ -563,6 +569,9 @@ type Inventory struct {
 	// DoorCooldownMs is how long a player waits between two uses of a door of the map,
 	// refused or not (docs/02 "Puertas con llave"): a door's tile goes to everyone around.
 	DoorCooldownMs int `yaml:"door_cooldown_ms"`
+	// CorpseMoveCooldownMs is how long a player waits between two drags of a body
+	// (docs/02 "Arrastrar un cuerpo"); 0 or absent, no wait.
+	CorpseMoveCooldownMs int `yaml:"corpse_move_cooldown_ms"`
 	// Reach is the Chebyshev distance (same floor) for actions on ground items, 1 to
 	// MaxReach.
 	Reach int `yaml:"reach"`
@@ -594,8 +603,8 @@ const MaxRange = 6
 // above 0 (reach at most MaxReach), use_cooldown_ms not negative, pocket_slots 1 to
 // MaxPocketSlots.
 func (i Inventory) check() error {
-	if i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.DoorCooldownMs <= 0 || i.Reach <= 0 || i.Reach > MaxReach {
-		return fmt.Errorf("inventory: max_open_containers, door_cooldown_ms and reach must be > 0 (reach at most %d), use_cooldown_ms >= 0", MaxReach)
+	if i.MaxOpenContainers <= 0 || i.UseCooldownMs < 0 || i.CorpseMoveCooldownMs < 0 || i.DoorCooldownMs <= 0 || i.Reach <= 0 || i.Reach > MaxReach {
+		return fmt.Errorf("inventory: max_open_containers, door_cooldown_ms and reach must be > 0 (reach at most %d), use_cooldown_ms and corpse_move_cooldown_ms >= 0", MaxReach)
 	}
 	if i.PocketSlots < 1 || i.PocketSlots > MaxPocketSlots {
 		return fmt.Errorf("inventory: pocket_slots must be 1 to %d", MaxPocketSlots)

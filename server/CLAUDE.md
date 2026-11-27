@@ -472,8 +472,16 @@ server/
   hechizos y ataques salen de `data/`; `content.MaxReach` y `content.MaxRange` (6, el
   alcance de las manos y el rango o radio con que apunta un jugador) siguen a la ventana
   clásica: un monstruo golpeado desde tan lejos como se apunta siempre devuelve el golpe.
-  El bloqueo de un respawn (`watched`) también mira la ventana clásica, no la ancha (la
-  capacidad del mundo de docs/07). Una respuesta que dependa de dónde está otro jugador
+  El bloqueo de un respawn (`watched`) mira la ventana **ancha**, no la clásica: usa
+  `Sees`/`eachObserver` (la ventana entera con su margen, en los pisos que se ven juntos),
+  así que nada reaparece a la vista de un jugador (docs/02 "Respawns", decisión del dueño
+  del 2026-11-26; la capacidad del mundo de docs/07 quedó por medir con `make bots`). El
+  staff que camina invisible no cuenta (`blocksRespawn`); un GM visible sí. Con jugadores
+  mirando el área, un monstruo toma una casilla del área que ninguno ve
+  (`spawnWatchers`, `unseenSpawnTile`) o espera. El mundo vivo pregunta lo mismo por
+  `Host.Watched`; una roca empujada deja de esperar a las dos veces su `reset_seconds`
+  (`resetSightHold`, para no encerrar a nadie). `onScreen` (retirar un monstruo
+  extraviado) es la misma ventana sin la excepción del staff. Una respuesta que dependa de dónde está otro jugador
   pide `Sees` **y** `Knows` (un invisible no se ve aunque esté en la ventana).
   Un mensaje que va a todos los observadores de un paso o un golpe se arma una vez y se
   comparte (`observeMove`, `hitEvents`): no modifiques un mensaje después de emitirlo.
@@ -576,4 +584,8 @@ server/
   `minimapRequest` contesta solo casillas exploradas, con presupuesto por jugador. La pista
   del objetivo (`flushHint`) se recalcula cuando `questsChanged` o `relocate` (`hintMoved`;
   ambos solo **levantan** `hintStale`, nunca lo bajan) y siempre pasa por
-  `quest.FuzzHint`: nunca mandes el lugar exacto de un paso.
+  `quest.FuzzHint`: nunca mandes el lugar exacto de un paso. Los lugares de un paso son
+  `stepTargets` (todos los objetivos reales, una vez por paso, `World.hintTargets`) y
+  `stepPlace` elige el más cercano: un tipo nuevo de `complete_when` necesita su caso ahí
+  y en `TestEveryObjectiveMarkHoldsARealTarget` (`hint_data_test.go`), que recorre todos
+  los pasos de `data/quests` sobre el mapa real.

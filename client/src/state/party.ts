@@ -1,7 +1,7 @@
 // The player's party (T3.3), rebuilt from PartyUpdate and PartyInvitation. Pure: callers
 // pass `now` in ms. The server decides everything; members out of view arrive without
 // health or mana (docs/05, "Grupos"), so there is nothing to hide here.
-import { SharedExperience } from "@rpg/protocol";
+import { ShareBlock, SharedExperience } from "@rpg/protocol";
 import type { PartyInvitation, PartyUpdate } from "@rpg/protocol";
 
 export interface PartyMemberView {
@@ -16,6 +16,8 @@ export interface PartyMemberView {
   /** Island id ("" at sea). */
   island: string;
   sharing: boolean;
+  /** Why it does not share (UNSPECIFIED while it shares or sharing is off). */
+  block: ShareBlock;
 }
 
 export interface PartyView {
@@ -56,6 +58,7 @@ export class PartyState {
         mana: m.manaPercent,
         island: m.island,
         sharing: m.sharing,
+        block: m.shareBlock,
       })),
     };
     // In a party now: any other invitation needs leaving first.
@@ -111,4 +114,23 @@ export function sharedKey(s: SharedExperience): string {
     default:
       return "client.party.shared.off";
   }
+}
+
+const BLOCKS: Partial<Record<ShareBlock, string>> = {
+  [ShareBlock.FAR]: "far",
+  [ShareBlock.DEAD]: "dead",
+  [ShareBlock.IDLE]: "idle",
+  [ShareBlock.LEVEL]: "level",
+  [ShareBlock.ACCOUNT]: "account",
+  [ShareBlock.ALONE]: "alone",
+};
+
+/**
+ * i18n key of why a member does not share experience, or undefined when it shares or
+ * there is nothing to tell: `client.party.block.<reason>` is the short tag next to a
+ * member and, with `own`, `client.party.block_you.<reason>` the sentence for the player.
+ */
+export function blockKey(b: ShareBlock, own = false): string | undefined {
+  const reason = BLOCKS[b];
+  return reason && `client.party.${own ? "block_you" : "block"}.${reason}`;
 }

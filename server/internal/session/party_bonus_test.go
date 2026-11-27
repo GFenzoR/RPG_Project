@@ -174,8 +174,13 @@ func TestSharedExperienceSameAccountAlts(t *testing.T) {
 		t.Fatalf("character and alt: %d %d, want 900 100 (no sharing)", da, dx)
 	}
 	h.sim.RunTicks(20)
-	if up := lastParty(ca.take()); up.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_INACTIVE || up.GetBonusPercent() != 0 {
-		t.Fatalf("indicator %v", up)
+	up0 := lastParty(ca.take())
+	if up0.GetShared() != pb.SharedExperience_SHARED_EXPERIENCE_INACTIVE || up0.GetBonusPercent() != 0 {
+		t.Fatalf("indicator %v", up0)
+	}
+	// Its own account is told why the alt does not share.
+	if _, why := blockOf(t, up0, alt.ID()); why != pb.ShareBlock_SHARE_BLOCK_ACCOUNT {
+		t.Fatalf("the alt, to its account: %v", why)
 	}
 
 	// A third player of another account: Ana and Bruno share (+5 %, two sharers, not
@@ -198,6 +203,10 @@ func TestSharedExperienceSameAccountAlts(t *testing.T) {
 	}
 	h.sim.RunTicks(20)
 	up := lastParty(cb.take())
+	// Another account is not told that Ana and Anita are one account.
+	if sharing, why := blockOf(t, up, alt.ID()); sharing || why != pb.ShareBlock_SHARE_BLOCK_UNSPECIFIED {
+		t.Fatalf("the alt, to a stranger: %v %v", sharing, why)
+	}
 	if up.GetBonusPercent() != 5 {
 		t.Fatalf("bonus %d, want 5", up.GetBonusPercent())
 	}

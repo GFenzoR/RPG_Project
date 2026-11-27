@@ -13,6 +13,7 @@ import type { Translate } from "../i18n/i18n.ts";
 import { cardTitle } from "../ui/ItemCard.tsx";
 import { itemName } from "../ui/Inventory.tsx";
 import {
+  FLOOR_ITEM_SCALE,
   corpseArt,
   corpseSprite,
   mapItemArt,
@@ -261,5 +262,32 @@ describe("the corpse on the map", () => {
       anchorX: 1,
     });
     expect(mapItemArt(String(SWORD), items, atlas)).toBeUndefined();
+  });
+
+  it("draws a carried thing smaller on the floor, furniture and remains at their size", () => {
+    const atlas = {
+      texture: (sprite: string) => `tex:${sprite}`,
+      tileArt: (sprite: string) =>
+        sprite.startsWith("decor/")
+          ? { ...corpseArt(`art:${sprite}`), anchorX: 1 as const }
+          : undefined,
+    };
+    const items = {
+      1: { sprite: "weapons/iron_sword", kind: "weapon" },
+      2: { sprite: "decor/table", kind: "decoration" },
+      3: { sprite: "decor/pelt", kind: "material" },
+    };
+    expect(mapItemArt("1", items, atlas)).toMatchObject({
+      base: "tex:weapons/iron_sword",
+      anchorX: 1,
+      scale: FLOOR_ITEM_SCALE,
+    });
+    expect(mapItemArt("2", items, atlas)?.scale).toBeUndefined();
+    expect(mapItemArt("3", items, atlas)).toMatchObject({
+      base: "art:decor/pelt",
+      scale: FLOOR_ITEM_SCALE,
+    });
+    expect(FLOOR_ITEM_SCALE).toBeGreaterThan(0.5);
+    expect(FLOOR_ITEM_SCALE).toBeLessThan(0.8);
   });
 });

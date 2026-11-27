@@ -39,14 +39,18 @@ type Host interface {
 	// that blocks (the map's own items, other objects), no creature, no loose item, not
 	// a protection zone, a house or a stairs/teleport entrance.
 	Free(p Pos) bool
-	// ClearItems moves the loose items of p (never a creature's remains: they rot on their
-	// own) to tiles nearby, for an object that stands again, goes home or closes on p: the
+	// ClearItems moves the loose items of p (a creature's remains too: players can drag
+	// them there) to tiles nearby, for an object that stands again, goes home or closes on p: the
 	// loot nobody took, or a coin dropped to jam it, never holds it back. It reports
-	// whether p holds no loose item now (false: no room nearby, or remains still lie).
+	// whether p holds no loose item now (false: no room nearby).
 	ClearItems(p Pos) bool
 	// Occupied reports whether a creature stands on p (a pressure plate's weight, a gate
 	// that cannot close on someone).
 	Occupied(p Pos) bool
+	// Watched reports whether a player has p in its view. Nothing comes back in sight: an
+	// object stands again, or a boulder goes home, only once nobody looks (the host's rule
+	// for its monsters' respawns; it decides who counts, e.g. not invisible staff).
+	Watched(p Pos) bool
 	// SetBlock sets what the object layer of p blocks; the host combines it with what
 	// the map's own items block. Called whenever an object appears, changes or leaves p.
 	SetBlock(p Pos, move, sight bool)
@@ -118,7 +122,10 @@ type object struct {
 	st    state
 	hp    int
 	until uint64 // tick of the next change (debris fades, respawn, reset); 0 none
-	seq   int    // its index in World.order (ties of the timers go in placement order)
+	// sightUntil is the tick a pushed object stops waiting for players to look away before
+	// it goes home (resetPushable, resetSightHold).
+	sightUntil uint64
+	seq        int // its index in World.order (ties of the timers go in placement order)
 	// plates linked to a gate.
 	plates []Pos
 }

@@ -76,14 +76,14 @@
   respawn_seconds: 30
 
 - id: puerto_mine_bats_west
-  center: { x: 3140, y: 6316, z: 8 }
+  center: { x: 3140, y: 6313, z: 8 }
   radius: 5
   monsters:
     - { monster: gloom_bat, count: 5 }
   respawn_seconds: 45
 
 - id: puerto_mine_bats_south
-  center: { x: 3144, y: 6328, z: 8 }
+  center: { x: 3144, y: 6329, z: 8 }
   radius: 5
   monsters:
     - { monster: gloom_bat, count: 5 }

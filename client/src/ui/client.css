@@ -2278,6 +2278,10 @@ body.picking-item .map-hint {
   color: var(--muted);
 }
 .party .tag {
+  /* One box per tag: a long one ("No comparte: no está peleando") goes whole to the next
+     line instead of breaking in two inside its border. */
+  display: inline-block;
+  white-space: nowrap;
   margin-left: 0.35rem;
   padding: 0 0.3rem;
   font-size: 0.7rem;
@@ -2287,6 +2291,15 @@ body.picking-item .map-hint {
 .party .tag.sharing {
   border-color: var(--ui-ok);
   color: #8fd07a;
+}
+.party .tag.blocked {
+  border-color: var(--ui-gold-700);
+  color: var(--muted);
+}
+.party .party-block {
+  margin: -0.2rem 0 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ui-gold-300);
 }
 .party .mname {
   font-weight: 500;

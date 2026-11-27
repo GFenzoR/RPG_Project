@@ -330,7 +330,11 @@ type World struct {
 	spawned    bool
 	active     map[uint64]struct{}
 	activeKeys []uint64
-	thinkBuf   []*Monster
+	// spawnEyes and spawnOpts are scratch for a respawn: who sees the spawn's area and the
+	// tiles of it nobody sees (monster.go).
+	spawnEyes []world.Pos
+	spawnOpts []world.Pos
+	thinkBuf  []*Monster
 	// areaTiles and areaHit hold the tiles and the players of a monster's area attack
 	// while it lands (monsterArea).
 	areaTiles []world.Pos
@@ -392,6 +396,8 @@ type World struct {
 	rooms   []room
 	roomOf  map[world.Pos]int32
 	doorFor game.Tick
+	// corpseMoveFor is the wait between two drags of a body by one player (corpsemove.go).
+	corpseMoveFor game.Tick
 	// Areas (area.go): the area (or minus the house area) of each tile by sector (ids
 	// 1-based), worked out at start.
 	areas          map[uint64]*areaTiles
@@ -410,8 +416,11 @@ type World struct {
 	quests   *quest.Engine
 	// reachAt is the place of every reach step of the quests (questlog.go); reachBuf is
 	// scratch for reading a player's current ones.
-	reachAt  map[*content.Reach]*reachPlace
-	reachBuf []*content.Reach
+	reachAt map[*content.Reach]*reachPlace
+	// hintTargets is where each quest step can be done, worked out the first time a hint
+	// asks for it (minimap.go, stepTargets).
+	hintTargets map[*content.QuestStepDef][]hintTarget
+	reachBuf    []*content.Reach
 	// sigilRooms and sigilAt (plate tile → its room) are the milestones' plates (sigil.go).
 	sigilRooms []*sigilRoom
 	sigilAt    map[world.Pos]*sigilRoom

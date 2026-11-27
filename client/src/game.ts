@@ -75,7 +75,17 @@ import type {
   LightShadowHook,
   SkyHook,
 } from "./render/game-canvas.ts";
-import { locationInit, menuItem, splitCount, splittable, tileUse, topItem } from "./state/items.ts";
+import {
+  dragFromTile,
+  dragLands,
+  immovable,
+  locationInit,
+  menuItem,
+  splitCount,
+  splittable,
+  tileUse,
+  topItem,
+} from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
@@ -85,6 +95,7 @@ import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { parseHex } from "./state/minimap.ts";
+import { minimapPassable } from "./state/minimap.ts";
 import type { MinimapState, ObjectiveHintView } from "./state/minimap.ts";
 import type { PocketsState } from "./state/pockets.ts";
 import { MotionTrail } from "./state/motion.ts";
@@ -128,6 +139,8 @@ export interface MinimapUi {
   hint: ObjectiveHintView | undefined;
   /** The quest the server says is tracked ("": none). */
   tracked: string;
+  /** Where a click on the minimap is walking to, while it lasts (Game.minimapWalk). */
+  dest?: { x: number; y: number } | undefined;
 }
 
 export interface GameUi {
@@ -572,6 +585,8 @@ export class Game {
       portals: opts.content.portals,
       diagonalCost: opts.content.movement.diagonalCost,
       maxPathTiles: opts.content.movement.maxPathTiles,
+      farPassable: (x, y, z) =>
+        minimapPassable(this.world.minimap, (id) => this.world.item(id), x, y, z),
     });
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
@@ -1013,6 +1028,20 @@ export class Game {
     if (sectors.length > 0) this.conn.send({ case: "minimapRequest", value: { z, sectors } });
   }
 
+  /**
+   * A click on the minimap (docs/17 "Minimapa"): walks to tile x, y of the own floor, or
+   * to the reachable tile nearest to it, over what the character has explored. Only
+   * normal Walk steps go out (Steering.walkFar); a key, the pad, a click on the map or
+   * Escape end it. Nothing on the death screen.
+   */
+  minimapWalk(x: number, y: number): void {
+    if (this.world.death || !this.world.self) return;
+    const now = performance.now();
+    this.steer.walkFar(this.world, { x, y }, now);
+    this.decideStep(now);
+    this.publish();
+  }
+
   private readonly minimapColours = new Map<number, readonly [number, number, number]>();
 
   /**
@@ -1428,7 +1457,7 @@ export class Game {
     const up = (ev: PointerEvent): void => {
       end();
       const to = this.dropTarget(ev.clientX, ev.clientY);
-      if (!to) return;
+      if (!to || !dragLands(ref, to)) return;
       if (split && splittable(this.opts.content.items[ref.itemId], ref.count)) {
         this.split = { ref, to, x: ev.clientX, y: ev.clientY };
         this.publish();
@@ -1669,7 +1698,7 @@ export class Game {
       food: (def?.consumable?.foodMs ?? 0) > 0,
       equip: ref.loc.kind !== "slot" && equipSlot(def) !== undefined,
       split: def?.stackable === true && ref.count > 1,
-      fixed: def?.fixed === true,
+      fixed: immovable(def, ref.mods),
       usable:
         def?.door === true ||
         def?.board === true ||
@@ -1953,6 +1982,7 @@ export class Game {
       party,
       hint: w.minimap.hint,
       tracked: w.minimap.tracked,
+      dest: this.steer.farGoal,
     };
   }
 
@@ -2198,7 +2228,11 @@ export class Game {
       dragTile: (x, y, z, e) => {
         const ref = topItem(this.world, x, y, z, false);
         // Shift+drag from the map moves part of its stack too (docs/17 UI-6).
-        if (ref) this.startDrag(ref, e.shiftKey);
+        if (!ref) return;
+        // A body out of grasp is not dragged (pressTile walked): nothing to start.
+        const def = this.opts.content.items[ref.itemId];
+        if (!dragFromTile(def, ref.mods, this.world.self?.pos, { x, y, z })) return;
+        this.startDrag(ref, e.shiftKey);
       },
       tapTile: (x, y, z) => this.tapTile({ x, y, z }),
       longPressTile: (x, y, z, cx, cy) => this.longPressTile({ x, y, z }, cx, cy),
@@ -2406,7 +2440,8 @@ export class Game {
     const top = aiming ? undefined : topItem(this.world, pos.x, pos.y, pos.z, false);
     const answer = pressAnswer(
       aiming,
-      top !== undefined && this.opts.content.items[top.itemId]?.fixed !== true,
+      top !== undefined &&
+        dragFromTile(this.opts.content.items[top.itemId], top.mods, this.world.self?.pos, pos),
     );
     if (!aiming) this.world.retryWalk();
     if (answer.walked) this.click({ pos });
@@ -2504,6 +2539,12 @@ export class Game {
     }
     if (e.code === "Escape" && this.cancelUse()) {
       e.preventDefault();
+      return;
+    }
+    // Escape ends the walk of a click on the minimap (the steps already sent are taken).
+    if (e.code === "Escape" && this.steer.cancelFar()) {
+      e.preventDefault();
+      this.publish();
       return;
     }
     const d = this.world.dialog;

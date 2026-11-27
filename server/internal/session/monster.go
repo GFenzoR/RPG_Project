@@ -47,8 +47,8 @@ const (
 	// wanderOdds: an idle monster that can step takes a random step with chance 1/n per
 	// tick (about once a second).
 	wanderOdds = 20
-	// respawnRetry is how long a respawn waits when a player is looking at the chosen
-	// tile, or there is no free tile.
+	// respawnRetry is how long a respawn waits when players see every tile of the spawn's
+	// area, or there is no free tile.
 	respawnRetry = game.Tick(5 * time.Second / game.TickDuration)
 	// spawnTries is how many random tiles a respawn tries in the spawn's radius.
 	spawnTries = 16
@@ -341,6 +341,10 @@ func (w *World) initCombat() error {
 	}
 	w.attackFor = ticksFor(c.AttackIntervalMs)
 	w.corpseFor = ticksFor(c.MonsterCorpseMs)
+	w.corpseMoveFor = 0
+	if ms := w.cfg.Balance.Inventory.CorpseMoveCooldownMs; ms > 0 {
+		w.corpseMoveFor = ticksFor(ms)
+	}
 	w.pathRetry = ticksFor(c.MonsterPathRetryMs)
 	w.stuckFor = ticksFor(c.MonsterStuckMs)
 	w.shunFor = ticksFor(c.MonsterShunMs)
@@ -569,17 +573,19 @@ func healthPercent(cur, maxHealth int) uint32 {
 
 // ---- spawns ----------------------------------------------------------------------
 
-// watched reports whether a player stands within the classic window of tile p (the
-// rectangle of InSight, on the floors seen together with p's): no monster appears there.
-// Not the wide view (Sees): a player hunting one spawn would hold back the respawns of
-// its neighbours 12-20 tiles away and cut the world's capacity (docs/07). A monster may
-// appear in a player's view instead, beyond the classic window (docs/02 "Respawns").
+// watched reports whether a player has tile p in its view (Sees: the whole window with its
+// margin, on the floors seen together with p's): nothing comes back there, neither a
+// monster nor an object of the living world (docs/02 "Respawns"). So a respawn sends a
+// CreatureAppear to nobody. A staff member that walks invisible does not count: it
+// inspects the world without changing it. An invisible player of any other kind does.
 func (w *World) watched(p world.Pos) bool {
 	seen := false
-	x, y := int(p.X), int(p.Y)
-	w.eachInRect(x-SightHalfW, y-SightHalfH, x+SightHalfW, y+SightHalfH, p.Z, func(*Player) { seen = true })
+	w.eachObserver(nil, p, func(o *Player) { seen = seen || blocksRespawn(o) })
 	return seen
 }
+
+// blocksRespawn reports whether what p sees holds respawns back.
+func blocksRespawn(p *Player) bool { return !p.invisible || p.role < RoleGM }
 
 // monsterCanEnter reports whether a monster may stand on p: walkable, free, outside
 // protection zones and not a tile that stairs, a hole or a teleport leaves from
@@ -607,11 +613,59 @@ func (w *World) spawnTile(ctx *game.TickContext, sp *world.Spawn) (world.Pos, bo
 	return world.Pos{}, false
 }
 
-// spawnMonster puts slot's monster in the world. Unless initial, it refuses when a
-// player is looking at the chosen tile (no monster appears in a player's face).
+// spawnWatchers collects, in w.spawnEyes, where the players stand that see some tile of
+// sp's area: one query of the spatial index for the whole area, not one per tile.
+func (w *World) spawnWatchers(sp *world.Spawn) []world.Pos {
+	w.spawnEyes = w.spawnEyes[:0]
+	x, y, r := int(sp.Center.X), int(sp.Center.Y), int(sp.Radius)
+	w.eachInRect(x-r-ViewHalfW, y-r-ViewHalfH, x+r+ViewHalfW, y+r+ViewHalfH, sp.Center.Z, func(o *Player) {
+		if blocksRespawn(o) {
+			w.spawnEyes = append(w.spawnEyes, o.pos)
+		}
+	})
+	return w.spawnEyes
+}
+
+// unseenSpawnTile picks a random tile of sp's area that a monster can enter and none of
+// eyes sees. It walks the whole area (a spawn's radius is a few tiles) instead of trying
+// at random: with a player hunting there, the few tiles out of its view are found.
+func (w *World) unseenSpawnTile(ctx *game.TickContext, sp *world.Spawn, eyes []world.Pos) (world.Pos, bool) {
+	w.spawnOpts = w.spawnOpts[:0]
+	r := int(sp.Radius)
+	for y := max(int(sp.Center.Y)-r, 0); y <= min(int(sp.Center.Y)+r, 0xFFFF); y++ {
+	tiles:
+		for x := max(int(sp.Center.X)-r, 0); x <= min(int(sp.Center.X)+r, 0xFFFF); x++ {
+			p := world.Pos{X: uint16(x), Y: uint16(y), Z: sp.Center.Z}
+			for _, e := range eyes {
+				if Sees(e, p) {
+					continue tiles
+				}
+			}
+			if w.monsterCanEnter(p) {
+				w.spawnOpts = append(w.spawnOpts, p)
+			}
+		}
+	}
+	if len(w.spawnOpts) == 0 {
+		return world.Pos{}, false
+	}
+	return w.spawnOpts[ctx.Rand.IntN(len(w.spawnOpts))], true
+}
+
+// spawnMonster puts slot's monster in the world. Unless initial, never on a tile a player
+// sees (watched): with players looking at the spawn's area it takes a tile of the area
+// none of them sees, and refuses when there is none (the respawn stays due and retries).
 func (w *World) spawnMonster(ctx *game.TickContext, slot *spawnSlot, initial bool) bool {
-	pos, ok := w.spawnTile(ctx, slot.spawn)
-	if !ok || (!initial && w.watched(pos)) {
+	var pos world.Pos
+	var ok bool
+	if initial { // the world starts: nobody is asked who looks
+		pos, ok = w.spawnTile(ctx, slot.spawn)
+	} else if eyes := w.spawnWatchers(slot.spawn); len(eyes) == 0 {
+		pos, ok = w.spawnTile(ctx, slot.spawn)
+	} else {
+		pos, ok = w.unseenSpawnTile(ctx, slot.spawn, eyes)
+	}
+	if !ok {
 		return false
 	}
 	w.placeMonster(slot.kind, slot, pos)

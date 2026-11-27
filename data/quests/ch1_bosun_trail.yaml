@@ -1,0 +1,23 @@
+id: ch1_bosun_trail
+name: quest.ch1_bosun_trail.name
+chapter: 1
+min_level: 5
+notes: >-
+  Main line, Chapter 1, fourth quest of the island chain: after ch1_false_light, from
+  puerto_foreman. Edric Sall, the bosun, is the only witness of the false light. Route:
+  the bats' gallery of the old mine (floor 8, west) -> the light under the sinkhole of
+  the wreck beach (puerto_beach_hole lands there): his broken lamp and drag marks, so he
+  was hauled up to Saltwrack -> puerto_foreman, who sends the player to puerto_diver.
+steps:
+  - id: clear_gallery
+    description: quest.ch1_bosun_trail.step_clear_gallery
+    complete_when: { kill: { monster: gloom_bat, count: 8 } }
+  - id: follow_tracks
+    description: quest.ch1_bosun_trail.step_follow_tracks
+    complete_when: { reach: { x: 3142, y: 6313, z: 8, radius: 2 } }
+  - id: tell_foreman
+    description: quest.ch1_bosun_trail.step_tell_foreman
+    complete_when: { dialog_action: { npc: puerto_foreman, node: bosun_trail_done } }
+rewards:
+  - { xp: 800 }
+  - { gold: 120 }

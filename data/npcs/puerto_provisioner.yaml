@@ -18,6 +18,7 @@ notes: >-
   buys hunting materials from the island's monsters at about a third of their value. No
   shovel since the content audit (m1): nothing in the world is dug yet. The rope climbs out
   of the sinkhole of the wreck beach (portals.yaml).
+  Answers two steps of Chapter 1's island chain (ch1_castaways, ch1_false_light).
 dialog:
   start: greet
   nodes:
@@ -30,8 +31,24 @@ dialog:
           goto: tools
         - text: npc.puerto_provisioner.opt_gossip
           goto: gossip
+        - text: npc.puerto_provisioner.opt_castaways
+          if: { quest_state: { quest: ch1_castaways, state: in_progress, step: ask_supplies } }
+          goto: castaways_supplies
+        - text: npc.puerto_provisioner.opt_false_light
+          if: { quest_state: { quest: ch1_false_light, state: in_progress, step: ask_oil } }
+          goto: false_light_oil
         - text: dialog.bye
           action: close
+    castaways_supplies:
+      text: npc.puerto_provisioner.castaways_supplies
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    false_light_oil:
+      text: npc.puerto_provisioner.false_light_oil
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
     tools:
       text: npc.puerto_provisioner.tools
       options:

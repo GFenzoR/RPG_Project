@@ -56,7 +56,27 @@ export interface MapItemAtlas<T> {
 }
 
 /** What they need of data/items: each item's sprite, by number. */
-export type MapItemSprites = Readonly<Record<number, { sprite?: string } | undefined>>;
+export type MapItemSprites = Readonly<
+  Record<number, { sprite?: string; kind?: string } | undefined>
+>;
+
+/**
+ * Share of its icon a carried thing shows at on the floor: the icons fill a tile, as big as
+ * a person. Still larger than life, so a dropped item is easy to see and to click.
+ */
+export const FLOOR_ITEM_SCALE = 0.625;
+/** The kinds of data/items a character carries (not furniture, grounds, walls or chests). */
+const CARRIED_KINDS: ReadonlySet<string> = new Set([
+  "weapon",
+  "armor",
+  "shield",
+  "ammo",
+  "consumable",
+  "material",
+  "currency",
+  "rune",
+  "tool",
+]);
 
 /**
  * The texture the map draws for the tile item `key`: the corpse of the monster whose
@@ -88,6 +108,22 @@ export function mapItemArt<T>(
   const { itemId, remainsOf } = parseMapItemKey(key);
   const corpse = remainsOf ? atlas.texture(corpseSprite(remainsOf)) : undefined;
   if (corpse) return corpseArt(corpse);
-  const sprite = items[itemId]?.sprite;
-  return sprite ? atlas.tileArt(sprite) : undefined;
+  const def = items[itemId];
+  const sprite = def?.sprite;
+  if (!sprite) return undefined;
+  const art = atlas.tileArt(sprite);
+  if (def.kind === undefined || !CARRIED_KINDS.has(def.kind)) return art;
+  if (art) return { ...art, scale: FLOOR_ITEM_SCALE };
+  const base = atlas.texture(sprite);
+  return base === undefined
+    ? undefined
+    : {
+        base,
+        ms: DEFAULT_FRAME_MS,
+        sync: "world",
+        anchorX: 1,
+        joinsWalls: false,
+        light: 0,
+        scale: FLOOR_ITEM_SCALE,
+      };
 }

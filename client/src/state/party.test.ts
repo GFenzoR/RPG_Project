@@ -4,9 +4,10 @@ import {
   PartyInvitationSchema,
   PartyMemberSchema,
   PartyUpdateSchema,
+  ShareBlock,
   SharedExperience,
 } from "@rpg/protocol";
-import { PartyState, partyBonus, sharedKey, sharingCount } from "./party.ts";
+import { PartyState, blockKey, partyBonus, sharedKey, sharingCount } from "./party.ts";
 
 const update = (leaderId: number, ids: number[]) =>
   create(PartyUpdateSchema, {
@@ -83,5 +84,25 @@ describe("PartyState", () => {
   it("names the indicator", () => {
     expect(sharedKey(SharedExperience.ACTIVE)).toBe("client.party.shared.active");
     expect(sharedKey(SharedExperience.OFF)).toBe("client.party.shared.off");
+  });
+
+  it("keeps why a member does not share and names every reason", () => {
+    const s = new PartyState();
+    const u = update(1, [1, 2]);
+    const low = u.members[1];
+    if (low) low.shareBlock = ShareBlock.LEVEL;
+    s.update(u);
+    expect(s.party?.members.map((m) => m.block)).toEqual([
+      ShareBlock.UNSPECIFIED,
+      ShareBlock.LEVEL,
+    ]);
+    expect(blockKey(ShareBlock.UNSPECIFIED)).toBeUndefined();
+    expect(blockKey(ShareBlock.LEVEL)).toBe("client.party.block.level");
+    expect(blockKey(ShareBlock.IDLE, true)).toBe("client.party.block_you.idle");
+    // Every reason of the protocol has its text in both languages.
+    const reasons = Object.values(ShareBlock).filter(
+      (v): v is ShareBlock => typeof v === "number" && v !== ShareBlock.UNSPECIFIED,
+    );
+    expect(reasons.map((r) => blockKey(r)).filter((k) => k === undefined)).toEqual([]);
   });
 });

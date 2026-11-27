@@ -731,10 +731,38 @@ tiempos de `go test -bench` (mediana de 3):
 - **Monstruos:** lo que nota un monstruo sigue siendo la ventana clásica (`InSight`) y
   `pickTarget` recorre solo ese rectángulo: la IA no cuesta más. Los sectores activos (2
   sectores alrededor de cada jugador, 64 casillas o más) ya cubrían la ventana ancha.
-- **Respawns:** el bloqueo de un respawn (`watched`) mira la ventana clásica, no la
-  ancha: con la ancha, quien caza en un spawn frenaba los vecinos (a 12–20 casillas) y la
-  "Eficiencia 2/3" de "Capacidad del mundo" quedaba optimista. Así la capacidad sigue
-  como se midió con 15x11 (`TestRespawnWaitsOnlyForTheClassicWindow`).
+- **Respawns (2026-11-26, decisión del dueño: nada reaparece a la vista; `02`
+  "Respawns"):** el bloqueo de un respawn mira la ventana entera, no la clásica, y un
+  spawn con jugadores mirando parte de su área toma una casilla que nadie ve. Costo por
+  intento: una consulta del índice espacial para toda el área (`spawnWatchers`: quién ve
+  alguna casilla) y, solo si hay alguien, recorrer las (2r+1)² casillas con aritmética
+  (`Sees`) contra esos pocos jugadores; sin nadie cerca sigue el sorteo de antes. Nada por
+  tick: solo en el evento del scheduler de cada slot vencido (cada 5 s mientras espera).
+  - **Medido** (`BenchmarkRespawnsHeld`, peor caso: 1024 monstruos muertos a la vez, 96
+    jugadores quietos que ven todas las áreas, cada slot reintentando cada 5 s, unos 10
+    intentos por tick): **9 µs por tick**, 18 allocs (PC del dueño, 2026-11-26), contra
+    11,7 µs de `BenchmarkTickMonsters` con 1024 monstruos vivos en la misma máquina.
+    Lejos del presupuesto de 50 ms.
+  - **Capacidad, por volver a medir:** con la ventana entera quien caza en un spawn frena
+    las casillas de los vecinos que ve (están a 12–20), así que la "Eficiencia 2/3" de
+    "Capacidad del mundo" (medida con 15x11) queda optimista; la casilla alternativa lo
+    compensa solo donde el área del vecino sale de la vista. Falta la prueba con bots
+    (`make bots` pide Postgres y el servidor: queda para la verificación final del lote)
+    y, si la XP/h cae, ajustar `count`/`respawn_seconds` o separar spawns.
+  - **`make bots N=100` en la verificación final del lote 20e (2026-11-27, PC del dueño,
+    Windows nativo, 10 min, escenario base):** 100/100 adentro, 0 desconexiones, tick
+    p50/p95/p99 0,03 / 1,02 / **2,09 ms** (máx. ≤ 6, 0 ticks pasados), RSS máx. 179 MB,
+    602 B/s por jugador, latencia de comando p95 48,1 ms. Todo dentro del presupuesto; el
+    p99 queda algo por encima de los 1,7–1,8 ms de las corridas anteriores, dentro del
+    mismo bucket del histograma. Los bots del escenario base casi no cazan (147 ataques
+    en 10 min), así que **la XP/h con la regla nueva sigue sin medir**: hace falta un
+    escenario de caza en `tools/bots`.
+  - **Mundo vivo, sin medir:** un objeto roto o una roca empujada que alguien mira
+    reintenta cada segundo, y cada intento es una pregunta `Host.Watched` (un
+    `eachObserver`; dos por roca, y la roca deja de preguntar a las dos veces su
+    `reset_seconds`). No es por tick y hoy hay decenas de objetos, no miles:
+    `BenchmarkRespawnsHeld` solo cubre monstruos. Si el mundo vivo crece a miles de
+    objetos rotos a la vista a la vez, medirlo antes.
 - **`make bots` contra un servidor real (lote 6, 2026-11-18).** Punta del lote
   (`lote6/verify`), mismo notebook y mismo script que "Resultados del stack T5.5–T5.7":
   Windows nativo, servidor, bots y Postgres (Docker) en la misma máquina, 5 islas (146

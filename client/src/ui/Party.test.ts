@@ -3,7 +3,7 @@
 import { KNOWN_NAME_MAX_CHARS } from "@rpg/content-schema/npc-role";
 import { describe, expect, it } from "vitest";
 import type { VNode } from "preact";
-import { SharedExperience } from "@rpg/protocol";
+import { ShareBlock, SharedExperience } from "@rpg/protocol";
 import type { Game, GameUi } from "../game.ts";
 import type { PartyView } from "../state/party.ts";
 import { PartyInvite, PartyPanel } from "./Party.tsx";
@@ -29,7 +29,7 @@ const text = (v: VNode<Props> | undefined): string =>
     .filter((c): c is string => typeof c === "string")
     .join("|");
 
-const member = (id: number, sharing: boolean) => ({
+const member = (id: number, sharing: boolean, block = ShareBlock.UNSPECIFIED) => ({
   id,
   name: `p${id}`,
   vocation: "guardian",
@@ -39,6 +39,7 @@ const member = (id: number, sharing: boolean) => ({
   mana: 50,
   island: "puerto",
   sharing,
+  block,
 });
 
 function panel(
@@ -82,6 +83,34 @@ describe("PartyPanel", () => {
     }
     // On (inactive) the button turns it off; off, it turns it on.
     expect(sent).toEqual([false, true]);
+  });
+
+  it("tells why a member does not share, and the player why it does not", () => {
+    const all = panel({
+      leaderId: 1,
+      shared: SharedExperience.ACTIVE,
+      bonusPercent: 5,
+      members: [
+        member(1, false, ShareBlock.LEVEL),
+        member(2, true),
+        member(3, true),
+        member(4, false, ShareBlock.FAR),
+        member(5, false, ShareBlock.IDLE),
+      ],
+    });
+    expect(text(byTestId(all, "party-block"))).toBe("client.party.block_you.level");
+    const tags = all.filter((v) => v.props["data-testid"] === "party-member-block");
+    // The player itself has the sentence, not a tag as well.
+    expect(tags.map((v) => text(v))).toEqual(["client.party.block.far", "client.party.block.idle"]);
+    // Sharing, or shared experience off: nothing to explain.
+    const off = panel({
+      leaderId: 1,
+      shared: SharedExperience.OFF,
+      bonusPercent: 0,
+      members: [member(1, false), member(2, false)],
+    });
+    expect(byTestId(off, "party-block")).toBeUndefined();
+    expect(off.filter((v) => v.props["data-testid"] === "party-member-block")).toHaveLength(0);
   });
 
   it("explains what a party gives when the player has none", () => {

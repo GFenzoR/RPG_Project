@@ -472,6 +472,13 @@ test("two arrows walk the diagonal at the straight speed, the person turned to i
   await page.waitForTimeout(HELD_MS);
   const drawn = await page.evaluate(() => window.__rpgClient?.drawnFacing());
   await page.screenshot({ path: join(shots, "96d-movement-diagonal.png") });
+  // Both keys come up in one task of the page: released one after the other (two round
+  // trips), the frame between them could still take a straight step with the key that
+  // was left (seen once: 3 east and 2 north). Playwright's own state follows after.
+  await page.evaluate((keys) => {
+    for (const k of keys)
+      window.dispatchEvent(new KeyboardEvent("keyup", { key: k, code: k, bubbles: true }));
+  }, d.keys);
   for (const k of d.keys) await page.keyboard.up(k);
   const end = await standing(page);
   const held = (await now(page)) - t0;

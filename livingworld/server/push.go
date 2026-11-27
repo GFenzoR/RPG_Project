@@ -36,6 +36,7 @@ func (w *World) Push(from Pos, dx, dy int) PushResult {
 	w.move(o, to)
 	if o.k.reset > 0 {
 		w.schedule(o, w.tick+o.k.reset)
+		o.sightUntil = w.tick + resetSightHold*o.k.reset
 	}
 	w.host.Event(Event{Kind: EventPush, Pos: from, To: to, Item: o.k.num, Effect: o.k.def.Pushable.Effect, Sound: o.k.def.Pushable.Sound})
 	w.updatePlates()
@@ -54,14 +55,24 @@ func (w *World) move(o *object, to Pos) {
 	w.host.TileChanged(to)
 }
 
-// resetPushable puts o back home once no creature stands there (the puzzle starts over);
-// loose items on its home are moved aside (room).
+// resetSightHold is how long, in reset times counted from the last push, a pushed object
+// waits for players to look away before it goes home anyway. Without a limit a boulder
+// pushed into the mouth of a dead end would lock in whoever stands behind it: that player
+// cannot push it back (a push needs the tile behind the boulder) and its own view would
+// hold the reset for ever (livingworld/README.md, invariant 7).
+const resetSightHold = 2
+
+// resetPushable puts o back home once no creature stands there (the puzzle starts over)
+// and no player sees it leave or arrive: a boulder does not jump in sight, so whoever is
+// still at the puzzle keeps it as it is. Sight holds it only until sightUntil: after that
+// it goes home in view. Loose items on its home are moved aside (room).
 func (w *World) resetPushable(o *object) {
 	if o.pos == o.home {
 		o.until = 0
 		return
 	}
-	if w.objs[o.home] != nil || !w.room(o.home) {
+	seen := w.tick < o.sightUntil && (w.host.Watched(o.pos) || w.host.Watched(o.home))
+	if w.objs[o.home] != nil || seen || !w.room(o.home) {
 		w.schedule(o, w.tick+w.cat.retry)
 		return
 	}

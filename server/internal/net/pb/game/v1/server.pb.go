@@ -663,6 +663,80 @@ func (SharedExperience) EnumDescriptor() ([]byte, []int) {
 	return file_game_v1_server_proto_rawDescGZIP(), []int{9}
 }
 
+// ShareBlock is why a member would not share the experience of a kill next to the
+// viewer right now: the first reason that applies, in this order. UNSPECIFIED while the
+// member shares or shared experience is off.
+type ShareBlock int32
+
+const (
+	ShareBlock_SHARE_BLOCK_UNSPECIFIED ShareBlock = 0
+	// The member is on another floor or farther than balance.yaml party.share_distance
+	// from the viewer. It does not follow the view: a member out of view (in_view false)
+	// that is within share_distance shares, or has one of the other reasons.
+	ShareBlock_SHARE_BLOCK_FAR  ShareBlock = 1
+	ShareBlock_SHARE_BLOCK_DEAD ShareBlock = 2
+	// It did not fight within balance.yaml party.contribution_ms (hit a monster, healed a
+	// member or was attacked by a monster).
+	ShareBlock_SHARE_BLOCK_IDLE ShareBlock = 3
+	// Its level is too far below the highest of the members that fight nearby
+	// (party.level_gap_always and party.level_range_pct).
+	ShareBlock_SHARE_BLOCK_LEVEL ShareBlock = 4
+	// Another character of its account already shares. Sent only to a viewer of that
+	// account: for anyone else the member has no reason (UNSPECIFIED).
+	ShareBlock_SHARE_BLOCK_ACCOUNT ShareBlock = 5
+	// It qualifies, but no other member does: sharing needs two.
+	ShareBlock_SHARE_BLOCK_ALONE ShareBlock = 6
+)
+
+// Enum value maps for ShareBlock.
+var (
+	ShareBlock_name = map[int32]string{
+		0: "SHARE_BLOCK_UNSPECIFIED",
+		1: "SHARE_BLOCK_FAR",
+		2: "SHARE_BLOCK_DEAD",
+		3: "SHARE_BLOCK_IDLE",
+		4: "SHARE_BLOCK_LEVEL",
+		5: "SHARE_BLOCK_ACCOUNT",
+		6: "SHARE_BLOCK_ALONE",
+	}
+	ShareBlock_value = map[string]int32{
+		"SHARE_BLOCK_UNSPECIFIED": 0,
+		"SHARE_BLOCK_FAR":         1,
+		"SHARE_BLOCK_DEAD":        2,
+		"SHARE_BLOCK_IDLE":        3,
+		"SHARE_BLOCK_LEVEL":       4,
+		"SHARE_BLOCK_ACCOUNT":     5,
+		"SHARE_BLOCK_ALONE":       6,
+	}
+)
+
+func (x ShareBlock) Enum() *ShareBlock {
+	p := new(ShareBlock)
+	*p = x
+	return p
+}
+
+func (x ShareBlock) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ShareBlock) Descriptor() protoreflect.EnumDescriptor {
+	return file_game_v1_server_proto_enumTypes[10].Descriptor()
+}
+
+func (ShareBlock) Type() protoreflect.EnumType {
+	return &file_game_v1_server_proto_enumTypes[10]
+}
+
+func (x ShareBlock) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ShareBlock.Descriptor instead.
+func (ShareBlock) EnumDescriptor() ([]byte, []int) {
+	return file_game_v1_server_proto_rawDescGZIP(), []int{10}
+}
+
 // GuildRank is a member's rank (T5.1).
 type GuildRank int32
 
@@ -700,11 +774,11 @@ func (x GuildRank) String() string {
 }
 
 func (GuildRank) Descriptor() protoreflect.EnumDescriptor {
-	return file_game_v1_server_proto_enumTypes[10].Descriptor()
+	return file_game_v1_server_proto_enumTypes[11].Descriptor()
 }
 
 func (GuildRank) Type() protoreflect.EnumType {
-	return &file_game_v1_server_proto_enumTypes[10]
+	return &file_game_v1_server_proto_enumTypes[11]
 }
 
 func (x GuildRank) Number() protoreflect.EnumNumber {
@@ -713,7 +787,7 @@ func (x GuildRank) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GuildRank.Descriptor instead.
 func (GuildRank) EnumDescriptor() ([]byte, []int) {
-	return file_game_v1_server_proto_rawDescGZIP(), []int{10}
+	return file_game_v1_server_proto_rawDescGZIP(), []int{11}
 }
 
 type GuildWarState int32
@@ -750,11 +824,11 @@ func (x GuildWarState) String() string {
 }
 
 func (GuildWarState) Descriptor() protoreflect.EnumDescriptor {
-	return file_game_v1_server_proto_enumTypes[11].Descriptor()
+	return file_game_v1_server_proto_enumTypes[12].Descriptor()
 }
 
 func (GuildWarState) Type() protoreflect.EnumType {
-	return &file_game_v1_server_proto_enumTypes[11]
+	return &file_game_v1_server_proto_enumTypes[12]
 }
 
 func (x GuildWarState) Number() protoreflect.EnumNumber {
@@ -763,7 +837,7 @@ func (x GuildWarState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use GuildWarState.Descriptor instead.
 func (GuildWarState) EnumDescriptor() ([]byte, []int) {
-	return file_game_v1_server_proto_rawDescGZIP(), []int{11}
+	return file_game_v1_server_proto_rawDescGZIP(), []int{12}
 }
 
 // RefineOutcome is how a forge attempt ended (docs/02 "Forja").
@@ -806,11 +880,11 @@ func (x RefineOutcome) String() string {
 }
 
 func (RefineOutcome) Descriptor() protoreflect.EnumDescriptor {
-	return file_game_v1_server_proto_enumTypes[12].Descriptor()
+	return file_game_v1_server_proto_enumTypes[13].Descriptor()
 }
 
 func (RefineOutcome) Type() protoreflect.EnumType {
-	return &file_game_v1_server_proto_enumTypes[12]
+	return &file_game_v1_server_proto_enumTypes[13]
 }
 
 func (x RefineOutcome) Number() protoreflect.EnumNumber {
@@ -819,7 +893,7 @@ func (x RefineOutcome) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RefineOutcome.Descriptor instead.
 func (RefineOutcome) EnumDescriptor() ([]byte, []int) {
-	return file_game_v1_server_proto_rawDescGZIP(), []int{12}
+	return file_game_v1_server_proto_rawDescGZIP(), []int{13}
 }
 
 // QuestLogState is where the character is in one quest of its quest log.
@@ -867,11 +941,11 @@ func (x QuestLogState) String() string {
 }
 
 func (QuestLogState) Descriptor() protoreflect.EnumDescriptor {
-	return file_game_v1_server_proto_enumTypes[13].Descriptor()
+	return file_game_v1_server_proto_enumTypes[14].Descriptor()
 }
 
 func (QuestLogState) Type() protoreflect.EnumType {
-	return &file_game_v1_server_proto_enumTypes[13]
+	return &file_game_v1_server_proto_enumTypes[14]
 }
 
 func (x QuestLogState) Number() protoreflect.EnumNumber {
@@ -880,7 +954,7 @@ func (x QuestLogState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use QuestLogState.Descriptor instead.
 func (QuestLogState) EnumDescriptor() ([]byte, []int) {
-	return file_game_v1_server_proto_rawDescGZIP(), []int{13}
+	return file_game_v1_server_proto_rawDescGZIP(), []int{14}
 }
 
 // StashResult is what became of the last StashCommand (or of the UseItem that opened the
@@ -958,11 +1032,11 @@ func (x StashResult) String() string {
 }
 
 func (StashResult) Descriptor() protoreflect.EnumDescriptor {
-	return file_game_v1_server_proto_enumTypes[14].Descriptor()
+	return file_game_v1_server_proto_enumTypes[15].Descriptor()
 }
 
 func (StashResult) Type() protoreflect.EnumType {
-	return &file_game_v1_server_proto_enumTypes[14]
+	return &file_game_v1_server_proto_enumTypes[15]
 }
 
 func (x StashResult) Number() protoreflect.EnumNumber {
@@ -971,7 +1045,7 @@ func (x StashResult) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use StashResult.Descriptor instead.
 func (StashResult) EnumDescriptor() ([]byte, []int) {
-	return file_game_v1_server_proto_rawDescGZIP(), []int{14}
+	return file_game_v1_server_proto_rawDescGZIP(), []int{15}
 }
 
 // ServerBatch is the only thing a server WebSocket frame carries: every event of one
@@ -6339,8 +6413,11 @@ type PartyMember struct {
 	ManaPercent   uint32 `protobuf:"varint,7,opt,name=mana_percent,json=manaPercent,proto3" json:"mana_percent,omitempty"`
 	// Island id of world/world.yaml where the member is (empty in the open sea).
 	Island string `protobuf:"bytes,8,opt,name=island,proto3" json:"island,omitempty"`
-	// The member qualifies for shared experience right now (see SharedExperience).
-	Sharing       bool `protobuf:"varint,9,opt,name=sharing,proto3" json:"sharing,omitempty"`
+	// The member would share a kill next to the viewer right now (see SharedExperience),
+	// in view or not.
+	Sharing bool `protobuf:"varint,9,opt,name=sharing,proto3" json:"sharing,omitempty"`
+	// Why not, when sharing is false and shared experience is on.
+	ShareBlock    ShareBlock `protobuf:"varint,10,opt,name=share_block,json=shareBlock,proto3,enum=game.v1.ShareBlock" json:"share_block,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6436,6 +6513,13 @@ func (x *PartyMember) GetSharing() bool {
 		return x.Sharing
 	}
 	return false
+}
+
+func (x *PartyMember) GetShareBlock() ShareBlock {
+	if x != nil {
+		return x.ShareBlock
+	}
+	return ShareBlock_SHARE_BLOCK_UNSPECIFIED
 }
 
 // PartyInvitation tells a player that inviter_id invited it to a party. It can answer
@@ -8239,7 +8323,7 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\tleader_id\x18\x01 \x01(\rR\bleaderId\x121\n" +
 	"\x06shared\x18\x02 \x01(\x0e2\x19.game.v1.SharedExperienceR\x06shared\x12.\n" +
 	"\amembers\x18\x03 \x03(\v2\x14.game.v1.PartyMemberR\amembers\x12#\n" +
-	"\rbonus_percent\x18\x04 \x01(\rR\fbonusPercent\"\x89\x02\n" +
+	"\rbonus_percent\x18\x04 \x01(\rR\fbonusPercent\"\xbf\x02\n" +
 	"\vPartyMember\x12\x1f\n" +
 	"\vcreature_id\x18\x01 \x01(\rR\n" +
 	"creatureId\x12\x12\n" +
@@ -8250,7 +8334,10 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x0ehealth_percent\x18\x06 \x01(\rR\rhealthPercent\x12!\n" +
 	"\fmana_percent\x18\a \x01(\rR\vmanaPercent\x12\x16\n" +
 	"\x06island\x18\b \x01(\tR\x06island\x12\x18\n" +
-	"\asharing\x18\t \x01(\bR\asharing\"r\n" +
+	"\asharing\x18\t \x01(\bR\asharing\x124\n" +
+	"\vshare_block\x18\n" +
+	" \x01(\x0e2\x13.game.v1.ShareBlockR\n" +
+	"shareBlock\"r\n" +
 	"\x0fPartyInvitation\x12\x1d\n" +
 	"\n" +
 	"inviter_id\x18\x01 \x01(\rR\tinviterId\x12!\n" +
@@ -8436,7 +8523,16 @@ const file_game_v1_server_proto_rawDesc = "" +
 	"\x1dSHARED_EXPERIENCE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15SHARED_EXPERIENCE_OFF\x10\x01\x12\x1c\n" +
 	"\x18SHARED_EXPERIENCE_ACTIVE\x10\x02\x12\x1e\n" +
-	"\x1aSHARED_EXPERIENCE_INACTIVE\x10\x03*j\n" +
+	"\x1aSHARED_EXPERIENCE_INACTIVE\x10\x03*\xb1\x01\n" +
+	"\n" +
+	"ShareBlock\x12\x1b\n" +
+	"\x17SHARE_BLOCK_UNSPECIFIED\x10\x00\x12\x13\n" +
+	"\x0fSHARE_BLOCK_FAR\x10\x01\x12\x14\n" +
+	"\x10SHARE_BLOCK_DEAD\x10\x02\x12\x14\n" +
+	"\x10SHARE_BLOCK_IDLE\x10\x03\x12\x15\n" +
+	"\x11SHARE_BLOCK_LEVEL\x10\x04\x12\x17\n" +
+	"\x13SHARE_BLOCK_ACCOUNT\x10\x05\x12\x15\n" +
+	"\x11SHARE_BLOCK_ALONE\x10\x06*j\n" +
 	"\tGuildRank\x12\x1a\n" +
 	"\x16GUILD_RANK_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11GUILD_RANK_MEMBER\x10\x01\x12\x13\n" +
@@ -8484,7 +8580,7 @@ func file_game_v1_server_proto_rawDescGZIP() []byte {
 	return file_game_v1_server_proto_rawDescData
 }
 
-var file_game_v1_server_proto_enumTypes = make([]protoimpl.EnumInfo, 15)
+var file_game_v1_server_proto_enumTypes = make([]protoimpl.EnumInfo, 16)
 var file_game_v1_server_proto_msgTypes = make([]protoimpl.MessageInfo, 79)
 var file_game_v1_server_proto_goTypes = []any{
 	(TutorialState)(0),         // 0: game.v1.TutorialState
@@ -8497,267 +8593,269 @@ var file_game_v1_server_proto_goTypes = []any{
 	(TradeState)(0),            // 7: game.v1.TradeState
 	(DisconnectReason)(0),      // 8: game.v1.DisconnectReason
 	(SharedExperience)(0),      // 9: game.v1.SharedExperience
-	(GuildRank)(0),             // 10: game.v1.GuildRank
-	(GuildWarState)(0),         // 11: game.v1.GuildWarState
-	(RefineOutcome)(0),         // 12: game.v1.RefineOutcome
-	(QuestLogState)(0),         // 13: game.v1.QuestLogState
-	(StashResult)(0),           // 14: game.v1.StashResult
-	(*ServerBatch)(nil),        // 15: game.v1.ServerBatch
-	(*ServerMessage)(nil),      // 16: game.v1.ServerMessage
-	(*TutorialStep)(nil),       // 17: game.v1.TutorialStep
-	(*PresenceCheck)(nil),      // 18: game.v1.PresenceCheck
-	(*Welcome)(nil),            // 19: game.v1.Welcome
-	(*GameOptions)(nil),        // 20: game.v1.GameOptions
-	(*Tile)(nil),               // 21: game.v1.Tile
-	(*MapFloor)(nil),           // 22: game.v1.MapFloor
-	(*MapArea)(nil),            // 23: game.v1.MapArea
-	(*FullMapView)(nil),        // 24: game.v1.FullMapView
-	(*MapSlice)(nil),           // 25: game.v1.MapSlice
-	(*TileUpdate)(nil),         // 26: game.v1.TileUpdate
-	(*Outfit)(nil),             // 27: game.v1.Outfit
-	(*Creature)(nil),           // 28: game.v1.Creature
-	(*VisibleEquipment)(nil),   // 29: game.v1.VisibleEquipment
-	(*WornPiece)(nil),          // 30: game.v1.WornPiece
-	(*Worn)(nil),               // 31: game.v1.Worn
-	(*CreatureLook)(nil),       // 32: game.v1.CreatureLook
-	(*Cosmetics)(nil),          // 33: game.v1.Cosmetics
-	(*CreatureCosmetics)(nil),  // 34: game.v1.CreatureCosmetics
-	(*CosmeticsState)(nil),     // 35: game.v1.CosmeticsState
-	(*CreatureSkull)(nil),      // 36: game.v1.CreatureSkull
-	(*CreatureAppear)(nil),     // 37: game.v1.CreatureAppear
-	(*CreatureDisappear)(nil),  // 38: game.v1.CreatureDisappear
-	(*CreatureMove)(nil),       // 39: game.v1.CreatureMove
-	(*CreatureTurn)(nil),       // 40: game.v1.CreatureTurn
-	(*CreatureHealth)(nil),     // 41: game.v1.CreatureHealth
-	(*CreatureOutfit)(nil),     // 42: game.v1.CreatureOutfit
-	(*CreatureSpeed)(nil),      // 43: game.v1.CreatureSpeed
-	(*Effect)(nil),             // 44: game.v1.Effect
-	(*Projectile)(nil),         // 45: game.v1.Projectile
-	(*CreatureAttack)(nil),     // 46: game.v1.CreatureAttack
-	(*PlayerConditions)(nil),   // 47: game.v1.PlayerConditions
-	(*ActiveCondition)(nil),    // 48: game.v1.ActiveCondition
-	(*SpellCooldown)(nil),      // 49: game.v1.SpellCooldown
-	(*FloatingText)(nil),       // 50: game.v1.FloatingText
-	(*PlayerStats)(nil),        // 51: game.v1.PlayerStats
-	(*SkillProgress)(nil),      // 52: game.v1.SkillProgress
-	(*PlayerSkills)(nil),       // 53: game.v1.PlayerSkills
-	(*EquippedItem)(nil),       // 54: game.v1.EquippedItem
-	(*Inventory)(nil),          // 55: game.v1.Inventory
-	(*ContainerOpen)(nil),      // 56: game.v1.ContainerOpen
-	(*ContainerUpdate)(nil),    // 57: game.v1.ContainerUpdate
-	(*ContainerClose)(nil),     // 58: game.v1.ContainerClose
-	(*Message)(nil),            // 59: game.v1.Message
-	(*DialogOption)(nil),       // 60: game.v1.DialogOption
-	(*DialogOpen)(nil),         // 61: game.v1.DialogOpen
-	(*DialogClose)(nil),        // 62: game.v1.DialogClose
-	(*ShopOffer)(nil),          // 63: game.v1.ShopOffer
-	(*ShopOpen)(nil),           // 64: game.v1.ShopOpen
-	(*TradeUpdate)(nil),        // 65: game.v1.TradeUpdate
-	(*MarketOffer)(nil),        // 66: game.v1.MarketOffer
-	(*MarketMailItem)(nil),     // 67: game.v1.MarketMailItem
-	(*MarketHistoryEntry)(nil), // 68: game.v1.MarketHistoryEntry
-	(*MarketUpdate)(nil),       // 69: game.v1.MarketUpdate
-	(*HouseUpdate)(nil),        // 70: game.v1.HouseUpdate
-	(*WalkRejected)(nil),       // 71: game.v1.WalkRejected
-	(*Pong)(nil),               // 72: game.v1.Pong
-	(*Disconnect)(nil),         // 73: game.v1.Disconnect
-	(*PartyUpdate)(nil),        // 74: game.v1.PartyUpdate
-	(*PartyMember)(nil),        // 75: game.v1.PartyMember
-	(*PartyInvitation)(nil),    // 76: game.v1.PartyInvitation
-	(*GuildUpdate)(nil),        // 77: game.v1.GuildUpdate
-	(*GuildWar)(nil),           // 78: game.v1.GuildWar
-	(*GuildMember)(nil),        // 79: game.v1.GuildMember
-	(*GuildPendingInvite)(nil), // 80: game.v1.GuildPendingInvite
-	(*GuildInvitation)(nil),    // 81: game.v1.GuildInvitation
-	(*CreatureGuild)(nil),      // 82: game.v1.CreatureGuild
-	(*StationOpen)(nil),        // 83: game.v1.StationOpen
-	(*RefineResult)(nil),       // 84: game.v1.RefineResult
-	(*QuestLog)(nil),           // 85: game.v1.QuestLog
-	(*QuestLogEntry)(nil),      // 86: game.v1.QuestLogEntry
-	(*MilestoneInfo)(nil),      // 87: game.v1.MilestoneInfo
-	(*StashUpdate)(nil),        // 88: game.v1.StashUpdate
-	(*MinimapIndex)(nil),       // 89: game.v1.MinimapIndex
-	(*MinimapFloorIndex)(nil),  // 90: game.v1.MinimapFloorIndex
-	(*MinimapSectors)(nil),     // 91: game.v1.MinimapSectors
-	(*MinimapSector)(nil),      // 92: game.v1.MinimapSector
-	(*ObjectiveHint)(nil),      // 93: game.v1.ObjectiveHint
-	(*LivingObjectEvent)(nil),  // 94: game.v1.LivingObjectEvent
-	(*TrailWear)(nil),          // 95: game.v1.TrailWear
-	(*WorldClock)(nil),         // 96: game.v1.WorldClock
-	(*LocalizedText)(nil),      // 97: game.v1.LocalizedText
-	(FightStance)(0),           // 98: game.v1.FightStance
-	(*ItemStack)(nil),          // 99: game.v1.ItemStack
-	(*Position)(nil),           // 100: game.v1.Position
-	(Direction)(0),             // 101: game.v1.Direction
-	(*BodyLook)(nil),           // 102: game.v1.BodyLook
-	(EquipmentSlot)(0),         // 103: game.v1.EquipmentSlot
-	(*ItemMods)(nil),           // 104: game.v1.ItemMods
-	(MarketSide)(0),            // 105: game.v1.MarketSide
+	(ShareBlock)(0),            // 10: game.v1.ShareBlock
+	(GuildRank)(0),             // 11: game.v1.GuildRank
+	(GuildWarState)(0),         // 12: game.v1.GuildWarState
+	(RefineOutcome)(0),         // 13: game.v1.RefineOutcome
+	(QuestLogState)(0),         // 14: game.v1.QuestLogState
+	(StashResult)(0),           // 15: game.v1.StashResult
+	(*ServerBatch)(nil),        // 16: game.v1.ServerBatch
+	(*ServerMessage)(nil),      // 17: game.v1.ServerMessage
+	(*TutorialStep)(nil),       // 18: game.v1.TutorialStep
+	(*PresenceCheck)(nil),      // 19: game.v1.PresenceCheck
+	(*Welcome)(nil),            // 20: game.v1.Welcome
+	(*GameOptions)(nil),        // 21: game.v1.GameOptions
+	(*Tile)(nil),               // 22: game.v1.Tile
+	(*MapFloor)(nil),           // 23: game.v1.MapFloor
+	(*MapArea)(nil),            // 24: game.v1.MapArea
+	(*FullMapView)(nil),        // 25: game.v1.FullMapView
+	(*MapSlice)(nil),           // 26: game.v1.MapSlice
+	(*TileUpdate)(nil),         // 27: game.v1.TileUpdate
+	(*Outfit)(nil),             // 28: game.v1.Outfit
+	(*Creature)(nil),           // 29: game.v1.Creature
+	(*VisibleEquipment)(nil),   // 30: game.v1.VisibleEquipment
+	(*WornPiece)(nil),          // 31: game.v1.WornPiece
+	(*Worn)(nil),               // 32: game.v1.Worn
+	(*CreatureLook)(nil),       // 33: game.v1.CreatureLook
+	(*Cosmetics)(nil),          // 34: game.v1.Cosmetics
+	(*CreatureCosmetics)(nil),  // 35: game.v1.CreatureCosmetics
+	(*CosmeticsState)(nil),     // 36: game.v1.CosmeticsState
+	(*CreatureSkull)(nil),      // 37: game.v1.CreatureSkull
+	(*CreatureAppear)(nil),     // 38: game.v1.CreatureAppear
+	(*CreatureDisappear)(nil),  // 39: game.v1.CreatureDisappear
+	(*CreatureMove)(nil),       // 40: game.v1.CreatureMove
+	(*CreatureTurn)(nil),       // 41: game.v1.CreatureTurn
+	(*CreatureHealth)(nil),     // 42: game.v1.CreatureHealth
+	(*CreatureOutfit)(nil),     // 43: game.v1.CreatureOutfit
+	(*CreatureSpeed)(nil),      // 44: game.v1.CreatureSpeed
+	(*Effect)(nil),             // 45: game.v1.Effect
+	(*Projectile)(nil),         // 46: game.v1.Projectile
+	(*CreatureAttack)(nil),     // 47: game.v1.CreatureAttack
+	(*PlayerConditions)(nil),   // 48: game.v1.PlayerConditions
+	(*ActiveCondition)(nil),    // 49: game.v1.ActiveCondition
+	(*SpellCooldown)(nil),      // 50: game.v1.SpellCooldown
+	(*FloatingText)(nil),       // 51: game.v1.FloatingText
+	(*PlayerStats)(nil),        // 52: game.v1.PlayerStats
+	(*SkillProgress)(nil),      // 53: game.v1.SkillProgress
+	(*PlayerSkills)(nil),       // 54: game.v1.PlayerSkills
+	(*EquippedItem)(nil),       // 55: game.v1.EquippedItem
+	(*Inventory)(nil),          // 56: game.v1.Inventory
+	(*ContainerOpen)(nil),      // 57: game.v1.ContainerOpen
+	(*ContainerUpdate)(nil),    // 58: game.v1.ContainerUpdate
+	(*ContainerClose)(nil),     // 59: game.v1.ContainerClose
+	(*Message)(nil),            // 60: game.v1.Message
+	(*DialogOption)(nil),       // 61: game.v1.DialogOption
+	(*DialogOpen)(nil),         // 62: game.v1.DialogOpen
+	(*DialogClose)(nil),        // 63: game.v1.DialogClose
+	(*ShopOffer)(nil),          // 64: game.v1.ShopOffer
+	(*ShopOpen)(nil),           // 65: game.v1.ShopOpen
+	(*TradeUpdate)(nil),        // 66: game.v1.TradeUpdate
+	(*MarketOffer)(nil),        // 67: game.v1.MarketOffer
+	(*MarketMailItem)(nil),     // 68: game.v1.MarketMailItem
+	(*MarketHistoryEntry)(nil), // 69: game.v1.MarketHistoryEntry
+	(*MarketUpdate)(nil),       // 70: game.v1.MarketUpdate
+	(*HouseUpdate)(nil),        // 71: game.v1.HouseUpdate
+	(*WalkRejected)(nil),       // 72: game.v1.WalkRejected
+	(*Pong)(nil),               // 73: game.v1.Pong
+	(*Disconnect)(nil),         // 74: game.v1.Disconnect
+	(*PartyUpdate)(nil),        // 75: game.v1.PartyUpdate
+	(*PartyMember)(nil),        // 76: game.v1.PartyMember
+	(*PartyInvitation)(nil),    // 77: game.v1.PartyInvitation
+	(*GuildUpdate)(nil),        // 78: game.v1.GuildUpdate
+	(*GuildWar)(nil),           // 79: game.v1.GuildWar
+	(*GuildMember)(nil),        // 80: game.v1.GuildMember
+	(*GuildPendingInvite)(nil), // 81: game.v1.GuildPendingInvite
+	(*GuildInvitation)(nil),    // 82: game.v1.GuildInvitation
+	(*CreatureGuild)(nil),      // 83: game.v1.CreatureGuild
+	(*StationOpen)(nil),        // 84: game.v1.StationOpen
+	(*RefineResult)(nil),       // 85: game.v1.RefineResult
+	(*QuestLog)(nil),           // 86: game.v1.QuestLog
+	(*QuestLogEntry)(nil),      // 87: game.v1.QuestLogEntry
+	(*MilestoneInfo)(nil),      // 88: game.v1.MilestoneInfo
+	(*StashUpdate)(nil),        // 89: game.v1.StashUpdate
+	(*MinimapIndex)(nil),       // 90: game.v1.MinimapIndex
+	(*MinimapFloorIndex)(nil),  // 91: game.v1.MinimapFloorIndex
+	(*MinimapSectors)(nil),     // 92: game.v1.MinimapSectors
+	(*MinimapSector)(nil),      // 93: game.v1.MinimapSector
+	(*ObjectiveHint)(nil),      // 94: game.v1.ObjectiveHint
+	(*LivingObjectEvent)(nil),  // 95: game.v1.LivingObjectEvent
+	(*TrailWear)(nil),          // 96: game.v1.TrailWear
+	(*WorldClock)(nil),         // 97: game.v1.WorldClock
+	(*LocalizedText)(nil),      // 98: game.v1.LocalizedText
+	(FightStance)(0),           // 99: game.v1.FightStance
+	(*ItemStack)(nil),          // 100: game.v1.ItemStack
+	(*Position)(nil),           // 101: game.v1.Position
+	(Direction)(0),             // 102: game.v1.Direction
+	(*BodyLook)(nil),           // 103: game.v1.BodyLook
+	(EquipmentSlot)(0),         // 104: game.v1.EquipmentSlot
+	(*ItemMods)(nil),           // 105: game.v1.ItemMods
+	(MarketSide)(0),            // 106: game.v1.MarketSide
 }
 var file_game_v1_server_proto_depIdxs = []int32{
-	16,  // 0: game.v1.ServerBatch.events:type_name -> game.v1.ServerMessage
-	19,  // 1: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
-	24,  // 2: game.v1.ServerMessage.full_map_view:type_name -> game.v1.FullMapView
-	25,  // 3: game.v1.ServerMessage.map_slice:type_name -> game.v1.MapSlice
-	26,  // 4: game.v1.ServerMessage.tile_update:type_name -> game.v1.TileUpdate
-	37,  // 5: game.v1.ServerMessage.creature_appear:type_name -> game.v1.CreatureAppear
-	38,  // 6: game.v1.ServerMessage.creature_disappear:type_name -> game.v1.CreatureDisappear
-	39,  // 7: game.v1.ServerMessage.creature_move:type_name -> game.v1.CreatureMove
-	40,  // 8: game.v1.ServerMessage.creature_turn:type_name -> game.v1.CreatureTurn
-	41,  // 9: game.v1.ServerMessage.creature_health:type_name -> game.v1.CreatureHealth
-	42,  // 10: game.v1.ServerMessage.creature_outfit:type_name -> game.v1.CreatureOutfit
-	43,  // 11: game.v1.ServerMessage.creature_speed:type_name -> game.v1.CreatureSpeed
-	44,  // 12: game.v1.ServerMessage.effect:type_name -> game.v1.Effect
-	45,  // 13: game.v1.ServerMessage.projectile:type_name -> game.v1.Projectile
-	50,  // 14: game.v1.ServerMessage.floating_text:type_name -> game.v1.FloatingText
-	51,  // 15: game.v1.ServerMessage.player_stats:type_name -> game.v1.PlayerStats
-	53,  // 16: game.v1.ServerMessage.player_skills:type_name -> game.v1.PlayerSkills
-	55,  // 17: game.v1.ServerMessage.inventory:type_name -> game.v1.Inventory
-	56,  // 18: game.v1.ServerMessage.container_open:type_name -> game.v1.ContainerOpen
-	57,  // 19: game.v1.ServerMessage.container_update:type_name -> game.v1.ContainerUpdate
-	58,  // 20: game.v1.ServerMessage.container_close:type_name -> game.v1.ContainerClose
-	59,  // 21: game.v1.ServerMessage.chat_message:type_name -> game.v1.Message
-	61,  // 22: game.v1.ServerMessage.dialog_open:type_name -> game.v1.DialogOpen
-	62,  // 23: game.v1.ServerMessage.dialog_close:type_name -> game.v1.DialogClose
-	64,  // 24: game.v1.ServerMessage.shop_open:type_name -> game.v1.ShopOpen
-	65,  // 25: game.v1.ServerMessage.trade_update:type_name -> game.v1.TradeUpdate
-	71,  // 26: game.v1.ServerMessage.walk_rejected:type_name -> game.v1.WalkRejected
-	72,  // 27: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
-	73,  // 28: game.v1.ServerMessage.disconnect:type_name -> game.v1.Disconnect
-	49,  // 29: game.v1.ServerMessage.spell_cooldown:type_name -> game.v1.SpellCooldown
-	47,  // 30: game.v1.ServerMessage.player_conditions:type_name -> game.v1.PlayerConditions
-	74,  // 31: game.v1.ServerMessage.party_update:type_name -> game.v1.PartyUpdate
-	76,  // 32: game.v1.ServerMessage.party_invitation:type_name -> game.v1.PartyInvitation
-	83,  // 33: game.v1.ServerMessage.station_open:type_name -> game.v1.StationOpen
-	18,  // 34: game.v1.ServerMessage.presence_check:type_name -> game.v1.PresenceCheck
-	17,  // 35: game.v1.ServerMessage.tutorial_step:type_name -> game.v1.TutorialStep
-	77,  // 36: game.v1.ServerMessage.guild_update:type_name -> game.v1.GuildUpdate
-	82,  // 37: game.v1.ServerMessage.creature_guild:type_name -> game.v1.CreatureGuild
-	36,  // 38: game.v1.ServerMessage.creature_skull:type_name -> game.v1.CreatureSkull
-	69,  // 39: game.v1.ServerMessage.market_update:type_name -> game.v1.MarketUpdate
-	70,  // 40: game.v1.ServerMessage.house_update:type_name -> game.v1.HouseUpdate
-	34,  // 41: game.v1.ServerMessage.creature_cosmetics:type_name -> game.v1.CreatureCosmetics
-	35,  // 42: game.v1.ServerMessage.cosmetics_state:type_name -> game.v1.CosmeticsState
-	46,  // 43: game.v1.ServerMessage.creature_attack:type_name -> game.v1.CreatureAttack
-	84,  // 44: game.v1.ServerMessage.refine_result:type_name -> game.v1.RefineResult
-	85,  // 45: game.v1.ServerMessage.quest_log:type_name -> game.v1.QuestLog
-	32,  // 46: game.v1.ServerMessage.creature_look:type_name -> game.v1.CreatureLook
-	88,  // 47: game.v1.ServerMessage.stash_update:type_name -> game.v1.StashUpdate
-	94,  // 48: game.v1.ServerMessage.living_object:type_name -> game.v1.LivingObjectEvent
-	95,  // 49: game.v1.ServerMessage.trail_wear:type_name -> game.v1.TrailWear
-	89,  // 50: game.v1.ServerMessage.minimap_index:type_name -> game.v1.MinimapIndex
-	91,  // 51: game.v1.ServerMessage.minimap_sectors:type_name -> game.v1.MinimapSectors
-	93,  // 52: game.v1.ServerMessage.objective_hint:type_name -> game.v1.ObjectiveHint
-	96,  // 53: game.v1.ServerMessage.world_clock:type_name -> game.v1.WorldClock
+	17,  // 0: game.v1.ServerBatch.events:type_name -> game.v1.ServerMessage
+	20,  // 1: game.v1.ServerMessage.welcome:type_name -> game.v1.Welcome
+	25,  // 2: game.v1.ServerMessage.full_map_view:type_name -> game.v1.FullMapView
+	26,  // 3: game.v1.ServerMessage.map_slice:type_name -> game.v1.MapSlice
+	27,  // 4: game.v1.ServerMessage.tile_update:type_name -> game.v1.TileUpdate
+	38,  // 5: game.v1.ServerMessage.creature_appear:type_name -> game.v1.CreatureAppear
+	39,  // 6: game.v1.ServerMessage.creature_disappear:type_name -> game.v1.CreatureDisappear
+	40,  // 7: game.v1.ServerMessage.creature_move:type_name -> game.v1.CreatureMove
+	41,  // 8: game.v1.ServerMessage.creature_turn:type_name -> game.v1.CreatureTurn
+	42,  // 9: game.v1.ServerMessage.creature_health:type_name -> game.v1.CreatureHealth
+	43,  // 10: game.v1.ServerMessage.creature_outfit:type_name -> game.v1.CreatureOutfit
+	44,  // 11: game.v1.ServerMessage.creature_speed:type_name -> game.v1.CreatureSpeed
+	45,  // 12: game.v1.ServerMessage.effect:type_name -> game.v1.Effect
+	46,  // 13: game.v1.ServerMessage.projectile:type_name -> game.v1.Projectile
+	51,  // 14: game.v1.ServerMessage.floating_text:type_name -> game.v1.FloatingText
+	52,  // 15: game.v1.ServerMessage.player_stats:type_name -> game.v1.PlayerStats
+	54,  // 16: game.v1.ServerMessage.player_skills:type_name -> game.v1.PlayerSkills
+	56,  // 17: game.v1.ServerMessage.inventory:type_name -> game.v1.Inventory
+	57,  // 18: game.v1.ServerMessage.container_open:type_name -> game.v1.ContainerOpen
+	58,  // 19: game.v1.ServerMessage.container_update:type_name -> game.v1.ContainerUpdate
+	59,  // 20: game.v1.ServerMessage.container_close:type_name -> game.v1.ContainerClose
+	60,  // 21: game.v1.ServerMessage.chat_message:type_name -> game.v1.Message
+	62,  // 22: game.v1.ServerMessage.dialog_open:type_name -> game.v1.DialogOpen
+	63,  // 23: game.v1.ServerMessage.dialog_close:type_name -> game.v1.DialogClose
+	65,  // 24: game.v1.ServerMessage.shop_open:type_name -> game.v1.ShopOpen
+	66,  // 25: game.v1.ServerMessage.trade_update:type_name -> game.v1.TradeUpdate
+	72,  // 26: game.v1.ServerMessage.walk_rejected:type_name -> game.v1.WalkRejected
+	73,  // 27: game.v1.ServerMessage.pong:type_name -> game.v1.Pong
+	74,  // 28: game.v1.ServerMessage.disconnect:type_name -> game.v1.Disconnect
+	50,  // 29: game.v1.ServerMessage.spell_cooldown:type_name -> game.v1.SpellCooldown
+	48,  // 30: game.v1.ServerMessage.player_conditions:type_name -> game.v1.PlayerConditions
+	75,  // 31: game.v1.ServerMessage.party_update:type_name -> game.v1.PartyUpdate
+	77,  // 32: game.v1.ServerMessage.party_invitation:type_name -> game.v1.PartyInvitation
+	84,  // 33: game.v1.ServerMessage.station_open:type_name -> game.v1.StationOpen
+	19,  // 34: game.v1.ServerMessage.presence_check:type_name -> game.v1.PresenceCheck
+	18,  // 35: game.v1.ServerMessage.tutorial_step:type_name -> game.v1.TutorialStep
+	78,  // 36: game.v1.ServerMessage.guild_update:type_name -> game.v1.GuildUpdate
+	83,  // 37: game.v1.ServerMessage.creature_guild:type_name -> game.v1.CreatureGuild
+	37,  // 38: game.v1.ServerMessage.creature_skull:type_name -> game.v1.CreatureSkull
+	70,  // 39: game.v1.ServerMessage.market_update:type_name -> game.v1.MarketUpdate
+	71,  // 40: game.v1.ServerMessage.house_update:type_name -> game.v1.HouseUpdate
+	35,  // 41: game.v1.ServerMessage.creature_cosmetics:type_name -> game.v1.CreatureCosmetics
+	36,  // 42: game.v1.ServerMessage.cosmetics_state:type_name -> game.v1.CosmeticsState
+	47,  // 43: game.v1.ServerMessage.creature_attack:type_name -> game.v1.CreatureAttack
+	85,  // 44: game.v1.ServerMessage.refine_result:type_name -> game.v1.RefineResult
+	86,  // 45: game.v1.ServerMessage.quest_log:type_name -> game.v1.QuestLog
+	33,  // 46: game.v1.ServerMessage.creature_look:type_name -> game.v1.CreatureLook
+	89,  // 47: game.v1.ServerMessage.stash_update:type_name -> game.v1.StashUpdate
+	95,  // 48: game.v1.ServerMessage.living_object:type_name -> game.v1.LivingObjectEvent
+	96,  // 49: game.v1.ServerMessage.trail_wear:type_name -> game.v1.TrailWear
+	90,  // 50: game.v1.ServerMessage.minimap_index:type_name -> game.v1.MinimapIndex
+	92,  // 51: game.v1.ServerMessage.minimap_sectors:type_name -> game.v1.MinimapSectors
+	94,  // 52: game.v1.ServerMessage.objective_hint:type_name -> game.v1.ObjectiveHint
+	97,  // 53: game.v1.ServerMessage.world_clock:type_name -> game.v1.WorldClock
 	0,   // 54: game.v1.TutorialStep.state:type_name -> game.v1.TutorialState
-	97,  // 55: game.v1.TutorialStep.text:type_name -> game.v1.LocalizedText
-	97,  // 56: game.v1.PresenceCheck.question:type_name -> game.v1.LocalizedText
-	60,  // 57: game.v1.PresenceCheck.options:type_name -> game.v1.DialogOption
-	20,  // 58: game.v1.Welcome.options:type_name -> game.v1.GameOptions
-	98,  // 59: game.v1.GameOptions.stance:type_name -> game.v1.FightStance
-	99,  // 60: game.v1.Tile.items:type_name -> game.v1.ItemStack
-	21,  // 61: game.v1.MapArea.palette:type_name -> game.v1.Tile
-	22,  // 62: game.v1.MapArea.floors:type_name -> game.v1.MapFloor
-	28,  // 63: game.v1.MapArea.creatures:type_name -> game.v1.Creature
-	95,  // 64: game.v1.MapArea.wear:type_name -> game.v1.TrailWear
-	23,  // 65: game.v1.FullMapView.area:type_name -> game.v1.MapArea
-	23,  // 66: game.v1.MapSlice.area:type_name -> game.v1.MapArea
-	100, // 67: game.v1.TileUpdate.pos:type_name -> game.v1.Position
-	21,  // 68: game.v1.TileUpdate.tile:type_name -> game.v1.Tile
+	98,  // 55: game.v1.TutorialStep.text:type_name -> game.v1.LocalizedText
+	98,  // 56: game.v1.PresenceCheck.question:type_name -> game.v1.LocalizedText
+	61,  // 57: game.v1.PresenceCheck.options:type_name -> game.v1.DialogOption
+	21,  // 58: game.v1.Welcome.options:type_name -> game.v1.GameOptions
+	99,  // 59: game.v1.GameOptions.stance:type_name -> game.v1.FightStance
+	100, // 60: game.v1.Tile.items:type_name -> game.v1.ItemStack
+	22,  // 61: game.v1.MapArea.palette:type_name -> game.v1.Tile
+	23,  // 62: game.v1.MapArea.floors:type_name -> game.v1.MapFloor
+	29,  // 63: game.v1.MapArea.creatures:type_name -> game.v1.Creature
+	96,  // 64: game.v1.MapArea.wear:type_name -> game.v1.TrailWear
+	24,  // 65: game.v1.FullMapView.area:type_name -> game.v1.MapArea
+	24,  // 66: game.v1.MapSlice.area:type_name -> game.v1.MapArea
+	101, // 67: game.v1.TileUpdate.pos:type_name -> game.v1.Position
+	22,  // 68: game.v1.TileUpdate.tile:type_name -> game.v1.Tile
 	1,   // 69: game.v1.Creature.kind:type_name -> game.v1.CreatureKind
-	100, // 70: game.v1.Creature.pos:type_name -> game.v1.Position
-	101, // 71: game.v1.Creature.dir:type_name -> game.v1.Direction
-	27,  // 72: game.v1.Creature.outfit:type_name -> game.v1.Outfit
+	101, // 70: game.v1.Creature.pos:type_name -> game.v1.Position
+	102, // 71: game.v1.Creature.dir:type_name -> game.v1.Direction
+	28,  // 72: game.v1.Creature.outfit:type_name -> game.v1.Outfit
 	2,   // 73: game.v1.Creature.skull:type_name -> game.v1.Skull
-	33,  // 74: game.v1.Creature.cosmetics:type_name -> game.v1.Cosmetics
-	102, // 75: game.v1.Creature.look:type_name -> game.v1.BodyLook
-	29,  // 76: game.v1.Creature.equipment:type_name -> game.v1.VisibleEquipment
-	31,  // 77: game.v1.Creature.worn:type_name -> game.v1.Worn
-	30,  // 78: game.v1.Worn.head:type_name -> game.v1.WornPiece
-	30,  // 79: game.v1.Worn.torso:type_name -> game.v1.WornPiece
-	30,  // 80: game.v1.Worn.legs:type_name -> game.v1.WornPiece
-	30,  // 81: game.v1.Worn.feet:type_name -> game.v1.WornPiece
-	30,  // 82: game.v1.Worn.shield:type_name -> game.v1.WornPiece
-	30,  // 83: game.v1.Worn.weapon:type_name -> game.v1.WornPiece
-	102, // 84: game.v1.CreatureLook.look:type_name -> game.v1.BodyLook
-	29,  // 85: game.v1.CreatureLook.equipment:type_name -> game.v1.VisibleEquipment
-	33,  // 86: game.v1.CreatureCosmetics.cosmetics:type_name -> game.v1.Cosmetics
-	33,  // 87: game.v1.CosmeticsState.equipped:type_name -> game.v1.Cosmetics
+	34,  // 74: game.v1.Creature.cosmetics:type_name -> game.v1.Cosmetics
+	103, // 75: game.v1.Creature.look:type_name -> game.v1.BodyLook
+	30,  // 76: game.v1.Creature.equipment:type_name -> game.v1.VisibleEquipment
+	32,  // 77: game.v1.Creature.worn:type_name -> game.v1.Worn
+	31,  // 78: game.v1.Worn.head:type_name -> game.v1.WornPiece
+	31,  // 79: game.v1.Worn.torso:type_name -> game.v1.WornPiece
+	31,  // 80: game.v1.Worn.legs:type_name -> game.v1.WornPiece
+	31,  // 81: game.v1.Worn.feet:type_name -> game.v1.WornPiece
+	31,  // 82: game.v1.Worn.shield:type_name -> game.v1.WornPiece
+	31,  // 83: game.v1.Worn.weapon:type_name -> game.v1.WornPiece
+	103, // 84: game.v1.CreatureLook.look:type_name -> game.v1.BodyLook
+	30,  // 85: game.v1.CreatureLook.equipment:type_name -> game.v1.VisibleEquipment
+	34,  // 86: game.v1.CreatureCosmetics.cosmetics:type_name -> game.v1.Cosmetics
+	34,  // 87: game.v1.CosmeticsState.equipped:type_name -> game.v1.Cosmetics
 	2,   // 88: game.v1.CreatureSkull.skull:type_name -> game.v1.Skull
-	28,  // 89: game.v1.CreatureAppear.creature:type_name -> game.v1.Creature
+	29,  // 89: game.v1.CreatureAppear.creature:type_name -> game.v1.Creature
 	3,   // 90: game.v1.CreatureDisappear.reason:type_name -> game.v1.DisappearReason
-	100, // 91: game.v1.CreatureMove.from:type_name -> game.v1.Position
-	100, // 92: game.v1.CreatureMove.to:type_name -> game.v1.Position
-	101, // 93: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
-	27,  // 94: game.v1.CreatureOutfit.outfit:type_name -> game.v1.Outfit
-	100, // 95: game.v1.Effect.pos:type_name -> game.v1.Position
-	100, // 96: game.v1.Projectile.from:type_name -> game.v1.Position
-	100, // 97: game.v1.Projectile.to:type_name -> game.v1.Position
+	101, // 91: game.v1.CreatureMove.from:type_name -> game.v1.Position
+	101, // 92: game.v1.CreatureMove.to:type_name -> game.v1.Position
+	102, // 93: game.v1.CreatureTurn.dir:type_name -> game.v1.Direction
+	28,  // 94: game.v1.CreatureOutfit.outfit:type_name -> game.v1.Outfit
+	101, // 95: game.v1.Effect.pos:type_name -> game.v1.Position
+	101, // 96: game.v1.Projectile.from:type_name -> game.v1.Position
+	101, // 97: game.v1.Projectile.to:type_name -> game.v1.Position
 	4,   // 98: game.v1.CreatureAttack.kind:type_name -> game.v1.AttackKind
-	100, // 99: game.v1.CreatureAttack.to:type_name -> game.v1.Position
-	48,  // 100: game.v1.PlayerConditions.conditions:type_name -> game.v1.ActiveCondition
-	100, // 101: game.v1.FloatingText.pos:type_name -> game.v1.Position
+	101, // 99: game.v1.CreatureAttack.to:type_name -> game.v1.Position
+	49,  // 100: game.v1.PlayerConditions.conditions:type_name -> game.v1.ActiveCondition
+	101, // 101: game.v1.FloatingText.pos:type_name -> game.v1.Position
 	5,   // 102: game.v1.FloatingText.kind:type_name -> game.v1.FloatingTextKind
-	52,  // 103: game.v1.PlayerSkills.skills:type_name -> game.v1.SkillProgress
-	103, // 104: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
-	99,  // 105: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
-	54,  // 106: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
-	99,  // 107: game.v1.Inventory.pockets:type_name -> game.v1.ItemStack
-	99,  // 108: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
-	104, // 109: game.v1.ContainerOpen.mods:type_name -> game.v1.ItemMods
-	99,  // 110: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
+	53,  // 103: game.v1.PlayerSkills.skills:type_name -> game.v1.SkillProgress
+	104, // 104: game.v1.EquippedItem.slot:type_name -> game.v1.EquipmentSlot
+	100, // 105: game.v1.EquippedItem.item:type_name -> game.v1.ItemStack
+	55,  // 106: game.v1.Inventory.slots:type_name -> game.v1.EquippedItem
+	100, // 107: game.v1.Inventory.pockets:type_name -> game.v1.ItemStack
+	100, // 108: game.v1.ContainerOpen.items:type_name -> game.v1.ItemStack
+	105, // 109: game.v1.ContainerOpen.mods:type_name -> game.v1.ItemMods
+	100, // 110: game.v1.ContainerUpdate.items:type_name -> game.v1.ItemStack
 	6,   // 111: game.v1.Message.kind:type_name -> game.v1.MessageKind
-	100, // 112: game.v1.Message.pos:type_name -> game.v1.Position
-	97,  // 113: game.v1.Message.localized:type_name -> game.v1.LocalizedText
-	97,  // 114: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
-	97,  // 115: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
-	60,  // 116: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
-	63,  // 117: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
+	101, // 112: game.v1.Message.pos:type_name -> game.v1.Position
+	98,  // 113: game.v1.Message.localized:type_name -> game.v1.LocalizedText
+	98,  // 114: game.v1.DialogOption.text:type_name -> game.v1.LocalizedText
+	98,  // 115: game.v1.DialogOpen.text:type_name -> game.v1.LocalizedText
+	61,  // 116: game.v1.DialogOpen.options:type_name -> game.v1.DialogOption
+	64,  // 117: game.v1.ShopOpen.offers:type_name -> game.v1.ShopOffer
 	7,   // 118: game.v1.TradeUpdate.state:type_name -> game.v1.TradeState
-	99,  // 119: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
-	99,  // 120: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
-	105, // 121: game.v1.MarketOffer.side:type_name -> game.v1.MarketSide
-	104, // 122: game.v1.MarketOffer.mods:type_name -> game.v1.ItemMods
-	99,  // 123: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
-	105, // 124: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
-	66,  // 125: game.v1.MarketUpdate.sells:type_name -> game.v1.MarketOffer
-	66,  // 126: game.v1.MarketUpdate.buys:type_name -> game.v1.MarketOffer
-	66,  // 127: game.v1.MarketUpdate.own:type_name -> game.v1.MarketOffer
-	67,  // 128: game.v1.MarketUpdate.mailbox_items:type_name -> game.v1.MarketMailItem
-	68,  // 129: game.v1.MarketUpdate.history:type_name -> game.v1.MarketHistoryEntry
-	104, // 130: game.v1.MarketUpdate.owned_mods:type_name -> game.v1.ItemMods
-	100, // 131: game.v1.WalkRejected.pos:type_name -> game.v1.Position
-	101, // 132: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
+	100, // 119: game.v1.TradeUpdate.own_offer:type_name -> game.v1.ItemStack
+	100, // 120: game.v1.TradeUpdate.partner_offer:type_name -> game.v1.ItemStack
+	106, // 121: game.v1.MarketOffer.side:type_name -> game.v1.MarketSide
+	105, // 122: game.v1.MarketOffer.mods:type_name -> game.v1.ItemMods
+	100, // 123: game.v1.MarketMailItem.item:type_name -> game.v1.ItemStack
+	106, // 124: game.v1.MarketHistoryEntry.side:type_name -> game.v1.MarketSide
+	67,  // 125: game.v1.MarketUpdate.sells:type_name -> game.v1.MarketOffer
+	67,  // 126: game.v1.MarketUpdate.buys:type_name -> game.v1.MarketOffer
+	67,  // 127: game.v1.MarketUpdate.own:type_name -> game.v1.MarketOffer
+	68,  // 128: game.v1.MarketUpdate.mailbox_items:type_name -> game.v1.MarketMailItem
+	69,  // 129: game.v1.MarketUpdate.history:type_name -> game.v1.MarketHistoryEntry
+	105, // 130: game.v1.MarketUpdate.owned_mods:type_name -> game.v1.ItemMods
+	101, // 131: game.v1.WalkRejected.pos:type_name -> game.v1.Position
+	102, // 132: game.v1.WalkRejected.dir:type_name -> game.v1.Direction
 	8,   // 133: game.v1.Disconnect.reason:type_name -> game.v1.DisconnectReason
-	97,  // 134: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
+	98,  // 134: game.v1.Disconnect.message:type_name -> game.v1.LocalizedText
 	9,   // 135: game.v1.PartyUpdate.shared:type_name -> game.v1.SharedExperience
-	75,  // 136: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
-	10,  // 137: game.v1.GuildUpdate.rank:type_name -> game.v1.GuildRank
-	79,  // 138: game.v1.GuildUpdate.members:type_name -> game.v1.GuildMember
-	80,  // 139: game.v1.GuildUpdate.pending:type_name -> game.v1.GuildPendingInvite
-	81,  // 140: game.v1.GuildUpdate.invitations:type_name -> game.v1.GuildInvitation
-	78,  // 141: game.v1.GuildUpdate.wars:type_name -> game.v1.GuildWar
-	11,  // 142: game.v1.GuildWar.state:type_name -> game.v1.GuildWarState
-	10,  // 143: game.v1.GuildMember.rank:type_name -> game.v1.GuildRank
-	100, // 144: game.v1.StationOpen.pos:type_name -> game.v1.Position
-	99,  // 145: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
-	12,  // 146: game.v1.RefineResult.outcome:type_name -> game.v1.RefineOutcome
-	99,  // 147: game.v1.RefineResult.item:type_name -> game.v1.ItemStack
-	97,  // 148: game.v1.RefineResult.text:type_name -> game.v1.LocalizedText
-	86,  // 149: game.v1.QuestLog.entries:type_name -> game.v1.QuestLogEntry
-	13,  // 150: game.v1.QuestLogEntry.state:type_name -> game.v1.QuestLogState
-	87,  // 151: game.v1.QuestLogEntry.milestone:type_name -> game.v1.MilestoneInfo
-	99,  // 152: game.v1.StashUpdate.items:type_name -> game.v1.ItemStack
-	14,  // 153: game.v1.StashUpdate.result:type_name -> game.v1.StashResult
-	100, // 154: game.v1.StashUpdate.chest:type_name -> game.v1.Position
-	90,  // 155: game.v1.MinimapIndex.floors:type_name -> game.v1.MinimapFloorIndex
-	92,  // 156: game.v1.MinimapSectors.sectors:type_name -> game.v1.MinimapSector
-	100, // 157: game.v1.ObjectiveHint.center:type_name -> game.v1.Position
-	158, // [158:158] is the sub-list for method output_type
-	158, // [158:158] is the sub-list for method input_type
-	158, // [158:158] is the sub-list for extension type_name
-	158, // [158:158] is the sub-list for extension extendee
-	0,   // [0:158] is the sub-list for field type_name
+	76,  // 136: game.v1.PartyUpdate.members:type_name -> game.v1.PartyMember
+	10,  // 137: game.v1.PartyMember.share_block:type_name -> game.v1.ShareBlock
+	11,  // 138: game.v1.GuildUpdate.rank:type_name -> game.v1.GuildRank
+	80,  // 139: game.v1.GuildUpdate.members:type_name -> game.v1.GuildMember
+	81,  // 140: game.v1.GuildUpdate.pending:type_name -> game.v1.GuildPendingInvite
+	82,  // 141: game.v1.GuildUpdate.invitations:type_name -> game.v1.GuildInvitation
+	79,  // 142: game.v1.GuildUpdate.wars:type_name -> game.v1.GuildWar
+	12,  // 143: game.v1.GuildWar.state:type_name -> game.v1.GuildWarState
+	11,  // 144: game.v1.GuildMember.rank:type_name -> game.v1.GuildRank
+	101, // 145: game.v1.StationOpen.pos:type_name -> game.v1.Position
+	100, // 146: game.v1.StationOpen.owned:type_name -> game.v1.ItemStack
+	13,  // 147: game.v1.RefineResult.outcome:type_name -> game.v1.RefineOutcome
+	100, // 148: game.v1.RefineResult.item:type_name -> game.v1.ItemStack
+	98,  // 149: game.v1.RefineResult.text:type_name -> game.v1.LocalizedText
+	87,  // 150: game.v1.QuestLog.entries:type_name -> game.v1.QuestLogEntry
+	14,  // 151: game.v1.QuestLogEntry.state:type_name -> game.v1.QuestLogState
+	88,  // 152: game.v1.QuestLogEntry.milestone:type_name -> game.v1.MilestoneInfo
+	100, // 153: game.v1.StashUpdate.items:type_name -> game.v1.ItemStack
+	15,  // 154: game.v1.StashUpdate.result:type_name -> game.v1.StashResult
+	101, // 155: game.v1.StashUpdate.chest:type_name -> game.v1.Position
+	91,  // 156: game.v1.MinimapIndex.floors:type_name -> game.v1.MinimapFloorIndex
+	93,  // 157: game.v1.MinimapSectors.sectors:type_name -> game.v1.MinimapSector
+	101, // 158: game.v1.ObjectiveHint.center:type_name -> game.v1.Position
+	159, // [159:159] is the sub-list for method output_type
+	159, // [159:159] is the sub-list for method input_type
+	159, // [159:159] is the sub-list for extension type_name
+	159, // [159:159] is the sub-list for extension extendee
+	0,   // [0:159] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_server_proto_init() }
@@ -8831,7 +8929,7 @@ func file_game_v1_server_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_game_v1_server_proto_rawDesc), len(file_game_v1_server_proto_rawDesc)),
-			NumEnums:      15,
+			NumEnums:      16,
 			NumMessages:   79,
 			NumExtensions: 0,
 			NumServices:   0,

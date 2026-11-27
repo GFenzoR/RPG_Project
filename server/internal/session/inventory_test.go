@@ -164,11 +164,12 @@ func TestLootCorpse(t *testing.T) {
 		t.Errorf("PlayerStats = %v", st)
 	}
 
-	// The remains cannot be picked up, and they decay with their window open.
+	// The remains cannot be picked up (only dragged a tile, corpsemove.go), and they decay
+	// with their window open.
 	h.input(cl, moveItem(onTile(died), corpseID, 1, inContainer(pack, 0), 1))
 	h.sim.RunTicks(60 * 20)
 	evs = cl.take()
-	if !hasKey(evs, "inventory.cannot_move") {
+	if !hasKey(evs, "inventory.corpse_drag") {
 		t.Errorf("moving the remains: %v", systemKeys(evs))
 	}
 	closes := find(evs, (*pb.ServerMessage).GetContainerClose)

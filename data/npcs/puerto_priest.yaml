@@ -17,6 +17,8 @@ notes: >-
   (content audit M6) and heals for free.
   Refusing a blessing the player already holds is the death/blessing engine's job (T1.11):
   there is no "has blessing" condition yet.
+  Chapter 1's island chain (docs/02 "Capítulo 1"): gives ch1_castaways and
+  ch1_false_light after ch1_shipwreck, and closes ch1_wreckers, the last one.
 dialog:
   start: greet
   nodes:
@@ -30,8 +32,69 @@ dialog:
           goto: healed
         - text: npc.puerto_priest.opt_faith
           goto: faith
+        # Chapter 1's island chain (docs/02 "Capítulo 1"): each quest opens with the one before.
+        - text: npc.puerto_priest.opt_castaways
+          if:
+            - { quest_state: { quest: ch1_shipwreck, state: completed } }
+            - { quest_not_started: ch1_castaways }
+            - { level_at_least: 3 }
+          goto: castaways_offer
+        - text: npc.puerto_priest.opt_castaways_return
+          if: { quest_state: { quest: ch1_castaways, state: in_progress, step: return_priest } }
+          goto: castaways_done
+        - text: npc.puerto_priest.opt_false_light
+          if:
+            - { quest_state: { quest: ch1_castaways, state: completed } }
+            - { quest_not_started: ch1_false_light }
+            - { level_at_least: 4 }
+          goto: false_light_offer
+        - text: npc.puerto_priest.opt_false_light_return
+          if: { quest_state: { quest: ch1_false_light, state: in_progress, step: tell_priest } }
+          goto: false_light_done
+        - text: npc.puerto_priest.opt_wreckers_return
+          if: { quest_state: { quest: ch1_wreckers, state: in_progress, step: hear_bosun } }
+          goto: wreckers_done
         - text: dialog.bye
           action: close
+    castaways_offer:
+      text: npc.puerto_priest.castaways_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: ch1_castaways }
+          goto: castaways_accepted
+        - text: dialog.decline
+          goto: greet
+    castaways_accepted:
+      text: npc.puerto_priest.castaways_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    castaways_done:
+      text: npc.puerto_priest.castaways_done
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    false_light_offer:
+      text: npc.puerto_priest.false_light_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: ch1_false_light }
+          goto: false_light_accepted
+        - text: dialog.decline
+          goto: greet
+    false_light_accepted:
+      text: npc.puerto_priest.false_light_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    false_light_done:
+      text: npc.puerto_priest.false_light_done
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    wreckers_done:
+      text: npc.puerto_priest.wreckers_done
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
     blessings:
       text: npc.puerto_priest.blessings
       options:

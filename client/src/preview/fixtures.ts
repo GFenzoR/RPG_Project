@@ -7,6 +7,7 @@ import {
   EquipmentSlot,
   GuildRank,
   MessageKind,
+  ShareBlock,
   SharedExperience,
 } from "@rpg/protocol";
 import type { Skull, TextParam } from "@rpg/protocol";
@@ -222,6 +223,7 @@ export function baseScene(content: ClientContent, now: number): Scene {
         mana: 53,
         island: "puerto",
         sharing: true,
+        block: ShareBlock.UNSPECIFIED,
       },
       {
         id: 13,
@@ -233,6 +235,7 @@ export function baseScene(content: ClientContent, now: number): Scene {
         mana: 61,
         island: "puerto",
         sharing: true,
+        block: ShareBlock.UNSPECIFIED,
       },
       {
         id: 21,
@@ -244,6 +247,7 @@ export function baseScene(content: ClientContent, now: number): Scene {
         mana: 0,
         island: "bosque",
         sharing: false,
+        block: ShareBlock.FAR,
       },
     ],
   };
