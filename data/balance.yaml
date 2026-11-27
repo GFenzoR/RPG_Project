@@ -124,6 +124,7 @@ inventory:
   max_open_containers: 16     # container windows a player can have open at once
   use_cooldown_ms: 1000       # between two uses of a consumable
   door_cooldown_ms: 500       # between two uses of a map door by one player, refused or not
+  corpse_move_cooldown_ms: 300  # between two drags of a body by one player (docs/02 "Arrastrar un cuerpo")
   reach: 1                    # tiles (Chebyshev, same floor) to take, drop, open or use on the ground
   pocket_slots: 4             # built-in pocket cells of every character (docs/02 "Bolsillos"); never lower it
 

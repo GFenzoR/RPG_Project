@@ -106,6 +106,8 @@ type Player struct {
 	nextContainer uint32
 	nextUse       game.Tick
 	nextDoor      game.Tick
+	// nextCorpseMove is when p may drag a body again (inventory.corpse_move_cooldown_ms).
+	nextCorpseMove game.Tick
 
 	// Chat (T1.13): the anti-flood theoretical arrival tick (GCRA), the tick a flood
 	// mute ends and the first tick p may speak on the global channel again.

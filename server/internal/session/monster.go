@@ -341,6 +341,10 @@ func (w *World) initCombat() error {
 	}
 	w.attackFor = ticksFor(c.AttackIntervalMs)
 	w.corpseFor = ticksFor(c.MonsterCorpseMs)
+	w.corpseMoveFor = 0
+	if ms := w.cfg.Balance.Inventory.CorpseMoveCooldownMs; ms > 0 {
+		w.corpseMoveFor = ticksFor(ms)
+	}
 	w.pathRetry = ticksFor(c.MonsterPathRetryMs)
 	w.stuckFor = ticksFor(c.MonsterStuckMs)
 	w.shunFor = ticksFor(c.MonsterShunMs)

@@ -91,6 +91,8 @@ client.inventory.pocket: "Pocket"
 inventory.not_possible: "That is not possible."
 inventory.too_far: "That is too far away."
 inventory.cannot_move: "You cannot move that."
+inventory.corpse_drag: "A body can only be dragged to the tile next to it, while you stand beside it."
+inventory.corpse_not_ready: "Wait a moment before you drag a body again."
 inventory.cannot_use: "You cannot use that."
 # Fishing and mining (T1.12)
 gather.nothing: "There is nothing to get there with that."

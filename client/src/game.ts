@@ -75,7 +75,15 @@ import type {
   LightShadowHook,
   SkyHook,
 } from "./render/game-canvas.ts";
-import { locationInit, menuItem, splitCount, splittable, tileUse, topItem } from "./state/items.ts";
+import {
+  immovable,
+  locationInit,
+  menuItem,
+  splitCount,
+  splittable,
+  tileUse,
+  topItem,
+} from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
 import type { Pending } from "./state/aim.ts";
@@ -1688,7 +1696,7 @@ export class Game {
       food: (def?.consumable?.foodMs ?? 0) > 0,
       equip: ref.loc.kind !== "slot" && equipSlot(def) !== undefined,
       split: def?.stackable === true && ref.count > 1,
-      fixed: def?.fixed === true,
+      fixed: immovable(def, ref.mods),
       usable:
         def?.door === true ||
         def?.board === true ||
@@ -2426,7 +2434,7 @@ export class Game {
     const top = aiming ? undefined : topItem(this.world, pos.x, pos.y, pos.z, false);
     const answer = pressAnswer(
       aiming,
-      top !== undefined && this.opts.content.items[top.itemId]?.fixed !== true,
+      top !== undefined && !immovable(this.opts.content.items[top.itemId], top.mods),
     );
     if (!aiming) this.world.retryWalk();
     if (answer.walked) this.click({ pos });

@@ -559,6 +559,10 @@
           "description": "Wait between two uses of a map door by one player, refused or not (docs/02 \"Puertas con llave\").",
           "$ref": "common.schema.json#/$defs/positiveInt"
         },
+        "corpse_move_cooldown_ms": {
+          "description": "Wait between two drags of the remains of a creature by one player (docs/02 \"Arrastrar un cuerpo\"); 0 or absent, none.",
+          "$ref": "common.schema.json#/$defs/durationMs"
+        },
         "reach": {
           "description": "Chebyshev distance (same floor) for actions on ground items, at most 6 (the half-height of the classic 15x11 window, what a monster notices; the 31x21 view did not stretch it).",
           "type": "integer",

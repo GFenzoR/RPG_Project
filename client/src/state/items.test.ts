@@ -14,6 +14,7 @@ import type { ClientContent, ItemDef } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
 import { tileActions } from "../input/actions.ts";
 import {
+  immovable,
   halfStack,
   locationInit,
   menuItem,
@@ -406,5 +407,21 @@ describe("Shift+drag splits a stack (docs/17 UI-6)", () => {
     expect(splitCount(500, 37)).toBe(36);
     expect(splitCount(Number.NaN, 37)).toBe(1);
     expect(splitCount(4.7, 10)).toBe(4);
+  });
+});
+
+describe("immovable", () => {
+  it("lets the remains of a creature be dragged, and no other fixture", () => {
+    const remains = { fixed: true };
+    expect(immovable(remains, undefined)).toBe(true); // a chest of the map, a station
+    expect(immovable(remains, { remainsOf: "wolf" })).toBe(false);
+    expect(immovable(remains, { bodyOf: "Owner" })).toBe(false);
+    expect(immovable({ fixed: false }, undefined)).toBe(false);
+    expect(immovable(undefined, undefined)).toBe(false);
+    // The menu of a tile offers "move" for a body, as for anything one can pick up.
+    const body = { container: true, fixed: immovable(remains, { remainsOf: "wolf" }) };
+    expect(tileActions({ item: body, known: true })).toEqual(["open", "look", "move"]);
+    const chest = { container: true, fixed: immovable(remains, undefined) };
+    expect(tileActions({ item: chest, known: true })).toEqual(["open", "look"]);
   });
 });

@@ -124,6 +124,18 @@ export function topItem(
   return mods ? { ...ref, mods } : ref;
 }
 
+/**
+ * Whether nobody moves an item: a map fixture (`pickupable: false`), but for the remains
+ * of a creature (a monster's, `remainsOf`, or a player's body, `bodyOf`), which are
+ * dragged a tile at a time (docs/02 "Arrastrar un cuerpo"; the server decides).
+ */
+export function immovable(
+  def: { fixed?: boolean | undefined } | undefined,
+  mods: Pick<ItemMods, "remainsOf" | "bodyOf"> | undefined,
+): boolean {
+  return def?.fixed === true && !mods?.remainsOf && !mods?.bodyOf;
+}
+
 /** Whether a stack of `count` units can be split (a Shift+drag, docs/17 UI-6). */
 export function splittable(def: { stackable: boolean } | undefined, count: number): boolean {
   return def?.stackable === true && count > 1;

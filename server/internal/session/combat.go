@@ -501,23 +501,12 @@ func (w *World) addCorpse(ctx *game.TickContext, pos world.Pos, c *Corpse, lasts
 	w.corpses[pos] = append(w.corpses[pos], c)
 	w.tileChanged(pos)
 	ctx.Sched.After(lasts, func(*game.TickContext) {
-		w.removeCorpse(pos, c)
+		w.removeCorpse(c.Item.pos, c) // where it lies now: it may have been dragged (corpsemove.go)
 	})
 }
 
 func (w *World) removeCorpse(pos world.Pos, c *Corpse) {
-	list := w.corpses[pos]
-	for i, q := range list {
-		if q == c {
-			list = append(list[:i], list[i+1:]...)
-			break
-		}
-	}
-	if len(list) == 0 {
-		delete(w.corpses, pos)
-	} else {
-		w.corpses[pos] = list
-	}
+	w.unlistCorpse(pos, c)
 	// The remains decay with whatever is still inside them (logged: loot and dropped
 	// items were logged when they were created or lost).
 	for _, it := range c.Item.items {
