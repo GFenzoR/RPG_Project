@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   APPEAR_MS,
-  DEATH_FADE_MS,
+  FLY_MS,
+  FLY_PX,
   DEATH_MS,
+  DEATH_SETTLE_MS,
+  FEET_LINE,
+  TIP_SQUASH,
+  fallMs,
+  fallShift,
+  tipPlacement,
   HIT_FLASH_MS,
   HIT_MS,
   IDLE_AFTER_MS,
@@ -303,16 +310,51 @@ describe("clips", () => {
     expect(animate(s, SIDE, in_, out)).toMatchObject({ action: "death", frame: 1 });
   });
 
-  it("plays the death clip, fades its last frame and says when it is done", () => {
+  it("plays the death clip whole, then fades its last frame over the corpse (docs/17)", () => {
     const { s, in_, out } = setup();
     startDeath(s, 0);
     startDeath(s, 50); // the first death counts
     in_.now = 250;
     expect(animate(s, LPC, in_, out)).toMatchObject({ action: "death", frame: 2, done: false });
-    in_.now = clipMs(LPC, "death") + DEATH_FADE_MS / 2;
+    // Never fainter while it falls: the corpse is hidden until the fall ends.
+    expect(fallMs(LPC)).toBe(clipMs(LPC, "death"));
+    in_.now = fallMs(LPC);
+    expect(animate(s, LPC, in_, out)).toMatchObject({ frame: 5, alpha: 1, done: false });
+    in_.now = fallMs(LPC) + DEATH_SETTLE_MS / 2;
     expect(animate(s, LPC, in_, out)).toMatchObject({ frame: 5, alpha: 0.5, done: false });
-    in_.now = clipMs(LPC, "death") + DEATH_FADE_MS;
+    in_.now = fallMs(LPC) + DEATH_SETTLE_MS;
     expect(animate(s, LPC, in_, out).done).toBe(true);
+    expect(DEATH_SETTLE_MS).toBeLessThanOrEqual(100);
+  });
+
+  it("lowers a falling body frame by frame onto where its corpse lies", () => {
+    // The corpse is the last frame with its lowest pixel on the feet line: a body that
+    // rests 9 rows over its frame's bottom, drawn 2 rows (foot) under the line, moves 7.
+    const meta: AnimMeta = { ...LPC, rest: 9 };
+    expect(fallShift(meta)).toBe(7);
+    expect(fallShift({ ...meta, anchor: "br" })).toBe(9 - FEET_LINE);
+    expect(fallShift(LPC)).toBe(0); // an older atlas: it falls in place
+    expect(fallShift(undefined)).toBe(0);
+    expect(fallShift(meta, 4)).toBe(2); // a paper doll: the lowest of its layers
+    const { s, in_, out } = setup();
+    startDeath(s, 0, fallShift(meta));
+    const ys: number[] = [];
+    for (let frame = 0; frame < 6; frame++) {
+      in_.now = frame * 100 + 1;
+      ys.push(animate(s, meta, in_, out).y);
+    }
+    expect(ys[0]).toBe(0);
+    expect(ys).toEqual([...ys].sort((a, b) => a - b));
+    // The whole last frame, and the fade after it, lie on the corpse.
+    expect(ys[5]).toBe(7);
+    in_.now = fallMs(meta) + DEATH_SETTLE_MS / 2;
+    expect(animate(s, meta, in_, out)).toMatchObject({
+      frame: 5,
+      y: 7,
+      x: 0,
+      scaleX: 1,
+      scaleY: 1,
+    });
   });
 });
 
@@ -387,13 +429,105 @@ describe("procedural motion of single-frame sprites (ANI-5)", () => {
     expect(stepAt(s, bat, in_, out, 400, 200).skewX).toBe(0);
   });
 
-  it("falls flat and fades when it dies", () => {
+  it("lands a flyer as it dies: no bob left when the fall ends, on the corpse's pixels", () => {
+    const DEATH: AnimMeta = {
+      ...STILL,
+      flying: true,
+      actions: { death: { frames: 4, ms: 90, dirs: ["s"] } },
+    };
+    for (const bat of [{ ...STILL, flying: true } as AnimMeta, DEATH]) {
+      const { s, in_, out } = setup();
+      // It dies at the top of its bob, 4 px up.
+      const at = FLY_MS / 4 - (s.seed % FLY_MS) + FLY_MS;
+      in_.now = at;
+      expect(animate(s, bat, in_, out).y).toBe(-2 * FLY_PX);
+      startDeath(s, at, 3);
+      let last = -2 * FLY_PX;
+      const ms = fallMs(bat);
+      for (let el = 0; el <= ms; el += 30) {
+        in_.now = at + el;
+        const y = animate(s, bat, in_, out).y;
+        expect(y).toBeGreaterThanOrEqual(last); // only ever down
+        last = y;
+      }
+      // Fallen, and all through the crossfade: exactly where the corpse lies, full shadow.
+      for (const el of [ms, ms + DEATH_SETTLE_MS / 2, ms + DEATH_SETTLE_MS - 1]) {
+        in_.now = at + el;
+        expect(animate(s, bat, in_, out)).toMatchObject({ y: 3, shadow: 1 });
+      }
+    }
+  });
+
+  it("tips over clockwise and flattens when it dies, ending as its corpse was drawn", () => {
     const { s, in_, out } = setup();
-    startDeath(s, 0);
-    in_.now = DEATH_MS / 2;
-    expect(animate(s, STILL, in_, out)).toMatchObject({ scaleY: 0.75, alpha: 0.5, done: false });
-    in_.now = DEATH_MS;
+    expect(fallMs(STILL)).toBe(DEATH_MS);
+    expect(fallMs(undefined)).toBe(DEATH_MS);
+    startDeath(s, 0, 3);
+    let last = -1;
+    for (let now = 0; now <= DEATH_MS; now += 50) {
+      in_.now = now;
+      const p = animate(s, STILL, in_, out);
+      expect(p).toMatchObject({ action: "death", alpha: 1, done: false });
+      expect(p.tip).toBeGreaterThan(last); // one motion, always the same way
+      last = p.tip;
+    }
+    // The end of the fall: a quarter turn, 3/5 as high, lowered onto the corpse.
+    expect(out.tip).toBeCloseTo(Math.PI / 2);
+    expect(out.scaleY).toBeCloseTo(TIP_SQUASH);
+    expect(out).toMatchObject({ x: 0, y: 3, scaleX: 1 });
+    in_.now = DEATH_MS + DEATH_SETTLE_MS / 2;
+    expect(animate(s, STILL, in_, out)).toMatchObject({ alpha: 0.5, y: 3, done: false });
+    expect(out.tip).toBeCloseTo(Math.PI / 2);
+    in_.now = DEATH_MS + DEATH_SETTLE_MS;
     expect(animate(s, STILL, in_, out).done).toBe(true);
+  });
+
+  it("tips a mirrored single image over as it was drawn: the corpse is never mirrored", () => {
+    const { s, in_, out } = setup();
+    in_.dir = "e"; // STILL looks left: mirrored to look east
+    in_.now = 0;
+    expect(animate(s, STILL, in_, out).scaleX).toBe(-1);
+    startDeath(s, 10);
+    in_.now = 200;
+    expect(animate(s, STILL, in_, out).scaleX).toBe(1);
+  });
+
+  it("places a tipped frame on the pixels spritegen's tipOver gives (the corpse)", () => {
+    // tipOver: (x, y) of an n x n image goes to column n - 1 - y and, flattened to h rows
+    // against the bottom, to the rows n - h + x h / n. The sprite is anchored at its
+    // bottom centre: a point (u, v) from it is drawn at at + (a u + c v, b u + d v).
+    const n = 32;
+    const at = tipPlacement(Math.PI / 2, TIP_SQUASH, n, {
+      x: 0,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1,
+      skewX: 0,
+      skewY: 0,
+    });
+    const a = Math.cos(at.skewY) * at.scaleX;
+    const b = Math.sin(at.skewY) * at.scaleX;
+    const c = Math.sin(at.skewX) * at.scaleY;
+    const d = Math.cos(at.skewX) * at.scaleY;
+    for (const [x, y] of [
+      [0, 0],
+      [31, 0],
+      [0, 31],
+      [31, 31],
+      [12, 20],
+    ] as const) {
+      // The pixel's corners nearest the image's top-left, from the anchor (n / 2, n).
+      const u = x - n / 2;
+      const v = y - n;
+      const px = at.x + a * u + c * v + n / 2;
+      const py = at.y + b * u + d * v + n;
+      expect(px).toBeCloseTo(n - y); // the right edge of column n - 1 - y
+      expect(py).toBeCloseTo(n - TIP_SQUASH * n + x * TIP_SQUASH); // row x, flattened
+    }
+    // Standing (no tip, no squash) it is the sprite as it is.
+    expect(tipPlacement(0, 1, n, at)).toMatchObject({ x: 0, scaleX: 1, scaleY: 1, skewY: 0 });
+    expect(at.y).toBeCloseTo(0);
+    expect(at.skewX).toBeCloseTo(0);
   });
 
   it("shimmers away when it leaves by a teleport or a logout, never falling (ANI-7)", () => {

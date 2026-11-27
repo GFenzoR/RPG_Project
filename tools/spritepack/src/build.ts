@@ -10,8 +10,10 @@ import {
   ANIM_ACTIONS,
   ANIM_DIRS,
   frameName,
+  gaitHints,
   layerOver,
   measureFrames,
+  restOf,
   stancesOf,
   mirrorImage,
   recolorImage,
@@ -365,6 +367,7 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
       shadow: entry?.shadow ?? "baked",
       ...(entry?.facing ? { facing: entry.facing } : {}),
       ...(entry?.flying ? { flying: true } : {}),
+      ...gaitHints(entry),
       actions: found?.actions ?? {},
     };
     if (!r && found) aliases.set(name, found.base);
@@ -511,6 +514,14 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
       resolved.get(target)?.image,
     );
     if (stance) meta.stance = stance;
+    // Where its fallen body rests: the client's fall ends on the corpse sprite.
+    const rest = restOf(
+      name,
+      meta,
+      (frame) => resolved.get(frame)?.image,
+      aliases.has(name) ? undefined : resolved.get(name)?.image,
+    );
+    if (rest !== undefined) meta.rest = rest;
   }
   index.anims = anims;
   index.tiles = tiles;
@@ -699,6 +710,7 @@ function buildLayered(
     shadow: entry.shadow,
     ...(entry.facing ? { facing: entry.facing } : {}),
     ...(entry.flying ? { flying: true } : {}),
+    ...gaitHints(entry),
     actions: {},
   };
   const recolored = new Map<string, Image>();

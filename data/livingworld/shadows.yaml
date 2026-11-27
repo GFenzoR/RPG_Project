@@ -52,6 +52,7 @@ families:
   portcullis: block
   frame: block
   # bodies lying on the ground
+  # (a player's body too: the same remains container, docs/17 "El cuerpo de un jugador")
   remains: { cast: silhouette, length: 0.4 }
   # flat on the ground
   border: none

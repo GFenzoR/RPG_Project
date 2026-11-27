@@ -884,7 +884,7 @@ de un sprite con `death` juega su clip y se desvanece.
 | Volador (`flying: true`) | Oscila ±2 px siempre, y su sombra de contacto se achica cuando sube | 600 ms por ciclo |
 | Atacar | Embestida: avanza 6 px hacia el objetivo y vuelve | 90 ms de ida y 160 ms de vuelta |
 | Recibir golpe | Silueta blanca (textura generada al cargar el atlas) y retroceso de 2 px | 60 ms y después 120 ms |
-| Morir | Destello blanco, se aplasta hasta la mitad del alto contra el piso y se disuelve con tramado ordenado (Bayer 4x4). Después aparece el cadáver que manda el servidor (los restos de su familia: "Hecho: proyectiles, restos por familia y la fuente del canvas") | 400 ms |
+| Morir | Destello, se vuelca un cuarto de vuelta hacia la derecha y se aplasta a 3/5 del alto contra el piso: la pose de su cadáver, que toma su lugar ("Muerte continua (hecho, 2026-11-27)"; antes se aplastaba a la mitad y se disolvía) | 400 ms + 100 ms |
 | Aparecer | La disolución al revés | 300 ms |
 
 ### ANI-6 Atuendos y cosméticos
@@ -936,6 +936,110 @@ Lo que había antes, y queda como respaldo con un servidor sin `attack_events`:
 - **Muerte o salida de la vista.** Si `CreatureDisappear` no lo distingue, se suma un
   motivo. Mientras tanto el cliente toma como muerte la salida de una criatura con la barra
   en 0 (el servidor manda `CreatureHealth` 0 antes de `CreatureDisappear`).
+
+### Criaturas al ritmo de su paso (hecho, 2026-11-27, rama `feat/creature-walk`, lote 20e)
+
+Pedido del dueño después de jugar (2026-11-25/27): "los sprites de los enemigos deben
+animarse al ritmo de como se mueven; no deben verse deslizándose ni flotando". La caminata
+del jugador "quedó excelente" y es la referencia (ciclo por distancia, "La regla de la
+zancada", 8 direcciones).
+
+**Qué pasaba.** Todo monstruo dibujado tenía ya 4 frames de caminar y el ciclo ya avanzaba
+por distancia (ANI-2), pero con un solo número para todos: spritepack ponía `perTile` en la
+mitad de los frames, es decir **un ciclo cada 2 casillas (64 px)**, fuera una rata de 24 px
+de largo o el guardián de 96. Un animal chico recorría tres o cuatro veces el suelo que sus
+patas dibujaban: patinaba. El murciélago aleteaba por distancia (parado a media casilla, las
+alas quietas), y la gaviota, de una sola imagen, solo flotaba.
+
+**La regla.** Cada sprite de criatura dice en `animations` de `assets/sprites.yaml`:
+
+- `body`: `biped`, `quadruped`, `many_legs` (arañas, cangrejos, escarabajos), `slither` (un
+  cuerpo arrastrado en ondas), `hop` (salta) o `flyer` (vuela).
+- `stride`: los px de sprite de suelo que cubre **un ciclo** de caminar. Sin él vale el de
+  su cuerpo (`DEFAULT_STRIDE` de `packages/renderer/src/anim.ts`: bípedo 32, la zancada del
+  humanoide del motor; cuadrúpedo 40; muchas patas 16; arrastrado 24; salto 32). Un volador
+  no tiene.
+
+spritepack los copia a `atlas.json` `anims` y `animate` (`anim.ts`) hace el resto:
+
+- **Con frames de caminar:** la fase del ciclo es la distancia caminada sobre la zancada
+  (`walkPerStep` con `strideOf`; un paso diagonal cuenta √2 casillas), igual en todas las
+  direcciones y a cualquier velocidad: una criatura lenta o apurada mueve las patas más
+  lento o más rápido, nunca patina más. La fase sigue de una casilla a la otra.
+- **Sin frames de caminar** (una sola imagen con `body`): la marcha procedural de su cuerpo
+  sobre la misma fase: bípedo y cuadrúpedo suben 1 px entre dos apoyos (en 0 y en la mitad
+  del ciclo) y se inclinan; muchas patas tiemblan 1 px ocho veces por ciclo; el que salta
+  hace un arco por zancada y se aplasta al caer; el arrastrado ondula.
+- **Arrastrado** (`slither`, con o sin frames): una onda por zancada. Yendo de lado se
+  estira y se junta 1 px sin despegarse del suelo; hacia arriba, abajo o en diagonal se
+  mece 1 px a los lados.
+- **Volador** (`flyer` con `flying: true`): las alas baten **por tiempo** (`WING_BEAT_MS`,
+  90 ms por frame de su clip de caminar), avance o flote, también parado en una dirección
+  sin frames de quieto; el vaivén de siempre (`FLY_PX`); `Pose.walk` es -1 siempre, así que
+  nunca deja huella, polvo ni sonido de paso. Uno de una sola imagen se achata 1 px en cada
+  batido (`FLAP_MS`).
+- **Quieta no cicla; empujada o teletransportada tampoco.** El ciclo solo avanza dentro de
+  un paso (`AnimInput.walkStart`): un empujón, un teletransporte o una corrección del
+  dibujo no son un paso, y las patas quedan como estaban. Al volver a caminar siguen desde
+  ese frame.
+- **Huellas y sonidos:** el mundo vivo ya planta cada pie por la fase del ciclo dibujado
+  (`Pose.walk`) y la distancia de un ciclo (`walkCyclesPerStep`), así que con la zancada
+  nueva las huellas, el polvo y el sonido caen donde pisa el dibujo, sin más cambios. El
+  andar de cada monstruo ya estaba en `data/livingworld/gaits.yaml` (el reptador hueco
+  deja los puntos de sus patas, `many_legs`, aunque su cuerpo ondule como `slither`).
+- Un sprite que no dice `body` ni `stride` sigue con la regla vieja (`perTile`): las capas
+  del humanoide del motor, que derivan `per_tile` de su zancada.
+
+**Auditoría (2026-11-27).** Todos los monstruos de `data/monsters` y los NPCs de
+`data/npcs`. "Antes" es cuántas veces más suelo recorría el cuerpo que el que dibujaban sus
+patas (64 px por ciclo sobre su zancada). Los ms por casilla son `89100 / speed`.
+
+| Criatura | Cuerpo | Frames de caminar | Direcciones | Zancada (px por ciclo) | Antes | ms por casilla | Ciclos por casilla ahora |
+|---|---|---|---|---|---|---|---|
+| `ash_hound` | quadruped | 4 | 3 + espejo | 56 | ×1,1 | 297 | 0,57 |
+| `bilge_rat` | quadruped | 4 | 3 + espejo | 20 | ×3,2 | 557 | 1,60 |
+| `bramble_stag` | quadruped | 4 | 4 dibujadas | 40 | ×1,6 | 414 | 0,80 |
+| `bristleback_boar` | quadruped | 4 | 4 dibujadas | 32 | ×2,0 | 495 | 1,00 |
+| `cinder_salamander` | quadruped | 4 | 3 + espejo | 26 | ×2,5 | 594 | 1,23 |
+| `ember_wyrmling` | quadruped | 4 | 3 + espejo | 32 | ×2,0 | 446 | 1,00 |
+| `gloom_bat` | flyer | 4 (alas) | 3 + espejo | no pisa | aleteaba por distancia | 387 | por tiempo |
+| `hollow_crawler` | slither | 4 | 3 + espejo | 22 | ×2,9 | 524 | 1,45 |
+| `mire_toad` | hop | 4 | 3 + espejo | 32 | ×2,0 | 685 | 1,00 |
+| `moss_spider` | many_legs | 4 | 3 + espejo | 16 | ×4,0 | 524 | 2,00 |
+| `ore_beetle` | many_legs | 4 | 3 + espejo | 14 | ×4,6 | 636 | 2,29 |
+| `slag_golem` | biped | 4 | 3 + espejo | 30 | ×2,1 | 743 | 1,07 |
+| `slagbound_warden` | biped | 4 | 3 + espejo | 52 | ×1,2 | 636 | 0,62 |
+| `thieving_gull` | flyer | no tiene | 1 imagen, se espeja | no pisa | solo flotaba | 424 | por tiempo |
+| `thornling` | biped | 4 | 3 + espejo | 24 | ×2,7 | 594 | 1,33 |
+| `tide_crab` | many_legs | 4 | 3 + espejo | 14 | ×4,6 | 594 | 2,29 |
+| `wolf` | quadruped | 4 | 3 + espejo | 40 | ×1,6 | 469 | 0,80 |
+| `coffer_smuggler`, `drowned_miner`, `obsidian_delver`, `wreck_looter` | humanoide del motor (muñeco de capas) | 8 | 8 | 32, la del jugador | igual | 435 a 557 | 1,00 |
+| NPCs con `look` (los 19 que son personas) | humanoide del motor | 8 | 8 | 32, la del jugador | igual | según su `speed` | 1,00 |
+| `volcan_forge_echo` (`npcs/forge_echo`) | flyer | no tiene (4 de quieto) | 4 dibujadas | no pisa | flotaba | no camina | por tiempo |
+
+**Cómo se eligió cada zancada.** Mirando los 4 frames de perfil de cada una (hoja de
+contacto a 2x y una tira con cada frame corrido lo que dice la regla) y midiendo el largo
+del cuerpo y lo que abarcan sus apoyos: un bípedo, dos veces el paso que dibuja (el
+guardián da pasos de ~26 px; el brote, de ~12); un cuadrúpedo, más o menos el largo del
+tronco (el sabueso corre: más); muchas patas, un ciclo corto y rápido. Son estimaciones a
+ojo sobre 4 frames, no una medida de cada apoyo: con 4 frames el pie apoyado todavía se
+corre hasta un octavo de zancada dentro de cada frame. Si en el juego alguna se ve patinar
+o pedalear, se ajusta su `stride` en `assets/sprites.yaml` (más chico = patas más rápidas) y
+`make sprites`; no hace falta tocar código.
+
+**Lo que no se dibujó.** No se agregaron frames: todos los monstruos dibujados ya tenían su
+caminata. La gaviota sigue con una imagen (parada, con las alas plegadas): un ciclo de
+vuelo en tres direcciones no sale de su receta de spritegen, así que bate con el achatado
+procedural y queda en docs/14 como pendiente de frames dibujados.
+
+**Pruebas.** `packages/renderer/src/anim-gait.test.ts` (fase contra distancia para cada
+cuerpo, con y sin frames, a tres velocidades; la zancada propia y la por defecto; el
+volador; la onda; quieta, empujada y teletransportada), `tools/spritepack/src/anims.test.ts`
+(`body` y `stride` en el manifiesto y en el atlas) y `monsters.test.ts` (todo sprite de
+monstruo dice su cuerpo; un volador no tiene zancada). E2E: "sandbox creature walk" de
+`client/e2e/sandbox.spec.ts` mide con `__rpgClient.gaits()` dos monstruos distintos junto a
+los corrales (el ciclo que avanza dentro de un paso es la distancia dibujada sobre su
+zancada) y saca `91b-creature-walk` con los dos a medio paso.
 
 ### Motor de sprites (hecho, 2026-11-18, rama `feat/sprite-engine`)
 Pedido del dueño (2026-11-18): *"podrías poner un agente que arme el motor de generar
@@ -3182,6 +3286,67 @@ borra"); en corto:
   la playa abierta, desde barlovento; al abrigo dura hasta el tope), la ola siguiente en
   la arena mojada, o el pie de otra criatura; las más viejas se desvanecen al pasar el tope.
 
+### Muerte continua (hecho, 2026-11-27, rama `feat/death-anim`)
+Pedido del dueño (2026-11-25/27): "cuando un enemigo muere, de repente muere hacia cierta
+dirección y aparece su cuerpo en la otra; debiese ser una animación continua hasta que queda
+el cuerpo en el piso". Lo que pasaba (comprobado en el código y en el atlas): (1) el servidor
+pone los restos en la casilla en el mismo tick de la muerte, así que el cadáver se veía bajo
+el cuerpo que todavía caía; (2) el cuerpo se desvanecía a nada (150 ms, o aplastándose) en
+vez de terminar como el cadáver; (3) el jabalí y el ciervo tienen la caída en las cuatro
+direcciones y su cadáver sale de la del sur: morían mirando al este y el cuerpo aparecía
+tendido hacia el sur; y el cadáver está bajado a la línea de los pies, hasta 5 px lejos de
+donde quedaba el último frame (el ciervo; 4 px los humanoides).
+- **Una sola caída** (`packages/renderer/src/anim.ts` `dying`, `fallMs`): el clip de morir
+  (o el vuelco procedural) dura lo que duraba, el cuerpo no palidece mientras cae y su
+  último frame queda `DEATH_SETTLE_MS` (100 ms) fundiéndose sobre el cadáver, que el mapa
+  ya muestra desde el final de la caída: un fundido de los colores vivos a los del cadáver,
+  sobre los mismos píxeles. Nunca se ve el piso a través.
+- **Termina en la pose del cadáver:** toda muerte se dibuja mirando al sur
+  (`CreatureBody.draw`), la dirección de la que sale el cadáver. `atlas.json` dice dónde
+  descansa el cuerpo caído (`anims.<sprite>.rest`, filas vacías bajo el último frame de
+  `death_s`; `tools/spritepack` `restOf`) y el cliente lo baja frame a frame hasta ahí
+  (`fallShift`, `AnimState.fallY`; un muñeco de capas descansa en la más baja de sus capas,
+  como se compuso su cadáver): el último frame cae píxel por píxel sobre el cadáver
+  (comprobado con los 16 monstruos con clip: la máscara del último frame bajado es la del
+  PNG de `corpses/`). Una sola imagen (la gaviota) se vuelca: un cuarto de vuelta en el
+  sentido del reloj alrededor del centro de su cuadro y aplastada a `TIP_SQUASH` (3/5)
+  contra el borde de abajo, la misma geometría que `tipOver` de spritegen
+  (`tipPlacement`, `Pose.tip`; su `rest` es `tippedRest`, que un test de spritegen compara
+  con `tipOver`). Se vuelca desde el dibujo sin espejar, porque el cadáver no se espeja:
+  una gaviota que miraba al este gira al morir.
+- **El cadáver espera** (`client/src/render/death-fall.ts` `CorpseVeil`, puro y con tests):
+  el mundo anota los restos que un `TileUpdate` deja en una casilla a la vista
+  (`WorldState.remainsLaid`: de un monstruo, `remains_of`, o el cuerpo de un jugador,
+  `body_of`; nunca el mapa tal como llega). Los de ESA muerte son los que llegaron a su
+  casilla desde 150 ms antes de saberse la muerte (los dos mensajes del mismo tick, en
+  cualquier orden) hasta el fin de la caída; el canvas esconde ese sprite del mapa
+  (`renderable`, el de más arriba con esa clave: un cadáver igual que ya estaba debajo
+  sigue a la vista) y lo muestra en el cuadro en que la caída termina.
+- **Revisión final del lote 20f (2026-11-27):** un volador (murciélago, gaviota) deja de
+  mecerse al morir: baja desde la altura a la que murió y aterriza con la caída, así que
+  también termina sobre los píxeles de su cadáver y con la sombra entera. Dos monstruos
+  iguales que mueren en la misma casilla a la vez esconden cada uno su propio cadáver. Los
+  restos escondidos tampoco proyectan sombra mientras tanto (`object-shadows.ts`). Al
+  cambiar de piso no queda nada escondido: `MapView.setFloor` rehace los sprites. Ningún
+  monstruo puede llamarse `body_male` ni `body_female` (`checkPaths` de spritegen,
+  `bodyClashes`): esos nombres son del cuerpo de un jugador.
+- **Casos de borde:** una criatura que muere a mitad de un paso termina el paso en 120 ms
+  (`settle`) y cae en la casilla donde quedan sus restos; con movimiento reducido no hay
+  caída (el cuerpo se va y el cadáver está); si los restos llegan tarde o no llegan (una
+  invocación no deja), el cuerpo igual se va a los 100 ms del final y los restos, cuando
+  llegan, se ven en el acto; lo que ya estaba en el piso al entrar a la vista nunca se
+  esconde. El escondite dura como mucho la caída (menos de un segundo): los restos se pueden
+  abrir y arrastrar (lote 20e) apenas el cuerpo está en el piso. Vale igual para jugadores y
+  NPCs; el cuerpo de un jugador es el item genérico (otro dibujo), así que ahí el fundido
+  es de la caída a ese item, sin alineación.
+- **Decisiones:** la caída siempre al sur, también el jabalí y el ciervo (sus `death_e/n/w`
+  quedan sin usar): hacer un cadáver por dirección pedía que el servidor dijera hacia
+  dónde cayó, y todos los demás monstruos ya caían al sur. Sin tocar servidor ni protocolo.
+- **E2E:** `shotFall` de `e2e/game.spec.ts` retiene los frames y el reloj de la página
+  (`performance.now`) desde el principio de una caída y dibuja tres cuadros de la misma
+  muerte: `11b-death-1-mid`, `11b-death-2-end` y `11b-death-3-corpse` (reemplazan a
+  `11b-death`). `poses().dying` trae `fall` y `veiled`.
+
 ### Cadáveres (hecho, 2026-11-23, rama `feat/corpse-names`)
 Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo el nombre.
 - **De qué sale:** `tools/spritegen/src/recipes/corpses.ts` hace `corpses/<monstruo>`
@@ -3203,8 +3368,9 @@ Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo
   ser cuadrada (`tipOver` la gira un cuarto; otra forma falla en vez de recortarse).
 - **Dónde va:** del tamaño de la criatura (el custodio de 96x96 conserva su huella) y
   con su píxel más bajo donde estaban sus pies (`FEET_LINE` sobre el borde de la
-  casilla). El cliente lo dibuja centrado en la casilla (`corpseArt`, ancla `bc`), así el
-  último frame de la caída, que se desvanece encima, y el cadáver coinciden. Un sprite
+  casilla). El cliente lo dibuja centrado en la casilla (`corpseArt`, ancla `bc`), y baja
+  el cuerpo que cae hasta ahí: el último frame de la caída y el cadáver coinciden píxel
+  por píxel ("Muerte continua"). Un sprite
   `br` más ancho que una casilla se ensancha para que su centro quede en la casilla.
 - **Cómo llega al mapa:** los restos siguen siendo el contenedor de la familia; el item
   trae `mods.remains_of` (docs/05 "Restos") y el cliente lo apila en `MapView` con la
@@ -3216,6 +3382,24 @@ Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo
   se achica a ella (`BigIcon` con `shrink`) en vez de salirse a 1x. Si el cliente no
   tiene el nombre del monstruo (`monster.<id>.name`), los restos se llaman como su
   familia (`instanceName`), nunca con la clave cruda.
+- **El cuerpo de un jugador (rama `feat/human-corpse`; el dueño el 2026-11-26: "el cuerpo del
+  jugador debería verse como un humano")**: ya no es el sprite genérico de la familia
+  (`decor/remains_humanoid`) sino una persona tendida: `corpses/body_male` y
+  `corpses/body_female`, hechos por `corpseRecipes` con el mismo muñeco del motor (último
+  cuadro de `death` mirando al sur: la pose en la que termina la caída, así el cambio no se
+  nota) y el mismo oscurecido que los demás cadáveres. **Qué lleva del aspecto:** solo el
+  sexo, con ropa neutra (túnica de lino, pantalón pardo; piel clara, pelo castaño). El
+  servidor manda en los restos el nombre del dueño (`bodyOf`) y nada del aspecto, y no se
+  tocó el protocolo: el cliente recuerda el sexo de cada jugador que ve (`sexByName` en
+  `state/world.ts`, 256 nombres) y lo pone en `mods.bodySex` al guardar la casilla; la clave
+  de `MapView` queda `<item>@body_<sexo>` (`bodyCorpse` en `state/corpse-art.ts`). Un cuerpo
+  cuyo dueño el cliente no vio vivo (ya estaba ahí al llegar) sale de hombre. Piel, pelo y
+  ropa reales del muerto quedarían para un cambio de protocolo (el cuerpo llevaría su
+  `look`) o para componer el muñeco al vuelo en el cliente. Los humanoides de
+  `data/monsters` (con `look`) ya dejaban su cadáver con su propio aspecto. Sombra: el
+  contenedor es de la familia `remains` de `data/livingworld/shadows.yaml` (`length: 0.4`),
+  que ya cubre el cuerpo. No tiene etapas de descomposición: los restos no las tienen
+  (desaparecen al vencer, docs/02 "Muerte").
 - **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts corpses
   [--out FILE.png] [--scale N]`: cada monstruo de pie a la izquierda y su cadáver a la
   derecha, sobre la grilla de casillas, como los pone el cliente. Revisado el 2026-11-24

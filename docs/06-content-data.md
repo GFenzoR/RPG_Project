@@ -550,7 +550,9 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   commiteados de spritegen falla mientras falte. Si el arte del monstruo lo dibuja
   spritegen, un solo `make spritegen` escribe sus frames y su cadáver (sale de la receta,
   no del PNG). Un monstruo sin `look`, sin clip de muerte y sin imagen cuadrada no puede
-  tener cadáver: `spritegen check` lo dice (`corpses/<id>: monster <id> has no corpse`).
+  tener cadáver: `spritegen check` lo dice (`corpses/<id>: monster <id> has no corpse`). El
+  cuerpo de un jugador no es de ningún monstruo: `corpses/body_male` y `corpses/body_female`
+  salen del mismo archivo, de `data/looks.yaml` (docs/17 "El cuerpo de un jugador").
 - **Persecución y regeneración** (`pursuit` y `regen`, opcionales; reglas en
   `02-game-design.md` "Monstruos", "Persecución" y "Regeneración fuera de combate"): cada
   campo que falta toma el de `balance.yaml combat.monster_pursuit` / `monster_regen`.
@@ -1705,6 +1707,14 @@ monstruos con el mismo sprite se mueven igual y el servidor no se entera: el YAM
   respiración, embestida, golpe y caída: ANI-5). Una entrada sin `layers` le da pistas:
   `facing: left | right` (hacia dónde mira el dibujo; se espeja para caminar al otro lado)
   y `flying: true` (flota y nunca salta).
+- **Cómo camina** (docs/17 "Criaturas al ritmo de su paso"): la entrada del sprite en
+  `animations` de `assets/sprites.yaml` dice `body` (`biped`, `quadruped`, `many_legs`,
+  `slither`, `hop` o `flyer`) y, si camina, `stride`: los px de sprite que cubre un ciclo
+  de su caminata (sin él, el de su cuerpo). El ciclo avanza con la distancia recorrida
+  sobre esa zancada, a cualquier `speed`; un `flyer` (con `flying: true`) bate las alas por
+  tiempo y no deja huellas. Un monstruo nuevo con sprite propio lleva las dos
+  (`tools/spritepack/src/monsters.test.ts` lo exige); uno con `look` camina como el
+  jugador y no lleva ninguna.
 - Un monstruo humanoide o un NPC que es una persona: su `look` ("Looks"), no un sprite
   animado. Las capas del humanoide son entradas de `animations` con `trim`, `per_tile` y
   `per_tile_ns` (`assets/README.md`, "Sprites animados").

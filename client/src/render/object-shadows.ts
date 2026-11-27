@@ -188,6 +188,10 @@ export class ObjectShadows {
       this.stale = false;
       this.place(pose);
     }
+    // An item hidden for now casts nothing: the remains under a body that still falls
+    // (death-fall.ts), whose own shadow is the creature's.
+    for (const e of this.entries.values())
+      if (e.main && e.hint.cast !== "block") e.main.visible = e.item.renderable;
   }
 
   /**

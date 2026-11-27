@@ -20,6 +20,7 @@ import {
   tileNoise,
 } from "./draw.ts";
 import {
+  bodyClashes,
   checkPaths,
   EFFECT_FRAME,
   MISSILE_ART,
@@ -244,6 +245,8 @@ describe("recipes", () => {
 
   it("every recipe path is used by data/ or is an outfit or effect frame or a ui icon", () => {
     expect(checkPaths(root)).toEqual([]);
+    // A monster may not take the id a player's body is drawn by.
+    expect(bodyClashes(["wolf", "body_male", "body_female"])).toHaveLength(2);
     expect(OUTFIT_FRAME.test("outfits/citizen/s_0")).toBe(true);
     expect(OUTFIT_FRAME.test("outfits/citizen/south_0")).toBe(false);
     expect(OUTFIT_FRAME.test("outfits/citizen/up_0")).toBe(false);

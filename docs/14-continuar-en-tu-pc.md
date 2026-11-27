@@ -104,6 +104,56 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Criaturas al ritmo de su paso (hecho, rama `feat/creature-walk`, lote 20e; el dueño el
+  2026-11-27: "los sprites de los enemigos deben animarse al ritmo de como se mueven; no
+  deben verse deslizándose ni flotando")**: cada sprite de criatura dice su cuerpo y su
+  zancada (`body`, `stride` en `assets/sprites.yaml`) y el ciclo de caminar avanza con la
+  distancia sobre esa zancada; antes todos hacían un ciclo cada 64 px. Los voladores baten
+  por tiempo y no pisan; el reptador ondula (docs/17 "Criaturas al ritmo de su paso", con
+  la auditoría de cada monstruo y NPC). Pendiente:
+  - **Que el dueño lo mire jugando.** Las zancadas son estimaciones sobre los 4 frames de
+    cada monstruo. Si alguno todavía patina (zancada muy larga) o pedalea (muy corta), se
+    cambia su `stride` y se corre `make sprites`; no hay código que tocar.
+  - **Frames dibujados que faltan.** La gaviota (`creatures/thieving_gull`) sigue con una
+    sola imagen, parada y con las alas plegadas: flota, y "bate" achatándose 1 px. Necesita
+    un ciclo de vuelo dibujado (3 direcciones, 4 frames), con spritegen o con el Gemini del
+    dueño. El eco de la forja no tiene frames de caminar (flota con los de quieto): alcanza
+    mientras no se mueva de su lugar.
+  - **4 frames por ciclo.** Con 4 frames el pie apoyado se corre hasta un octavo de
+    zancada dentro de cada frame (2 a 7 px según la criatura). Para que quede clavado como
+    el del jugador (8 frames) hacen falta caminatas de 6 u 8 frames; lo más visible, en las
+    de zancada larga (el sabueso de ceniza, 56 px; el guardián, 52).
+  - **Norte y sur.** La misma zancada vale en todas las direcciones; de frente y de
+    espaldas los frames de Gemini apenas muestran el paso, así que ahí se nota menos.
+- **Cuerpo humano del jugador (hecho, rama `feat/human-corpse`; el dueño el 2026-11-26)**:
+  el cuerpo de un jugador es una persona tendida (`corpses/body_male|female`, docs/17 "El
+  cuerpo de un jugador"), apilada sobre la caída continua. Solo cliente y spritegen; hay
+  que correr `make sprites`. Pendiente: mirar en `make e2e` la muerte de un jugador (el
+  cuerpo debe seguir la pose de la caída). Limitación conocida: lleva el sexo, no la
+  piel, el pelo ni la ropa del muerto (el servidor solo manda su nombre); un cuerpo cuyo
+  dueño no se vio vivo sale de hombre. Arreglo completo: que `ItemMods` lleve el `look`.
+- **Muerte continua (hecho, rama `feat/death-anim`; el dueño el 2026-11-25/27: "muere hacia
+  cierta dirección y aparece su cuerpo en la otra; debiese ser una animación continua")**:
+  la caída termina en la pose y sobre los píxeles del cadáver, que queda escondido hasta
+  que el cuerpo está en el piso (docs/17 "Muerte continua"). Solo cliente y spritepack
+  (`atlas.json` `anims.rest`; hay que correr `make sprites`). Pendiente:
+  - **Mirarlo en `make e2e`:** `11b-death-1-mid`, `-2-end` y `-3-corpse` (tres cuadros de
+    la misma muerte de un lobo): el cuerpo y el cadáver nunca a la vez, y entre el 2 y el 3
+    solo cambia el color. El test no se corrió en su etapa (sin servidores); retiene el
+    reloj de la página, y si fallara por eso, `shotFall` es lo que hay que mirar.
+  - **El jabalí y el ciervo caen siempre al sur** (antes hacia donde miraban, con el
+    cadáver al sur): sus caídas al este, norte y oeste quedan sin usar. Un cadáver por
+    dirección pide un campo del servidor (hacia dónde cayó) y cuatro sprites por monstruo;
+    que lo decida el dueño si el giro al sur al morir le molesta.
+  - **La gaviota** (la única de una sola imagen) gira a su dibujo sin espejar al morir si
+    miraba al este, y mientras se vuelca no proyecta sombra. Un clip de muerte propio lo
+    arregla.
+  - **La sombra del cadáver** (la que proyectan los objetos del mapa) sale con el
+    `TileUpdate`, mientras el cuerpo todavía cae: son unos píxeles bajo el cuerpo.
+  - **El cuerpo de un jugador** sigue siendo el item genérico: la caída se funde a otro
+    dibujo. Un cadáver con el aspecto del jugador es arte y protocolo nuevos.
+  - **Sin oscurecer al caer:** el cuerpo llega al piso con sus colores vivos y los 100 ms
+    del fundido lo llevan a los del cadáver; si se nota el cambio, teñirlo durante la caída.
 - **Nada reaparece a la vista (hecho, rama `feat/unseen-respawn`; el dueño el 2026-11-26: "si
   el jugador está viendo un área el respawn no debiese pasar")**: un monstruo no reaparece
   en una casilla que algún jugador tenga en su ventana entera (31x21 + margen); con
@@ -632,7 +682,7 @@ el punto 5:
   - **Caída hacia otro lado:** el cadáver es siempre la caída al sur; el ciervo y el
     jabalí del motor, que mueren en cuatro direcciones, terminan su caída al oeste o al
     norte y el cadáver aparece mirando al sur.
-  - **E2E:** mirar en `make e2e` el lobo muerto (`11b-death`, `14-respawn`): el cadáver
+  - **E2E:** mirar en `make e2e` el lobo muerto (`11b-death-3-corpse`, `14-respawn`): el cadáver
     del lobo, no el de la familia, y "restos de lobo" en el log y en la ventana.
 - **Unidades métricas y cargas realistas (hecho, rama `feat/metric-units`; el dueño el
   2026-11-23: "todas las unidades y distancias en el sistema métrico"; docs/02

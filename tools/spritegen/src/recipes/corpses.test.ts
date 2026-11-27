@@ -3,11 +3,20 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createImage } from "@rpg/spritepack";
+import { tippedRest, createImage } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { describe, expect, it } from "vitest";
 import { checkPaths, RECIPES, recipesAt, render, spriteFile } from "../index.ts";
-import { CORPSE_LIGHT, corpseOf, corpsePath, FEET_LINE, monsterIds, tipOver } from "./corpses.ts";
+import {
+  BODY_SEXES,
+  bodyPath,
+  CORPSE_LIGHT,
+  corpseOf,
+  corpsePath,
+  FEET_LINE,
+  monsterIds,
+  tipOver,
+} from "./corpses.ts";
 
 const root = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 
@@ -46,6 +55,26 @@ function rootWith(monsters: Record<string, string>): string {
     writeFileSync(join(dir, "data", "monsters", `${id}.yaml`), `id: ${id}\n${rest}`);
   return dir;
 }
+
+describe("a player's body", () => {
+  it("is a human lying down, one per sex, committed, with its feet where a person's stand", () => {
+    expect(BODY_SEXES).toEqual(["male", "female"]);
+    const imgs = BODY_SEXES.map((sex) => {
+      expect(RECIPES[bodyPath(sex)], sex).toBeDefined();
+      expect(existsSync(spriteFile(root, bodyPath(sex))), `${sex}: run make spritegen`).toBe(true);
+      const img = render(bodyPath(sex));
+      expect([img.width, img.height]).toEqual([64, 64]);
+      expect(lowest(img)).toBe(img.height - 1 - FEET_LINE);
+      return img;
+    });
+    // Two bodies, not one: the woman's has her own shape and hair.
+    expect(Buffer.from(imgs[0]?.data ?? []).equals(Buffer.from(imgs[1]?.data ?? []))).toBe(false);
+  });
+
+  it("is a corpse the checker accepts (no monster of its own)", () => {
+    expect(checkPaths(root).filter((p) => p.startsWith("corpses/body_"))).toEqual([]);
+  });
+});
 
 describe("monster corpses", () => {
   const book = Object.fromEntries(
@@ -170,5 +199,24 @@ describe("monster corpses", () => {
         }
     expect(maxX - minX + 1).toBe(28); // lying along x now
     expect(minY).toBeGreaterThanOrEqual(32 - 20); // in the bottom 3/5
+  });
+
+  it("rest where the atlas says a tipped image does (the client's fall ends there)", () => {
+    // atlas.json `rest` (tools/spritepack tippedRest) is measured without drawing the
+    // tipped image: it must be the rows this recipe really leaves under it.
+    for (const img of [
+      block(32, 32, 14, 17, 4, 31),
+      block(32, 32, 3, 21, 9, 30),
+      block(32, 32, 0, 31, 0, 31),
+      block(64, 64, 20, 50, 10, 63),
+      block(48, 48, 5, 6, 40, 41),
+    ]) {
+      const fallen = tipOver(img);
+      let low = -1;
+      for (let y = 0; y < fallen.height; y++)
+        for (let x = 0; x < fallen.width; x++)
+          if ((fallen.data[(y * fallen.width + x) * 4 + 3] ?? 0) > 0) low = y;
+      expect(tippedRest(img)).toBe(fallen.height - 1 - low);
+    }
   });
 });

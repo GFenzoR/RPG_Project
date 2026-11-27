@@ -89,3 +89,29 @@ describe("the game's monsters (docs/17 ANI-1, ART-2)", () => {
     expect([...sizes].filter(([, w]) => w === 96).map(([id]) => id)).toEqual(["slagbound_warden"]);
   });
 });
+
+describe('how the game\'s creatures walk (docs/17 "Criaturas al ritmo de su paso")', () => {
+  /** The sprites the client draws as one figure (not a paper doll): monsters and NPC spirits. */
+  const drawn = [...new Set(monsters.values()), "npcs/forge_echo"];
+
+  it("every drawn creature says its body, and a walker's stride fits its walk frames", () => {
+    for (const sprite of drawn) {
+      const entry = manifest.animations.get(sprite);
+      expect(entry?.body, `${sprite}: body`).toBeDefined();
+      const walks = frameFiles(sprite).filter((n) => n.startsWith("walk_w_")).length;
+      if (entry?.body === "flyer" || entry?.flying) {
+        expect(entry.body, `${sprite}: a flying sprite is a flyer`).toBe("flyer");
+        expect(entry.flying, `${sprite}: a flyer hovers`).toBe(true);
+        expect(entry.stride, `${sprite}: a flyer has no stride`).toBeUndefined();
+        continue;
+      }
+      // A cycle no shorter than a frame per 2 px, no longer than two tiles: outside that
+      // the legs blur or the body skates.
+      const stride = entry?.stride;
+      expect(stride, `${sprite}: stride`).toBeDefined();
+      if (stride === undefined) continue;
+      expect(stride).toBeGreaterThanOrEqual(Math.max(8, walks * 2));
+      expect(stride).toBeLessThanOrEqual(64);
+    }
+  });
+});

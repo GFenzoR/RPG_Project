@@ -69,6 +69,7 @@ import { Connection } from "./net/connection.ts";
 import { createGameCanvas } from "./render/game-canvas.ts";
 import type {
   FootfallHook,
+  GaitView,
   GameCanvas,
   GustHook,
   LabelsShown,
@@ -388,6 +389,8 @@ export interface ClientTestHooks {
   gust(x: number, y: number, min?: number): GustHook | undefined;
   /** The shadows lamps and fires cast now (GameCanvas.lightShadows). */
   lightShadows(): LightShadowHook | undefined;
+  /** How each drawn creature walks now: its stride and the cycles played (GameCanvas.gaits). */
+  gaits(): GaitView[];
   /** The footprints on the ground and the own player's last footfalls (GameCanvas.footfalls). */
   footfalls(): FootfallHook;
   /** NPCs the client knows, as [id, contentId, x, y, z]. */
@@ -416,6 +419,9 @@ interface PoseView {
   id: number;
   ms: number;
   of: number;
+  /** A fall: how long the fall itself lasts, and whether its remains are hidden under it. */
+  fall?: number;
+  veiled?: boolean;
   action: string;
   x: number;
   y: number;
@@ -2324,6 +2330,7 @@ export class Game {
           .map((d) => ({ id: d.id, reason: DisappearReason[d.reason] }));
       },
       poses: () => canvas.poses(),
+      gaits: () => canvas.gaits(),
       bubbles: () => canvas.bubbles(),
       sky: () => canvas.sky(),
       gust: (x, y, min) => canvas.gust(x, y, min),

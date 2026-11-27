@@ -20,7 +20,7 @@ import {
 import type { ServerMessage } from "@rpg/protocol";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
-import { PRESENCE_GRACE_MS, WorldState } from "./world.ts";
+import { PRESENCE_GRACE_MS, REMAINS_LAID_MS, WorldState } from "./world.ts";
 import { PLAYOUT_MARGIN_MS, PREDICT_TIMEOUT_MS, SLIDE_MS, STEP_LEAD_MS } from "./motion.ts";
 import type { CreatureState } from "./world.ts";
 import { followCamera } from "../render/viewport.ts";
@@ -934,6 +934,47 @@ describe('minimap colours (docs/02 "Minimapa")', () => {
     expect(w.tile(101, 201, 7)).toBeUndefined();
     coloured(w);
   });
+  it("a player's body is keyed by the sex the player was seen with, a man's when unseen", () => {
+    const w = entered();
+    const seen = (id: number, name: string, sex: string): void =>
+      w.apply(
+        {
+          case: "creatureAppear",
+          value: {
+            creature: create(CreatureSchema, {
+              id,
+              kind: CreatureKind.PLAYER,
+              name,
+              pos: { x: 102, y: 200, z: 7 },
+              look: { sex, body: "sturdy" },
+            }),
+          } as never,
+        },
+        0,
+      );
+    const body = (at: number, name: string): void =>
+      w.apply(
+        {
+          case: "tileUpdate",
+          value: {
+            $typeName: "game.v1.TileUpdate",
+            pos: { $typeName: "game.v1.Position", x: 101, y: 201, z: 7 },
+            tile: create(TileSchema, {
+              items: [create(ItemStackSchema, { itemId: 40, mods: { bodyOf: name } })],
+            }),
+          },
+        },
+        at,
+      );
+    seen(21, "Mira", "female");
+    seen(22, "Brand", "male");
+    body(100, "Mira");
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@body_female");
+    body(200, "Brand");
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@body_male");
+    body(300, "Stranger");
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@body_male");
+  });
   it("a tile update in view changes the remembered colour (a door, a felled tree)", () => {
     const w = entered();
     w.apply(
@@ -948,6 +989,48 @@ describe('minimap colours (docs/02 "Minimapa")', () => {
       0,
     );
     expect(w.minimap.item(101, 201, 7)).toBe(1);
+  });
+  it("remembers the remains a tile update lays in view, for the body that still falls there", () => {
+    const w = entered();
+    const update = (at: number, ...stacks: { itemId: number; remainsOf?: string }[]): void =>
+      w.apply(
+        {
+          case: "tileUpdate",
+          value: {
+            $typeName: "game.v1.TileUpdate",
+            pos: { $typeName: "game.v1.Position", x: 101, y: 201, z: 7 },
+            tile: create(TileSchema, {
+              items: stacks.map((st) =>
+                create(ItemStackSchema, {
+                  itemId: st.itemId,
+                  ...(st.remainsOf ? { mods: { remainsOf: st.remainsOf } } : {}),
+                }),
+              ),
+            }),
+          },
+        },
+        at,
+      );
+    // The map as it arrived laid nothing, and neither does a plain item.
+    expect(w.remainsLaid).toEqual([]);
+    update(100, { itemId: 1 }, { itemId: 9 });
+    expect(w.remainsLaid).toEqual([]);
+    update(500, { itemId: 1 }, { itemId: 9 }, { itemId: 40, remainsOf: "wolf" });
+    expect(w.remainsLaid).toEqual([{ x: 101, y: 201, z: 7, key: "40@wolf", start: 500 }]);
+    // Another item on the tile, or something taken from it, lays no remains again.
+    update(600, { itemId: 1 }, { itemId: 40, remainsOf: "wolf" });
+    expect(w.remainsLaid).toHaveLength(1);
+    // A second wolf dies on the same tile: its own remains, over the first.
+    update(
+      900,
+      { itemId: 1 },
+      { itemId: 40, remainsOf: "wolf" },
+      { itemId: 40, remainsOf: "wolf" },
+    );
+    expect(w.remainsLaid.map((l) => l.start)).toEqual([500, 900]);
+    // Forgotten once no fall can still be playing over them.
+    w.expire(500 + REMAINS_LAID_MS);
+    expect(w.remainsLaid.map((l) => l.start)).toEqual([900]);
   });
   it("only an answer stops the asking: MinimapSectors.answer reaches the state", () => {
     const w = entered();

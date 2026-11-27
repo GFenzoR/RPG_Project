@@ -153,6 +153,18 @@ export interface AnimMeta {
   /** Hovers: bobs all the time and never hops. */
   flying?: boolean;
   /**
+   * How its body walks (assets/sprites.yaml `body`, docs/17 "Criaturas al ritmo de su paso"):
+   * it picks the default stride and the procedural gait of a sprite without walk frames.
+   * Absent: the older rule, a whole clip (or one hop) per perTile.
+   */
+  body?: BodyGait;
+  /**
+   * Sprite pixels of ground one walk cycle covers (assets/sprites.yaml `stride`); absent,
+   * the default of its `body` (DEFAULT_STRIDE). The cycle advances with the distance
+   * walked over it, so a planted foot holds its ground point at any speed.
+   */
+  stride?: number;
+  /**
    * Where it stands, per facing (tools/spritepack measureStance): [foot, x0, x1], the
    * transparent rows under the lowest pixel of its standing pose and the columns (from the
    * frame's left edge, x1 exclusive) its lowest rows span. `foot` above is the lowest reach
@@ -160,10 +172,62 @@ export interface AnimMeta {
    * Absent in older atlases.
    */
   stance?: Partial<Record<AnimDir, Stance>>;
+  /**
+   * Transparent rows under its fallen body (tools/spritepack restOf): the last frame of its
+   * death facing south, or its single image tipped over. Its corpse is that body moved to
+   * the feet line (tools/spritegen recipes/corpses.ts), so the fall ends there (fallShift).
+   * Absent in older atlases and for a drawing nothing can be said of.
+   */
+  rest?: number;
   actions: Partial<Record<AnimAction, AnimActionMeta>>;
 }
 
 export type Stance = readonly [foot: number, x0: number, x1: number];
+
+/**
+ * The kinds of body a creature walks with: two legs, four, many (spiders, crabs, beetles),
+ * a body dragged in waves, a jumper, and a flier (wings beat by time, it never plants a foot).
+ */
+export type BodyGait = "biped" | "quadruped" | "many_legs" | "slither" | "hop" | "flyer";
+export const BODY_GAITS: readonly BodyGait[] = [
+  "biped",
+  "quadruped",
+  "many_legs",
+  "slither",
+  "hop",
+  "flyer",
+];
+
+/** Sprite pixels a tile measures: the distance of one straight step. */
+export const STEP_PX = 32;
+
+/**
+ * Ground one walk cycle covers, sprite px, for a body without its own `stride`: a biped's
+ * two steps (the engine humanoid's: a tile), a walking beast's four footfalls, the quick
+ * short cycle of many legs, one wave of a dragged body, one jump. A flier has none.
+ */
+export const DEFAULT_STRIDE: Readonly<Record<BodyGait, number>> = {
+  biped: 32,
+  quadruped: 40,
+  many_legs: 16,
+  slither: 24,
+  hop: 32,
+  flyer: 0,
+};
+
+/** Whether it flies: wings by time, a bob, and never a footfall. */
+export const isFlyer = (meta: AnimMeta | undefined): boolean =>
+  meta?.flying === true || meta?.body === "flyer";
+
+/**
+ * The stride of a creature, sprite px per walk cycle: its own, else its body's default;
+ * undefined for a flier and for a sprite that declares neither (the older per-tile rule).
+ */
+export function strideOf(meta: AnimMeta | undefined): number | undefined {
+  if (!meta || isFlyer(meta)) return undefined;
+  if (meta.stride !== undefined && meta.stride > 0) return meta.stride;
+  return meta.body ? DEFAULT_STRIDE[meta.body] : undefined;
+}
 
 /**
  * The stance of `meta` facing `dir`: its own, else the south one, else any; undefined for
@@ -191,6 +255,12 @@ export const BREATH_PERIOD_MS = 1600;
 export const BREATH_SPREAD_MS = 800;
 export const FLY_PX = 2;
 export const FLY_MS = 600;
+/** A flier's wings: ms per frame of its walk clip, moving or hovering (never by distance). */
+export const WING_BEAT_MS = 90;
+/** A flier of a single image: it flattens 1 px for half of every FLAP_MS (the wing beat). */
+export const FLAP_MS = 240;
+/** The rise of a walker without walk frames between two footfalls, sprite px. */
+export const STEP_BOB_PX = 1;
 export const LUNGE_PX = 6;
 export const LUNGE_OUT_MS = 90;
 export const LUNGE_BACK_MS = 160;
@@ -198,8 +268,70 @@ export const HIT_FLASH_MS = 60;
 export const HIT_MS = 180;
 export const KNOCK_PX = 2;
 export const DEATH_MS = 400;
-/** A death clip holds its last frame this long while it fades. */
-export const DEATH_FADE_MS = 150;
+/**
+ * A fallen body holds its last pose this long while it fades over its corpse, which the
+ * map shows from the end of the fall (docs/17 "Muerte continua"): a crossfade from the
+ * living colours to the corpse's, both drawn on the same pixels.
+ */
+export const DEATH_SETTLE_MS = 100;
+/** A single image tipped over is flattened to this share of its height (spritegen tipOver). */
+export const TIP_SQUASH = 3 / 5;
+
+/** How long the fall of a death lasts, ms: its clip, or the procedural tip (DEATH_MS). */
+export function fallMs(meta: AnimMeta | undefined): number {
+  const clip = meta?.actions.death;
+  return clip && clip.frames > 0 && clip.ms > 0 ? clip.frames * clip.ms : DEATH_MS;
+}
+
+/**
+ * How far down (sprite px, negative: up) a body `rest` rows over the bottom of its frame
+ * moves while it falls, to lie where its corpse sprite does: the corpse has its lowest
+ * pixel FEET_LINE over the tile's bottom, the body is drawn with its frame's bottom on the
+ * tile's (br) or `foot` rows under the feet line (bc). 0 when the atlas does not say.
+ */
+export function fallShift(
+  meta: AnimMeta | undefined,
+  rest: number | undefined = meta?.rest,
+): number {
+  if (!meta || rest === undefined) return 0;
+  return rest - (meta.anchor === "bc" ? meta.foot : FEET_LINE);
+}
+
+/** How a sprite anchored at its bottom centre is set to draw a tipped pose (tipPlacement). */
+export interface TipPlacement {
+  x: number;
+  y: number;
+  scaleX: number;
+  scaleY: number;
+  skewX: number;
+  skewY: number;
+}
+
+/**
+ * Fills `out` with the Pixi transform (rotation 0) of a frame `h` px high, anchored at its
+ * bottom centre, turned `tip` radians clockwise about its middle and then flattened to
+ * `squash` of its height against its bottom edge: what spritegen's tipOver does to make the
+ * corpse of a single image, so a quarter turn at TIP_SQUASH lands on the corpse's pixels.
+ * A point (u, v) from the anchor is drawn at
+ * (x + u cos - v sin, y + squash (u sin + v cos)).
+ */
+export function tipPlacement(
+  tip: number,
+  squash: number,
+  h: number,
+  out: TipPlacement,
+): TipPlacement {
+  const cos = Math.cos(tip);
+  const sin = Math.sin(tip);
+  // Pixi: a = cos(skewY) sx, b = sin(skewY) sx, c = sin(skewX) sy, d = cos(skewX) sy.
+  out.scaleX = Math.hypot(cos, squash * sin);
+  out.skewY = Math.atan2(squash * sin, cos);
+  out.scaleY = Math.hypot(sin, squash * cos);
+  out.skewX = Math.atan2(-sin, squash * cos);
+  out.x = 0 - (sin * h) / 2;
+  out.y = (squash * (cos - 1) * h) / 2;
+  return out;
+}
 export const APPEAR_MS = 300;
 /**
  * Leaving by a teleport or a logout (ANI-7): it narrows into a pale flickering sliver and
@@ -245,6 +377,8 @@ export interface AnimState {
   bornAt: number;
   /** When it died (NaN while alive). */
   diedAt: number;
+  /** How far down its body moves as it falls, to lie where its corpse does (fallShift). */
+  fallY: number;
   /** When it left by a teleport or a logout (NaN while here). */
   vanishAt: number;
   /** Single-frame sprites with `facing`: drawn mirrored (kept while walking north or south). */
@@ -273,6 +407,7 @@ export function newAnimState(id: number, now: number): AnimState {
     hitDy: 0,
     bornAt: now,
     diedAt: Number.NaN,
+    fallY: 0,
     vanishAt: Number.NaN,
     flip: false,
     facing: "s",
@@ -314,6 +449,11 @@ export interface Pose {
   scaleY: number;
   /** Horizontal shear of the upper part (radians, Pixi skew.x). */
   skewX: number;
+  /**
+   * A single image falling dead: turned this much clockwise about the middle of its frame
+   * (radians), then squashed by scaleY against the floor (tipPlacement). 0 otherwise.
+   */
+  tip: number;
   alpha: number;
   /** Hit flash. */
   flash: boolean;
@@ -340,6 +480,7 @@ export const newPose = (): Pose => ({
   scaleX: 1,
   scaleY: 1,
   skewX: 0,
+  tip: 0,
   alpha: 1,
   flash: false,
   shimmer: false,
@@ -376,8 +517,14 @@ export function startHit(s: AnimState, now: number, dx: number, dy: number): voi
   s.hitDy = Math.sign(dy);
 }
 
-export function startDeath(s: AnimState, now: number): void {
-  if (Number.isNaN(s.diedAt)) s.diedAt = now;
+/**
+ * It died: the fall starts (the first one counts). `fallY` is how far down the body moves
+ * while it falls so its last pose lies on its corpse (fallShift; 0: it falls in place).
+ */
+export function startDeath(s: AnimState, now: number, fallY = 0): void {
+  if (!Number.isNaN(s.diedAt)) return;
+  s.diedAt = now;
+  s.fallY = fallY;
 }
 
 /** It leaves by a teleport or a logout: the shimmer of VANISH_MS (the first one counts). */
@@ -427,6 +574,7 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
   out.scaleX = 1;
   out.scaleY = 1;
   out.skewX = 0;
+  out.tip = 0;
   out.alpha = 1;
   out.flash = false;
   out.shimmer = false;
@@ -451,8 +599,11 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
   if (meta?.facing && (in_.dir === "e" || in_.dir === "w"))
     s.flip = (in_.dir === "e") === (meta.facing === "left");
 
+  let mirror = s.flip;
   if (!Number.isNaN(s.diedAt)) {
-    dying(meta, now - s.diedAt, out);
+    // A single image tips over as its corpse was drawn, from the drawing as it is (never
+    // mirrored): the body ends on the corpse's own pixels.
+    if (dying(meta, now - s.diedAt, s.fallY, out)) mirror = false;
   } else {
     const sinceAttack = now - s.attackAt;
     const attack = attackClip(meta, s.attackAction, in_.dir);
@@ -474,11 +625,27 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
     }
   }
 
-  if (meta?.flying) {
-    const phase = (now + s.seed) % FLY_MS;
-    const lift = FLY_PX + Math.round(FLY_PX * Math.sin((2 * Math.PI * phase) / FLY_MS));
+  if (isFlyer(meta)) {
+    // A dying flyer stops bobbing: it comes down from the height it died at and lands with
+    // the fall, so its body ends on the corpse's own pixels like any other.
+    const dead = !Number.isNaN(s.diedAt);
+    const phase = ((dead ? s.diedAt : now) + s.seed) % FLY_MS;
+    const hover = FLY_PX + FLY_PX * Math.sin((2 * Math.PI * phase) / FLY_MS);
+    const ms = fallMs(meta);
+    const left = dead ? (ms > 0 ? Math.max(0, 1 - Math.max(0, now - s.diedAt) / ms) : 0) : 1;
+    const lift = Math.round(hover * left);
     out.y -= lift;
     out.shadow = 1 - lift / (4 * FLY_PX + 2);
+    // A single image has no wings to move: it flattens a pixel on every beat instead.
+    if (
+      Number.isNaN(s.diedAt) &&
+      !meta?.actions.walk &&
+      !meta?.actions.idle &&
+      (now + s.seed) % FLAP_MS < FLAP_MS / 2
+    ) {
+      out.scaleY *= (top - 1) / top;
+      out.scaleX *= (top + 1) / top;
+    }
   }
 
   const sinceHit = now - s.hitAt;
@@ -495,7 +662,7 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
   const sinceBorn = now - s.bornAt;
   if (sinceBorn >= 0 && sinceBorn < APPEAR_MS) out.alpha *= sinceBorn / APPEAR_MS;
   if (!Number.isNaN(s.vanishAt) && Number.isNaN(s.diedAt)) vanishing(now - s.vanishAt, out);
-  if (s.flip) out.scaleX = -out.scaleX;
+  if (mirror) out.scaleX = -out.scaleX;
   return out;
 }
 
@@ -522,39 +689,110 @@ function walking(
   out: Pose,
 ): void {
   const walk = meta?.actions.walk;
-  if (walk && walk.frames > 0) {
+  const clip = walk !== undefined && walk.frames > 0 ? walk : undefined;
+  if (isFlyer(meta)) {
+    // Wings beat by time, flying on or hovering between two steps; no foot ever lands.
+    if (clip) {
+      out.action = "walk";
+      out.frame = wingFrame(s, clip, in_.now);
+    }
+    return;
+  }
+  const stride = strideOf(meta);
+  if (clip) {
     out.action = "walk";
     // ANI-2: by distance, so feet do not slide when the speed changes; between chained
     // steps (t undefined, within IDLE_AFTER_MS) the last frame stays (ANI-3).
     if (t !== undefined) {
-      s.walkPhase %= walk.frames;
-      const per = walkPerStep(walk, in_);
+      s.walkPhase %= clip.frames;
+      const per = walkPerStep(clip, in_, stride);
       s.walkPer = per;
       const at = s.walkPhase + t * per;
-      s.walkFrame = Math.floor(at) % walk.frames;
-      out.walk = (at % walk.frames) / walk.frames;
+      s.walkFrame = Math.floor(at) % clip.frames;
+      out.walk = (at % clip.frames) / clip.frames;
+      if (meta?.body === "slither") wave(in_, out.walk, top, out);
     }
     out.frame = s.walkFrame;
     return;
   }
-  if (meta?.flying || t === undefined) return;
-  out.walk = t;
-  // ANI-5: a hop per tile, the top leaning 1 px towards the move, a squash on landing.
-  out.y -= Math.round(HOP_PX * Math.sin(Math.PI * t));
+  if (t === undefined) return;
+  if (stride === undefined) {
+    out.walk = t;
+    // ANI-5: a hop per tile, the top leaning 1 px towards the move, a squash on landing.
+    hop(in_, t, top, out);
+    return;
+  }
+  // No walk frames, a known stride: the procedural gait of its body, by distance. The
+  // phase is kept in cycles (a clip of one frame), so it carries on across tiles.
+  s.walkPhase %= 1;
+  const per = stepPx(in_) / stride;
+  s.walkPer = per;
+  const p = (s.walkPhase + t * per) % 1;
+  out.walk = p;
+  switch (meta?.body) {
+    case "hop":
+      hop(in_, p, top, out);
+      break;
+    case "slither":
+      wave(in_, p, top, out);
+      break;
+    case "many_legs":
+      // Eight quick footfalls a cycle: the body trembles a pixel between them.
+      out.y -= Math.floor(p * 8) % 2;
+      break;
+    default:
+      // Two legs or four: the body rises between two footfalls (at 0 and at half the
+      // cycle, where the gaits of the living world plant the feet) and leans into the move.
+      out.y -= Math.round(STEP_BOB_PX * Math.abs(Math.sin(2 * Math.PI * p)));
+      if (in_.moveDx !== 0) out.skewX = -in_.moveDx * Math.asin(1 / top);
+  }
+}
+
+/** One jump from take-off (0) to landing (1): the arc, the lean and the squash at both ends. */
+function hop(in_: AnimInput, p: number, top: number, out: Pose): void {
+  out.y -= Math.round(HOP_PX * Math.sin(Math.PI * p));
   if (in_.moveDx !== 0) out.skewX = -in_.moveDx * Math.asin(1 / top);
-  if (t < 0.15 || t > 0.85) {
+  if (p < 0.15 || p > 0.85) {
     out.scaleY = (top - 1) / top;
     out.scaleX = (top + 1) / top;
   }
 }
 
 /**
- * Walk frames one step plays, by distance (ANI-2): a diagonal step, a tile across and a
- * tile down the screen, plays the length of both, hypot(perTile, perTileNS); a straight
- * one, perTileNS facing north or south (the 3/4 view, specs/humanoid) and perTile
- * otherwise (the stride is the drawn facing's).
+ * A dragged body's wave at `p` of its cycle: moving across the screen it stretches and
+ * gathers a pixel (never leaving the ground); moving up, down or diagonally it sways a
+ * pixel from side to side.
  */
-export function walkPerStep(walk: AnimActionMeta, in_: AnimInput): number {
+function wave(in_: AnimInput, p: number, top: number, out: Pose): void {
+  const w = Math.round(Math.sin(2 * Math.PI * p));
+  if (w === 0) return;
+  if (in_.moveDy === 0) {
+    out.scaleX = (top + w) / top;
+    out.scaleY = (top - w) / top;
+  } else {
+    out.x += w;
+  }
+}
+
+/** The frame of a flier's wing clip at `now` (by time, a phase per creature). */
+function wingFrame(s: AnimState, clip: AnimActionMeta, now: number): number {
+  return Math.floor(Math.max(0, now + s.seed) / WING_BEAT_MS) % clip.frames;
+}
+
+/** Sprite pixels the step being drawn covers: a tile, or its diagonal. */
+function stepPx(in_: AnimInput): number {
+  return in_.moveDx !== 0 && in_.moveDy !== 0 ? STEP_PX * Math.SQRT2 : STEP_PX;
+}
+
+/**
+ * Walk frames one step plays, by distance (ANI-2). With a `stride` (sprite px per cycle,
+ * strideOf): the clip's frames times the step's length over it, the same in every facing.
+ * Without one, the older rule: a diagonal step, a tile across and a tile down the screen,
+ * plays the length of both, hypot(perTile, perTileNS); a straight one, perTileNS facing
+ * north or south (the 3/4 view, specs/humanoid) and perTile otherwise.
+ */
+export function walkPerStep(walk: AnimActionMeta, in_: AnimInput, stride?: number): number {
+  if (stride !== undefined && stride > 0) return (walk.frames * stepPx(in_)) / stride;
   const across = walk.perTile ?? walk.frames;
   const down = walk.perTileNS ?? across;
   if (in_.moveDx !== 0 && in_.moveDy !== 0) return Math.max(1, Math.hypot(across, down));
@@ -563,11 +801,14 @@ export function walkPerStep(walk: AnimActionMeta, in_: AnimInput): number {
 
 /**
  * Walk cycles one step plays (the footprints' spacing, livingworld): a clip's frames per
- * step over its frames; without a walk clip, the one hop of a step.
+ * step over its frames; without a walk clip, the step's length over its stride, or the one
+ * hop of a step for a sprite that declares none.
  */
 export function walkCyclesPerStep(meta: AnimMeta | undefined, in_: AnimInput): number {
   const walk = meta?.actions.walk;
-  return walk && walk.frames > 0 ? walkPerStep(walk, in_) / walk.frames : 1;
+  const stride = strideOf(meta);
+  if (walk && walk.frames > 0) return walkPerStep(walk, in_, stride) / walk.frames;
+  return stride === undefined ? 1 : stepPx(in_) / stride;
 }
 
 function idle(
@@ -585,29 +826,47 @@ function idle(
     out.frame = Math.floor(((now + s.seed) % cycle) / clip.ms);
     return;
   }
-  if (meta?.actions.walk || meta?.flying) return; // a walk clip's frame 0 stands still
+  const walk = meta?.actions.walk;
+  if (isFlyer(meta)) {
+    // Hovering without an idle clip this way: the wings keep beating.
+    if (walk && walk.frames > 0) {
+      out.action = "walk";
+      out.frame = wingFrame(s, walk, now);
+    }
+    return;
+  }
+  if (walk) return; // a walk clip's frame 0 stands still
   // ANI-5 breathing: 1 px taller for BREATH_MS every 1.6-2.4 s, phase by creature.
   const period = BREATH_PERIOD_MS + (s.seed % BREATH_SPREAD_MS);
   if ((now + s.seed) % period < BREATH_MS) out.scaleY = (top + 1) / top;
 }
 
-function dying(meta: AnimMeta | undefined, el: number, out: Pose): void {
+/**
+ * The fall of a death (docs/17 "Muerte continua"), `el` ms after it: one motion that ends
+ * in the pose of the corpse, `fallY` px lower, and holds it DEATH_SETTLE_MS fading over the
+ * corpse the map shows by then. Answers whether it is the procedural tip of a single image.
+ */
+function dying(meta: AnimMeta | undefined, el: number, fallY: number, out: Pose): boolean {
   const clip = meta?.actions.death;
+  const ms = fallMs(meta);
   out.action = "death";
+  if (el > ms) out.alpha = Math.max(0, 1 - (el - ms) / DEATH_SETTLE_MS);
+  out.done = el >= ms + DEATH_SETTLE_MS;
   if (clip && clip.frames > 0 && clip.ms > 0) {
-    const ms = clip.frames * clip.ms;
     out.frame = Math.min(clip.frames - 1, Math.floor(Math.max(0, el) / clip.ms));
-    if (el > ms) out.alpha = Math.max(0, 1 - (el - ms) / DEATH_FADE_MS);
-    out.done = el >= ms + DEATH_FADE_MS;
-    return;
+    // Lowered frame by frame: the last one, the fallen body, is already on the corpse.
+    out.y = clip.frames > 1 ? Math.round((fallY * out.frame) / (clip.frames - 1)) : fallY;
+    return false;
   }
-  // ANI-5: a flash, then squashed to half its height against the floor while it fades.
+  // ANI-5: a flash, then it tips over clockwise, faster as it goes, and flattens against
+  // the floor: at the end, spritegen's tipOver of the same image.
   const t = Math.min(1, Math.max(0, el) / DEATH_MS);
+  const e = t * t;
   out.flash = el < HIT_FLASH_MS;
-  out.scaleY = 1 - 0.5 * t;
-  out.scaleX = 1 + 0.25 * t;
-  out.alpha = 1 - t;
-  out.done = el >= DEATH_MS;
+  out.tip = (Math.PI / 2) * e;
+  out.scaleY = 1 - (1 - TIP_SQUASH) * e;
+  out.y = Math.round(fallY * e);
+  return true;
 }
 
 /** A well-spread non-negative integer from a creature id (idle phases). */

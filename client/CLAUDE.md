@@ -671,6 +671,12 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   respiración, embestida de 6 px, flotar (`flying`), espejo según `facing`, caída aplastada
   con desvanecido. Además, para todos: destello rojo y empujón de 2 px al recibir un golpe
   y aparición con fundido de 300 ms. Un frame no crea objetos para esto (docs/07).
+- **Al ritmo de su paso** (docs/17 "Criaturas al ritmo de su paso", lote 20e): un sprite con
+  `body` o `stride` en `atlas.json` `anims` camina por distancia sobre su zancada
+  (`strideOf`, `walkPerStep` con ella; sin frames, la marcha procedural de su cuerpo), un
+  volador (`isFlyer`) bate por tiempo y da `Pose.walk` -1, y un `slither` ondula. Sin las
+  dos, la regla de `perTile` de arriba. Hook E2E `__rpgClient.gaits()` (`GaitView`: cuerpo,
+  zancada, si camina, ciclos jugados, frame y dónde se dibuja, en px de sprite).
 - Quién ataca a quién (`render/creature-events.ts`, puro, con tests; ANI-7, A9): con
   `Welcome.attack_events` lo dice el servidor. Cada `CreatureAttack` que llegó desde el
   frame anterior (`WorldState.attacks`) juega el ataque de su atacante hacia el objetivo
@@ -699,6 +705,14 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   de 300 ms. Una criatura que deja de dibujarse sin salida propia (otro piso, un mapa
   nuevo) se borra. Un fantasma tapado por una criatura más alta queda tapado (sin copia
   translúcida desde el 2026-11-26).
+- **Muerte continua** (docs/17, rama `feat/death-anim`): la caída termina en la pose del
+  cadáver y se funde sobre él `DEATH_SETTLE_MS` (100 ms); ya no se desvanece a nada. Toda
+  muerte se dibuja al sur (`CreatureBody.draw`), bajada `CreatureBody.fallY` px
+  (`fallShift` con `rest` de `atlas.json`); una sola imagen se vuelca (`Pose.tip`,
+  `tipPlacement`). `render/death-fall.ts` (puro, con tests): `CorpseVeil` esconde
+  (`renderable`) los restos de esa muerte (`WorldState.remainsLaid`, de un `TileUpdate`)
+  mientras dura la caída y nunca más; `settle` termina el paso de quien muere caminando.
+  Con movimiento reducido no hay fantasma de caída.
 - `WorldState` no borra una salida cuando la criatura vuelve: la marca `back`, y
   `departureOf` la ignora (así un jugador que murió y despertó a la vista no "muere" al
   salir después del piso dibujado); el canvas igual la juega una vez.
@@ -712,7 +726,8 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   ya termina) y en primer plano, 9x7 casillas alrededor del cuerpo (`closeShot`).
   Con un servidor sin eventos el cliente igual deduce poses y caídas, así que los tests
   exigen el evento: un `CreatureAttack` del jugador o su lobo y uno de una criatura en
-  la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death`).
+  la pose (`07b-attack-pose`), y `DEATH` para cada criatura que cae (`11b-death-1-mid`, `-2-end`, `-3-corpse`: `shotFall`,
+  tres cuadros de la misma caída con los frames y el reloj de la página retenidos).
 
 ## Humanoides del motor (rama `feat/humanoid-art`, lote 13)
 - Jugadores, NPCs que son personas y monstruos humanoides se dibujan como **muñecos de

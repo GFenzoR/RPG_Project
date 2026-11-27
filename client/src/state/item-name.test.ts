@@ -199,7 +199,11 @@ describe("the corpse on the map", () => {
   it("is drawn with its monster's own corpse: the tile's key names it", () => {
     expect(mapItemKey(FUR, wolfRemains)).toBe(`${FUR}@wolf`);
     expect(mapItemKey(FUR, undefined)).toBe(String(FUR));
-    expect(mapItemKey(BODY, anaBody)).toBe(String(BODY));
+    // A player's body is drawn as the person it was: a man's unless seen to be a woman.
+    expect(mapItemKey(BODY, anaBody)).toBe(`${BODY}@body_male`);
+    expect(mapItemKey(BODY, { ...anaBody, bodySex: "male" })).toBe(`${BODY}@body_male`);
+    expect(mapItemKey(BODY, { ...anaBody, bodySex: "female" })).toBe(`${BODY}@body_female`);
+    expect(mapItemKey(BODY, undefined)).toBe(String(BODY));
     expect(parseMapItemKey(`${FUR}@wolf`)).toEqual({ itemId: FUR, remainsOf: "wolf" });
     expect(parseMapItemKey("48")).toEqual({ itemId: 48 });
     expect(corpseSprite("wolf")).toBe("corpses/wolf");
@@ -245,10 +249,20 @@ describe("the corpse on the map", () => {
     expect(mapItemTexture(`${FUR}@wolf`, items, atlas)).toBe("tex:corpses/wolf");
     expect(mapItemTexture(`${FUR}@bristleback_boar`, items, atlas)).toBe("tex:decor/remains_fur");
     expect(mapItemTexture(String(FUR), items, atlas)).toBe("tex:decor/remains_fur");
-    // A player's body is its item's sprite: no monster in its key.
-    expect(mapItemTexture(mapItemKey(BODY, anaBody), items, atlas)).toBe(
-      "tex:decor/remains_humanoid",
+    // A player's body is a human lying down, by sex; an atlas without one still shows
+    // the family's remains.
+    const withBodies = {
+      ...atlas,
+      texture: (sprite: string) =>
+        has.has(sprite) || sprite.startsWith("corpses/body_") ? `tex:${sprite}` : undefined,
+    };
+    const woman = mapItemKey(BODY, { ...anaBody, bodySex: "female" });
+    expect(mapItemTexture(woman, items, withBodies)).toBe("tex:corpses/body_female");
+    expect(mapItemTexture(mapItemKey(BODY, anaBody), items, withBodies)).toBe(
+      "tex:corpses/body_male",
     );
+    expect(mapItemTexture(woman, items, atlas)).toBe("tex:decor/remains_humanoid");
+    expect(mapItemArt(woman, items, withBodies)).toEqual(corpseArt("tex:corpses/body_female"));
     // No sprite at all: the canvas draws its missing texture.
     expect(mapItemTexture(String(SWORD), items, atlas)).toBeUndefined();
     expect(

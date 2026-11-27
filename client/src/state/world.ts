@@ -50,7 +50,7 @@ import { EquippedBackpack } from "./backpack.ts";
 import { TrailWearState } from "./trail-wear.ts";
 import { WorldClockState } from "./world-clock.ts";
 import { modsOf } from "./mods.ts";
-import { mapItemKey } from "./corpse-art.ts";
+import { laidRemains, mapItemKey, remainsKeys } from "./corpse-art.ts";
 import { delta, directionTo, isDiagonal, samePos, step } from "./geometry.ts";
 import { stepMs, TICK_MS } from "./step-time.ts";
 import {
@@ -253,6 +253,23 @@ export interface DepartureState {
   back: boolean;
 }
 
+/**
+ * Remains put on a tile while it was in view (a TileUpdate, never the map as it arrives):
+ * what a monster left or the body of a player, as the map draws them (`key`, its MapView
+ * key). The canvas hides them while the body that left them still falls (docs/17 "Muerte
+ * continua").
+ */
+/** How many players' sexes are remembered for their bodies (the oldest seen goes first). */
+const SEX_MEMORY = 256;
+
+export interface RemainsLaid {
+  x: number;
+  y: number;
+  z: number;
+  key: string;
+  start: number;
+}
+
 /** A number rising from a tile: damage, healing, experience. */
 export interface FloatingTextState {
   pos: Pos;
@@ -400,6 +417,11 @@ export const FLOATING_TEXT_MS = 1000;
 /** How long attacks (for the hits of their batch) and departures are kept, ms. */
 export const ATTACK_MS = FLOATING_TEXT_MS;
 export const DEPARTURE_MS = 1000;
+/**
+ * How long the world remembers that remains were laid on a tile: longer than any fall
+ * (the canvas pairs them with the body that still falls there, render/death-fall.ts).
+ */
+export const REMAINS_LAID_MS = 2000;
 
 /** Removes, in place and keeping the order, the entries that started `ms` or more before now. */
 export function dropFinished(list: { start: number }[], now: number, ms: number): void {
@@ -609,6 +631,8 @@ export class WorldState implements TileSource {
   attackEvents = false;
   attacks: AttackState[] = [];
   departures: DepartureState[] = [];
+  /** The remains laid in view in the last REMAINS_LAID_MS, oldest first. */
+  remainsLaid: RemainsLaid[] = [];
   /**
    * LivingObjectEvents not drawn yet (livingworld/README.md): the canvas takes them every
    * frame (takeLiving). At most LIVING_QUEUE wait, the oldest dropped first.
@@ -836,7 +860,11 @@ export class WorldState implements TileSource {
         break;
       case "tileUpdate": {
         const p = posOf(msg.value.pos);
+        const before = this.remainsAt(p.x, p.y, p.z);
         this.setTile(p.x, p.y, p.z, msg.value.tile?.items);
+        const key = laidRemains(before, this.remainsAt(p.x, p.y, p.z));
+        if (key !== undefined)
+          pushLive(this.remainsLaid, { x: p.x, y: p.y, z: p.z, key, start: now }, REMAINS_LAID_MS);
         break;
       }
       case "creatureAppear":
@@ -924,6 +952,7 @@ export class WorldState implements TileSource {
         const c = this.creatures.get(msg.value.id);
         if (c) {
           c.look = lookView(msg.value.look);
+          this.noteSex(c.name, c.kind, c.look);
           c.equipment = equipmentView(msg.value.equipment);
           c.lookRev = ++this.lookSeq;
         }
@@ -1286,6 +1315,24 @@ export class WorldState implements TileSource {
     this.trailWear.applyArea(a.x, a.y, a.width, a.height, a.wear);
   }
 
+  /** Who is seen to be a woman or a man, by name: what a body is drawn as (bodySex). */
+  private readonly sexByName = new Map<string, string>();
+
+  /** The mods with the sex of the player a body is of, if the client saw them (bodySex). */
+  private withBodySex(m: ItemMods | undefined): ItemMods | undefined {
+    const sex = m?.bodyOf ? this.sexByName.get(m.bodyOf) : undefined;
+    return m && sex ? { ...m, bodySex: sex } : m;
+  }
+
+  /** Remembers the sex of a player in view (a body is drawn as its owner was). */
+  private noteSex(name: string, kind: CreatureKind, look: Look | undefined): void {
+    if (kind !== CreatureKind.PLAYER || !name || !look) return;
+    this.sexByName.delete(name);
+    this.sexByName.set(name, look.sex);
+    if (this.sexByName.size > SEX_MEMORY)
+      this.sexByName.delete(this.sexByName.keys().next().value as string);
+  }
+
   private setTile(x: number, y: number, z: number, stack: readonly ItemStack[] | undefined): void {
     const items = stack?.map((s) => s.itemId);
     // The minimap remembers the tile's colour past prune() and the next FullMapView.
@@ -1307,8 +1354,20 @@ export class WorldState implements TileSource {
     const i = (y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES);
     c.tiles[i] = items;
     c.counts[i] = stack?.some((s) => s.count > 0) ? stack.map((s) => s.count) : undefined;
-    c.mods[i] = stack?.some((s) => modsOf(s)) ? stack.map(modsOf) : undefined;
+    c.mods[i] = stack?.some((s) => modsOf(s))
+      ? stack.map((s) => this.withBodySex(modsOf(s)))
+      : undefined;
     c.data = undefined;
+  }
+
+  /** The remains lying on a tile, as MapView keys (undefined: none, the usual). */
+  private remainsAt(x: number, y: number, z: number): string[] | undefined {
+    const c = this.chunks.get(
+      chunkKey(z, Math.floor(x / CHUNK_TILES), Math.floor(y / CHUNK_TILES)),
+    );
+    if (!c) return undefined;
+    const i = (y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES);
+    return remainsKeys(c.tiles[i], c.mods[i]);
   }
 
   /** Forgets chunks far from the own creature so memory stays bounded while exploring. */
@@ -1354,6 +1413,7 @@ export class WorldState implements TileSource {
       worn: wornViewKeep(prev?.worn, c.worn),
       lookRev: prev ? prev.lookRev : ++this.lookSeq,
     });
+    this.noteSex(c.name, c.kind, this.creatures.get(c.id)?.look);
     // Built again only when what the figure is drawn from changed: a FullMapView or a
     // MapSlice (a teleport, another floor) sends every creature in view again.
     const next = this.creatures.get(c.id);
@@ -1517,6 +1577,7 @@ export class WorldState implements TileSource {
     dropFinished(this.projectiles, now, PROJECTILE_MS);
     dropFinished(this.attacks, now, ATTACK_MS);
     dropFinished(this.departures, now, DEPARTURE_MS);
+    if (this.remainsLaid.length > 0) dropFinished(this.remainsLaid, now, REMAINS_LAID_MS);
   }
 
   /**
