@@ -82,6 +82,52 @@ inventario), `guild` (la ventana del gremio), `danger` (vida baja y subida de ni
 (768x1024). No reemplaza a `make e2e`: no hay mapa real, ni red, ni criaturas en el canvas.
 Sirve para revisar con Read el tema, el layout y las ventanas en todos los tamaños.
 
+### Auditoría táctil (`client/e2e/touch-audit.ts`, lote 21)
+
+Mide lo que un dedo puede alcanzar en la pantalla que la página muestra en ese momento. No
+compara imágenes: recorre los controles (`button`, `a[href]`, `input`, `select`, `summary`,
+los `role` de botón, pestaña, interruptor…) que están a la vista y de verdad reciben el
+toque (`elementFromPoint`), y reporta:
+
+| Hallazgo | Qué es |
+|---|---|
+| `tap` | Un control cuya área de toque mide menos de 44x44 px CSS (1 px de gracia por el redondeo). Se mide con pruebas de toque alrededor del centro, no con la caja: una casilla chica dentro de una etiqueta de 44 px cuenta por la etiqueta |
+| `clip` | Un botón, pestaña, etiqueta o título cuyo texto no entra en su caja (también si lo corta un "…") |
+| `offscreen` | Un control que se sale de la pantalla y que ningún contenedor desplaza |
+| `overflow` | La página se desplaza de lado |
+| `unsafe` | Con los *insets* de un notch y una barra de inicio emulados, un control cuyo centro queda debajo |
+| `covered` (opcional) | Un control de tamaño suficiente que otro tapa en parte. Apagado por defecto (una hoja tapa el HUD a propósito); sirve para cazar solapamientos |
+
+Dónde corre:
+
+- **Sin servidor:** `make ui-preview AUDIT=1 SIZES=phone,tablet` audita cada escena en los
+  cuatro tamaños táctiles (teléfono 390x844 y 844x390, tablet 768x1024 y 1024x768), deja el
+  detalle en `build/ui-preview/touch-audit-<idioma>.json` y sale con error si hay
+  hallazgos. `UILANG=en` cambia el idioma (los textos en inglés tienen otro largo),
+  `NOTCH=1` dibuja con las áreas seguras de un teléfono con notch y barra de inicio (y
+  activa `unsafe`), `COVERED=1` suma los solapamientos. Lo que se deja pasar está en
+  `AUDIT_ALLOW` de `e2e/ui-preview.ts`, cada entrada con su motivo.
+- **En el juego:** los tests "lote 21 QA on …" de `e2e/mobile.spec.ts` entran con toques en
+  Pixel 7 vertical y apaisado (con *insets* de CDP), iPad Mini vertical y apaisado, e iPhone
+  13 vertical y apaisado (WebKit), y auditan el login, la lista de personajes, el HUD, cada
+  sección de la hoja, el menú, el tutorial y el diálogo de un NPC (capturas
+  `mobile-qa-<dispositivo>-<pantalla>.png`). Un test nuevo de una pantalla táctil llama a
+  `touchAudit(page)` y exige `[]`.
+
+Una pantalla nueva para teléfonos entra a la auditoría con su escena en `make ui-preview`.
+
+### Hojas de contacto (`client/e2e/contact-sheet.ts`)
+
+Para revisar una corrida entera de capturas sin abrirlas una por una:
+
+```
+node --experimental-strip-types client/e2e/contact-sheet.ts   client/e2e/screenshots/actual/ui-preview phone-390x844 --per 14 --cols 7
+```
+
+arma hojas con las capturas cuyo nombre contiene ese texto, cada una con su nombre debajo
+(en `<carpeta>/sheets/`, o `--out`). Se mira la hoja y se abre a tamaño real solo la
+captura que se ve mal.
+
 ## Golden files
 - `packages/map-format/testdata/golden/`: chunks de entrada y salida esperada.
 - `proto`: un mensaje de ejemplo serializado en Go se decodifica en TS y viceversa.

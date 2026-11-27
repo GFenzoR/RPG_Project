@@ -376,6 +376,10 @@ const AUDIT_ALLOW: { scene?: string; re: RegExp }[] = [
   // The item menu of this scene is the one a mouse opens (30 px rows, at the cursor); a
   // long press opens the 44 px one, which e2e/mobile-qa.spec.ts measures in the game.
   { scene: "itemmenu", re: /^tap button\.touch-menu-action/ },
+  // A spell's name in its slot is cut on purpose (the whole name is the slot's label).
+  { re: /^clip button "F\d+/ },
+  // The title of a narrow floating window, on a tablet on its side (the desktop screen).
+  { re: /^clip h2\.gwin-title/ },
 ];
 const findings: { scene: string; size: string; found: TouchFinding[] }[] = [];
 
