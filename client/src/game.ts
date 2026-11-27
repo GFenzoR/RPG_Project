@@ -422,6 +422,8 @@ export interface ClientTestHooks {
   gust(x: number, y: number, min?: number): GustHook | undefined;
   /** The shadows lamps and fires cast now (GameCanvas.lightShadows). */
   lightShadows(): LightShadowHook | undefined;
+  /** The falling leaves, in sprite pixels of the map (GameCanvas.leafSpots). */
+  leafSpots(): { x: number; y: number }[];
   /** How each drawn creature walks now: its stride and the cycles played (GameCanvas.gaits). */
   gaits(): GaitView[];
   /** The footprints on the ground and the own player's last footfalls (GameCanvas.footfalls). */
@@ -2718,6 +2720,7 @@ export class Game {
       sky: () => canvas.sky(),
       gust: (x, y, min) => canvas.gust(x, y, min),
       lightShadows: () => canvas.lightShadows(),
+      leafSpots: () => canvas.leafSpots(),
       footfalls: () => canvas.footfalls(),
       npcs: () =>
         [...world.creatures.values()]

@@ -395,6 +395,11 @@ export interface GameCanvas {
    */
   lightShadows(): LightShadowHook;
   /**
+   * E2E: where the falling leaves of the living world are, in sprite pixels of the map (a
+   * leaf from a crown crosses it now and then, also in the calm between two gusts).
+   */
+  leafSpots(): { x: number; y: number }[];
+  /**
    * E2E: the footfalls of the walks drawn (livingworld/README.md "Huellas"): the footprints
    * on the ground now, and the last feet of the own player that touched the ground, oldest
    * first (the side, and where: sprite pixels of the map).
@@ -2392,6 +2397,9 @@ export async function createGameCanvas(
     gust(x, y, min) {
       const g = living?.nextGust(x, y, performance.now(), min);
       return g && living && { at: g.at, strength: g.strength, calm: !living.stats().gusting };
+    },
+    leafSpots() {
+      return living?.leafSpots() ?? [];
     },
     lightShadows() {
       const me = world.self;
