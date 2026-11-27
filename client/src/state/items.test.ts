@@ -14,6 +14,8 @@ import type { ClientContent, ItemDef } from "../content-types.ts";
 import { translator } from "../i18n/i18n.ts";
 import { tileActions } from "../input/actions.ts";
 import {
+  dragFromTile,
+  dragLands,
   immovable,
   halfStack,
   locationInit,
@@ -423,5 +425,35 @@ describe("immovable", () => {
     expect(tileActions({ item: body, known: true })).toEqual(["open", "look", "move"]);
     const chest = { container: true, fixed: immovable(remains, undefined) };
     expect(tileActions({ item: chest, known: true })).toEqual(["open", "look"]);
+  });
+});
+
+describe("dragging the remains of a creature from the map", () => {
+  const remains = { fixed: true };
+  const wolf = { remainsOf: "wolf" };
+  const self = { x: 5, y: 5, z: 7 };
+
+  it("starts only from the tile next to them, so a held press farther away walks", () => {
+    expect(dragFromTile(remains, wolf, self, { x: 6, y: 6, z: 7 })).toBe(true);
+    expect(dragFromTile(remains, wolf, self, { x: 5, y: 5, z: 7 })).toBe(true);
+    expect(dragFromTile(remains, { bodyOf: "Owner" }, self, { x: 4, y: 5, z: 7 })).toBe(true);
+    expect(dragFromTile(remains, wolf, self, { x: 7, y: 5, z: 7 })).toBe(false);
+    expect(dragFromTile(remains, wolf, self, { x: 6, y: 5, z: 6 })).toBe(false);
+    expect(dragFromTile(remains, wolf, undefined, { x: 6, y: 5, z: 7 })).toBe(false);
+    // Anything else one can pick up is dragged from anywhere, a fixture from nowhere.
+    expect(dragFromTile({ fixed: false }, undefined, self, { x: 9, y: 9, z: 7 })).toBe(true);
+    expect(dragFromTile(remains, undefined, self, { x: 6, y: 5, z: 7 })).toBe(false);
+  });
+
+  it("sends only a drop on a tile next to them", () => {
+    const ref = { loc: { kind: "pos" as const, pos: { x: 6, y: 5, z: 7 } }, mods: wolf };
+    expect(dragLands(ref, { kind: "pos", pos: { x: 7, y: 6, z: 7 } })).toBe(true);
+    expect(dragLands(ref, { kind: "pos", pos: { x: 8, y: 5, z: 7 } })).toBe(false);
+    expect(dragLands(ref, { kind: "pos", pos: { x: 6, y: 5, z: 7 } })).toBe(false);
+    expect(dragLands(ref, { kind: "pos", pos: { x: 7, y: 5, z: 6 } })).toBe(false);
+    expect(dragLands(ref, { kind: "pocket", index: 0 })).toBe(false);
+    const coin = { loc: ref.loc, mods: undefined };
+    expect(dragLands(coin, { kind: "pos", pos: { x: 9, y: 9, z: 7 } })).toBe(true);
+    expect(dragLands(coin, { kind: "pocket", index: 0 })).toBe(true);
   });
 });

@@ -76,6 +76,8 @@ import type {
   SkyHook,
 } from "./render/game-canvas.ts";
 import {
+  dragFromTile,
+  dragLands,
   immovable,
   locationInit,
   menuItem,
@@ -1455,7 +1457,7 @@ export class Game {
     const up = (ev: PointerEvent): void => {
       end();
       const to = this.dropTarget(ev.clientX, ev.clientY);
-      if (!to) return;
+      if (!to || !dragLands(ref, to)) return;
       if (split && splittable(this.opts.content.items[ref.itemId], ref.count)) {
         this.split = { ref, to, x: ev.clientX, y: ev.clientY };
         this.publish();
@@ -2226,7 +2228,11 @@ export class Game {
       dragTile: (x, y, z, e) => {
         const ref = topItem(this.world, x, y, z, false);
         // Shift+drag from the map moves part of its stack too (docs/17 UI-6).
-        if (ref) this.startDrag(ref, e.shiftKey);
+        if (!ref) return;
+        // A body out of grasp is not dragged (pressTile walked): nothing to start.
+        const def = this.opts.content.items[ref.itemId];
+        if (!dragFromTile(def, ref.mods, this.world.self?.pos, { x, y, z })) return;
+        this.startDrag(ref, e.shiftKey);
       },
       tapTile: (x, y, z) => this.tapTile({ x, y, z }),
       longPressTile: (x, y, z, cx, cy) => this.longPressTile({ x, y, z }, cx, cy),
@@ -2434,7 +2440,8 @@ export class Game {
     const top = aiming ? undefined : topItem(this.world, pos.x, pos.y, pos.z, false);
     const answer = pressAnswer(
       aiming,
-      top !== undefined && !immovable(this.opts.content.items[top.itemId], top.mods),
+      top !== undefined &&
+        dragFromTile(this.opts.content.items[top.itemId], top.mods, this.world.self?.pos, pos),
     );
     if (!aiming) this.world.retryWalk();
     if (answer.walked) this.click({ pos });
