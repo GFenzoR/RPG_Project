@@ -171,6 +171,11 @@ animations:
   menos de la mitad de opacidad se descarta.
 - **Pistas** (con o sin capas): `facing: left | right` (hacia dónde mira el dibujo: se
   espeja para ir al otro lado), `flying: true` (flota, su sombra se achica, no salta),
+  `body: biped | quadruped | many_legs | slither | hop | flyer` y `stride` (los px de suelo
+  que cubre un ciclo de caminar; sin él, el de su cuerpo; un `flyer` lleva `flying: true` y
+  ninguna zancada): el ciclo avanza con la distancia sobre la zancada y un sprite sin frames
+  recibe la marcha procedural de su cuerpo (docs/17 "Criaturas al ritmo de su paso"; todo
+  sprite de monstruo dice su `body`, `tools/spritepack/src/monsters.test.ts`),
   `shadow: baked | ellipse | none`. Con capas, la sombra por defecto es `ellipse` (la sombra
   de contacto del renderer, ART-5: los frames de LPC no traen sombra); sin capas,
   `baked` (Dungeon Crawl y spritegen la pintan).
@@ -202,7 +207,7 @@ animations:
   `anchor` o `ms` con capas o sin frames de archivos.
 - **atlas.json** suma `anims`: por sprite, `w`, `h`, `anchor` (`bc` con capas: los pies
   sobre la casilla; `br`, el de siempre), `foot` (filas vacías bajo los pies), `top` (alto
-  del dibujo), `shadow`, `facing`, `flying` y por acción `frames`, `ms`, `perTile` y `dirs`.
+  del dibujo), `shadow`, `facing`, `flying`, `body`, `stride` y por acción `frames`, `ms`, `perTile` y `dirs`.
   `foot` y `top` se miden en los frames de caminar.
 - **Revisar:** `node --experimental-strip-types tools/spritepack/src/cli.ts preview --page 1
   --scale 2 --out shot.png` muestra la página donde caen los personajes. Mirarlos a 1x y a

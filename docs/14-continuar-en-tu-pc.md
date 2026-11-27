@@ -104,6 +104,27 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Criaturas al ritmo de su paso (hecho, rama `feat/creature-walk`, lote 20e; el dueño el
+  2026-11-27: "los sprites de los enemigos deben animarse al ritmo de como se mueven; no
+  deben verse deslizándose ni flotando")**: cada sprite de criatura dice su cuerpo y su
+  zancada (`body`, `stride` en `assets/sprites.yaml`) y el ciclo de caminar avanza con la
+  distancia sobre esa zancada; antes todos hacían un ciclo cada 64 px. Los voladores baten
+  por tiempo y no pisan; el reptador ondula (docs/17 "Criaturas al ritmo de su paso", con
+  la auditoría de cada monstruo y NPC). Pendiente:
+  - **Que el dueño lo mire jugando.** Las zancadas son estimaciones sobre los 4 frames de
+    cada monstruo. Si alguno todavía patina (zancada muy larga) o pedalea (muy corta), se
+    cambia su `stride` y se corre `make sprites`; no hay código que tocar.
+  - **Frames dibujados que faltan.** La gaviota (`creatures/thieving_gull`) sigue con una
+    sola imagen, parada y con las alas plegadas: flota, y "bate" achatándose 1 px. Necesita
+    un ciclo de vuelo dibujado (3 direcciones, 4 frames), con spritegen o con el Gemini del
+    dueño. El eco de la forja no tiene frames de caminar (flota con los de quieto): alcanza
+    mientras no se mueva de su lugar.
+  - **4 frames por ciclo.** Con 4 frames el pie apoyado se corre hasta un octavo de
+    zancada dentro de cada frame (2 a 7 px según la criatura). Para que quede clavado como
+    el del jugador (8 frames) hacen falta caminatas de 6 u 8 frames; lo más visible, en las
+    de zancada larga (el sabueso de ceniza, 56 px; el guardián, 52).
+  - **Norte y sur.** La misma zancada vale en todas las direcciones; de frente y de
+    espaldas los frames de Gemini apenas muestran el paso, así que ahí se nota menos.
 - **Nada reaparece a la vista (hecho, rama `feat/unseen-respawn`; el dueño el 2026-11-26: "si
   el jugador está viendo un área el respawn no debiese pasar")**: un monstruo no reaparece
   en una casilla que algún jugador tenga en su ventana entera (31x21 + margen); con

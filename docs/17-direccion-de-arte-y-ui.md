@@ -937,6 +937,110 @@ Lo que había antes, y queda como respaldo con un servidor sin `attack_events`:
   motivo. Mientras tanto el cliente toma como muerte la salida de una criatura con la barra
   en 0 (el servidor manda `CreatureHealth` 0 antes de `CreatureDisappear`).
 
+### Criaturas al ritmo de su paso (hecho, 2026-11-27, rama `feat/creature-walk`, lote 20e)
+
+Pedido del dueño después de jugar (2026-11-25/27): "los sprites de los enemigos deben
+animarse al ritmo de como se mueven; no deben verse deslizándose ni flotando". La caminata
+del jugador "quedó excelente" y es la referencia (ciclo por distancia, "La regla de la
+zancada", 8 direcciones).
+
+**Qué pasaba.** Todo monstruo dibujado tenía ya 4 frames de caminar y el ciclo ya avanzaba
+por distancia (ANI-2), pero con un solo número para todos: spritepack ponía `perTile` en la
+mitad de los frames, es decir **un ciclo cada 2 casillas (64 px)**, fuera una rata de 24 px
+de largo o el guardián de 96. Un animal chico recorría tres o cuatro veces el suelo que sus
+patas dibujaban: patinaba. El murciélago aleteaba por distancia (parado a media casilla, las
+alas quietas), y la gaviota, de una sola imagen, solo flotaba.
+
+**La regla.** Cada sprite de criatura dice en `animations` de `assets/sprites.yaml`:
+
+- `body`: `biped`, `quadruped`, `many_legs` (arañas, cangrejos, escarabajos), `slither` (un
+  cuerpo arrastrado en ondas), `hop` (salta) o `flyer` (vuela).
+- `stride`: los px de sprite de suelo que cubre **un ciclo** de caminar. Sin él vale el de
+  su cuerpo (`DEFAULT_STRIDE` de `packages/renderer/src/anim.ts`: bípedo 32, la zancada del
+  humanoide del motor; cuadrúpedo 40; muchas patas 16; arrastrado 24; salto 32). Un volador
+  no tiene.
+
+spritepack los copia a `atlas.json` `anims` y `animate` (`anim.ts`) hace el resto:
+
+- **Con frames de caminar:** la fase del ciclo es la distancia caminada sobre la zancada
+  (`walkPerStep` con `strideOf`; un paso diagonal cuenta √2 casillas), igual en todas las
+  direcciones y a cualquier velocidad: una criatura lenta o apurada mueve las patas más
+  lento o más rápido, nunca patina más. La fase sigue de una casilla a la otra.
+- **Sin frames de caminar** (una sola imagen con `body`): la marcha procedural de su cuerpo
+  sobre la misma fase: bípedo y cuadrúpedo suben 1 px entre dos apoyos (en 0 y en la mitad
+  del ciclo) y se inclinan; muchas patas tiemblan 1 px ocho veces por ciclo; el que salta
+  hace un arco por zancada y se aplasta al caer; el arrastrado ondula.
+- **Arrastrado** (`slither`, con o sin frames): una onda por zancada. Yendo de lado se
+  estira y se junta 1 px sin despegarse del suelo; hacia arriba, abajo o en diagonal se
+  mece 1 px a los lados.
+- **Volador** (`flyer` con `flying: true`): las alas baten **por tiempo** (`WING_BEAT_MS`,
+  90 ms por frame de su clip de caminar), avance o flote, también parado en una dirección
+  sin frames de quieto; el vaivén de siempre (`FLY_PX`); `Pose.walk` es -1 siempre, así que
+  nunca deja huella, polvo ni sonido de paso. Uno de una sola imagen se achata 1 px en cada
+  batido (`FLAP_MS`).
+- **Quieta no cicla; empujada o teletransportada tampoco.** El ciclo solo avanza dentro de
+  un paso (`AnimInput.walkStart`): un empujón, un teletransporte o una corrección del
+  dibujo no son un paso, y las patas quedan como estaban. Al volver a caminar siguen desde
+  ese frame.
+- **Huellas y sonidos:** el mundo vivo ya planta cada pie por la fase del ciclo dibujado
+  (`Pose.walk`) y la distancia de un ciclo (`walkCyclesPerStep`), así que con la zancada
+  nueva las huellas, el polvo y el sonido caen donde pisa el dibujo, sin más cambios. El
+  andar de cada monstruo ya estaba en `data/livingworld/gaits.yaml` (el reptador hueco
+  deja los puntos de sus patas, `many_legs`, aunque su cuerpo ondule como `slither`).
+- Un sprite que no dice `body` ni `stride` sigue con la regla vieja (`perTile`): las capas
+  del humanoide del motor, que derivan `per_tile` de su zancada.
+
+**Auditoría (2026-11-27).** Todos los monstruos de `data/monsters` y los NPCs de
+`data/npcs`. "Antes" es cuántas veces más suelo recorría el cuerpo que el que dibujaban sus
+patas (64 px por ciclo sobre su zancada). Los ms por casilla son `89100 / speed`.
+
+| Criatura | Cuerpo | Frames de caminar | Direcciones | Zancada (px por ciclo) | Antes | ms por casilla | Ciclos por casilla ahora |
+|---|---|---|---|---|---|---|---|
+| `ash_hound` | quadruped | 4 | 3 + espejo | 56 | ×1,1 | 297 | 0,57 |
+| `bilge_rat` | quadruped | 4 | 3 + espejo | 20 | ×3,2 | 557 | 1,60 |
+| `bramble_stag` | quadruped | 4 | 4 dibujadas | 40 | ×1,6 | 414 | 0,80 |
+| `bristleback_boar` | quadruped | 4 | 4 dibujadas | 32 | ×2,0 | 495 | 1,00 |
+| `cinder_salamander` | quadruped | 4 | 3 + espejo | 26 | ×2,5 | 594 | 1,23 |
+| `ember_wyrmling` | quadruped | 4 | 3 + espejo | 32 | ×2,0 | 446 | 1,00 |
+| `gloom_bat` | flyer | 4 (alas) | 3 + espejo | no pisa | aleteaba por distancia | 387 | por tiempo |
+| `hollow_crawler` | slither | 4 | 3 + espejo | 22 | ×2,9 | 524 | 1,45 |
+| `mire_toad` | hop | 4 | 3 + espejo | 32 | ×2,0 | 685 | 1,00 |
+| `moss_spider` | many_legs | 4 | 3 + espejo | 16 | ×4,0 | 524 | 2,00 |
+| `ore_beetle` | many_legs | 4 | 3 + espejo | 14 | ×4,6 | 636 | 2,29 |
+| `slag_golem` | biped | 4 | 3 + espejo | 30 | ×2,1 | 743 | 1,07 |
+| `slagbound_warden` | biped | 4 | 3 + espejo | 52 | ×1,2 | 636 | 0,62 |
+| `thieving_gull` | flyer | no tiene | 1 imagen, se espeja | no pisa | solo flotaba | 424 | por tiempo |
+| `thornling` | biped | 4 | 3 + espejo | 24 | ×2,7 | 594 | 1,33 |
+| `tide_crab` | many_legs | 4 | 3 + espejo | 14 | ×4,6 | 594 | 2,29 |
+| `wolf` | quadruped | 4 | 3 + espejo | 40 | ×1,6 | 469 | 0,80 |
+| `coffer_smuggler`, `drowned_miner`, `obsidian_delver`, `wreck_looter` | humanoide del motor (muñeco de capas) | 8 | 8 | 32, la del jugador | igual | 435 a 557 | 1,00 |
+| NPCs con `look` (los 19 que son personas) | humanoide del motor | 8 | 8 | 32, la del jugador | igual | según su `speed` | 1,00 |
+| `volcan_forge_echo` (`npcs/forge_echo`) | flyer | no tiene (4 de quieto) | 4 dibujadas | no pisa | flotaba | no camina | por tiempo |
+
+**Cómo se eligió cada zancada.** Mirando los 4 frames de perfil de cada una (hoja de
+contacto a 2x y una tira con cada frame corrido lo que dice la regla) y midiendo el largo
+del cuerpo y lo que abarcan sus apoyos: un bípedo, dos veces el paso que dibuja (el
+guardián da pasos de ~26 px; el brote, de ~12); un cuadrúpedo, más o menos el largo del
+tronco (el sabueso corre: más); muchas patas, un ciclo corto y rápido. Son estimaciones a
+ojo sobre 4 frames, no una medida de cada apoyo: con 4 frames el pie apoyado todavía se
+corre hasta un octavo de zancada dentro de cada frame. Si en el juego alguna se ve patinar
+o pedalear, se ajusta su `stride` en `assets/sprites.yaml` (más chico = patas más rápidas) y
+`make sprites`; no hace falta tocar código.
+
+**Lo que no se dibujó.** No se agregaron frames: todos los monstruos dibujados ya tenían su
+caminata. La gaviota sigue con una imagen (parada, con las alas plegadas): un ciclo de
+vuelo en tres direcciones no sale de su receta de spritegen, así que bate con el achatado
+procedural y queda en docs/14 como pendiente de frames dibujados.
+
+**Pruebas.** `packages/renderer/src/anim-gait.test.ts` (fase contra distancia para cada
+cuerpo, con y sin frames, a tres velocidades; la zancada propia y la por defecto; el
+volador; la onda; quieta, empujada y teletransportada), `tools/spritepack/src/anims.test.ts`
+(`body` y `stride` en el manifiesto y en el atlas) y `monsters.test.ts` (todo sprite de
+monstruo dice su cuerpo; un volador no tiene zancada). E2E: "sandbox creature walk" de
+`client/e2e/sandbox.spec.ts` mide con `__rpgClient.gaits()` dos monstruos distintos junto a
+los corrales (el ciclo que avanza dentro de un paso es la distancia dibujada sobre su
+zancada) y saca `91b-creature-walk` con los dos a medio paso.
+
 ### Motor de sprites (hecho, 2026-11-18, rama `feat/sprite-engine`)
 Pedido del dueño (2026-11-18): *"podrías poner un agente que arme el motor de generar
 sprites, basándose en las referencias que habíamos hablado"*. El motor está en

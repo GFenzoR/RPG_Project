@@ -671,6 +671,12 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   respiración, embestida de 6 px, flotar (`flying`), espejo según `facing`, caída aplastada
   con desvanecido. Además, para todos: destello rojo y empujón de 2 px al recibir un golpe
   y aparición con fundido de 300 ms. Un frame no crea objetos para esto (docs/07).
+- **Al ritmo de su paso** (docs/17 "Criaturas al ritmo de su paso", lote 20e): un sprite con
+  `body` o `stride` en `atlas.json` `anims` camina por distancia sobre su zancada
+  (`strideOf`, `walkPerStep` con ella; sin frames, la marcha procedural de su cuerpo), un
+  volador (`isFlyer`) bate por tiempo y da `Pose.walk` -1, y un `slither` ondula. Sin las
+  dos, la regla de `perTile` de arriba. Hook E2E `__rpgClient.gaits()` (`GaitView`: cuerpo,
+  zancada, si camina, ciclos jugados, frame y dónde se dibuja, en px de sprite).
 - Quién ataca a quién (`render/creature-events.ts`, puro, con tests; ANI-7, A9): con
   `Welcome.attack_events` lo dice el servidor. Cada `CreatureAttack` que llegó desde el
   frame anterior (`WorldState.attacks`) juega el ataque de su atacante hacia el objetivo

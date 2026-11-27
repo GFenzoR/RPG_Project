@@ -1705,6 +1705,14 @@ monstruos con el mismo sprite se mueven igual y el servidor no se entera: el YAM
   respiración, embestida, golpe y caída: ANI-5). Una entrada sin `layers` le da pistas:
   `facing: left | right` (hacia dónde mira el dibujo; se espeja para caminar al otro lado)
   y `flying: true` (flota y nunca salta).
+- **Cómo camina** (docs/17 "Criaturas al ritmo de su paso"): la entrada del sprite en
+  `animations` de `assets/sprites.yaml` dice `body` (`biped`, `quadruped`, `many_legs`,
+  `slither`, `hop` o `flyer`) y, si camina, `stride`: los px de sprite que cubre un ciclo
+  de su caminata (sin él, el de su cuerpo). El ciclo avanza con la distancia recorrida
+  sobre esa zancada, a cualquier `speed`; un `flyer` (con `flying: true`) bate las alas por
+  tiempo y no deja huellas. Un monstruo nuevo con sprite propio lleva las dos
+  (`tools/spritepack/src/monsters.test.ts` lo exige); uno con `look` camina como el
+  jugador y no lleva ninguna.
 - Un monstruo humanoide o un NPC que es una persona: su `look` ("Looks"), no un sprite
   animado. Las capas del humanoide son entradas de `animations` con `trim`, `per_tile` y
   `per_tile_ns` (`assets/README.md`, "Sprites animados").
