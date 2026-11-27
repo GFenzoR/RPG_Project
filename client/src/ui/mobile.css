@@ -797,6 +797,14 @@
   max-width: min(20rem, calc(100% - 12px));
   max-height: calc(100% - 4.2rem);
 }
+/* On its side the action buttons stand in the right corner, where the hints hung: the
+   buttons drew over the text and over "Skip tutorial" (lote 21 QA). The hints stand at
+   the buttons' left, from the top edge. */
+.game[data-ui="mobile"][data-flow="row"][data-cluster] .tutorial {
+  top: 0.4rem;
+  right: 12.5rem;
+  max-height: calc(100% - 0.8rem);
+}
 .game[data-ui="mobile"] .tutorial-show {
   min-height: 44px;
 }

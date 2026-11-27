@@ -48,6 +48,24 @@ describe("the mobile style sheets", () => {
     expect(hidden).toMatch(/pointer-events:\s*none/);
   });
 
+  it("keep the left-handed buttons off the stick on a phone on its side", () => {
+    // The row's rule set `right`; the mirror's `left` alone stretched the box across the map.
+    const mirrored = rule(
+      touchCss,
+      '.game[data-mirror][data-ui="mobile"][data-flow="row"] .touch-cluster',
+    );
+    expect(mirrored).toMatch(/right:\s*auto/);
+    expect(mirrored).toMatch(/left:\s*8px/);
+  });
+
+  it("hang the tutorial's hints at the left of the action buttons on a phone on its side", () => {
+    const hints = rule(
+      mobileCss,
+      '.game[data-ui="mobile"][data-flow="row"][data-cluster] .tutorial',
+    );
+    expect(hints).toMatch(/right:\s*12\.5rem/);
+  });
+
   it("make what a finger presses 44 px wide as well as tall", () => {
     const block = coarse();
     const wide = /\.game button,\s*\.game summary,\s*\.panel button \{\s*min-width:\s*44px;/;

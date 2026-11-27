@@ -511,7 +511,11 @@ body.inspecting [data-testid="game-canvas"] {
   left: auto;
   right: 60px;
 }
+/* `right: auto` again: the row's own rule is more specific than the mirror's, and with
+   both sides set the box stretched across the map and its right-to-left columns landed
+   on the stick (lote 21 QA). */
 .game[data-mirror][data-ui="mobile"][data-flow="row"] .touch-cluster {
+  right: auto;
   left: 8px;
   bottom: 12px;
 }
