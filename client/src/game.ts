@@ -468,6 +468,10 @@ interface PoseView {
 
 /** Pointer travel (CSS pixels) that turns a press on a DOM item into a drag. */
 const DRAG_START_PX = 4;
+/** A finger slips more than a mouse: an item hotkey drag by touch starts later. */
+const KEY_DRAG_TOUCH_PX = 24;
+/** Released this far from where it was pressed, off the bar, an item hotkey is cleared. */
+const KEY_CLEAR_PX = 56;
 
 /** How long after a touch press a contextmenu event is taken as the finger's, ms. */
 const TOUCH_CONTEXTMENU_MS = 1500;
@@ -1423,11 +1427,14 @@ export class Game {
     const itemId = this.itemKeys[slot] ?? 0;
     if (itemId <= 0) return;
     const def = this.opts.content.items[itemId];
-    this.itemUse = { slot, at: performance.now() };
-    this.toolAt = undefined;
+    if (this.world.itemCounts.get(itemId) !== 0) this.itemUse = { slot, at: performance.now() };
     const aims = this.opts.content.spells.find((s) => s.id === def?.rune?.spell)?.aimsAtPlayer;
-    this.setPending(aims === true ? { kind: "itemType", itemId } : undefined);
-    if (aims !== true) this.sendUseType(itemId);
+    if (aims === true) {
+      this.toolAt = undefined;
+      this.setPending({ kind: "itemType", itemId });
+    } else {
+      this.sendUseType(itemId); // eating or drinking leaves a pending "use with" or aimed spell be
+    }
     this.publish();
   }
 
@@ -1782,16 +1789,23 @@ export class Game {
     if ((this.itemKeys[slot] ?? 0) <= 0 || (e.pointerType === "mouse" && e.button !== 0)) return;
     const x0 = e.clientX;
     const y0 = e.clientY;
+    const start = e.pointerType === "mouse" ? DRAG_START_PX : KEY_DRAG_TOUCH_PX;
     const move = (ev: PointerEvent): void => {
-      if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < DRAG_START_PX) return;
+      if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < start) return;
       this.keyDragged = true;
     };
     const up = (ev: PointerEvent): void => {
       stop();
       if (!this.keyDragged) return;
       const to = this.itemKeyAt(ev.clientX, ev.clientY);
-      if (to === undefined) this.setItemKey(slot, 0);
-      else this.swapItemKeys(slot, to);
+      if (to === slot) {
+        this.keyDragged = false; // back on its own slot: a tap, the click that follows uses it
+      } else if (to !== undefined) {
+        this.swapItemKeys(slot, to);
+      } else if (Math.hypot(ev.clientX - x0, ev.clientY - y0) >= KEY_CLEAR_PX) {
+        this.setItemKey(slot, 0); // dropped well away from the bar: cleared
+      }
+      // A slip a little off the bar changes nothing (and no click follows, so uses nothing).
     };
     const stop = (): void => {
       window.removeEventListener("pointermove", move);
@@ -2940,10 +2954,11 @@ export class Game {
         return;
       }
     }
-    // The keys 1-6 use the item hotkeys (an open dialog took its digits above).
+    // The keys 1-6 use the item hotkeys (an open dialog took its digits above; a focused
+    // select keeps its own keys, as the arrows do: input/keyboard.ts takesText).
     const itemSlot =
       e.ctrlKey || e.altKey || e.metaKey || e.shiftKey ? undefined : itemHotkeySlot(e.code);
-    if (itemSlot !== undefined) {
+    if (itemSlot !== undefined && (e.target as { tagName?: string } | null)?.tagName !== "SELECT") {
       e.preventDefault();
       if (!e.repeat) this.useItemKey(itemSlot);
       return;

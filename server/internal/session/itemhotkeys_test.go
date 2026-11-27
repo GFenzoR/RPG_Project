@@ -141,18 +141,203 @@ func TestUseItemTypeSameCooldown(t *testing.T) {
 	}
 }
 
-// A rune is used by type from a closed container: it casts on the current target or self and
-// spends a charge; the counts of a rune are its charges.
+const hardRuneID = 75
+
+func init() {
+	testItemDefs[hardRuneID] = "{id: test_hard_rune, kind: rune, weight: 100, rune: {spell: test_bolt, charges: 3, magic_level: 5}}"
+}
+
+// useTypeAt is a UseItemType with a target.
+func useTypeAt(id uint16, to *pb.ActionTarget) *pb.ClientMessage {
+	m := useType(id)
+	m.GetUseItemType().To = to
+	return m
+}
+
+// arcanistWith joins an arcanist at (10,10) carrying items in the backpack, on a world with
+// a dummy at (12,10).
+func arcanistWith(t *testing.T, items ...session.ItemState) (*harness, *fakeClient, *session.Player) {
+	t.Helper()
+	h := magicHarness(t, worldtest.Open(t, 0, 0, 32, 32), spawnAt("dummy", 12, 10, 0, 60))
+	nextChar++
+	c := withPack(nextChar, pos(10, 10), items...)
+	c.Vocation, c.Mana, c.Health = "arcanist", arcanistMax, 140
+	cl, p := h.joinChar(c)
+	h.sim.Step()
+	cl.take()
+	return h, cl, p
+}
+
+// A rune is used by type from a closed container: it casts its spell at the target and
+// spends a charge, the counts follow the charges, and the last one removes the rune.
 func TestUseItemTypeRune(t *testing.T) {
-	h := newHarness(t, worldtest.Open(t, 0, 0, 32, 32), func(c *session.Config) {
-		c.Items = testItems()
-		c.Balance.Inventory.UseCooldownMs = 1000
-	})
-	c := withPack(9703, pos(10, 10), session.ItemState{ItemID: runeID, Count: 3, Slot: 0})
-	cl, _ := h.joinChar(c)
-	evs := h.send(cl, trackTypes(runeID))
-	if got := lastCounts(evs); got[runeID] != 3 {
+	h, cl, p := arcanistWith(t, session.ItemState{ItemID: runeID, Count: 3, Slot: 0})
+	d := h.dummy()
+	bp := p.Equipped(slotBackpack)
+	onD := &pb.ActionTarget{Target: &pb.ActionTarget_CreatureId{CreatureId: d.ID()}}
+	if got := lastCounts(h.send(cl, trackTypes(runeID))); got[runeID] != 3 {
 		t.Fatalf("rune charges counted: %v", got)
+	}
+	mana := h.w.Mana(p)
+	// No target: the rune has nothing to hit, so nothing is spent.
+	h.sim.RunTicks(20)
+	h.send(cl, useType(runeID))
+	if bp.Items()[0].Count() != 3 || h.w.MonsterHealth(d) != 1000 {
+		t.Fatalf("a rune used with no target spent a charge or hit: %d charges, dummy %d", bp.Items()[0].Count(), h.w.MonsterHealth(d))
+	}
+	for i := range 3 {
+		h.sim.RunTicks(20) // the attack group's cooldown
+		evs := h.send(cl, useTypeAt(runeID, onD))
+		if want := 1000 - 5*(i+1); h.w.MonsterHealth(d) != want {
+			t.Fatalf("use %d: dummy %d, want %d (%v)", i+1, h.w.MonsterHealth(d), want, systemKeys(evs))
+		}
+		if got, want := lastCounts(evs)[runeID], uint32(2-i); got != want && want != 0 {
+			t.Errorf("use %d: counts %d, want %d", i+1, got, want)
+		}
+		if i == 0 {
+			// The group cooldown: a second cast at once is refused and keeps its charge.
+			evs := h.send(cl, useTypeAt(runeID, onD))
+			if !hasKey(evs, "magic.not_ready") || bp.Items()[0].Count() != 2 {
+				t.Errorf("second cast in the cooldown: %v, %d charges", systemKeys(evs), bp.Items()[0].Count())
+			}
+		}
+	}
+	if len(bp.Items()) != 0 {
+		t.Errorf("the last charge left the rune: %v", bp.Items())
+	}
+	if h.w.Mana(p) != mana {
+		t.Errorf("runes spent mana: %d -> %d", mana, h.w.Mana(p))
+	}
+	h.sim.RunTicks(20)
+	if evs := h.send(cl, useTypeAt(runeID, onD)); !hasKey(evs, "inventory.none_carried") {
+		t.Errorf("with none left: %v", systemKeys(evs))
+	}
+}
+
+// A rune that needs more magic level than p has is refused and keeps its charges.
+func TestUseItemTypeRuneMagicLevel(t *testing.T) {
+	h, cl, p := arcanistWith(t, session.ItemState{ItemID: hardRuneID, Count: 3, Slot: 0})
+	d := h.dummy()
+	evs := h.send(cl, useTypeAt(hardRuneID, &pb.ActionTarget{Target: &pb.ActionTarget_CreatureId{CreatureId: d.ID()}}))
+	if !hasKey(evs, "magic.magic_level_required") || p.Equipped(slotBackpack).Items()[0].Count() != 3 || h.w.MonsterHealth(d) != 1000 {
+		t.Errorf("a rune above the magic level: %v", systemKeys(evs))
+	}
+}
+
+// A rune at a tile: the target the client sends reaches the spell.
+func TestUseItemTypeRuneAtATile(t *testing.T) {
+	h, cl, _ := arcanistWith(t, session.ItemState{ItemID: runeID, Count: 3, Slot: 0})
+	d := h.dummy()
+	h.send(cl, useTypeAt(runeID, &pb.ActionTarget{Target: &pb.ActionTarget_Pos{Pos: posMsgT(pos(12, 10))}}))
+	if h.w.MonsterHealth(d) == 1000 {
+		t.Errorf("the rune thrown at the dummy's tile did not hit")
+	}
+}
+
+// The none_carried answer names the type (the client shows the item's name).
+func TestUseItemTypeNoneCarriedNamesTheItem(t *testing.T) {
+	h := salveHarness(t)
+	cl, _ := h.joinChar(withPack(9710, pos(10, 10)))
+	evs := h.send(cl, useType(salveID))
+	var named bool
+	for _, m := range find(evs, (*pb.ServerMessage).GetChatMessage) {
+		if m.GetLocalized().GetKey() != "inventory.none_carried" {
+			continue
+		}
+		for _, prm := range m.GetLocalized().GetParams() {
+			if prm.GetName() == "item" && prm.GetItem().GetItemId() == salveID {
+				named = true
+			}
+		}
+	}
+	if !named {
+		t.Errorf("none_carried without its item parameter: %v", evs)
+	}
+}
+
+// A consumable in an equipment slot (the ammo hand) is found before the containers.
+func TestUseItemTypeFromAnEquipmentSlot(t *testing.T) {
+	h := salveHarness(t)
+	c := withPack(9711, pos(10, 10), session.ItemState{ItemID: salveID, Count: 4, Slot: 0})
+	c.Inventory = append(c.Inventory, session.ItemState{ItemID: salveID, Count: 3, Slot: int(slotAmmo)})
+	c.Health = 20
+	cl, p := h.joinChar(c)
+	if p.Equipped(slotAmmo) == nil {
+		t.Skip("the test world does not equip a salve in the ammo slot")
+	}
+	h.send(cl, useType(salveID))
+	if ammo := p.Equipped(slotAmmo); ammo == nil || ammo.Count() != 2 || stackOf(p.Equipped(slotBackpack), salveID) != 4 {
+		t.Errorf("the equipment slot was not used first")
+	}
+}
+
+// Breadth-first: the backpack's own cells, then the bag in a pocket, then the bag inside the
+// backpack (one level deeper).
+func TestUseItemTypeBagInAPocketAfterTheBackpack(t *testing.T) {
+	h := salveHarness(t)
+	pocketBag := session.ItemState{ItemID: bagID, Count: 1, Slot: 0, Pocket: true, Items: []session.ItemState{{ItemID: salveID, Count: 6}}}
+	packBag := session.ItemState{ItemID: bagID, Count: 1, Slot: 1, Items: []session.ItemState{{ItemID: salveID, Count: 3}}}
+	c := withPack(9712, pos(10, 10), session.ItemState{ItemID: salveID, Count: 1, Slot: 2}, pocketBag, packBag)
+	c.Health = 20
+	cl, p := h.joinChar(c)
+	var inPack, inPocket *session.Item
+	for _, it := range p.Equipped(slotBackpack).Items() {
+		if it.Def().Numeric == bagID {
+			inPack = it
+		}
+	}
+	for _, it := range p.Pockets().Items() {
+		if it.Def().Numeric == bagID {
+			inPocket = it
+		}
+	}
+	if inPack == nil || inPocket == nil {
+		t.Fatal("bags missing")
+	}
+	left := func() [3]int {
+		return [3]int{stackOf(p.Equipped(slotBackpack), salveID), stackOf(inPocket, salveID), stackOf(inPack, salveID)}
+	}
+	for i, want := range [][3]int{{0, 6, 3}, {0, 5, 3}} {
+		h.sim.RunTicks(20)
+		h.send(cl, useType(salveID))
+		if got := left(); got != want {
+			t.Fatalf("use %d: backpack cell, pocket bag, pack bag = %v, want %v", i+1, got, want)
+		}
+	}
+}
+
+// Salves offered in a trade and then used by type leave the offer and reset the accepts, as a
+// UseItem on them does: no one gets a different stack than the one they agreed to.
+func TestUseItemTypeOfAnOfferedStack(t *testing.T) {
+	h := newMarketHarness(t)
+	ca, a := h.trader("Ana", pos(2, 2), stack(salveID, 30, 0))
+	cb, b := h.trader("Beto", pos(3, 2), stack(swordID, 1, 0))
+	h.startTrade(ca, cb, a, b, salveID, swordID)
+	h.send(cb, tradeAccept)
+	cb.take()
+	evs := h.send(ca, useType(salveID))
+	if h.w.CountItem(a, "test_salve") != 29 {
+		t.Fatalf("the salve was not used: %d", h.w.CountItem(a, "test_salve"))
+	}
+	u := lastTrade(evs)
+	if u == nil || len(u.GetOwnOffer()) != 0 || u.GetOwnAccepted() || u.GetPartnerAccepted() {
+		t.Errorf("the offer after using it: %v", u)
+	}
+	if u := lastTrade(cb.take()); u == nil || len(u.GetPartnerOffer()) != 0 || u.GetOwnAccepted() {
+		t.Errorf("the partner's view: %v", u)
+	}
+}
+
+// A link-dead character's queued use does nothing: its connection is gone.
+func TestUseItemTypeLinkDead(t *testing.T) {
+	h := salveHarness(t)
+	cl, p := h.joinChar(carryingSalves())
+	h.cutSlow(cl)
+	h.sim.RunTicks(20)
+	h.input(cl, useType(salveID))
+	h.sim.Step()
+	if stackOf(p.Pockets(), salveID) != 5 {
+		t.Errorf("a link-dead character used a salve")
 	}
 }
 
@@ -184,8 +369,13 @@ func TestItemCounts(t *testing.T) {
 	if got := lastCounts(h.send(cl, moveItem(onTile(pos(10, 11)), salveID, 1, inPocket(0), 4))); got[salveID] != 9 {
 		t.Errorf("after a pick up: %v", got)
 	}
-	// Empty list: the next change tells nothing.
-	h.send(cl, trackTypes())
+	// Empty list: it tells nothing itself, nor on a quiet tick, nor on the next change.
+	if evs := h.send(cl, trackTypes()); lastCounts(evs) != nil {
+		t.Errorf("an empty list sent counts: %v", lastCounts(evs))
+	}
+	if evs := h.send(cl, &pb.ClientMessage{Message: &pb.ClientMessage_Ping{Ping: &pb.Ping{}}}); lastCounts(evs) != nil {
+		t.Errorf("counts sent on a quiet tick after an empty list")
+	}
 	h.sim.RunTicks(20)
 	if got := lastCounts(h.send(cl, useType(salveID))); len(got) != 0 {
 		t.Errorf("counts after stopping: %v", got)

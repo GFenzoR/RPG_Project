@@ -22,7 +22,8 @@ export const itemKeyLabel = (slot: number): string => String(slot + 1);
 /**
  * Whether an item type may sit on a slot: what a use eats, drinks or casts (food, potions,
  * runes). Equipment, containers, tools (they need a tile: "use with"), books and map fixtures
- * never; the server checks the same on every use.
+ * never. The server checks the broader rule on every use: a carried consumable or rune, found
+ * by type, used by the normal use rules (cooldown, stomach, rune level).
  */
 export function hotkeyUsable(def: ItemDef | undefined): boolean {
   if (!def || def.fixed || def.slots > 0 || def.useWith) return false;

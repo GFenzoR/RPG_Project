@@ -59,6 +59,11 @@ lee lo que ya recibió (todo lo que el cliente dibuja es público para quien lo 
   en espera (`heldDrop`) hasta el acuse; un transfer descartado marca el baúl en el Saver
   (lo que lo toque después no se escribe y marca a su personaje) y el mundo queda en solo
   lectura. Solo items comerciables: un item de quest no pasa entre personajes.
+- `UseItemType` y `SetItemHotkeys` (teclas de items): el cliente solo nombra un tipo (id
+  `<= 65535`, solo consumibles y runas); el servidor lo busca �nicamente en lo que el
+  personaje lleva (bolsillos, equipo y sus contenedores, nunca suelo, casas ni contenedores
+  ajenos) y lo usa por el mismo camino y los mismos cooldowns que `UseItem`. La lista de
+  `SetItemHotkeys` se acota a 12 tipos distintos y `ItemCounts` solo cuenta lo que lleva.
 - `Input` ignora enums y oneofs desconocidos.
 
 ### Anti-flood dentro del juego

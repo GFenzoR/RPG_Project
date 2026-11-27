@@ -872,7 +872,9 @@ func (w *World) questRecheck(p *Player) {
 		return
 	}
 	p.questDirty = false
-	p.countsStale = len(p.itemKeys) > 0 // the item hotkeys' totals (itemhotkeys.go)
+	if len(p.itemKeys) > 0 {
+		p.countsStale = true // the item hotkeys' totals (itemhotkeys.go)
+	}
 	w.quests.Recheck(p.storage, &questHost{w: w, p: p})
 	if len(w.quests.Milestones()) > 0 { // the met marks of the quest log (sigil.go)
 		if m := w.milestoneMarks(p); m != p.milestoneMarks {

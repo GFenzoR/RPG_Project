@@ -369,6 +369,7 @@ describe('Game item hotkeys (docs/02 "Teclas rapidas de items")', () => {
   let last: GameUi | undefined;
   let game: InstanceType<typeof Game>;
   let keydown: (e: Partial<KeyboardEvent>) => void;
+  const pointer: Record<string, (e: Partial<PointerEvent>) => void> = {};
 
   const press = (code: string, extra: Partial<KeyboardEvent> = {}): void =>
     keydown({ code, repeat: false, preventDefault: vi.fn(), target: null, ...extra });
@@ -379,10 +380,14 @@ describe('Game item hotkeys (docs/02 "Teclas rapidas de items")', () => {
     vi.stubGlobal("window", {
       addEventListener: (type: string, fn: typeof keydown) => {
         if (type === "keydown") keydown = fn;
+        else pointer[type] = fn as unknown as (e: Partial<PointerEvent>) => void;
       },
       removeEventListener: vi.fn(),
     });
-    vi.stubGlobal("document", { body: { classList: { toggle: vi.fn() } } });
+    vi.stubGlobal("document", {
+      body: { classList: { toggle: vi.fn() } },
+      elementFromPoint: () => null,
+    });
     game = new Game({
       host: {} as HTMLElement,
       content: itemContent,
@@ -434,6 +439,49 @@ describe('Game item hotkeys (docs/02 "Teclas rapidas de items")', () => {
     expect(sent).toHaveLength(1);
     game.useItemKeyTap(1); // a tap on the slot is the same use
     expect(sent).toHaveLength(2);
+  });
+
+  it("a finger that slips off the bar keeps the assignment; a long drag away clears it", () => {
+    game.setItemKey(0, 10);
+    const press0 = (type: string): void =>
+      game.pressItemKey(0, {
+        pointerType: type,
+        button: 0,
+        clientX: 100,
+        clientY: 100,
+      } as PointerEvent);
+    const release = (x: number, y: number): void => {
+      pointer["pointermove"]?.({ clientX: x, clientY: y });
+      pointer["pointerup"]?.({ clientX: x, clientY: y });
+    };
+    press0("touch");
+    release(110, 100); // a 10 px slip is below the touch drag threshold: a tap
+    expect(last?.itemKeys[0]).toBe(10);
+    press0("touch");
+    release(100, 140); // 40 px: a drag, dropped just off the bar: nothing changes
+    expect(last?.itemKeys[0]).toBe(10);
+    press0("touch");
+    release(100, 200); // dropped far away: cleared
+    expect(last?.itemKeys[0]).toBe(0);
+  });
+
+  it("eating leaves an aimed rune waiting for its click", () => {
+    game.setItemKey(0, 10);
+    game.setItemKey(1, 12);
+    press("Digit2"); // the aimed rune waits for a target
+    press("Digit1"); // drinking a potion does not cancel it
+    sent.length = 0;
+    (game as unknown as { click(t: { creature: number }): void }).click({ creature: 5 });
+    expect(sent[0]).toMatchObject({ case: "useItemType", value: { itemId: 12 } });
+  });
+
+  it("leaves the digits to a focused select", () => {
+    game.setItemKey(0, 10);
+    sent.length = 0;
+    press("Digit1", { target: { tagName: "SELECT" } as unknown as EventTarget });
+    expect(sent).toEqual([]);
+    press("Digit1", { target: { tagName: "BUTTON" } as unknown as EventTarget });
+    expect(sent).toHaveLength(1);
   });
 
   it("leaves the digits to an open dialog", () => {

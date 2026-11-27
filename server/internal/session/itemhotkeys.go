@@ -30,7 +30,8 @@ func hotkeyUsable(def *content.Item) bool {
 	return def != nil && def.Container == nil && (def.Consumable != nil || def.Rune != nil)
 }
 
-// findCarried returns the first stack of def p carries, in a deterministic order: the cells
+// findCarried returns the first stack of def (an offered stack of a trade counts: using it
+// drops it from the offer, as a UseItem does) p carries, in a deterministic order: the cells
 // of the pockets first, then the equipment slots in order (the item itself), then the
 // containers breadth-first: the ones in the equipment slots (the backpack first, as the
 // slots go), then the ones in the pockets; each container's cells from index 0. Nil if p
@@ -78,20 +79,26 @@ func findCarried(p *Player, def *content.Item) *Item {
 	return nil
 }
 
-// carriedUnits is how many units of def p carries in total: a stack's size, a rune's
-// charges (its count), 1 for any other item.
-func carriedUnits(p *Player, def *content.Item) uint32 {
-	var n uint32
+// carriedTotals fills totals[i] with how many units of keys[i] p carries in total (a stack's
+// size, a rune's charges, 1 for any other item), in one walk over p's inventory.
+func carriedTotals(p *Player, keys []*content.Item, totals []uint32) {
+	clear(totals)
 	p.eachCarried(true, func(it *Item) {
-		if it.def == def && len(it.items) == 0 {
-			if it.def.Stackable || it.def.Rune != nil {
-				n += uint32(it.count)
-			} else {
-				n++
+		if len(it.items) != 0 {
+			return
+		}
+		for i, def := range keys {
+			if it.def != def {
+				continue
 			}
+			if def.Stackable || def.Rune != nil {
+				totals[i] += uint32(it.count)
+			} else {
+				totals[i]++
+			}
+			return
 		}
 	})
-	return n
 }
 
 // useItemType runs a UseItemType: one unit of the type, from wherever p carries it.
@@ -145,10 +152,12 @@ func (w *World) flushItemCounts(p *Player) {
 		return
 	}
 	p.countsStale = false
-	counts := make([]uint32, len(p.itemKeys))
-	for i, def := range p.itemKeys {
-		counts[i] = carriedUnits(p, def)
+	if len(p.itemKeys) == 0 { // an empty list means no totals (docs/05): nothing to tell
+		p.countsSent = nil
+		return
 	}
+	counts := make([]uint32, len(p.itemKeys))
+	carriedTotals(p, p.itemKeys, counts)
 	if p.countsSent != nil && slices.Equal(counts, p.countsSent) {
 		return
 	}
