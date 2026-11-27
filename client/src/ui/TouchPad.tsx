@@ -8,6 +8,7 @@ import type { JSX } from "preact";
 import type { Game } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { DPAD_CELLS, directionId, dpadDirection } from "../input/dpad.ts";
+import { PointerOwner, isPalm } from "../input/pointers.ts";
 import "./touch.css";
 
 /**
@@ -33,6 +34,18 @@ const ARROWS: Partial<Record<Direction, string>> = {
 
 type PadGame = Pick<Game, "padPress" | "padRelease" | "padStep">;
 
+/**
+ * Lote 21: the finger that owns the pad (one pad on screen at a time). A second contact on
+ * it (the base of the thumb) neither changes the direction nor stops the walk when it lifts.
+ */
+const owner = new PointerOwner();
+
+/** Frees an owner whose pointer the element no longer holds (the pad was redrawn elsewhere). */
+export function staleOwner(o: PointerOwner, el: HTMLElement): void {
+  const id = o.current;
+  if (id !== undefined && !el.hasPointerCapture(id)) o.reset();
+}
+
 /** The direction a pointer on the pad element points at, or undefined at the centre. */
 function pointed(el: HTMLElement, e: PointerEvent): Direction | undefined {
   const r = el.getBoundingClientRect();
@@ -56,7 +69,7 @@ function hold(game: PadGame | undefined, el: HTMLElement, dir: Direction | undef
 export function TouchPad(props: { t: Translate; game: PadGame | undefined }): JSX.Element {
   const { t, game } = props;
   const release = (e: PointerEvent): void => {
-    hold(game, e.currentTarget as HTMLElement, undefined);
+    if (owner.release(e.pointerId)) hold(game, e.currentTarget as HTMLElement, undefined);
   };
   return (
     <div
@@ -67,12 +80,15 @@ export function TouchPad(props: { t: Translate; game: PadGame | undefined }): JS
       onPointerDown={(e) => {
         const el = e.currentTarget;
         e.preventDefault(); // no focus ring, no text selection, no emulated mouse
+        staleOwner(owner, el);
+        if (isPalm(e.width, e.height) || !owner.claim(e.pointerId)) return;
         el.setPointerCapture(e.pointerId);
         hold(game, el, pointed(el, e));
       }}
       onPointerMove={(e) => {
         const el = e.currentTarget;
-        if (el.hasPointerCapture(e.pointerId)) hold(game, el, pointed(el, e));
+        if (owner.owns(e.pointerId) && el.hasPointerCapture(e.pointerId))
+          hold(game, el, pointed(el, e));
       }}
       onPointerUp={release}
       onPointerCancel={release}

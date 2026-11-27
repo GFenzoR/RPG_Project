@@ -8,15 +8,7 @@ import type { TileFacts } from "./actions.ts";
 
 /** What the button does (its icon and i18n label: client.touch.context.<kind>). */
 export type ContextKind =
-  | "talk"
-  | "attack"
-  | "climb"
-  | "open"
-  | "loot"
-  | "read"
-  | "break"
-  | "push"
-  | "use";
+  "talk" | "attack" | "climb" | "open" | "loot" | "read" | "break" | "push" | "use";
 
 /** One tile the button may act on. */
 export interface ContextTile {

@@ -12,6 +12,17 @@
 
 export type Platform = "iphone" | "ipad" | "chromium" | "other";
 
+/** The event pwa.ts sends on `window` when a new version of the app took over this page. */
+export const UPDATE_EVENT = "rpg:app-update";
+
+/**
+ * Whether a service worker changing state means a new version: it activated on a page
+ * another worker already controlled (the first install of a visit is not an update).
+ */
+export function isAppUpdate(workerState: string, hadController: boolean): boolean {
+  return hadController && workerState === "activated";
+}
+
 /** What the page can read of where it runs. */
 export interface PlatformEnv {
   userAgent: string;

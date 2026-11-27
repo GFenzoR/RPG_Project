@@ -501,6 +501,12 @@ export interface GameCanvasOptions {
   holdAt?(cx: number, cy: number): void;
   /** The held left button was let go (or the hold was lost): stop walking toward it. */
   holdEnd?(): void;
+  /**
+   * Lote 21: a finger started dragging from tile (x, y, z): "walk" = hold-to-walk toward
+   * the finger (holdAt / holdEnd follow it), "item" = drag its top item, "none" = nothing
+   * (input/gestures.ts touchDrag). Without it, a drag moves the item as before.
+   */
+  touchDrag?(x: number, y: number, z: number): "none" | "item" | "walk";
   /** docs/17 MOV-7: the last click-to-walk's mark (a ring on its tile for MARK_MS). */
   walkMark?(): WalkMark | undefined;
   /**
@@ -734,6 +740,13 @@ export async function createGameCanvas(
   /** Reduced motion (Options or the system, state/ui-prefs.ts): no particles. */
   const reducedMotion = (): boolean =>
     document.documentElement.dataset["motion"] === "reduced" || (motionQuery?.matches ?? false);
+  /**
+   * The reduced effects preset (lote 21, state/touch-controls.ts: picked for low-end touch
+   * devices, changeable in Options): no ambient particles and a still living world, like
+   * reduced motion, while steps, attacks and deaths keep their animation.
+   */
+  const reducedEffects = (): boolean =>
+    reducedMotion() || document.documentElement.dataset["effects"] === "reduced";
   // Where each creature was drawn this frame (ART-2): clicks on heads.
   const drawnBoxes = new DrawnBoxes();
   view.overlay.addChild(particles.view);
@@ -854,7 +867,7 @@ export async function createGameCanvas(
     elevationAt: (x, y) => view.elevationAt(x, y),
     texture: (sprite) => atlas.texture(sprite),
     ...(opts.playSound ? { playSound: opts.playSound } : {}),
-    reducedMotion: () => reducedMotion(),
+    reducedMotion: () => reducedEffects(),
   });
   const effectLayer = new Container({ label: "effects" });
   const textLayer = new Container({ label: "floating texts" });
@@ -1706,7 +1719,7 @@ export async function createGameCanvas(
     particleView.y = cam.y;
     particleView.width = app.screen.width / tilePx;
     particleView.height = app.screen.height / tilePx;
-    particles.update(now, particleView, emitters, isDark(self.pos.z), reducedMotion());
+    particles.update(now, particleView, emitters, isDark(self.pos.z), reducedEffects());
     livingView.x = cam.x;
     livingView.y = cam.y;
     livingView.width = particleView.width;
@@ -1982,6 +1995,13 @@ export async function createGameCanvas(
   };
   /** The scale when the current pinch started (two fingers zoom by whole scales). */
   let pinchFrom: number | undefined;
+  /** Lote 21: the finger dragged over the map is walking the player toward it. */
+  let touchWalking = false;
+  const endTouchWalk = (): void => {
+    if (!touchWalking) return;
+    touchWalking = false;
+    opts.holdEnd?.();
+  };
   const onGestures = (gs: Gesture[], e: PointerEvent | undefined): void => {
     for (const g of gs) {
       if (g.kind === "pinchStart") {
@@ -1999,7 +2019,16 @@ export async function createGameCanvas(
         if (at) opts.longPressTile(at.x, at.y, at.z, g.x, g.y);
       } else if (g.kind === "dragStart" && e) {
         const at = touchTile;
-        if (at) opts.dragTile(at.x, at.y, at.z, e);
+        const does = at ? (opts.touchDrag?.(at.x, at.y, at.z) ?? "item") : "none";
+        if (at && does === "item") opts.dragTile(at.x, at.y, at.z, e);
+        else if (does === "walk") {
+          touchWalking = true;
+          opts.holdAt?.(g.x, g.y);
+        }
+      } else if (g.kind === "dragMove") {
+        if (touchWalking) opts.holdAt?.(g.x, g.y);
+      } else if (g.kind === "dragEnd" || g.kind === "cancel") {
+        endTouchWalk();
       }
     }
     clearTimeout(longPressTimer);
@@ -2032,6 +2061,7 @@ export async function createGameCanvas(
     if (!recent || touchPress.menu || !touchAim) return;
     touchPress.menu = true;
     gestures.reset();
+    endTouchWalk();
     clearTimeout(longPressTimer);
     longPressTimer = undefined;
     opts.longPressTile(touchAim.x, touchAim.y, touchAim.z, e.clientX, e.clientY);
@@ -2482,6 +2512,8 @@ export async function createGameCanvas(
       clearTimeout(longPressTimer);
       hint.remove();
       gestures.reset();
+      endTouchWalk();
+      endTouchWalk();
       observer.disconnect();
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);

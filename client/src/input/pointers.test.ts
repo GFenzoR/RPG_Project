@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PointerOwner, isPalm } from "./pointers.ts";
+import { PointerOwner, TAP_CLICK_GUARD_MS, TapGuard, isPalm } from "./pointers.ts";
 
 describe("PointerOwner", () => {
   it("follows the first finger and ignores the others until it lifts", () => {
@@ -39,5 +39,26 @@ describe("isPalm", () => {
     expect(isPalm(28, 34)).toBe(false);
     expect(isPalm(40, 95)).toBe(true);
     expect(isPalm(80, 20)).toBe(true);
+  });
+});
+
+describe("TapGuard", () => {
+  it("a mouse click or a keyboard activation acts", () => {
+    const g = new TapGuard();
+    expect(g.clickCounts(100)).toBe(true);
+    expect(g.clickCounts(120)).toBe(true);
+  });
+
+  it("the click after a finger already acted is dropped, once", () => {
+    const g = new TapGuard();
+    g.touchUp(1000);
+    expect(g.clickCounts(1010)).toBe(false);
+    expect(g.clickCounts(1020)).toBe(true); // a real click right after
+  });
+
+  it("a second thumb that gets no click leaves nothing behind", () => {
+    const g = new TapGuard();
+    g.touchUp(1000); // no click follows a secondary finger
+    expect(g.clickCounts(1000 + TAP_CLICK_GUARD_MS)).toBe(true);
   });
 });

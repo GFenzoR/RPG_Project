@@ -278,3 +278,393 @@ body.picking-item [data-drop] {
   padding-top: 8px;
   border-top: 1px solid var(--ui-gold-700);
 }
+
+/* ==== Lote 21: touch play (docs/15 "Controles táctiles") ============================ */
+
+/* Nothing of the game scrolls, zooms or selects under a finger: no pull-to-refresh, no
+   double-tap zoom, no callout nor selection on a long press. Text fields and the lists
+   that scroll keep their own behaviour (they set touch-action themselves). */
+.game {
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.game[data-touch] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.game[data-touch] input,
+.game[data-touch] textarea,
+.game[data-touch] .chat-lines,
+.game[data-touch] .user-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The size of the on-screen controls (Options): never under 44 px. */
+.game {
+  --touch-btn: 52px;
+  --touch-pad-scale: 1;
+}
+.game[data-touch-size="small"] {
+  --touch-btn: 44px;
+}
+.game[data-touch-size="large"] {
+  --touch-btn: 62px;
+  --touch-pad-scale: 1.2;
+}
+.game[data-touch-size="large"] .touch-pad {
+  grid-template-columns: repeat(3, 52px);
+  grid-template-rows: repeat(3, 52px);
+}
+.game[data-touch-size="large"] .touch-pad-button {
+  min-width: 52px;
+  min-height: 52px;
+}
+
+/* ---- the analog stick: an iron ring with a gold-rimmed knob ---- */
+.touch-stick {
+  position: relative;
+  width: calc(146px * var(--touch-pad-scale, 1));
+  height: calc(146px * var(--touch-pad-scale, 1));
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgb(0 0 0 / 55%) 0 38%,
+    rgb(33 28 23 / 80%) 39% 100%
+  );
+  box-shadow:
+    0 0 0 1px var(--ui-iron-900),
+    inset 0 0 0 2px var(--ui-iron-600),
+    inset 0 0 0 3px var(--ui-iron-900),
+    0 2px 6px rgb(0 0 0 / 60%);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.touch-stick-ring {
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  border: 1px dashed rgb(226 196 122 / 35%);
+  pointer-events: none;
+}
+.touch-stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44%;
+  height: 44%;
+  margin: -22% 0 0 -22%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--ui-iron-600), var(--ui-iron-900) 70%);
+  box-shadow:
+    0 0 0 1px var(--ui-iron-900),
+    inset 0 0 0 2px var(--ui-gold-500),
+    0 2px 4px rgb(0 0 0 / 70%);
+  pointer-events: none;
+  will-change: transform;
+}
+.touch-stick[data-held] .touch-stick-knob {
+  box-shadow:
+    0 0 0 1px var(--ui-iron-900),
+    inset 0 0 0 2px var(--ui-gold-300),
+    0 0 8px rgb(226 196 122 / 45%);
+}
+
+/* ---- the action buttons: round, iron-framed, gold on press ---- */
+.touch-cluster {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  /* Over the map and the drawer, under the windows over the map: as the pad. */
+  z-index: 9;
+  display: grid;
+  grid-template-columns: repeat(2, var(--touch-btn));
+  grid-auto-rows: var(--touch-btn);
+  gap: 8px;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.touch-action {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--touch-btn);
+  height: var(--touch-btn);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-iron-900);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, rgb(74 69 64 / 90%), rgb(26 24 22 / 92%) 72%);
+  box-shadow:
+    inset 0 0 0 2px var(--ui-iron-600),
+    inset 0 0 0 3px var(--ui-iron-900),
+    0 2px 5px rgb(0 0 0 / 65%);
+  color: var(--ui-gold-300);
+  font: 600 0.62rem/1.05 var(--ui-font);
+  touch-action: none;
+}
+.touch-action .icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+.touch-action.small .icon {
+  width: 24px;
+  height: 24px;
+}
+.touch-action:active,
+.touch-action[aria-pressed="true"] {
+  box-shadow:
+    inset 0 0 0 2px var(--ui-gold-500),
+    inset 0 0 0 3px var(--ui-iron-900),
+    0 0 8px rgb(226 196 122 / 40%);
+}
+.touch-action:focus-visible {
+  outline: 2px solid var(--ui-gold-300);
+  outline-offset: 2px;
+}
+.touch-action:disabled {
+  opacity: 0.45;
+}
+.touch-action.attack {
+  grid-area: 3 / 2;
+}
+.touch-action.attack[data-targeting] {
+  box-shadow:
+    inset 0 0 0 2px var(--ui-danger),
+    inset 0 0 0 3px var(--ui-iron-900),
+    0 2px 5px rgb(0 0 0 / 65%);
+}
+.touch-action.context {
+  grid-area: 3 / 1;
+}
+.touch-action[data-testid="touch-look"] {
+  grid-area: 2 / 2;
+}
+.touch-action[data-testid="touch-chase"] {
+  grid-area: 2 / 1;
+}
+.touch-action.quick {
+  grid-row: 1;
+}
+.touch-action.quick .quick-name {
+  max-width: 86%;
+  overflow: hidden;
+  text-align: center;
+  overflow-wrap: anywhere;
+  max-height: 2.2em;
+}
+.touch-action.quick .cd {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgb(0 0 0 / 60%);
+  pointer-events: none;
+}
+/* The inspect mode: the map says the next tap looks. */
+body.inspecting [data-testid="game-canvas"] {
+  cursor: help;
+}
+
+/* Where the cluster stands. On its side the map's zoom buttons keep the corner. */
+.game[data-ui="mobile"][data-flow="row"] .touch-cluster {
+  right: 60px;
+  bottom: 12px;
+}
+.game[data-ui="windows"] .touch-cluster {
+  right: 60px;
+  bottom: calc(var(--bar-px) + 12px);
+}
+/* Upright the compact chat log leaves the corner of the buttons free. */
+.game[data-ui="mobile"][data-flow="column"][data-cluster] .chat-glance {
+  max-width: calc(100% - 2 * var(--touch-btn) - 30px);
+}
+
+/* Left-handed (Options): the buttons at the left thumb, the pad or stick at the right. */
+.game[data-mirror] .touch-cluster {
+  right: auto;
+  left: 8px;
+  direction: rtl;
+}
+.game[data-mirror] .mconsole {
+  flex-direction: row-reverse;
+}
+.game[data-mirror] .mconsole .mconsole-tools {
+  justify-content: start;
+}
+.game[data-mirror][data-ui="mobile"] .mobile-bar[data-flow="row"] .touch-pad-dock {
+  left: auto;
+  right: 60px;
+}
+.game[data-mirror][data-ui="mobile"][data-flow="row"] .touch-cluster {
+  left: 8px;
+  bottom: 12px;
+}
+.game[data-mirror][data-ui="windows"] .touch-cluster {
+  left: 8px;
+}
+.game[data-mirror][data-ui="windows"][data-touch] .touch-pad-dock {
+  left: auto;
+  right: 60px;
+}
+.game[data-mirror][data-ui="mobile"][data-cluster] .chat-glance {
+  left: calc(2 * var(--touch-btn) + 24px);
+}
+
+/* Hybrid input (docs/15 "Entrada híbrida"): while a mouse or a keyboard plays, the
+   on-screen controls step back; the next touch brings them back (Options can pin them).
+   Where a fine pointer exists (a mouse plugged into the tablet) they also let it through
+   to the map. */
+.game[data-touch] .touch-pad-dock,
+.game[data-touch] .touch-cluster {
+  transition: opacity 160ms;
+}
+.game[data-touch][data-controls="faded"] .touch-pad-dock,
+.game[data-touch][data-controls="faded"] .touch-cluster {
+  opacity: 0.3;
+}
+@media (any-pointer: fine) {
+  .game[data-touch][data-controls="faded"] .touch-pad-dock,
+  .game[data-touch][data-controls="faded"] .touch-cluster {
+    pointer-events: none;
+  }
+}
+
+/* ---- touch options ---- */
+.touch-options {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--ui-iron-600);
+}
+.touch-options legend {
+  padding: 0 0.3rem;
+  color: var(--ui-gold-300);
+}
+.touch-opt-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.75rem;
+}
+.game[data-touch] .touch-options .check,
+.game[data-touch] .touch-opt-row {
+  min-height: 44px;
+}
+
+/* ---- full screen and install (ui/AppMode.tsx) ---- */
+.app-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.app-mode:empty {
+  display: none;
+}
+.app-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  padding: 0 0.7rem;
+}
+.app-button .icon {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+}
+.app-button[data-reoffer] {
+  box-shadow: 0 0 0 1px var(--ui-gold-500);
+}
+.app-install {
+  display: inline-flex;
+  align-items: center;
+}
+.app-dismiss {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.2rem;
+}
+.app-hint,
+.app-update {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.app-sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background: rgb(0 0 0 / 60%);
+}
+.app-sheet {
+  width: min(26rem, calc(100% - 16px));
+  margin: 8px;
+  padding: 1rem;
+  background: var(--ui-grain), var(--ui-stone-800);
+  box-shadow: var(--ui-frame-shadow);
+  color: var(--ui-text);
+  font-size: 1rem;
+}
+.app-sheet h2 {
+  margin: 0 0 0.6rem;
+  font: 600 1.1rem var(--ui-font-title);
+  color: var(--ui-gold-300);
+}
+.app-steps {
+  margin: 0 0 0.8rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: grid;
+  gap: 0.6rem;
+}
+.app-steps li {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 0.6rem;
+}
+.app-step-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  background: var(--ui-void);
+  box-shadow: inset 0 0 0 1px var(--ui-iron-600);
+}
+.app-step-icon .icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+.app-sheet button {
+  min-height: 44px;
+  width: 100%;
+}
+.fullscreen-reoffer {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  background: var(--ui-stone-800);
+  box-shadow: var(--ui-frame-shadow);
+}

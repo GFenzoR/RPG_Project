@@ -10,9 +10,9 @@ const tile = (t: Partial<ContextTile> & { facts?: ContextTile["facts"] }): Conte
 
 describe("tileContext", () => {
   it("talks to an NPC and attacks a monster, never the own player", () => {
-    expect(tileContext(tile({ facts: { known: true, creature: { npc: true, self: false } } }))).toBe(
-      "talk",
-    );
+    expect(
+      tileContext(tile({ facts: { known: true, creature: { npc: true, self: false } } })),
+    ).toBe("talk");
     expect(
       tileContext(tile({ facts: { known: true, creature: { npc: false, self: false } } })),
     ).toBe("attack");

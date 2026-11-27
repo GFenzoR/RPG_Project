@@ -1,4 +1,4 @@
-// Placeholder app icons of the installable web client (PWA, T5.6): a 32x32 pixel-art emblem
+// The app icons of the installable web client (PWA, T5.6; lote 21): the 32x32 pixel-art emblem of the game
 // (a shield with a sword, our own drawing) upscaled with whole-pixel steps on the page's
 // background colour. Deterministic, like the rest of spritegen; the PNGs are committed.
 //
@@ -14,8 +14,8 @@ import type { Image } from "@rpg/spritepack";
 import { disc, line, polygon, px, rect } from "./draw.ts";
 import { darken, hex, lighten } from "./palette.ts";
 
-/** Same as `--bg` in client/src/ui/client.css and theme_color in the manifest. */
-export const ICON_BACKGROUND = hex("#12151b");
+/** The void of the gothic theme: `--ui-void` in client/src/ui/client.css, theme_color and background_color in the manifest. */
+export const ICON_BACKGROUND = hex("#090807");
 
 const GOLD = hex("#d9b44a");
 const STEEL = hex("#b8c2cc");

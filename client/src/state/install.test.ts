@@ -6,6 +6,7 @@ import {
   fullscreenReoffer,
   initialAppMode,
   installOffer,
+  isAppUpdate,
   runsInstalled,
 } from "./install.ts";
 import type { AppModeMemory, AppModeState, PlatformEnv } from "./install.ts";
@@ -46,6 +47,15 @@ describe("detectPlatform", () => {
     expect(detectPlatform({ userAgent: UA.ipad, maxTouchPoints: 5 })).toBe("ipad");
     expect(detectPlatform({ userAgent: UA.ipad, maxTouchPoints: 0 })).toBe("other");
     expect(detectPlatform({ userAgent: UA.firefox, maxTouchPoints: 0 })).toBe("other");
+  });
+});
+
+describe("isAppUpdate", () => {
+  it("is a new worker activating on a page that already had one", () => {
+    expect(isAppUpdate("activated", true)).toBe(true);
+    expect(isAppUpdate("activated", false)).toBe(false); // the first install of a visit
+    expect(isAppUpdate("installed", true)).toBe(false);
+    expect(isAppUpdate("redundant", true)).toBe(false);
   });
 });
 

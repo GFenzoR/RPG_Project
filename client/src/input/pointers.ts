@@ -41,8 +41,39 @@ export class PointerOwner {
     return this.id !== undefined;
   }
 
+  /** The id of the pointer that owns the control, if any. */
+  get current(): number | undefined {
+    return this.id;
+  }
+
   /** Forgets the owner (the control went away, the window lost the focus). */
   reset(): void {
     this.id = undefined;
+  }
+}
+
+/** How long after a finger acted on a button the click the browser sends for it is ignored, ms. */
+export const TAP_CLICK_GUARD_MS = 700;
+
+/**
+ * A button that answers every finger (ui/tap.ts). Browsers send `click` only for a lone
+ * finger: with a thumb held on the pad, a tap of the other thumb on a button gives pointer
+ * events and no click. So a touch pointer acts when it lifts on the button, and the click
+ * that may follow that same tap is dropped; a mouse click or a keyboard activation (no
+ * touch just before) acts as always.
+ */
+export class TapGuard {
+  private at = Number.NEGATIVE_INFINITY;
+
+  /** A touch pointer lifted on the button at `now`: it acted. */
+  touchUp(now: number): void {
+    this.at = now;
+  }
+
+  /** A click at `now`: true unless it is the one that follows that touch. */
+  clickCounts(now: number): boolean {
+    const echo = now - this.at < TAP_CLICK_GUARD_MS;
+    this.at = Number.NEGATIVE_INFINITY;
+    return !echo;
   }
 }

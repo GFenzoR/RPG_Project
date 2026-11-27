@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GestureRecognizer, isTouchPointer } from "./gestures.ts";
+import { GestureRecognizer, isTouchPointer, touchDrag } from "./gestures.ts";
 
 const cfg = { slopPx: 10, longPressMs: 500 };
 
@@ -104,5 +104,18 @@ describe("isTouchPointer", () => {
     expect(isTouchPointer("pen")).toBe(true);
     expect(isTouchPointer("mouse")).toBe(false);
     expect(isTouchPointer("")).toBe(false);
+  });
+});
+
+describe("touchDrag", () => {
+  it("walks toward the finger from a tile with nothing to drag", () => {
+    expect(touchDrag(false, false)).toBe("walk");
+  });
+  it("moves the item of a tile that has one", () => {
+    expect(touchDrag(false, true)).toBe("item");
+  });
+  it("does nothing while aiming or with an item picked", () => {
+    expect(touchDrag(true, false)).toBe("none");
+    expect(touchDrag(true, true)).toBe("none");
   });
 });

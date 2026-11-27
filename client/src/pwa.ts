@@ -2,6 +2,7 @@
 // (src/sw.ts). The worker caches only the static shell; the API and the WebSocket never
 // go through it (src/sw/policy.ts). Pages import this module once (see main.tsx).
 import { isTauri } from "@tauri-apps/api/core";
+import { UPDATE_EVENT, isAppUpdate } from "./state/install.ts";
 
 /** Where the worker is served and what it controls (the website at / and the game at /play/). */
 export const SERVICE_WORKER_URL = "/sw.js";
@@ -40,10 +41,31 @@ export function registerServiceWorker(): void {
   const register = (): void => {
     navigator.serviceWorker
       .register(SERVICE_WORKER_URL, { scope: SERVICE_WORKER_SCOPE })
+      .then(watchUpdates)
       .catch((err: unknown) => console.warn("[pwa] service worker not registered", err));
   };
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register, { once: true });
+}
+
+/**
+ * The update flow (lote 21, docs/15): an installed app is never "reloaded" by its player, so
+ * a new worker taking over (sw.ts skips waiting and claims the page) is announced on
+ * `window` and the UI offers "new version, reload" (ui/AppMode.tsx). The browser looks for
+ * a new worker on each navigation; an app left open looks again when it comes back to the
+ * foreground.
+ */
+function watchUpdates(reg: ServiceWorkerRegistration): void {
+  reg.addEventListener("updatefound", () => {
+    const worker = reg.installing;
+    const hadController = navigator.serviceWorker.controller !== null;
+    worker?.addEventListener("statechange", () => {
+      if (isAppUpdate(worker.state, hadController)) window.dispatchEvent(new Event(UPDATE_EVENT));
+    });
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") reg.update().catch(() => undefined);
+  });
 }
 
 registerServiceWorker();

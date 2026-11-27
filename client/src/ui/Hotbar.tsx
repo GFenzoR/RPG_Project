@@ -15,6 +15,7 @@ import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { hotbarFit, hotbarRoom, sliderEnds, slotsWidth } from "./layout.ts";
 import type { HotbarFit } from "./layout.ts";
+import { tapProps } from "./tap.ts";
 
 /** Repaint interval of the cooldown shades, ms. */
 const COOLDOWN_REFRESH_MS = 100;
@@ -228,7 +229,10 @@ export function Hotbar(props: {
                       : withMana(id)
                     : undefined
                 }
-                onClick={() => id && game?.castSpell(id)}
+                // Any finger casts (lote 21): the other thumb may be walking on the pad.
+                {...tapProps(() => {
+                  if (id) game?.castSpell(id);
+                })}
               >
                 <span class="key">{key}</span>
                 {id && manaOf(id) > 0 && (

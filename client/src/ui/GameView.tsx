@@ -58,6 +58,14 @@ import { ItemTooltip } from "./ItemTooltip.tsx";
 import type { ControlsMode } from "../state/controls.ts";
 import { LoadStatus } from "./LoadStatus.tsx";
 import { TouchPad } from "./TouchPad.tsx";
+import { TouchStick } from "./TouchStick.tsx";
+import { ActionCluster } from "./ActionCluster.tsx";
+import { FullscreenReoffer } from "./AppMode.tsx";
+import { InputMode, controlsShow, initialMethod } from "../input/input-mode.ts";
+import type { InputMethod } from "../input/input-mode.ts";
+import { isTextField } from "../input/keyboard.ts";
+import { DEFAULT_TOUCH_PREFS } from "../state/touch-controls.ts";
+import type { TouchPrefs } from "../state/touch-controls.ts";
 import { ZoomButtons } from "./ZoomButtons.tsx";
 import { coarsePointer } from "../state/touch-prefs.ts";
 import { GameWindow } from "./GameWindow.tsx";
@@ -157,6 +165,8 @@ export function emptyGameUi(): GameUi {
     safeMode: true,
     fightStance: FightStance.BALANCED,
     chase: false,
+    context: undefined,
+    inspect: false,
     target: undefined,
     stats: undefined,
     skills: [],
@@ -199,6 +209,8 @@ export interface GameViewProps {
   /** The desktop Options window's pieces. */
   settings: GameSettings | undefined;
   touchPad: boolean;
+  /** Lote 21: pad or stick, the action buttons, mirror, size and pin (state/touch-controls.ts). */
+  touchControls?: TouchPrefs | undefined;
   characterName: string;
   ui: GameUi;
   game: Game | undefined;
@@ -233,6 +245,27 @@ export function GameView(props: GameViewProps): JSX.Element {
   useKeyboardViewport();
   // A touch screen gets the map's zoom buttons (a PC zooms with Ctrl+wheel).
   const [touch] = useState(coarsePointer);
+  // Lote 21 (docs/15 "Entrada híbrida"): the input method is the one of the last event,
+  // whatever the layout or the device. With a mouse or a keyboard in use the on-screen
+  // controls step back (unless pinned); the next touch brings them back.
+  const touchPrefs = props.touchControls ?? DEFAULT_TOUCH_PREFS;
+  const inputMethod = useInputMethod(touch);
+  const controlsFaded = controlsShow(inputMethod, touchPrefs.pinned) === "faded";
+  const padControl =
+    touchPrefs.pad === "stick" ? (
+      <TouchStick t={t} game={props.game} />
+    ) : (
+      <TouchPad t={t} game={props.game} />
+    );
+  // The action buttons: wherever fingers play (a touch screen, or the pad switched on).
+  const cluster = props.entered && (touch || props.touchPad) && touchPrefs.actions;
+  const touchAttrs = {
+    "data-input": inputMethod,
+    "data-controls": controlsFaded ? "faded" : undefined,
+    "data-mirror": touchPrefs.mirrored ? "" : undefined,
+    "data-touch-size": touchPrefs.size,
+    "data-cluster": cluster ? "" : undefined,
+  };
   const [tab, setTab] = useState<PanelTab>("battle");
   // The sheet (or drawer) of the mobile HUD: closed until a section button opens it.
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -683,13 +716,14 @@ export function GameView(props: GameViewProps): JSX.Element {
       {/* T5.6 touch controls on the desktop screen (a tablet on its side), over the map and
           under the windows: the direction pad (Options). The mobile HUD has it in its bar. */}
       {props.entered && props.touchPad && windowed && (
-        <div class="touch-pad-dock">
-          <TouchPad t={t} game={game} />
-        </div>
+        <div class="touch-pad-dock">{padControl}</div>
       )}
       {/* The map's zoom (pinch does the same): bottom right of the map. Upright, the mobile
           HUD has the two buttons in its console (below). */}
       {props.entered && touch && !stackedHotbar && <ZoomButtons t={t} game={game} zoom={ui.zoom} />}
+      {/* Lote 21: the action buttons at the thumb that does not walk (docs/15). */}
+      {cluster && <ActionCluster t={t} content={props.content} game={game} ui={ui} />}
+      {props.entered && touch && <FullscreenReoffer t={t} />}
       {props.entered && ui.picked && (
         <PickBanner t={t} content={props.content} picked={ui.picked} game={game} />
       )}
@@ -795,7 +829,7 @@ export function GameView(props: GameViewProps): JSX.Element {
         case "options":
           return <OptionsBody t={t} settings={props.settings} onReset={() => win.reset()} />;
         case "help":
-          return <HelpBody t={t} />;
+          return <HelpBody t={t} touch={touch} />;
         case "chat":
           return (
             <ChatPanes tab={chatTab} log={log}>
@@ -981,6 +1015,7 @@ export function GameView(props: GameViewProps): JSX.Element {
         data-ui="windows"
         data-pad={props.touchPad ? "" : undefined}
         data-touch={touch ? "" : undefined}
+        {...touchAttrs}
         style={ornamentStyle()}
       >
         <div class="game-body" key="body" data-shop={ui.dialog && ui.shop ? "" : undefined}>
@@ -1092,6 +1127,7 @@ export function GameView(props: GameViewProps): JSX.Element {
       data-ui="mobile"
       data-pad={props.touchPad ? "" : undefined}
       data-touch={touch ? "" : undefined}
+      {...touchAttrs}
       data-sheet={sheetOpen ? "" : undefined}
       style={ornamentStyle()}
     >
@@ -1120,11 +1156,7 @@ export function GameView(props: GameViewProps): JSX.Element {
             )
           }
           // On its side the pad floats over the map's corner, above the bar.
-          pad={
-            props.entered && props.touchPad && layout.flow === "row" ? (
-              <TouchPad t={t} game={game} />
-            ) : undefined
-          }
+          pad={props.entered && props.touchPad && layout.flow === "row" ? padControl : undefined}
           tools={
             layout.flow === "row" && (
               <>
@@ -1199,11 +1231,7 @@ export function GameView(props: GameViewProps): JSX.Element {
             data-testid="mobile-console"
             data-has-pad={props.entered && props.touchPad ? "" : undefined}
           >
-            {props.entered && props.touchPad && (
-              <div class="touch-pad-dock">
-                <TouchPad t={t} game={game} />
-              </div>
-            )}
+            {props.entered && props.touchPad && <div class="touch-pad-dock">{padControl}</div>}
             <div class="mconsole-tools">
               {panelTabs}
               {mobileMenu}
@@ -1699,7 +1727,7 @@ function OptionsBody(props: {
 }
 
 /** The help window: how to play and the keys of the windows. */
-function HelpBody(props: { t: Translate }): JSX.Element {
+function HelpBody(props: { t: Translate; touch?: boolean }): JSX.Element {
   const { t } = props;
   const keys: [string, string][] = [
     ["I", "client.inventory.title"],
@@ -1714,6 +1742,13 @@ function HelpBody(props: { t: Translate }): JSX.Element {
   ];
   return (
     <div class="help-body" data-testid="controls-help">
+      {/* On a touch screen the fingers come first (lote 21); the keys stay below for a
+          keyboard and a mouse plugged into the tablet. */}
+      {props.touch && (
+        <p class="controls-text" data-testid="touch-help">
+          {t("client.mobile.help")}
+        </p>
+      )}
       <p class="controls-text">{t("client.game.controls")}</p>
       <h3>{t("client.help.keys")}</h3>
       <dl class="keys">
@@ -1793,6 +1828,35 @@ function useLayout(): Layout {
  * the others (Safari on iOS) only shrink the visual viewport, so while a text field has
  * the focus the game takes the visual viewport's height (--game-height in client.css).
  */
+/**
+ * The input method in use (input/input-mode.ts): the one of the last pointer press or key
+ * of a hardware keyboard, anywhere on the page.
+ */
+function useInputMethod(coarse: boolean): InputMethod {
+  const [method, setMethod] = useState<InputMethod>(() => initialMethod(coarse));
+  useEffect(() => {
+    const mode = new InputMode(initialMethod(coarse));
+    const onPointer = (e: PointerEvent): void => {
+      if (mode.pointer(e.pointerType)) setMethod(mode.method);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      const facts = {
+        key: e.key,
+        editable: isTextField(e.target),
+        composing: e.isComposing || e.keyCode === 229,
+      };
+      if (mode.key(facts)) setMethod(mode.method);
+    };
+    window.addEventListener("pointerdown", onPointer, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointer, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [coarse]);
+  return method;
+}
+
 function useKeyboardViewport(): void {
   useEffect(() => {
     const vv = window.visualViewport;
