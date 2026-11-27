@@ -1439,9 +1439,14 @@ por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
   pedirlo muchas veces no lo promedia, y conocer un spawn de un `kill` no da el corrimiento
   de los otros), y el lugar del paso entra entero en el círculo. Un centro que caería
   fuera del mapa se refleja al otro lado del lugar (nunca se recorta encima de él). Con `quest_id` y sin `center`: se sigue la quest
-  pero su paso no tiene lugar (un `has_item` o un `flag_equals` sin `hint_area`, docs/06).
-  El lugar sale del YAML (`hint_area`) o del paso: el NPC de un `dialog_action` (los NPCs
-  no se mueven), el spawn más cercano del monstruo de un `kill` (su piso primero; el más
+  pero su paso no tiene ningún lugar en este mapa (ningún paso de `data/quests` queda así:
+  lo vigila `TestEveryObjectiveMarkHoldsARealTarget`).
+  El lugar sale del YAML (`hint_area`) o del paso (`stepTargets` de `session/minimap.go`,
+  calculado una vez por paso; desde el 2026-11-26 el radio del círculo es el doble del área
+  del lugar más 4, mínimo 8): el NPC de un `dialog_action` (los NPCs
+  no se mueven), el de un `flag_equals` es el NPC cuyo diálogo pone esa marca, el de un
+  `has_item` el área de un spawn de un monstruo que suelta el item, el spawn más cercano
+  del monstruo de un `kill` (entre varios lugares, su piso primero; el más
   cercano a donde el jugador empezó a seguir, avanzó la quest o se reubicó por última vez:
   caminar por el mismo piso no lo recalcula), el lugar de un `reach` (una zona: su
   rectángulo envolvente), las placas de un `sigils`. La pista no revela mapa: el

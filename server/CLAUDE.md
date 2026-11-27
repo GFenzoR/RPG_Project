@@ -576,4 +576,8 @@ server/
   `minimapRequest` contesta solo casillas exploradas, con presupuesto por jugador. La pista
   del objetivo (`flushHint`) se recalcula cuando `questsChanged` o `relocate` (`hintMoved`;
   ambos solo **levantan** `hintStale`, nunca lo bajan) y siempre pasa por
-  `quest.FuzzHint`: nunca mandes el lugar exacto de un paso.
+  `quest.FuzzHint`: nunca mandes el lugar exacto de un paso. Los lugares de un paso son
+  `stepTargets` (todos los objetivos reales, una vez por paso, `World.hintTargets`) y
+  `stepPlace` elige el más cercano: un tipo nuevo de `complete_when` necesita su caso ahí
+  y en `TestEveryObjectiveMarkHoldsARealTarget` (`hint_data_test.go`), que recorre todos
+  los pasos de `data/quests` sobre el mapa real.

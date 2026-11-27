@@ -354,16 +354,36 @@ si tenemos un objetivo activo, una estimación de dónde está."
   O (W en inglés) en los lados del marco: el norte siempre arriba.
 - **Moverse por el minimapa:** arrastrarlo lo corre; "volver a centrar" lo devuelve al
   jugador. Se pliega a su barra (en los teléfonos empieza plegado).
+- **Click para ir** (pedido del dueño del 2026-11-26: "si haces click en el minimapa te
+  debería llevar para allá"): un click (o un toque) en el minimapa lleva al personaje a esa
+  casilla, caminando por lo que ya exploró. Si la casilla está bloqueada (un muro, agua) o
+  sin explorar, va a la casilla alcanzable más cercana a ella. Solo por el piso propio: el
+  minimapa no muestra otros pisos y el camino no usa escaleras, agujeros ni
+  teletransportes (los rodea, salvo que sean el destino). Una cruz dorada marca el destino
+  mientras dura. Lo cancelan una tecla o el pad, un click o el mouse mantenido sobre el
+  mapa, Escape, un teletransporte o cambio de piso y el segundo paso rechazado. Arrastrar
+  el minimapa (4 px o más) y los botones de zoom no caminan. El servidor no sabe nada de
+  esto: recibe los mismos `Walk` de siempre, uno por paso, y valida cada uno.
 - **Objetivo seguido:** el diario de misiones tiene "Seguir en el mapa" en cada quest en
   curso (una a la vez). El minimapa muestra una **estimación**, nunca la casilla: un círculo
   alrededor de un punto cercano al lugar del paso actual, que lo contiene entero. Si el
   círculo queda fuera del minimapa, una flecha en el borde apunta hacia él con la distancia
   aproximada (de a 5 casillas hasta 50, después de a 10); si está en otro piso, ▲ (arriba) o
-  ▼ (abajo). El lugar es el NPC con quien hablar, el spawn más cercano del monstruo que hay
-  que cazar (se vuelve a elegir al cambiar de piso, teletransportarse, viajar en barco o
-  despertar en el templo; no al caminar), el lugar al que hay que llegar o las placas de un hito, o el `hint_area` del
-  paso (docs/06). Un paso que se cumple en cualquier lado (llevar un item, una marca) no
-  tiene círculo. La estimación no revela mapa: el círculo y la flecha se dibujan sobre lo
+  ▼ (abajo). **El círculo siempre contiene un objetivo real y entero del paso** (pedido del
+  dueño del 2026-11-25: "prefiero que se marque un área más grande pero que el objetivo
+  esté dentro de esa marca, a que se marque algo y que ni siquiera esté"): el NPC con quien
+  hablar o a quien entregar; el área de un spawn del monstruo que hay que cazar; para
+  juntar un item, el área de un spawn de un monstruo que lo suelta; para una marca
+  (`flag_equals`), el NPC cuyo diálogo la pone; el lugar al que hay que llegar (de una zona,
+  el rectángulo más cercano que tenga dónde pararse, alrededor de una casilla pisable);
+  las placas de un hito; o el `hint_area` del paso (docs/06). Con varios lugares posibles
+  se marca el más cercano, primero los del piso propio (se vuelve a elegir al cambiar de
+  piso, teletransportarse, viajar en barco o despertar en el templo; no al caminar). El
+  radio es el doble del área del objetivo más 4 casillas, 8 como mínimo, y el centro se
+  corre dentro del círculo para no delatar el punto exacto. Solo un paso sin ningún lugar
+  en el mapa no tiene círculo, y un test recorre todos los pasos de `data/quests` sobre el
+  mapa real para que no haya ninguno
+  (`TestEveryObjectiveMarkHoldsARealTarget`). La estimación no revela mapa: el círculo y la flecha se dibujan sobre lo
   que haya, y lo no explorado sigue negro. Es la misma para el mismo personaje, paso y
   lugar, así que pedirla muchas veces no la afina; cada spawn de un mismo monstruo se corre
   distinto, así que conocer uno no ubica los demás.

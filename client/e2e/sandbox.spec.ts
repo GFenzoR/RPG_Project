@@ -439,6 +439,23 @@ test("sandbox: the quest log, a lectern's book and a reward chest that gives onc
   });
   await closeWindow(page, "quests");
 
+  // A click on the minimap walks there (docs/17 "Minimapa"): the tile south of the lectern,
+  // 4 tiles east and 1 north of the player, at the default zoom (2 px a tile; the middle
+  // of the map is the player's tile). The destination is marked while the walk lasts and
+  // only normal Walk steps go out.
+  const mapBox = await minimap.locator(".minimap-map").boundingBox();
+  if (!mapBox) throw new Error("no minimap");
+  const px = mapBox.width / 160;
+  await page.mouse.click(
+    mapBox.x + mapBox.width / 2 + 8 * px,
+    mapBox.y + mapBox.height / 2 - 2 * px,
+  );
+  await expect(minimap.getByTestId("minimap-dest")).toHaveAttribute("data-x", "2099");
+  await expect(minimap.getByTestId("minimap-dest")).toHaveAttribute("data-y", "2085");
+  await minimap.screenshot({ path: join(shots, "96e-minimap-walk.png") });
+  await standsOn(2099, 2085, 7);
+  await expect(minimap.getByTestId("minimap-dest")).toHaveCount(0);
+
   // Next to the lectern (2099,2084) and the chest (2098,2084), inside the temple.
   const lectern = await item("book_lantern_rowers");
   const chest = await item("chest_pruebas");

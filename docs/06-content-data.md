@@ -890,9 +890,13 @@ unos rectángulos de unos pisos): ver "Música de una quest importante", en "Son
 Un paso puede decir dónde lo estima el minimapa (docs/02 "Minimapa") con `hint_area`: un
 punto (`x`, `y`, `z`) y cuántas casillas alrededor (`radius`, Chebyshev, 0 a 32). Es
 opcional: sin él, el servidor lo saca del paso (el NPC de un `dialog_action`, el spawn más
-cercano del monstruo de un `kill`, el lugar de un `reach`, las placas de un `sigils`). Un
-`has_item` o un `flag_equals` sin `hint_area` no muestra estimación; con él, por ejemplo
-dónde se consigue el item:
+cercano del monstruo de un `kill`, el spawn más cercano de un monstruo que suelta el item de
+un `has_item`, el NPC cuyo diálogo pone la marca de un `flag_equals`, el lugar de un
+`reach`, las placas de un `sigils`). **Todo paso tiene que tener un lugar**: un `has_item`
+cuyo item no suelta ningún monstruo con spawn (se cosecha, se compra, sale de un cofre) o
+un `flag_equals` cuya marca no pone ningún NPC del mapa necesita su `hint_area`, o falla
+`TestEveryObjectiveMarkHoldsARealTarget` (`server/internal/session`). El `hint_area` gana
+siempre, por ejemplo para apuntar a dónde se consigue el item:
 ```yaml
   - id: gather_ore
     description: quest.foreman_ore.step_gather_ore

@@ -464,6 +464,20 @@ el punto 5:
     `rpg.track` es el nombre del personaje (el cliente no conoce el id del personaje; el
     servidor valida la quest, así que un nombre reutilizado solo sigue una quest que el
     personaje nuevo también tenga en curso).
+  - **Marcas honestas y click para ir (2026-11-26, rama `feat/minimap-nav`, pedidos del
+    dueño tras jugar los lotes 19 y 20):** el círculo del objetivo siempre contiene un
+    objetivo real (juntar un item apunta a los spawns de quien lo suelta, una marca al NPC
+    que la pone, una zona a un rectángulo con dónde pararse; radio mayor, mínimo 8), con el
+    test `TestEveryObjectiveMarkHoldsARealTarget` sobre todos los pasos de `data/quests`; y
+    un click en el minimapa camina hasta ahí por lo explorado (docs/02 y docs/17
+    "Minimapa"). Queda: (1) el E2E del click (`96e-minimap-walk` de `e2e/sandbox.spec.ts`)
+    lo corre el lote al final; (2) un item que se **cosecha** (vetas, plantas) o sale de un
+    cofre no se ubica solo: hoy todos los items de quest los suelta algún monstruo, y uno
+    nuevo que no lo haga pide `hint_area` (el test lo exige); (3) el camino del minimapa no
+    cambia de piso ni toma barcos, y más allá de la vista confía en el color del minimapa
+    (una criatura o un objeto del mundo vivo en el camino se rodea recién al verlo); (4) si
+    todos los monstruos del spawn marcado están muertos, la marca sigue ahí hasta que
+    reaparezcan (no se mira el estado vivo del spawn).
   - **Riesgos menores anotados en la revisión:** la pista es fija por personaje y paso, así
     que con varios personajes de la misma cuenta se podría triangular el objetivo (riesgo
     bajo: es una quest, no un secreto). El upsert de `character_explored` hace un OR de
