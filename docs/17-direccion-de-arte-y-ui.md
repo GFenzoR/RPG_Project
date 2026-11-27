@@ -3679,6 +3679,27 @@ Consultadas el 2026-11-17. No se bajó ni se incrustó ninguna imagen de estas p
 - Fuentes: `METADATA.pb` y `OFL.txt` de cada familia en https://github.com/google/fonts
   (rutas de UI-3).
 
+### UI móvil: controles táctiles (lote 21, rama `feat/mobile-touch`)
+El detalle (la tabla de cada acción con su camino táctil, la entrada híbrida y el modo app)
+está en `docs/15-movil.md`; aquí, lo que toca a la estética.
+- **Botones de acción:** redondos, de 52 px (44 a 62 según la opción), con el mismo hierro
+  de los engastes de los orbes (anillo `--ui-iron-600` sobre `--ui-iron-900`, fondo en
+  degradado radial) y el ícono pixel de 16x16 a 2x en dorado. Apretado o activo, el anillo
+  pasa a `--ui-gold-500` con un halo; el de atacar lleva el anillo `--ui-danger` mientras
+  hay objetivo. Íconos nuevos en `ui/icons.tsx` (arte propio, la misma paleta): `target`,
+  `look`, `hand`, `chase`, `climb`, `hammer`, `push`, `fullscreen`, `install`, `share` y
+  `addhome`.
+- **Palanca:** un aro de hierro de 146 px con una guía punteada dorada y un pomo con borde
+  dorado que se ilumina mientras sostiene una dirección.
+- **Dónde van:** abajo a la derecha del mapa (a la izquierda con "para zurdos"), sobre el
+  cajón y bajo las hojas (z-index 9, como el pad); en apaisado dejan la esquina a los
+  botones de zoom. Con teclado o mouse en uso se atenúan al 30 %.
+- **Modo app:** los botones "Pantalla completa" e "Instalar como app" llevan su ícono pixel;
+  los pasos de iOS son una hoja con el marco de hierro y tres pasos ilustrados con íconos
+  propios (ningún logo ni captura de otro sistema).
+- **Vista previa:** escenas `touchstick` y `touchleft` de `make ui-preview`
+  (`SIZES=phone,tablet`).
+
 ### UI móvil: las ventanas como hojas (lote 21, rama `feat/mobile-windows`)
 Las ventanas del servidor (diálogo y tienda, crafteo y forja, mercado, casa, intercambio,
 alijo, libros) ya eran hojas con el marco gótico sobre el mapa; este paso les da las reglas

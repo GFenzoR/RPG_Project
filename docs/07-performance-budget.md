@@ -445,6 +445,14 @@ vista.
   una casilla lejos del jugador) y anotar los números; nunca quitar objetos en silencio.
   Hoy no se degrada nada.
 
+### Teléfonos de gama media (lote 21)
+- Al primer arranque en una pantalla táctil con 4 GB de memoria o menos, o 4 núcleos o
+  menos (`lowEndDevice`, `client/src/state/touch-controls.ts`), el cliente elige **Efectos
+  reducidos**: sin partículas de ambiente y con el mundo vivo quieto. Opciones lo cambia.
+- Los controles en pantalla no cuestan frames: el pomo de la palanca se mueve con
+  `transform` desde el propio evento de puntero (sin render de Preact), los botones no usan
+  hooks y un frame del juego no crea objetos por ellos.
+
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.
 - Escenario base: 100 bots repartidos en la isla inicial durante 10 minutos.

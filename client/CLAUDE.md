@@ -1055,6 +1055,48 @@ y la PWA de T5.6 siguen igual.
   `tradeCancel`, `stashClose`, `closeBook`, o la hoja del panel). Un encabezado nuevo de hoja
   lleva `data-sheet-head`.
 
+## Notas de los controles táctiles (lote 21, rama `feat/mobile-touch`; docs/15)
+- **Reglas puras, con tests** (`input/`): `joystick.ts` (`stickState`: 8 direcciones, zona
+  muerta, histéresis), `pointers.ts` (`PointerOwner`: un dedo por control; `isPalm`;
+  `TapGuard`: el `click` que sigue a un toque ya atendido se descarta), `input-mode.ts`
+  (`InputMode`, `controlsShow`: el método de entrada es el del último evento),
+  `targeting.ts` (`nearestTarget`, `nextTarget`: solo monstruos), `context-action.ts`
+  (`tileContext`, `contextAction`) y `touchDrag` en `gestures.ts`.
+- **`Game`**: `targetNext()`, `interact()` (la acción de contexto: manda `NpcTalk`,
+  `SetTarget`, `PushObject` o `UseItem` como un click), `setInspect(on)` (el siguiente
+  `tapTile` mira; clase `inspecting` en `body`), `setChase(on)`; `GameUi.context` e
+  `inspect`; `GameOptions.haptic(kind)`; hook E2E `__rpgClient.lastCast()`.
+- **Mantener para caminar con el dedo** (reemplaza "El dedo no mantiene" de "Movimiento
+  fluido"): `GameCanvasOptions.touchDrag` → `Game.touchDragOn`: un arrastre desde una
+  casilla sin item movible es `holdAt`/`holdEnd` siguiendo al dedo; con item, lo arrastra;
+  con mira, item elegido o el modo mirar, nada. El dedo quieto sigue siendo el toque largo.
+- **UI**: `ui/TouchStick.tsx` (test id `touch-stick`, `data-held`), `ui/ActionCluster.tsx`
+  (sin hooks; `touch-cluster`, `touch-attack` con `data-targeting`, `touch-interact` con
+  `data-context`, `touch-look` y `touch-chase` con `aria-pressed`, `touch-quick-<n>`),
+  `ui/tap.ts` (`tapProps`: úsalo en todo botón que deba responder mientras otro dedo está
+  en el pad; la hotbar ya lo usa), `ui/TouchOptions.tsx` (`touch-options`,
+  `[data-touch-pad=dpad|stick]`, `touch-opt-size`, `touch-opt-actions|mirrored|pinned|haptics`,
+  `effects-reduced`).
+- **`.game`** suma `data-input` (`touch`, `mouse`, `keyboard`), `data-controls="faded"`,
+  `data-mirror`, `data-touch-size` y `data-cluster`; todo el CSS está al final de
+  `ui/touch.css`. El atenuado solo rige con `data-touch`; `pointer-events: none` solo con
+  `any-pointer: fine` (un mouse real): en la emulación de Playwright los controles
+  atenuados siguen tomando toques.
+- **Preferencias del dispositivo** (`state/touch-controls.ts`, declaradas `session` en
+  `saved-options.ts`): `rpg.touch` (`TouchPrefs`), `rpg.effects` (`data-effects="reduced"`
+  en `<html>`, que `game-canvas.ts` lee en `reducedEffects`) y `rpg.appMode`.
+- **Modo app**: `state/install.ts` (puro), `ui/app-mode.ts` (el almacén de la página:
+  `beforeinstallprompt`, `appinstalled`, `fullscreenchange`, `UPDATE_EVENT` de `pwa.ts`,
+  `keepAwake`) y `ui/AppMode.tsx` (`AppModeButtons` con `where` y `fallback`,
+  `FullscreenReoffer`, `IosSteps`). Test ids: `app-mode` (`data-platform`, `data-where`),
+  `fullscreen-button`, `fullscreen-hint`, `fullscreen-reoffer`, `install-button`
+  (`data-install=prompt|ios-steps`), `install-dismiss`, `install-steps`,
+  `install-steps-close`, `app-update`, `app-update-reload`.
+- **Vista previa**: escenas `touchstick` y `touchleft` (`?stick=1&mirror=1&size=large`).
+- **E2E** (`e2e/mobile.spec.ts`, grupos "lote 21 …"): `preferStick` (siembra `rpg.touch`
+  antes de cargar), `clusterFits`. Un `.click()` de Playwright es un mouse: después de uno,
+  `data-input` es `mouse` y los controles salen atenuados en la captura.
+
 ## Zoom del mapa
 - **Vista ancha** (decisión del dueño, `docs/02` "La vista", `docs/17` UI-4): el servidor
   manda 31x21 (+1) a todos (`Welcome.view_width`/`view_height` → `WorldState.view`,
@@ -1195,7 +1237,7 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
     se dan los pasos ya mandados. Cada presión (sin mira ni item elegido) llama a
     `retryWalk`, como una tecla pulsada de nuevo; el mantener en que se convierte no lo
     vuelve a llamar (un rechazo y un aviso por presión).
-    El dedo no mantiene (gestos de T5.6).
+    El dedo mantiene arrastrando desde el lote 21 ("Notas de los controles táctiles").
   - **Doble click** (controles de menú): `Steering.cancel()` termina el camino del primer
     click, sin `StopWalk` (dejaría `Walk` sin respuesta).
 - **Respuesta visual** (MOV-7): el anillo (`render/walk-mark.ts` `markRing`, puro: 300 ms,

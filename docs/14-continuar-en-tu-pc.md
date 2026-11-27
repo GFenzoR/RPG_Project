@@ -105,6 +105,28 @@ el punto 5:
 
 ## Pendientes conocidos (no bloquean)
 
+- **Móvil, controles táctiles (lote 21, `feat/mobile-touch`), lo que falta:** (1) nada de
+  esto se probó con dedos en un teléfono real ni con `make e2e` en la rama (lo corre la
+  etapa final del lote): los E2E nuevos de `e2e/mobile.spec.ts` ("lote 21 …": palanca,
+  mirar, botón de atacar, botón de contexto con un NPC, teclado y mouse en el layout de
+  teléfono, manifest y botones de instalar por plataforma) se escribieron a ciegas. (2)
+  **Palanca o pad por defecto**: quedó el pad; que el dueño pruebe la palanca (Opciones →
+  Controles táctiles) y decida (`docs/15` "Palanca o pad"). (3) Faltan los E2E táctiles de:
+  lanzar un hechizo apuntado, saquear con el botón de contexto, mover un item al alijo,
+  empujar una roca, el chat con el teclado virtual arriba con los botones nuevos, y
+  arrastrar un item con el mouse en el layout de teléfono; la tabla de `docs/15` los marca
+  "sin E2E". (4) Con un mouse en el layout móvil no se revisó que la ficha al pasar por un
+  item y el texto junto al cursor se vean bien sobre las hojas. (5) Los botones de acción
+  repiten 2 slots de la hotbar con el nombre del hechizo en texto (no hay íconos de
+  hechizos todavía); que sean 2 a 4 a elección es una opción por agregar. (6) "Efectos
+  reducidos" apaga partículas de ambiente y el movimiento del mundo vivo, no las sombras:
+  falta un interruptor de sombras en el renderer. (7) Pantallas de inicio (*splash*) de iOS
+  y un logo definitivo para los íconos (hoy el emblema de spritegen). (8) En iPhone la
+  instalación y la app a pantalla completa hay que probarlas en el dispositivo (Safari no
+  se puede automatizar para eso); lo mismo el *wake lock* y la vibración en Android. (9)
+  Las opciones táctiles (`rpg.touch`, `rpg.effects`, `rpg.appMode`) se guardan solo en el
+  dispositivo: si el dueño las quiere por cuenta y clase de pantalla, hacen falta campos en
+  `server/internal/accountopts`.
 - **Móvil, ventanas (lote 21, `feat/mobile-windows`)**: faltan los pares como hojas partidas (la hoja con el inventario en la otra mitad o en pestaña), el aviso persistente de item elegido sobre cada hoja, la revisión de todas las escenas de `make ui-preview` en inglés y al 130 % de texto, y hojas propias para opciones, cuenta, selector de personajes y servidor. La pila, atrás, Escape y deslizar para cerrar ya están.
 - **UI móvil (lote 21, `feat/mobile-hud`), lo que falta:** (1) el HUD nuevo no se probó en
   un teléfono real ni con `make e2e` en esta rama (lo corre la etapa final del lote):
