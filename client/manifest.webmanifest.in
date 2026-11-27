@@ -1,8 +1,8 @@
 {
   "id": "/play/",
-  "name": "Neque's Realm",
-  "short_name": "Neque's Realm",
-  "description": "Neque's Realm",
+  "name": "{{game-name}}",
+  "short_name": "{{game-name}}",
+  "description": "{{game-name}}",
   "lang": "es",
   "start_url": "/play/",
   "scope": "/",

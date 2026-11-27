@@ -28,6 +28,7 @@ import {
 } from "../state/characters.ts";
 import type { CharactersView, KitEntry } from "../state/characters.ts";
 import { ServerPicker } from "./ServerPicker.tsx";
+import { TitleBackdrop } from "./TitleBackdrop.tsx";
 import { AccountSecurity, ForgotPasswordLink, OAuthButtons, VerifyNotice } from "./Account.tsx";
 import { loadLastEmail, saveLastEmail } from "../state/last-email.ts";
 import { GameView, emptyGameUi } from "./GameView.tsx";
@@ -56,6 +57,8 @@ export interface AppProps {
   locale: string;
   /** The language selector: fixed in a corner, or in the phone's menu. */
   languagePicker?: JSX.Element;
+  /** The game's "reduced animations" option (docs/17 UI-9): the title's backdrop stays still. */
+  reducedMotion?: boolean | undefined;
   /** Sound (T3.7); undefined = silent. */
   audio?: AudioEngine | undefined;
   /** T5.6: show the on-screen direction pad (switched in Options, state/touch-prefs.ts). */
@@ -104,6 +107,7 @@ function Screens({
   touchPad,
   touchControls,
   settings,
+  reducedMotion,
   onOptionsSynced,
 }: AppProps): JSX.Element {
   const [screen, setScreen] = useState<Screen>({ name: "loading" });
@@ -148,6 +152,7 @@ function Screens({
   // and the game's name in gothic letters crowns the panel (docs/17 UI-3).
   return (
     <>
+      <TitleBackdrop reducedMotion={reducedMotion} />
       {languagePicker && <div class="corner">{languagePicker}</div>}
       <p class="brand" aria-hidden="true">
         {t("client.title")}

@@ -103,6 +103,9 @@ el punto 5:
   mal puesta en el test, a veces del cliente): baja el artefacto `playwright-report`, mira
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
+## Pantalla de entrada (2026-11-27, rama `feat/title-art`)
+Tres fondos de Gemini que rotan detrás del login y el nombre del juego en letra gótica (docs/17 "Hecho: la pantalla de entrada"). El nombre sale de la clave `client.title`; docs/17 lista lo que un cambio de nombre toca a mano. Sin verificar en E2E ni en un teléfono real.
+
 ## Pendientes conocidos (no bloquean)
 
 - **Móvil, QA (lote 21, `feat/mobile-qa`; `docs/15` "QA móvil"):** la auditoría táctil

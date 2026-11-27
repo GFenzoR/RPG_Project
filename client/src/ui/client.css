@@ -128,25 +128,49 @@ h3 {
   scrollbar-width: thin;
   scrollbar-color: var(--ui-iron-600) var(--ui-stone-950);
 }
-/* The game's name over the login and character screens (Grenze Gotisch, own lettering). */
+/* The game's name over the login and character screens (Grenze Gotisch, own lettering), big
+   and fluid: the text of the i18n key client.title (docs/17 "Pantalla de entrada"). It stands on
+   the title backdrop, so it carries its own dark halo to stay legible on every picture. */
 .brand {
-  margin: 8vh auto 0;
+  margin: 7vh auto 0;
+  padding: 0 1rem;
   text-align: center;
   font-family: var(--ui-font-gothic);
-  font-size: clamp(2.4rem, 7vw, 3.6rem);
+  font-size: clamp(2.6rem, 4vw + 1.6rem, 5.5rem);
   font-weight: 600;
   line-height: 1;
   color: var(--ui-gold-300);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
   text-shadow:
-    0 2px 0 #000,
-    0 0 18px rgb(184 146 63 / 0.35);
+    0 3px 0 #000,
+    0 0 4px #000,
+    0 0 22px rgb(0 0 0 / 0.9),
+    0 0 40px rgb(184 146 63 / 0.35);
 }
 .brand + .panel {
   margin-top: 1.25rem;
 }
+/* A phone on its side has no height for a heading above the form: the name stands at the left,
+   the form at the right. */
 @media (max-height: 500px) {
   .brand {
-    display: none;
+    position: fixed;
+    left: calc(0.75rem + env(safe-area-inset-left, 0px));
+    top: 50%;
+    width: 34%;
+    margin: 0;
+    padding: 0;
+    transform: translateY(-50%);
+    font-size: clamp(1.8rem, 4.2vw, 3rem);
+    line-height: 1.05;
+  }
+  .brand + .panel {
+    margin: 1rem calc(1rem + env(safe-area-inset-right, 0px)) 1rem auto;
+    width: min(22rem, 54%);
+  }
+  .brand + .panel.wide {
+    width: min(30rem, 58%);
   }
 }
 .panel {

@@ -1,0 +1,68 @@
+/* The title screen's backdrop (docs/17 "Pantalla de entrada"): pictures behind the login, sign up
+   and character screens (ui/TitleBackdrop.tsx, state/title-art.ts). Fixed to the screen and
+   behind everything (z-index -1 on the root stacking context, over only the page's own
+   background), so nothing moves: no layout shift, no scroll. Only opacity animates. */
+:root {
+  /* The cross-fade: state/title-art.ts TITLE_FADE_MS repeats it (a test compares both). */
+  --title-fade: 3000ms;
+}
+.title-art {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--ui-void);
+  pointer-events: none;
+  user-select: none;
+}
+.title-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--pos-wide, 60% 50%);
+}
+/* A tall screen (a phone in portrait) shows a narrow slice: each picture says which one. */
+@media (max-aspect-ratio: 1 / 1) {
+  .title-art img {
+    object-position: var(--pos-tall, 80% 50%);
+  }
+}
+/* The newcomer fades in over the one under it, which stays until the fade is over. */
+.title-art img[data-enter] {
+  animation: title-art-in var(--title-fade) ease-in-out both;
+}
+@keyframes title-art-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* A scrim: the form and the name stay readable on any picture. Darker in the middle where
+   they stand and at the top and bottom edges, lighter at the sides so the art still shows. */
+.title-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 70% at 50% 52%, rgb(9 8 7 / 0.62), rgb(9 8 7 / 0.18) 100%),
+    linear-gradient(rgb(9 8 7 / 0.5), rgb(9 8 7 / 0) 28%, rgb(9 8 7 / 0) 70%, rgb(9 8 7 / 0.6));
+}
+/* Reduced motion (the game's option or the system's): one fixed picture, no fade. The
+   component draws no second layer then; this also stops a fade already running. */
+:root[data-motion="reduced"] .title-art img {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-art img {
+    animation: none;
+  }
+}
+/* The page's own glow and grain (body) would paint over the picture: out of the way while the
+   backdrop is there. The picture's own void colour stays under it. */
+body:has(> #app .title-art) {
+  background: none;
+}

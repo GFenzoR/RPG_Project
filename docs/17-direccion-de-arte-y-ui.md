@@ -3738,6 +3738,40 @@ orbes, el registro compacto, y `mobile.css`: medidas, transiciones, área segura
 `mobilemenu`, `mobilechat`, `mobilebattle`, `mobilenopad` y `mobilemap`; `ONLY` acepta
 varias escenas separadas por coma y `SIZES=phone,tablet` filtra los tamaños.
 
+### Hecho: la pantalla de entrada (2026-11-27)
+Pedido del dueño ("me gustan los fondos, podrías ir rotándolos, habría que agregarle el texto
+con el nombre del juego, por ahora es Neque's Realm pero puede cambiar").
+- **Fondos:** tres ilustraciones hechas con el Gemini del dueño (`assets/title/{harbour,shore,cave}.webp`,
+  1376x768, WebP calidad 90: 58, 130 y 136 KB; "Generado con IA" en `assets/CREDITS.md`, prompts en
+  `assets/prompts/title/`). El plugin `client/vite/title-art.ts` las sirve en `/title/<archivo>` y
+  `vite build` las emite en `title/`. Una imagen nueva: el `.webp` en esa carpeta, su fila de
+  CREDITS (`tools/gemini/credit.py`) y su entrada en `TITLE_ART` de `client/src/state/title-art.ts`
+  (con su `object-position` para pantalla ancha y alta; un test compara la lista con la carpeta).
+- **Rotación:** `ui/TitleBackdrop.tsx` (detrás del login, el registro y los personajes). Empieza en
+  una al azar y pasa a la siguiente con un fundido de 3 s cada 17 s (`TITLE_HOLD_MS` 14 s +
+  `TITLE_FADE_MS`); la siguiente se baja y decodifica 6 s antes (la primera pintura no espera a
+  las otras). Con movimiento reducido (la opción del juego o `prefers-reduced-motion`) queda una al
+  azar, fija, sin fundido y sin temporizadores. Solo se anima `opacity`. Decorativa:
+  `aria-hidden`, `alt=""`. Reglas puras en `state/title-art.ts` (con tests); estilo en
+  `ui/title-art.css` (cubre con `object-fit: cover`, una veta oscura para el contraste, `position:
+  fixed`: sin saltos de layout ni scroll horizontal).
+- **El nombre** (`.brand` de `client.css`): Grenze Gotisch grande y fluida (`clamp`) con halo oscuro;
+  en un teléfono apaisado (< 500 px de alto) va a la izquierda y el formulario a la derecha.
+- **Una sola fuente del nombre: la clave i18n `client.title`** (`i18n/es/client.yaml` y
+  `i18n/en/client.yaml`: una línea por idioma, mismo texto; `vite/brand.test.ts` exige que
+  coincidan y que ninguna otra clave lo repita). La leen la pantalla de entrada, el título del
+  documento (`main.tsx`) y el sitio (`site/Site.tsx`). `client/vite/brand.ts` la mete en lo que no
+  puede llamar a `t()`: `<title>` y metas de `client/index.html` y `client/play/index.html`
+  (`{{game-name}}`) y el manifest (`client/manifest.webmanifest.in`, servido y emitido como
+  `/manifest.webmanifest`). **Lo que un cambio de nombre debe tocar a mano** (el test compara el
+  primero): `apps/desktop/src-tauri/tauri.conf.json` (`productName`, título de la ventana,
+  descripciones y copyright); los asuntos de los correos del servidor (`i18n/*/email.yaml`) y sus
+  tests de Go (`server/internal/mail/mail_test.go`); los textos de `i18n/*/site.yaml` que dicen el
+  nombre en prosa (pie, créditos); `client/preview/index.html`; los E2E que lo comparan
+  (`e2e/site.spec.ts`, `e2e/account.spec.ts`); `README.md` y los docs. Los identificadores `rpg-*`
+  no cambian.
+- Vista previa: escenas `login` y `characters` de `make ui-preview` (todos los tamaños).
+
 ## 8. Cómo se verifica
 - **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**
   (`assets/README.md`). Un screenshot del E2E pasado a grises cumple las bandas de ART-6:

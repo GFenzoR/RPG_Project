@@ -60,6 +60,7 @@ import { DEFAULT_TOUCH_PREFS } from "../state/touch-controls.ts";
 import { SLOT_KEYS } from "../ui/Inventory.tsx";
 import { STATUS_ORDER } from "../state/status.ts";
 import "../ui/client.css";
+import "../ui/title-art.css";
 
 const params = new URLSearchParams(location.search);
 const scene = params.get("scene") ?? "game";
