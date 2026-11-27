@@ -85,6 +85,7 @@ import { climbable, usedBare, useMode } from "./state/portals.ts";
 import type { Pos } from "./state/geometry.ts";
 import { WorldState } from "./state/world.ts";
 import { parseHex } from "./state/minimap.ts";
+import { minimapPassable } from "./state/minimap.ts";
 import type { MinimapState, ObjectiveHintView } from "./state/minimap.ts";
 import type { PocketsState } from "./state/pockets.ts";
 import { MotionTrail } from "./state/motion.ts";
@@ -128,6 +129,8 @@ export interface MinimapUi {
   hint: ObjectiveHintView | undefined;
   /** The quest the server says is tracked ("": none). */
   tracked: string;
+  /** Where a click on the minimap is walking to, while it lasts (Game.minimapWalk). */
+  dest?: { x: number; y: number } | undefined;
 }
 
 export interface GameUi {
@@ -572,6 +575,8 @@ export class Game {
       portals: opts.content.portals,
       diagonalCost: opts.content.movement.diagonalCost,
       maxPathTiles: opts.content.movement.maxPathTiles,
+      farPassable: (x, y, z) =>
+        minimapPassable(this.world.minimap, (id) => this.world.item(id), x, y, z),
     });
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
@@ -1011,6 +1016,20 @@ export class Game {
   /** Asks the server for explored minimap sectors of floor z (MinimapState.wanted). */
   minimapRequest(z: number, sectors: number[]): void {
     if (sectors.length > 0) this.conn.send({ case: "minimapRequest", value: { z, sectors } });
+  }
+
+  /**
+   * A click on the minimap (docs/17 "Minimapa"): walks to tile x, y of the own floor, or
+   * to the reachable tile nearest to it, over what the character has explored. Only
+   * normal Walk steps go out (Steering.walkFar); a key, the pad, a click on the map or
+   * Escape end it. Nothing while a window of the server or the death screen has the game.
+   */
+  minimapWalk(x: number, y: number): void {
+    if (this.world.death || !this.world.self) return;
+    const now = performance.now();
+    this.steer.walkFar(this.world, { x, y }, now);
+    this.decideStep(now);
+    this.publish();
   }
 
   private readonly minimapColours = new Map<number, readonly [number, number, number]>();
@@ -1953,6 +1972,7 @@ export class Game {
       party,
       hint: w.minimap.hint,
       tracked: w.minimap.tracked,
+      dest: this.steer.farGoal,
     };
   }
 
@@ -2504,6 +2524,12 @@ export class Game {
     }
     if (e.code === "Escape" && this.cancelUse()) {
       e.preventDefault();
+      return;
+    }
+    // Escape ends the walk of a click on the minimap (the steps already sent are taken).
+    if (e.code === "Escape" && this.steer.cancelFar()) {
+      e.preventDefault();
+      this.publish();
       return;
     }
     const d = this.world.dialog;

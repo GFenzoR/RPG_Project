@@ -10,6 +10,7 @@ import type { ServerMessage } from "@rpg/protocol";
 import { delta, samePos, step } from "./geometry.ts";
 import type { Pos } from "./geometry.ts";
 import { stepChoices, towardDirection } from "./motion.ts";
+import { findFarPath } from "./far-path.ts";
 import { findPath } from "./path.ts";
 import { movesOnStep, pathPassable } from "./portals.ts";
 import type { Portals } from "./portals.ts";
@@ -55,7 +56,16 @@ export interface SteerConfig {
   portals?: Portals | undefined;
   diagonalCost: number;
   maxPathTiles: number;
+  /**
+   * Whether a tile the client holds no map of can be walked, as far as the minimap knows
+   * (explored and not coloured by something that blocks): the ground of a far route
+   * (walkFar). Without it a far route only crosses the map the client holds.
+   */
+  farPassable?: ((x: number, y: number, z: number) => boolean) | undefined;
 }
+
+/** A far route (a click on the minimap) is planned again every this many steps. */
+export const FAR_REPLAN_STEPS = 6;
 
 /** The input of one step decision. */
 export interface SteerInput {
@@ -87,6 +97,12 @@ interface Route {
    * cursor points this way. Undefined for a click's route.
    */
   heading?: Direction | undefined;
+  /**
+   * A click on the minimap (walkFar): planned over the explored tiles beyond the view,
+   * and again every FAR_REPLAN_STEPS steps (sinceplan) as the map comes into view.
+   */
+  far?: boolean | undefined;
+  sincePlan?: number | undefined;
 }
 
 /**
@@ -136,6 +152,52 @@ export class Steering {
       avoid: [],
       stale: false,
     };
+    return true;
+  }
+
+  /** Where a click on the minimap leads, while its route lasts (the minimap's mark). */
+  get farGoal(): Pos | undefined {
+    return this.route?.far ? this.route.goal : undefined;
+  }
+
+  /**
+   * A click on the minimap (docs/17 "Minimapa"): walks to `goal` on the own floor over
+   * the map the client holds and, beyond it, the explored tiles of the minimap
+   * (SteerConfig.farPassable). A goal that cannot be reached (a wall, water, unexplored)
+   * becomes the reachable tile nearest to it. Every step is a predicted Walk like a
+   * click's on the map, so a key, the pad, a click or the mouse held on the map, a
+   * teleport or a second refusal end it the same way; cancelFar is Escape. Returns where
+   * it leads, or undefined when there is nowhere nearer to go.
+   */
+  walkFar(world: WorldState, goal: { x: number; y: number }, now: number): Pos | undefined {
+    this.route = undefined;
+    world.retryWalk();
+    const s = world.self;
+    if (!s) return undefined;
+    const to = { x: goal.x, y: goal.y, z: s.pos.z };
+    const path = this.planFar(world, s.pos, to, []);
+    const end = { x: path.end.x, y: path.end.y, z: s.pos.z };
+    const reachable = path.steps.length > 0;
+    if (!samePos(s.pos, to)) this.mark = { pos: reachable ? end : to, at: now, reachable };
+    if (!reachable) return undefined;
+    this.route = {
+      goal: end,
+      steps: path.steps,
+      from: s.pos,
+      replans: 0,
+      refusals: 0,
+      avoid: [],
+      stale: false,
+      far: true,
+      sincePlan: 0,
+    };
+    return end;
+  }
+
+  /** Ends the route of a click on the minimap (Escape); whether there was one. */
+  cancelFar(): boolean {
+    if (!this.route?.far) return false;
+    this.route = undefined;
     return true;
   }
 
@@ -259,6 +321,16 @@ export class Steering {
     const d = r.steps[0];
     if (r.stale || d === undefined || !samePos(s.pos, r.from) || !world.stepOpen(d)) {
       if (!this.replan(world, r, s.pos)) return undefined;
+    } else if (r.far && (r.sincePlan ?? 0) >= FAR_REPLAN_STEPS) {
+      // The map that came into view may say more than the minimap did (a creature, a
+      // hole): look again, without spending the route's replans. No way now: it ends.
+      const steps = this.planFar(world, s.pos, r.goal, r.avoid);
+      if (!steps.exact || steps.steps.length === 0) {
+        this.route = undefined;
+        return undefined;
+      }
+      r.steps = steps.steps;
+      r.sincePlan = 0;
     }
     const dir = r.steps[0];
     const seq = dir === undefined ? undefined : world.predictStep(dir, now);
@@ -267,6 +339,7 @@ export class Steering {
       return undefined;
     }
     r.steps.shift();
+    if (r.far) r.sincePlan = (r.sincePlan ?? 0) + 1;
     r.from = world.self?.pos ?? r.from;
     if (r.steps.length === 0) this.route = undefined;
     return { kind: "walk", dir, seq };
@@ -274,7 +347,14 @@ export class Steering {
 
   /** Plans `r` again from `from`, keeping off the tiles refused; false (and no route) if none. */
   private replan(world: WorldState, r: Route, from: Pos): boolean {
-    const steps = r.replans < ROUTE_REPLANS ? this.plan(world, from, r.goal, r.avoid) : undefined;
+    let steps: Direction[] | undefined;
+    if (r.replans < ROUTE_REPLANS) {
+      if (r.far) {
+        const far = this.planFar(world, from, r.goal, r.avoid);
+        steps = far.exact ? far.steps : undefined;
+        r.sincePlan = 0;
+      } else steps = this.plan(world, from, r.goal, r.avoid);
+    }
     if (!steps || steps.length === 0) {
       this.route = undefined;
       return false;
@@ -312,5 +392,31 @@ export class Steering {
       diagonalCost: this.cfg.diagonalCost,
       maxSteps: this.cfg.maxPathTiles,
     });
+  }
+
+  /**
+   * The far route's plan (state/far-path.ts): the tiles the client holds count as in a
+   * click's route (free, round portals but the goal, off the refused ones); the ones it
+   * does not, as the minimap knows them (SteerConfig.farPassable).
+   */
+  private planFar(
+    world: WorldState,
+    from: Pos,
+    goal: Pos,
+    avoid: readonly Pos[],
+  ): ReturnType<typeof findFarPath> {
+    const z = from.z;
+    const r = world.refusedStep;
+    const refused = r && samePos(r.from, from) ? r.to : undefined;
+    const far = this.cfg.farPassable;
+    const passable = pathPassable(
+      this.cfg.portals,
+      { ...goal, z },
+      (x, y) =>
+        (world.tile(x, y, z) !== undefined ? world.free(x, y, z) : far?.(x, y, z) === true) &&
+        !(refused && refused.x === x && refused.y === y && refused.z === z) &&
+        !avoid.some((a) => a.x === x && a.y === y && a.z === z),
+    );
+    return findFarPath(from, goal, passable, { diagonalCost: this.cfg.diagonalCost });
   }
 }

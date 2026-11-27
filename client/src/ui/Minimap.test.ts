@@ -73,6 +73,18 @@ describe("MinimapMarks", () => {
     expect(label(6)).toBe('client.minimap.distance_up{"tiles":300}');
     expect(label(8)).toBe('client.minimap.distance_down{"tiles":300}');
   });
+  it("marks where a click on the minimap is walking to, only while it lasts", () => {
+    const dest = nodes(MinimapMarks({ t, mm: mm({ dest: { x: 110, y: 195 } }), view })).find(
+      (v) => v.props["data-testid"] === "minimap-dest",
+    );
+    expect(dest?.props.transform).toBe("translate(100 70)");
+    expect(dest?.props["data-x"]).toBe(110);
+    expect(
+      nodes(MinimapMarks({ t, mm: mm(), view })).some(
+        (v) => v.props["data-testid"] === "minimap-dest",
+      ),
+    ).toBe(false);
+  });
   it("turns the marker for every facing", () => {
     expect(facingDegrees(Direction.NORTH)).toBe(0);
     expect(facingDegrees(Direction.SOUTH_WEST)).toBe(225);

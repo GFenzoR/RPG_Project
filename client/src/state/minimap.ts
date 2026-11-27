@@ -446,6 +446,49 @@ export const CARDINALS = [
   { key: "client.minimap.west", side: "left" },
 ] as const;
 
+/** A press on the minimap that moved less than this many pixels is a click, not a drag. */
+export const CLICK_SLOP_PX = 4;
+
+/** Whether a press at x0, y0 released at x1, y1 is a click (it did not drag the map). */
+export function isMinimapClick(x0: number, y0: number, x1: number, y1: number): boolean {
+  return Math.hypot(x1 - x0, y1 - y0) < CLICK_SLOP_PX;
+}
+
+/**
+ * The tile under a pointer at clientX, clientY over the minimap whose box on the page is
+ * `box` (it may be drawn at another size than the view's pixels), or undefined outside it.
+ */
+export function clickTile(
+  v: MinimapView,
+  box: { left: number; top: number; width: number; height: number },
+  clientX: number,
+  clientY: number,
+): { x: number; y: number } | undefined {
+  if (box.width <= 0 || box.height <= 0) return undefined;
+  const px = ((clientX - box.left) * v.width) / box.width;
+  const py = ((clientY - box.top) * v.height) / box.height;
+  if (px < 0 || py < 0 || px >= v.width || py >= v.height) return undefined;
+  return pixelToTile(v, px, py);
+}
+
+/**
+ * Whether the minimap knows tile x, y on floor z as one to walk on: explored, and coloured
+ * by an item that neither blocks nor is ground one cannot walk (water, lava). What a click
+ * on the minimap is routed over beyond the map the client holds (state/steering.ts).
+ */
+export function minimapPassable(
+  state: Pick<MinimapState, "isExplored" | "item">,
+  item: (id: number) => ItemDef | undefined,
+  x: number,
+  y: number,
+  z: number,
+): boolean {
+  if (!state.isExplored(x, y, z)) return false;
+  const def = item(state.item(x, y, z));
+  if (!def || def.blocks === true) return false;
+  return !(def.ground === true && def.walkable !== true);
+}
+
 /** Pans view by a drag of dx, dy pixels (the map follows the pointer). */
 export function panBy(
   pan: { x: number; y: number },
