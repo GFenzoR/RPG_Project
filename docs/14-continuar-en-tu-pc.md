@@ -104,6 +104,19 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **UI móvil (lote 21, `feat/mobile-hud`), lo que falta:** (1) el HUD nuevo no se probó en
+  un teléfono real ni con `make e2e` en esta rama (lo corre la etapa final del lote):
+  `e2e/mobile.spec.ts` se adaptó a ciegas (la barra en vez del encabezado, la hoja y el
+  cajón, el pad en la consola). (2) En apaisado y en vertical el mapa conserva la regla de
+  "nunca menos de 15x11 casillas", así que a 844x390 quedan franjas oscuras a los lados y a
+  390x844 una franja bajo el mapa (donde van la placa y el chat compacto): cubrir la caja
+  como en escritorio (`--map-cover`) daría casillas de 32 px, más cómodas para el dedo,
+  pero muestra 12 columnas en vertical; lo decide el dueño. (3) Los slots de la hotbar
+  siguen siendo texto (48 px alcanzan para dos palabras cortas): piden íconos de hechizo.
+  (4) Una tablet táctil apaisada (≥ 1024 px) usa las ventanas flotantes a escala de dedo;
+  arrastrarlas y cambiarles el tamaño con el dedo no se probó en un dispositivo. (5) Las
+  ventanas del servidor (diálogo, tienda, mercado, casa, intercambio) siguen con las hojas
+  de T5.6: son de los puntos siguientes del lote.
 - **Criaturas al ritmo de su paso (hecho, rama `feat/creature-walk`, lote 20e; el dueño el
   2026-11-27: "los sprites de los enemigos deben animarse al ritmo de como se mueven; no
   deben verse deslizándose ni flotando")**: cada sprite de criatura dice su cuerpo y su

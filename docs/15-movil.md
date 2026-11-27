@@ -76,6 +76,16 @@ Ajustes del navegador → Sitios → borrar datos del sitio.
 | Se ve una versión vieja | El navegador revalida `/sw.js` al navegar; cierra y abre la app. Comprueba que Caddy mande `Cache-Control: no-cache` en `/sw.js` |
 | El juego no conecta en la PWA | Igual que en el navegador: el worker no toca `/api` ni `/ws`. Revisa el servidor y el túnel |
 
+## La interfaz en teléfonos y tablets
+
+Desde el lote 21 la pantalla de juego de teléfonos y tablets es el **HUD móvil**: el mapa
+sobre una barra gótica con orbes, experiencia, hotbar paginada y botones con íconos pixel;
+las secciones en una hoja (vertical) o un cajón (apaisado); el chat como registro compacto
+sobre el mapa. El diseño, los cortes por tamaño (qué recibe un teléfono, una tablet vertical
+y una apaisada) y cómo se verifica están en `docs/17-direccion-de-arte-y-ui.md`, "UI móvil";
+los gestos táctiles, en `client/CLAUDE.md` "Notas de T5.6". Vista previa sin servidor:
+`make ui-preview SIZES=phone,tablet`.
+
 ## Tauri mobile (preparado; compilarlo es 👤)
 
 ### Por qué en `apps/desktop` y no en `apps/mobile`

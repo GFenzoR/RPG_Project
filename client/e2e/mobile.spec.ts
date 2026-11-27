@@ -309,9 +309,9 @@ const mapDrawn = (page: Page): Promise<boolean> =>
   );
 
 /**
- * How the header sits on the screen: nothing sticks out sideways (`page`), its last
- * control (the ☰ menu) is on screen (`end`), and health and mana show whole (the name and
- * then the level are the ones that give way, with an ellipsis).
+ * How the mobile HUD's bar sits on the screen (docs/17 "UI movil"): nothing sticks out
+ * sideways (`page`), its menu button is on screen (`end`), and health and mana show whole
+ * on their orbs.
  */
 const headerFit = (
   page: Page,
@@ -322,7 +322,7 @@ const headerFit = (
       const el = document.querySelector(`[data-testid="${id}"]`);
       return el !== null && el.scrollWidth <= el.clientWidth;
     };
-    const last = document.querySelector(".hud")?.lastElementChild;
+    const last = document.querySelector('[data-testid="hud-menu"] > summary');
     return {
       page: root.scrollWidth <= root.clientWidth,
       end: last ? last.getBoundingClientRect().right <= root.clientWidth + 0.5 : false,
@@ -458,7 +458,10 @@ async function openDirection(
   throw new Error("no open direction around the player");
 }
 
-/** Shows a side panel tab: tabs under the map, or the drawer opened over it. */
+/**
+ * Shows a section (docs/17 "UI movil"): in portrait its button in the console opens the
+ * sheet; on its side the bar's panel button opens the drawer, with the buttons on its top.
+ */
 async function showTab(page: Page, tab: string): Promise<void> {
   const toggle = page.getByTestId("panel-toggle");
   if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) !== "true")
@@ -467,7 +470,7 @@ async function showTab(page: Page, tab: string): Promise<void> {
   await expect(page.locator(`[data-pane="${tab}"]`).first()).toBeVisible();
 }
 
-/** Closes the drawer (phone landscape) so the map takes taps again; no-op with tabs. */
+/** Closes the sheet or the drawer so the map takes taps again; no-op when it is closed. */
 async function closeDrawer(page: Page): Promise<void> {
   const toggle = page.getByTestId("panel-toggle");
   if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) === "true") {
@@ -494,10 +497,10 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
     ),
   ).toBe(true);
   // Also with a wide font: Linux draws system-ui with DejaVu Sans, far wider than Segoe UI
-  // or San Francisco, and on CI the header of the 390 px iPhone stuck out ~20 px (Verdana,
-  // as wide, shows it on Windows and macOS).
+  // or San Francisco, and on CI the old header of the 390 px iPhone stuck out ~20 px
+  // (Verdana, as wide, shows it on Windows and macOS). The bar must not either.
   const wide = await page.addStyleTag({
-    content: '.hud { font-family: "DejaVu Sans", Verdana, sans-serif; }',
+    content: '.hud-bar, .mconsole { font-family: "DejaVu Sans", Verdana, sans-serif; }',
   });
   expect(await headerFit(page)).toEqual({ page: true, end: true, health: true, mana: true });
   await shot("00-wide-font");
@@ -518,15 +521,21 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
   const pad = page.getByTestId("touch-pad");
   await expect(pad).toBeVisible();
   if (layout === "phone-portrait") {
-    // Under the map, right of the pad: the slots on their own line under the arrows, at
-    // least four whole ones on a 390-412 px phone (one fitted beside the arrows before).
-    await expect.poll(() => wholeSlots(page)).toBeGreaterThanOrEqual(4);
+    // In the bar under the map (docs/17 "UI movil"): the slots edge to edge on their own
+    // line under the arrows, at least six whole ones on a 390-412 px phone (layout.ts
+    // mobileHotbarFit), and the pad in the console under them, never over the map.
+    await expect.poll(() => wholeSlots(page)).toBeGreaterThanOrEqual(6);
     const bar = await page.getByTestId("hotbar").boundingBox();
     const map = await page.getByTestId("game-canvas").boundingBox();
     const padBox = await pad.boundingBox();
     if (!bar || !map || !padBox) throw new Error("no hotbar, map or pad");
     expect(bar.y).toBeGreaterThanOrEqual(map.y + map.height - 0.5);
-    expect(bar.x).toBeGreaterThanOrEqual(padBox.x + padBox.width - 0.5);
+    expect(padBox.y).toBeGreaterThanOrEqual(bar.y + bar.height - 0.5);
+    // The section buttons are a finger wide, each one.
+    for (const tab of await page.getByTestId("panel-tabs").getByRole("tab").all()) {
+      const b = await tab.boundingBox();
+      expect(Math.min(b?.width ?? 0, b?.height ?? 0)).toBeGreaterThanOrEqual(44);
+    }
     // Nothing covers the first slot.
     const first = page.getByTestId("hotbar").locator("li").first();
     expect(
@@ -872,8 +881,8 @@ const NOTCHED: {
   },
 ];
 
-/** Hotbar offset beside the pad (PAD_RESERVE_PX in src/ui/TouchPad.tsx, touch.css). */
-const PAD_RESERVE = 162;
+/** The padding of the mobile HUD's bar and console (MOBILE_HUD.pad, mobile.css --m-pad). */
+const CONSOLE_PAD = 6;
 /** The long-press menu's width (MENU_WIDTH in src/ui/ActionMenu.tsx, touch.css). */
 const MENU_WIDTH = 224;
 
@@ -925,14 +934,16 @@ for (const { prefix, device, column, insets } of NOTCHED) {
         );
       const vp = page.viewportSize();
       if (!vp) throw new Error("no viewport size");
-      // What the game draws starts and ends where the safe area does: the header at its
-      // top, the body (the map, and in portrait the panel under it) at its bottom.
-      const hud = await page.locator(".game > .hud").boundingBox();
-      if (!hud) throw new Error("no header");
-      near("header top", hud.y, insets.top);
+      // What the game draws starts and ends where the safe area does: the map at its top,
+      // the gothic bar (and in portrait the console under it) at its bottom.
       const body = await page.locator(".game-body").boundingBox();
       if (!body) throw new Error("no game body");
+      near("body top", body.y, insets.top);
       near("body bottom", vp.height - (body.y + body.height), insets.bottom);
+      const hudBar = await box("hud-bar");
+      near("bar left", hudBar.l, insets.left);
+      near("bar right", vp.width - hudBar.r, insets.right);
+      if (!column) near("bar bottom", vp.height - hudBar.b, insets.bottom);
       // The map's box (the pad's strip included in portrait) is inside the safe area: on its
       // side the map reaches the bottom one, in portrait the panel lies under it.
       const mapBox = await page.locator(".viewport").boundingBox();
@@ -945,22 +956,27 @@ for (const { prefix, device, column, insets } of NOTCHED) {
       };
       near("map left", map.l, insets.left);
       near("map right", vp.width - map.r, insets.right);
-      if (!column) near("map bottom", vp.height - map.b, insets.bottom);
-      // The widgets over it keep 8 px from its edges, not 8 px plus the inset again.
+      near("map top", map.t, insets.top);
+      // The widgets keep their own margin from the safe area's edges, not that margin plus
+      // the inset again: on its side the pad floats 8 px in and 12 px over the bar, and
+      // the zoom 8 px from the map's right; in portrait both are in the console (6 px).
       const pad = await box("touch-pad");
-      near("pad left", pad.l - map.l, 8);
-      near("pad bottom", map.b - pad.b, 8);
+      near("pad left", pad.l - map.l, column ? CONSOLE_PAD : 8);
+      if (column) near("pad bottom", vp.height - insets.bottom - pad.b, CONSOLE_PAD);
+      else near("pad bottom", map.b - pad.b, 12);
       const hotbar = await box("hotbar");
-      near("hotbar left", hotbar.l - map.l, PAD_RESERVE);
+      expect(hotbar.l - map.l, "hotbar left").toBeGreaterThanOrEqual(CONSOLE_PAD - 0.5);
+      expect(map.r - hotbar.r, "hotbar right").toBeGreaterThanOrEqual(CONSOLE_PAD - 0.5);
       const zoom = await box("zoom-buttons");
-      near("zoom right", map.r - zoom.r, 8);
-      // Picked, the backpack's banner goes top left of the map (in portrait, in the strip
-      // beside the pad, where the zoom buttons were).
+      if (column) expect(map.r - zoom.r, "zoom right").toBeGreaterThanOrEqual(CONSOLE_PAD - 0.5);
+      else near("zoom right", map.r - zoom.r, 8);
+      // Picked, the backpack's banner goes over the map, 8 px from its left edge (and in
+      // portrait from its right one too).
       await showTab(page, "inventory");
       await page.getByTestId("slot-backpack").locator("[data-item=backpack]").tap();
       await closeDrawer(page);
       const banner = await box("pick-banner");
-      near("banner left", banner.l - map.l, column ? PAD_RESERVE : 8);
+      near("banner left", banner.l - map.l, 8);
       if (column) near("banner right", map.r - banner.r, 8);
       await page.getByTestId("pick-cancel").tap();
       await expect(page.getByTestId("pick-banner")).toBeHidden();

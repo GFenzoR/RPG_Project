@@ -259,8 +259,7 @@
   gap: var(--m-pad);
   padding: 2px var(--m-pad) var(--m-pad);
   /* The bar's stone goes on under it. */
-  background:
-    linear-gradient(transparent, rgb(0 0 0 / 0.35)), var(--ui-grain), var(--ui-stone-800);
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.35)), var(--ui-grain), var(--ui-stone-800);
 }
 .mconsole .touch-pad-dock {
   position: static;
@@ -280,9 +279,15 @@
 .mconsole:not([data-has-pad]) .mconsole-tools {
   justify-content: center;
 }
-.mconsole-tools .panel-tabs,
-.mconsole-tools .zoom-buttons {
+.mconsole-tools .panel-tabs {
   display: contents;
+}
+/* The map's zoom: two cells of the grid, in a box of its own. */
+.mconsole-tools .zoom-buttons {
+  position: static;
+  grid-column: span 2;
+  flex-direction: row;
+  gap: var(--m-gap);
 }
 .mconsole-tools .zoom-button {
   width: var(--m-tool);
@@ -685,11 +690,12 @@
   top: calc(env(safe-area-inset-top, 0px) + 8px);
   bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
   left: 50%;
-  width: min(24rem, calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 16px));
-  height: max-content;
-  max-height: calc(
-    100% - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px
+  width: min(
+    24rem,
+    calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 16px)
   );
+  height: max-content;
+  max-height: calc(100% - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
   margin: auto 0;
   transform: translateX(-50%);
   box-sizing: border-box;
@@ -833,4 +839,19 @@
 .game[data-ui="mobile"] .death {
   max-height: calc(100% - 1rem);
   overflow-y: auto;
+}
+/* On its side there is no room to stack them: the presence check takes the middle, clear
+   of the minimap's bar and the tray, and the guild's invitation stands at its right. */
+.game[data-ui="mobile"][data-flow="row"] .presence {
+  left: 6.5rem;
+  transform: none;
+  max-width: calc(100% - 6.5rem - 17.5rem);
+}
+.game[data-ui="mobile"][data-flow="row"] .guild-invitations {
+  top: 3.4rem;
+  bottom: auto;
+  left: auto;
+  right: 6px;
+  transform: none;
+  max-width: 16.5rem;
 }

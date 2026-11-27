@@ -3,9 +3,9 @@
 // T5.6: on a narrow map it shows only the slots that fit whole, and the rest scroll in
 // with the arrows or a swipe (native horizontal scroll with snapping). Every slot stays in
 // the DOM, so F1–F12 and the tests see all of them.
-// Portrait with the touch pad (`stacked`): the bar sits right of the pad, the slots on one
-// line along the bottom and the arrows and the edit button on a line above them, so a
-// 412 px phone shows four slots without taking height from the map.
+// Upright on the mobile HUD (`stacked`, docs/17 "UI movil"): the slots on one
+// line edge to edge and the arrows and the edit button on a line above them, so a
+// 390 px phone shows seven slots (layout.ts mobileHotbarFit).
 // On the desktop it lives in the bottom bar (ui/HudBar.tsx, docs/17 UI-4), which the
 // interface scale zooms: it measures its slots in its own CSS px (cssZoom).
 import { useEffect, useRef, useState } from "preact/hooks";

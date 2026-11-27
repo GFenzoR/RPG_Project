@@ -411,7 +411,7 @@ export function GameView(props: GameViewProps): JSX.Element {
   });
   const stats = ui.stats;
   const experience = stats && (
-    <span class="stat" data-testid="experience">
+    <span class="stat" data-testid="experience-total">
       {t("client.game.experience", { experience: stats.experience })}
     </span>
   );
@@ -662,9 +662,7 @@ export function GameView(props: GameViewProps): JSX.Element {
       )}
       {/* The map's zoom (pinch does the same): bottom right of the map. Upright, the mobile
           HUD has the two buttons in its console (below). */}
-      {props.entered && touch && !stackedHotbar && (
-        <ZoomButtons t={t} game={game} zoom={ui.zoom} />
-      )}
+      {props.entered && touch && !stackedHotbar && <ZoomButtons t={t} game={game} zoom={ui.zoom} />}
       {props.entered && ui.picked && (
         <PickBanner t={t} content={props.content} picked={ui.picked} game={game} />
       )}
@@ -1138,7 +1136,9 @@ export function GameView(props: GameViewProps): JSX.Element {
                 </span>
                 <span class="sheet-vital mana">
                   <span
-                    style={{ transform: `scaleX(${orbFill(stats.mana, stats.maxMana).toFixed(3)})` }}
+                    style={{
+                      transform: `scaleX(${orbFill(stats.mana, stats.maxMana).toFixed(3)})`,
+                    }}
                   />
                 </span>
               </div>
@@ -1746,9 +1746,7 @@ function useLayout(): Layout {
         if (width === s.width && typingFocused()) return s;
         const next = layoutFor(width, window.innerHeight);
         const same =
-          next.id === s.layout.id &&
-          next.panel === s.layout.panel &&
-          next.flow === s.layout.flow;
+          next.id === s.layout.id && next.panel === s.layout.panel && next.flow === s.layout.flow;
         if (same && width === s.width) return s;
         return { width, layout: same ? s.layout : next };
       });

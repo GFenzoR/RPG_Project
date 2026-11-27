@@ -1001,6 +1001,51 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `hud-menu`, `notices`. Hook `__rpgClient.monsters()` para tocar un monstruo.
 - Un diálogo de NPC pasa `{name}` (el nombre del jugador) a su texto.
 
+## Notas del HUD móvil (lote 21, rama `feat/mobile-hud`; docs/17 "UI móvil")
+**Reemplaza** lo que "Notas de T5.6" y "Notas de la UI oscura" dicen del encabezado compacto,
+el menú ☰, las pestañas bajo el mapa, la hotbar junto al pad (`PAD_RESERVE_PX`, la franja de
+154 px) y los botones de zoom en esa franja. Los gestos, el área segura, el teclado virtual
+y la PWA de T5.6 siguen igual.
+- **Layout** (`ui/layout.ts`, la tabla de cortes está en su cabecera): `Layout` ya no tiene
+  `compactHeader`; `PanelMode` es `sidebar` (escritorio), `sheet` (vertical) o `drawer`
+  (apaisado); `isMobile(layout)`. `.game` lleva además `data-ui="mobile"` (como
+  `data-ui="windows"` en escritorio) y `data-sheet` con la hoja abierta. `MOBILE_HUD` son
+  las medidas (slot 48, botón 44, columna del orbe 68…), `mobileHotbarFit(ancho, flow)` los
+  slots que entran y `consoleColumns` las columnas de botones; `ui/mobile.css` repite esas
+  medidas como `--m-*` y `mobile-hud.test.ts` las compara.
+- **Árbol** (`GameView.tsx`, rama no `windowed`): `.game-body` es siempre columna:
+  `.viewport` (el mapa y lo que flota: bandeja de estados arriba a la derecha, minimapa
+  arriba a la izquierda, `ChatGlance` abajo a la izquierda, avisos, zoom en apaisado),
+  `MobileBar` (`section.hud-bar.mobile-bar[data-flow]`, test id `hud-bar` como en
+  escritorio: orbes, `ExperienceBar`, la `Hotbar` con `margin={0}` y `stacked` en vertical,
+  y en apaisado el pad flotando sobre la barra y los botones del panel y del menú),
+  `.sheet-anchor > aside.side#side-panel` (la hoja: alto 0 y la hoja `bottom: 0`, así sube
+  desde el techo de la consola sin medir nada; en apaisado el ancla es `display: contents`
+  y el cajón cuelga de `.game-body` hasta `--m-row-h`) y, solo en vertical, `.mconsole`
+  (test id `mobile-console`: el pad y `.mconsole-tools` con el tablist, el menú y el zoom).
+  `.viewport` y `.game-body` conservan sus `key`: cruzar un corte no reemplaza el canvas.
+- **Dónde va cada botón** (`ui/mobile-hud.ts`, puro): `tabsPlace` → `console` (vertical,
+  siempre: la hoja no tapa la consola), `sheet` (apaisado con el cajón abierto) o `none`;
+  `togglePlace` → `bar` (apaisado), `sheet` (la × de la hoja en vertical) o `none`. Un toque
+  en un botón de sección siempre la muestra (`openTab`); no la cierra. Las teclas de ventana
+  (I, K, L…) abren la hoja en su sección. Un paso del tutorial resalta el botón de su
+  sección (`data-tutorial` en cada tab) y no abre la hoja.
+- **Test ids**: se conservan `panel-tabs` `[data-tab=…]` (ahora botones de ícono con
+  `aria-label`), `panel-toggle` (`aria-expanded`; en vertical solo existe con la hoja
+  abierta), `hud-menu` (el `<details>` del menú; `hud-menu-close`), `logout-menu`,
+  `controls-help`, `touch-pad`, `zoom-buttons`, `health`, `mana`, `level`, `experience` (la
+  barra; el número del menú es `experience-total`). Nuevos: `chat-glance` (`data-lines`),
+  `side-panel`, `mobile-console`. En el E2E, `showTab` y `closeDrawer` de
+  `e2e/mobile.spec.ts` sirven para las dos formas.
+- **Chat**: `ChatGlance` (el único componente del HUD móvil con hooks: su reloj) usa
+  `glanceLines`/`glanceExpiry`; `KIND_CLASS` de `ui/Chat.tsx` da el color de cada línea. La
+  sección del chat en la hoja lleva `ChatTabs` (las de escritorio); "visto" cuenta solo con
+  la hoja abierta en esa sección (`viewedTab`).
+- **Tablet táctil apaisada** (≥ 1024 px): pantalla de escritorio con
+  `.game[data-ui="windows"][data-touch]` (`windows.css`, al final).
+- **Vista previa**: `make ui-preview ONLY=game,social SIZES=phone,tablet`; en tamaños
+  táctiles muestra el pad (`?pad=0` lo quita: escena `mobilenopad`).
+
 ## Zoom del mapa
 - **Vista ancha** (decisión del dueño, `docs/02` "La vista", `docs/17` UI-4): el servidor
   manda 31x21 (+1) a todos (`Welcome.view_width`/`view_height` → `WorldState.view`,

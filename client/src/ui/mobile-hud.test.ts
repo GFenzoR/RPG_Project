@@ -120,16 +120,30 @@ describe("the mobile bar", () => {
   } as Parameters<typeof MobileBar>[0]["stats"];
   const bar = (flow: "row" | "column"): Node[] =>
     nodes(
-      MobileBar({ t, flow, name: "Aldric Varn", stats, levelUp: false, hotbar: null, pad: null, tools: null }),
+      MobileBar({
+        t,
+        flow,
+        name: "Aldric Varn",
+        stats,
+        levelUp: false,
+        hotbar: null,
+        pad: null,
+        tools: null,
+      }),
     );
 
-  it.each(["row", "column"] as const)("%s: both orbs, the experience and the name plate", (flow) => {
-    const tree = bar(flow);
-    const ids = tree.map((n) => n.props["data-testid"]).filter(Boolean);
-    expect(ids).toEqual(expect.arrayContaining(["hud-bar", "health", "mana", "experience", "level"]));
-    expect(tree.some((n) => n.props["class"] === "nameplate")).toBe(true);
-    expect(tree[0]?.props["data-flow"]).toBe(flow);
-  });
+  it.each(["row", "column"] as const)(
+    "%s: both orbs, the experience and the name plate",
+    (flow) => {
+      const tree = bar(flow);
+      const ids = tree.map((n) => n.props["data-testid"]).filter(Boolean);
+      expect(ids).toEqual(
+        expect.arrayContaining(["hud-bar", "health", "mana", "experience", "level"]),
+      );
+      expect(tree.some((n) => n.props["class"] === "nameplate")).toBe(true);
+      expect(tree[0]?.props["data-flow"]).toBe(flow);
+    },
+  );
 
   it("the life orb beats under a quarter of the health, with its ghost", () => {
     const tree = bar("row");
