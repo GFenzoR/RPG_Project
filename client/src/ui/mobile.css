@@ -1,0 +1,893 @@
+/* The mobile HUD (docs/17 "UI movil", lote 21): phones and upright or small tablets
+   (.game[data-ui="mobile"], ui/MobileHud.tsx; ui/layout.ts decides who gets it). The same
+   gothic game as the desktop in less room: the map above one bar of carved stone under an
+   iron band, with the desktop's own pieces (the orbs in their iron sockets, the name plate
+   on the experience bar, the pixel icons, the ornaments of ui/ornaments.ts; windows.css)
+   at phone sizes. Every button is a 44 px touch target; nothing here depends on hover.
+   The sizes are MOBILE_HUD's (ui/layout.ts): change both together.
+
+   Safe area: .game's padding keeps all of this out of the notch, the rounded corners and
+   the home bar (client.css), so nothing here adds env(safe-area-inset-*) again; what is
+   position: fixed (the menu's sheet) is measured against the screen and takes the insets
+   once on its own edges. */
+
+.game[data-ui="mobile"] {
+  --m-slot: 48px;
+  --m-gap: 4px;
+  --m-pad: 6px;
+  --m-orb-col: 68px;
+  --m-tool: 44px;
+  --m-socket: 64px;
+  --m-orb: 54px;
+  /* The one-line bar of a screen on its side: the drawer ends above it. */
+  --m-row-h: 60px;
+}
+.game[data-ui="mobile"] .game-body {
+  position: relative;
+  flex-direction: column;
+  overflow: hidden;
+  overflow: clip;
+}
+.game[data-ui="mobile"] .viewport {
+  background: var(--ui-void);
+}
+/* Upright the map's window (31x21) is shorter than its box: it sits at the top, and what
+   is left under it holds the name plate and the chat log, off the tiles. */
+.game[data-ui="mobile"][data-flow="column"] .viewport {
+  align-items: flex-start;
+}
+
+/* ---- The bar ---------------------------------------------------------------------- */
+.hud-bar.mobile-bar {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  z-index: 5;
+  zoom: 1;
+  flex: none;
+  height: auto;
+  padding: 0 var(--m-pad);
+  column-gap: 0;
+}
+.mobile-bar .mbar-xp {
+  grid-area: xp;
+  min-width: 0;
+  align-self: end;
+  position: relative;
+  z-index: 1;
+}
+.mobile-bar .mbar-hotbar {
+  grid-area: hot;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.mobile-bar .mbar-tools {
+  grid-area: tools;
+  display: flex;
+  align-items: center;
+  gap: var(--m-gap);
+}
+.mobile-bar .orb-box {
+  z-index: 2;
+  margin-bottom: 2px;
+}
+.mobile-bar .orb-box.orb-life {
+  grid-area: life;
+}
+.mobile-bar .orb-box.orb-mana {
+  grid-area: mana;
+}
+.mobile-bar .orb-socket {
+  width: var(--m-socket);
+  height: var(--m-socket);
+  padding: 5px;
+  background-size:
+    8px 8px,
+    8px 8px,
+    8px 8px,
+    8px 8px,
+    auto;
+}
+.mobile-bar .orb-socket::before {
+  left: -5px;
+  right: -5px;
+  top: -6px;
+  height: 18px;
+  background-size:
+    12px 18px,
+    12px 18px;
+}
+.mobile-bar .orb {
+  width: var(--m-orb);
+  height: var(--m-orb);
+}
+.mobile-bar .orb-text {
+  top: 62%;
+  font-size: 0.6rem;
+  letter-spacing: -0.01em;
+}
+.mobile-bar .nameplate {
+  max-width: calc(100% - 36px);
+  padding: 1px 10px 0;
+}
+.mobile-bar .vname {
+  font-size: 0.78rem;
+}
+.mobile-bar .vlevel {
+  font-size: 0.7rem;
+}
+
+/* On its side (a phone at 844 x 390, a small tablet): one slim line. The orbs in the two
+   bottom corners, the experience along the top between them with the name plate standing
+   on it, and under it the hotbar, the panel button and the menu. */
+.mobile-bar[data-flow="row"] {
+  height: var(--m-row-h);
+  grid-template-columns: var(--m-orb-col) minmax(0, 1fr) auto var(--m-orb-col);
+  grid-template-rows: 13px minmax(0, 1fr);
+  grid-template-areas:
+    "life xp xp mana"
+    "life hot tools mana";
+}
+.mobile-bar[data-flow="row"]::before {
+  height: 5px;
+  background: linear-gradient(#5d5750, #3a3530 45%, #1f1c19);
+}
+.mobile-bar[data-flow="row"] .xpbar {
+  height: 7px;
+}
+.mobile-bar[data-flow="row"] .xppercent {
+  display: none;
+}
+.mobile-bar[data-flow="row"] .mbar-hotbar,
+.mobile-bar[data-flow="row"] .mbar-tools {
+  align-self: center;
+}
+.mobile-bar[data-flow="row"] .mbar-tools {
+  margin-left: var(--m-gap);
+}
+/* The pad floats over the map's bottom left corner, above the bar, at the left thumb. */
+.mobile-bar[data-flow="row"] .touch-pad-dock {
+  position: absolute;
+  left: 8px;
+  bottom: calc(100% + 12px);
+  z-index: 1;
+}
+
+/* Upright (a phone at 390 x 844, a tablet at 768 x 1024): the experience between the orbs
+   with the name plate over the map's edge, the hotbar's arrows and its edit button under
+   it, and the slots edge to edge on a line of their own. */
+.mobile-bar[data-flow="column"] {
+  grid-template-columns: var(--m-orb-col) minmax(0, 1fr) var(--m-orb-col);
+  grid-template-rows: 24px 46px 50px;
+  grid-template-areas:
+    "life xp mana"
+    "life . mana"
+    "hot hot hot";
+  padding-bottom: 4px;
+}
+.mobile-bar[data-flow="column"] .orb-box {
+  align-self: center;
+  margin-bottom: 0;
+}
+.mobile-bar[data-flow="column"] .mbar-xp {
+  padding: 0 4px 1px;
+}
+.mobile-bar[data-flow="column"] .mbar-hotbar {
+  grid-row: 2 / 4;
+  grid-column: 1 / -1;
+  display: block;
+}
+
+/* ---- The hotbar in the bar: slots cut in the stone ---------------------------------- */
+.game[data-ui="mobile"] .hotbar {
+  position: static;
+  transform: none;
+  max-width: 100%;
+  min-width: 0;
+  gap: var(--m-gap);
+}
+.game[data-ui="mobile"] .hotbar ol {
+  gap: var(--m-gap);
+}
+.game[data-ui="mobile"] .hotbar li button,
+.game[data-ui="mobile"] .hotbar li select {
+  /* px, not rem: the root text size must not cost a slot (MOBILE_HUD.slot). */
+  width: var(--m-slot);
+  height: 44px;
+  padding: 1px 2px;
+  font-size: 0.6rem;
+  line-height: 1.05;
+}
+/* A long word of a spell's name ("demoledor") was 2 px wider than the slot on a tablet and
+   lost its last letter: tighter, and broken rather than cut if it still does not fit. */
+.game[data-ui="mobile"] .hotbar .spell {
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+.game[data-ui="mobile"] .hotbar .page,
+.game[data-ui="mobile"] .hotbar .edit {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+.game[data-ui="mobile"] .hotbar.stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.game[data-ui="mobile"] .hotbar.stacked .hotbar-controls {
+  justify-content: center;
+  gap: var(--m-gap);
+  height: 44px;
+  margin-top: 1px;
+}
+
+/* ---- The buttons: the desktop toolbar's, at a finger's size ------------------------- */
+.game[data-ui="mobile"] .tool {
+  position: relative;
+  box-sizing: border-box;
+  width: var(--m-tool);
+  height: var(--m-tool);
+  min-width: var(--m-tool);
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+/* Pixel art at whole scales only: 2x. */
+.game[data-ui="mobile"] .tool .icon {
+  width: 32px;
+  height: 32px;
+}
+.game[data-ui="mobile"] .tool[aria-selected="true"],
+.game[data-ui="mobile"] .tool[aria-expanded="true"],
+.game[data-ui="mobile"] .mmenu[open] > summary {
+  background: var(--ui-stone-950);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-gold-500),
+    inset 0 2px 6px rgb(0 0 0 / 0.7);
+}
+.game[data-ui="mobile"] .tool .tool-badge {
+  top: 3px;
+  right: 3px;
+}
+
+/* ---- The console of an upright screen: the pad and the section buttons -------------- */
+.mconsole {
+  position: relative;
+  z-index: 5;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--m-pad);
+  padding: 2px var(--m-pad) var(--m-pad);
+  /* The bar's stone goes on under it. */
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.35)), var(--ui-grain), var(--ui-stone-800);
+}
+.mconsole .touch-pad-dock {
+  position: static;
+  flex: none;
+}
+/* As many 44 px buttons in a line as fit beside the pad (layout.ts consoleColumns), at the
+   right thumb: the eight sections, the menu and the map's zoom. */
+.mconsole-tools {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--m-tool));
+  gap: var(--m-gap);
+  justify-content: end;
+  align-content: center;
+}
+.mconsole:not([data-has-pad]) .mconsole-tools {
+  justify-content: center;
+}
+.mconsole-tools .panel-tabs {
+  display: contents;
+}
+/* The map's zoom: two cells of the grid, in a box of its own. */
+.mconsole-tools .zoom-buttons {
+  position: static;
+  grid-column: span 2;
+  flex-direction: row;
+  gap: var(--m-gap);
+}
+.mconsole-tools .zoom-button {
+  width: var(--m-tool);
+  height: var(--m-tool);
+}
+
+/* ---- The section buttons (the tablist) ---------------------------------------------- */
+.game[data-ui="mobile"] .panel-tabs {
+  gap: var(--m-gap);
+}
+.sheet-head .panel-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sheet-head .panel-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- The sheet: the sections, one at a time ----------------------------------------
+   Upright it rises from the console's top, over the bar and the lower part of the map (the
+   pad and the section buttons stay in reach under it, and the top of the map stays in
+   view, to drop an item on a tile). On its side it is a drawer over the right of the map,
+   above the bar. Closed it is inert (GameView.tsx) and hidden. Only transform and opacity
+   move (docs/17 UI-9). */
+.sheet-anchor {
+  position: relative;
+  z-index: 8;
+  flex: none;
+  height: 0;
+}
+.game[data-ui="mobile"] .side {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  width: auto;
+  /* Under half the screen: the player, in the middle of the map above, stays in view. */
+  height: min(34rem, 46vh);
+  height: min(34rem, 46dvh, calc(var(--game-height, 100dvh) - 11rem));
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem 0.6rem;
+  border: 0;
+  border-top: 2px solid var(--ui-iron-600);
+  background: var(--ui-grain), var(--ui-stone-900);
+  box-shadow:
+    inset 0 1px 0 rgb(110 84 34 / 0.75),
+    0 -6px 16px rgb(0 0 0 / 0.6);
+  overscroll-behavior: contain;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(16px);
+  transition:
+    transform var(--ui-dur) var(--ui-ease-out),
+    opacity var(--ui-dur) var(--ui-ease-out),
+    visibility 0s linear var(--ui-dur);
+}
+.game[data-ui="mobile"] .side[data-open] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    transform var(--ui-dur) var(--ui-ease-out),
+    opacity var(--ui-dur) var(--ui-ease-out);
+}
+/* Gold brackets on the sheet's upper corners, as on every window. */
+.game[data-ui="mobile"] .side::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: -3px;
+  right: -3px;
+  height: 24px;
+  pointer-events: none;
+  background:
+    var(--orn-corner-tl) 0 0 / 24px 24px no-repeat,
+    var(--orn-corner-tr) 100% 0 / 24px 24px no-repeat;
+}
+.game[data-ui="mobile"][data-flow="row"] .sheet-anchor {
+  position: static;
+  height: auto;
+  display: contents;
+}
+.game[data-ui="mobile"][data-flow="row"] .side {
+  top: 0;
+  left: auto;
+  bottom: var(--m-row-h);
+  z-index: 8;
+  width: min(25rem, 66vw);
+  height: auto;
+  border-top: 0;
+  border-left: 2px solid var(--ui-iron-600);
+  box-shadow:
+    inset 1px 0 0 rgb(110 84 34 / 0.75),
+    -6px 0 16px rgb(0 0 0 / 0.6);
+  transform: translateX(16px);
+}
+.game[data-ui="mobile"][data-flow="row"] .side[data-open] {
+  transform: none;
+}
+.game[data-ui="mobile"][data-flow="row"] .side::after {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .game[data-ui="mobile"] .side,
+  .game[data-ui="mobile"] .side[data-open] {
+    transition: none;
+  }
+}
+.sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+.sheet-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--ui-font-title);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  color: var(--ui-gold-300);
+  text-shadow: 0 1px 0 #000;
+}
+/* The section's own title would say it twice under the sheet's. */
+.game[data-ui="mobile"] .side .pane > :is(.battle, .inventory, .skills, .party, .appearance) > h2 {
+  display: none;
+}
+.game[data-ui="mobile"] .close {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+/* Life and mana while the sheet covers the orbs: two gothic bars, filled with transform. */
+.sheet-vitals {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.game[data-ui="mobile"][data-flow="row"] .sheet-vitals {
+  display: none;
+}
+.sheet-vital {
+  position: relative;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  background: var(--ui-stone-950);
+  border: 1px solid #0b0907;
+  box-shadow:
+    0 0 0 1px var(--ui-iron-600),
+    inset 0 1px 3px #000;
+}
+.sheet-vital > span {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transition: transform 250ms var(--ui-ease-out);
+}
+.sheet-vital.life > span {
+  background: linear-gradient(var(--ui-life-300), var(--ui-life-500) 50%, var(--ui-life-700));
+}
+.sheet-vital.mana > span {
+  background: linear-gradient(var(--ui-mana-300), var(--ui-mana-500) 50%, var(--ui-mana-700));
+}
+.sheet-vital.life[data-low] {
+  animation: orb-beat 1.2s ease-in-out infinite;
+}
+/* The whole chat in the sheet: its tabs at a finger's size, the lines, the line to type. */
+.game[data-ui="mobile"] .pane[data-pane="chat"] .chat-tabs {
+  flex: none;
+  gap: var(--m-gap);
+}
+.game[data-ui="mobile"] .pane[data-pane="chat"] .chat-tabs [role="tab"] {
+  min-height: 44px;
+  padding: 0 0.6rem;
+  font-size: 0.7rem;
+}
+.game[data-ui="mobile"] .pane[data-pane="chat"] .chat-tabs [role="tab"][aria-selected="true"] {
+  color: var(--ui-gold-300);
+  background: var(--ui-stone-950);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-iron-600),
+    inset 0 -3px 0 var(--ui-gold-500);
+}
+.game[data-ui="mobile"] .pane[data-pane="chat"] .chat-pane:not([hidden]) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.game[data-ui="mobile"] .pane[data-pane="chat"] .log {
+  flex: 0 1 auto;
+  max-height: 5.5rem;
+}
+.game[data-ui="mobile"] .pane[data-pane="chat"] .chat-pane[hidden] + .log,
+.game[data-ui="mobile"] .pane[data-pane="chat"] .log:has(+ .chat-pane[hidden]) {
+  flex: 1;
+  max-height: none;
+}
+.game[data-ui="mobile"] .say input,
+.game[data-ui="mobile"] .say select {
+  min-height: 44px;
+  /* 16 px at least: iOS zooms the page into a smaller field. */
+  font-size: max(1rem, 16px);
+}
+
+/* ---- Over the map ------------------------------------------------------------------ */
+/* The status tray, top right (the minimap is top left): the combat lock and the conditions,
+   the most urgent first; icons that do not fit wrap to a second line. Its tooltip hangs
+   under it. */
+.game[data-ui="mobile"] .viewport > .status-box {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 6;
+  max-width: calc(100% - 12px - 7rem);
+  padding: 2px;
+  border-radius: var(--ui-radius);
+  background: rgb(9 8 7 / 0.55);
+  box-shadow: 0 0 0 1px var(--ui-iron-900);
+}
+.game[data-ui="mobile"] .viewport > .status-box .status-tray {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.game[data-ui="mobile"] .viewport > .status-box .status-tip {
+  top: 100%;
+  right: 0;
+  margin-top: 0.25rem;
+}
+/* The minimap, top left (minimap.css): folded to its title on a phone (a 44 px bar). */
+.game[data-ui="mobile"] .minimap-fold {
+  min-height: 44px;
+}
+/* Notices: under the top row (the tray and the minimap's bar), off the thumbs. */
+.game[data-ui="mobile"] .notices,
+.game[data-ui="mobile"] .notices.raised {
+  top: 3.6rem;
+  bottom: auto;
+}
+.game[data-ui="mobile"] .notice-line {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.8rem;
+}
+/* The map's zoom on a screen on its side: bottom right of the map, at the right thumb. */
+.game[data-ui="mobile"] .viewport > .zoom-buttons {
+  bottom: 12px;
+}
+/* The banner of an item picked by a tap: along the map's bottom edge upright (the sheet
+   it was picked from covers that part; closed, it is off the middle tiles), top left on
+   its side (the drawer covers the right). */
+.game[data-ui="mobile"][data-flow="column"] .viewport > .pick-banner {
+  top: 3.6rem;
+  right: 8px;
+  max-width: none;
+}
+.game[data-ui="mobile"][data-flow="row"] .viewport > .pick-banner {
+  top: 3.4rem;
+}
+
+/* The compact chat over the map (ChatGlance): a small talk button and, beside it, the last
+   lines said on dark smoke, each fading out. One tap target, bottom left. */
+.chat-glance {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: min(22rem, calc(100% - 4.5rem));
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  text-align: left;
+  font-weight: 400;
+  color: var(--ui-text);
+}
+.chat-glance:hover:not(:disabled),
+.chat-glance:active:not(:disabled) {
+  background: none;
+  box-shadow: none;
+}
+.chat-glance-icon {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--ui-radius);
+  background: rgb(33 28 23 / 0.8);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow: inset 0 0 0 1px var(--ui-iron-600);
+}
+.chat-glance-icon .icon {
+  width: 32px;
+  height: 32px;
+}
+.chat-glance-icon .tool-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+.chat-glance .chat-glance-lines {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--ui-radius);
+  background: rgb(9 8 7 / 0.5);
+  box-shadow: none;
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+.chat-glance-line {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-shadow: 0 1px 0 #000;
+  animation: chat-glance-out 2000ms var(--ui-ease-in) both;
+}
+@keyframes chat-glance-out {
+  to {
+    opacity: 0;
+  }
+}
+/* Upright the name plate stands on the bar's middle: the log sits above it. */
+.game[data-ui="mobile"][data-flow="column"] .chat-glance {
+  bottom: 34px;
+  max-width: calc(100% - 12px);
+}
+.game[data-ui="mobile"][data-flow="row"] .chat-glance {
+  max-width: calc(50% - 8.5rem);
+}
+/* On its side the pad stands in that corner... */
+.game[data-ui="mobile"][data-flow="row"][data-pad] .chat-glance {
+  /* ...so the log stands on the pad, under the minimap's bar. */
+  bottom: 166px;
+  max-width: min(20rem, 42%);
+}
+/* A phone on its side inside the browser (the real device pass of lote 21: 748x298 on a
+   Galaxy S22 Ultra, with the address bar and the system buttons taking a quarter of the
+   height): over the pad there is no room left under the minimap's bar, and the log's
+   button went up under it and off the screen. So short, the log stands at the pad's right. */
+@media (max-height: 350px) {
+  .game[data-ui="mobile"][data-flow="row"][data-pad] .chat-glance {
+    bottom: 6px;
+    left: 196px;
+    max-width: min(18rem, 34%);
+  }
+  /* Left-handed: the buttons are in that corner, and the log already stands beside them. */
+  .game[data-mirror][data-ui="mobile"][data-flow="row"][data-pad] .chat-glance {
+    left: calc(2 * var(--touch-btn) + 24px);
+  }
+}
+/* The sheet is up: the log would only show through its edge (or squeezed beside it). */
+.game[data-ui="mobile"][data-sheet] .chat-glance {
+  display: none;
+}
+
+/* ---- The menu (MobileMenu): options, language, help, leaving ------------------------
+   A <details>: its summary is the button and, open, also the dark backdrop behind the
+   sheet (a tap outside is a tap on the summary: it closes). The sheet is fixed to the
+   screen, so its edges take the safe area themselves, once. */
+.mmenu {
+  position: static;
+}
+.mmenu > summary {
+  list-style: none;
+  cursor: pointer;
+  border-radius: var(--ui-radius);
+  background:
+    linear-gradient(rgb(255 240 210 / 0.07), transparent 45%, rgb(0 0 0 / 0.25)),
+    var(--ui-stone-700);
+  border: 1px solid var(--ui-iron-900);
+  box-shadow:
+    inset 0 0 0 1px var(--ui-iron-600),
+    inset 0 1px 0 1px rgb(255 240 210 / 0.08);
+}
+.mmenu > summary::-webkit-details-marker {
+  display: none;
+}
+.mmenu[open] > summary::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgb(0 0 0 / 0.55);
+}
+.mmenu-body {
+  position: fixed;
+  z-index: 41;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  left: 50%;
+  width: min(
+    24rem,
+    calc(100vw - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px) - 16px)
+  );
+  height: max-content;
+  max-height: calc(100% - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
+  margin: auto 0;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.75rem 0.75rem;
+  white-space: normal;
+  box-shadow: var(--ui-frame-shadow);
+}
+/* Gold brackets with a garnet on its corners, as on every window. */
+.mmenu-body::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  pointer-events: none;
+  background:
+    var(--orn-corner-tl) 0 0 / 24px 24px no-repeat,
+    var(--orn-corner-tr) 100% 0 / 24px 24px no-repeat,
+    var(--orn-corner-bl) 0 100% / 24px 24px no-repeat,
+    var(--orn-corner-br) 100% 100% / 24px 24px no-repeat;
+}
+.mmenu-body > header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid var(--ui-gold-700);
+}
+.mmenu-body > header h2 {
+  flex: 1;
+  margin: 0;
+  font-family: var(--ui-font-title);
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  color: var(--ui-gold-300);
+}
+.mmenu-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+}
+.mmenu-scroll .stat {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text);
+}
+.mmenu-scroll .controls-help > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  font-family: var(--ui-font-title);
+  color: var(--ui-gold-300);
+}
+.mmenu-scroll .controls-text {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--ui-text-muted);
+}
+/* The options open inside the menu, not off its edge. */
+.mmenu-scroll .options-panel {
+  position: static;
+  width: auto;
+  max-width: 100%;
+}
+.mmenu-scroll .logout-text {
+  min-height: 44px;
+}
+
+/* ---- The rest of the screen, laid out for a small one ------------------------------- */
+/* Level up: under the top row, never wider than the map. */
+.game[data-ui="mobile"] .level-up {
+  top: 3.8rem;
+  max-width: calc(100% - 1rem);
+  box-sizing: border-box;
+  padding: 0.4rem 1.5rem 0.5rem;
+  white-space: nowrap;
+}
+.game[data-ui="mobile"][data-flow="column"] .level-up {
+  top: 7.5rem;
+}
+.game[data-ui="mobile"][data-flow="row"] .level-up {
+  top: 0.5rem;
+}
+/* The tutorial's hints: under the minimap's bar, clear of the tray. */
+.game[data-ui="mobile"] .tutorial,
+.game[data-ui="mobile"] .tutorial-show {
+  top: 3.6rem;
+  right: 6px;
+}
+.game[data-ui="mobile"] .tutorial {
+  max-width: min(20rem, calc(100% - 12px));
+  max-height: calc(100% - 4.2rem);
+}
+/* On its side the action buttons stand in the right corner, where the hints hung: the
+   buttons drew over the text and over "Skip tutorial" (lote 21 QA). The hints stand at
+   the buttons' left, from the top edge. */
+.game[data-ui="mobile"][data-flow="row"][data-cluster] .tutorial {
+  top: 0.4rem;
+  right: 12.5rem;
+  max-height: calc(100% - 0.8rem);
+}
+.game[data-ui="mobile"] .tutorial-show {
+  min-height: 44px;
+}
+/* The presence check and the invitations (GameView's .alerts box): one column over the
+   map, under the top row, the check first; their buttons a finger wide. Lote 21 QA: each
+   used to stand at a fixed height, so two that arrived together came one over the other
+   (an invitation takes two or three lines at 390 px), under the action buttons upright
+   and over the pad's right column on a phone on its side. Whatever does not fit scrolls. */
+.game[data-ui="mobile"] .alerts {
+  position: absolute;
+  top: 3.6rem;
+  left: 6px;
+  right: 6px;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-height: calc(100% - 4.2rem);
+  overflow-y: auto;
+  pointer-events: none;
+}
+/* On its side: between the pad and the action buttons, from the top edge (the minimap's
+   bar and the tray are at the sides). */
+.game[data-ui="mobile"][data-flow="row"] .alerts {
+  top: 0.4rem;
+  left: 11.5rem;
+  right: 12.5rem;
+  max-height: calc(100% - 0.8rem);
+}
+.game[data-ui="mobile"] .alerts > * {
+  position: static;
+  transform: none;
+  flex: none;
+  width: auto;
+  max-width: 100%;
+  max-height: none;
+  pointer-events: auto;
+}
+.game[data-ui="mobile"] .alerts > .presence {
+  order: -1;
+}
+.game[data-ui="mobile"] .alerts > .invitations:empty {
+  display: none;
+}
+/* The text on its line and the two answers side by side, each half the box. */
+.game[data-ui="mobile"] .alerts .invitation {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.game[data-ui="mobile"] .alerts .invitation p {
+  grid-column: 1 / -1;
+}
+.game[data-ui="mobile"] .presence button,
+.game[data-ui="mobile"] .invitation button,
+.game[data-ui="mobile"] .tutorial button,
+.game[data-ui="mobile"] .death button {
+  min-height: 44px;
+  min-width: 44px;
+}
+/* The death screen fits a phone on its side: it scrolls inside if it must. */
+.game[data-ui="mobile"] .death {
+  max-height: calc(100% - 1rem);
+  overflow-y: auto;
+}

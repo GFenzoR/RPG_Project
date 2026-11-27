@@ -3520,6 +3520,114 @@ Online". Solo cliente; de Ragnarok Online se toma solo la idea.
   arriba a la izquierda del chat y comprueba que su esquina de abajo a la derecha no se
   movió (screenshot `16b-chat-resized-top-left`).
 
+### UI móvil (hecho, 2026-11-27, lote 21, rama `feat/mobile-hud`)
+
+Pedido del dueño (2026-11-24): el juego corre en el navegador, así que tiene que jugarse
+entero en teléfonos y tablets, con controles táctiles y una interfaz hecha para pantallas
+chicas que **conserve la misma estética** gótica (marcos de hierro, piedra, esquinas doradas,
+orbes, las fuentes y los tokens de este documento). Este punto es el HUD: la pantalla de
+juego. Las ventanas del servidor (diálogo, tienda, mercado…) siguen como hojas sobre el mapa
+(T5.6) y son de los puntos siguientes del lote.
+
+**Qué pantalla recibe cada dispositivo** (los cortes son datos de `client/src/ui/layout.ts`,
+con tests; px CSS, gana el primero que calza):
+
+| Ventana | `data-layout` | `data-panel` | `data-flow` | Pantalla |
+|---|---|---|---|---|
+| apaisada, ≤ 1000 de ancho y ≤ 500 de alto | `phone-landscape` | `drawer` | `row` | HUD móvil |
+| ≤ 599 de ancho | `phone-portrait` | `sheet` | `column` | HUD móvil |
+| ≤ 959 de ancho, vertical | `tablet` | `sheet` | `column` | HUD móvil |
+| ≤ 959 de ancho, apaisada | `tablet` | `drawer` | `row` | HUD móvil |
+| ≥ 960 de ancho | `desktop` | `sidebar` | `row` | ventanas flotantes |
+
+**Tablets, por orientación.** Vertical (iPad Mini 768x1024, iPad 810x1080, iPad Air
+820x1180): HUD móvil con la hoja de abajo. Apaisada desde 1024 px (1024x768 y más): la
+pantalla de escritorio, mapa a pantalla completa con ventanas flotantes, **a escala de
+dedo** si la pantalla es táctil (`.game[data-ui="windows"][data-touch]` en `windows.css`:
+barra de 124 px con la botonera en dos filas de 44 px, botones de las ventanas y pestañas
+del chat de 44 px, el pad y el zoom sobre el mapa, encima de la barra). Una tablet chica
+apaisada (< 960 px) sigue con el HUD móvil y el cajón. 960 es el mínimo de la app de
+escritorio: nada más angosto recibe ventanas.
+
+**El HUD móvil** (`.game[data-ui="mobile"]`, `ui/MobileHud.tsx`, reglas puras en
+`ui/mobile-hud.ts`, estilos en `ui/mobile.css`). Ya no hay encabezado ni menú hamburguesa:
+el mapa ocupa todo sobre una barra de piedra tallada bajo una banda de hierro, hecha con las
+mismas piezas de la barra de escritorio (`Orb` y `ExperienceBar` de `ui/Vitals.tsx`, los
+íconos pixel de `ui/icons.tsx`, los ornamentos de `ui/ornaments.ts`) a tamaño de teléfono:
+
+- **Orbes** de vida y maná de 54 px en engastes de hierro de 64 px con sus pináculos: el
+  mismo llenado con `transform`, el mismo "fantasma" de lo perdido y el mismo latido bajo el
+  25 %. Mientras la hoja tapa la barra (vertical), dos barras góticas finas en la cabecera
+  de la hoja llevan vida y maná (`.sheet-vitals`).
+- **Experiencia y placa del nombre**: la barra de experiencia entre los orbes, con la placa
+  (nombre y nivel, pináculos en los hombros) parada sobre ella, como en escritorio.
+- **Bandeja de estados** arriba a la derecha del mapa (bloqueo de combate y condiciones, lo
+  más urgente primero; el tooltip se abre con un toque y cuelga debajo). El **minimapa**
+  sigue arriba a la izquierda, plegado en teléfonos a su barra de 44 px, con la flecha del
+  objetivo seguido.
+- **Hotbar** con los slots de 48x44 px que entren y sus flechas ‹ › para paginar (además del
+  deslizamiento nativo). Cuántos entran lo calcula `mobileHotbarFit` de `layout.ts`
+  (`MOBILE_HUD` tiene las medidas; `mobile-hud.test.ts` exige que `mobile.css` use las
+  mismas): vertical, los slots tienen una línea propia de borde a borde, con las flechas y
+  el lápiz en la línea de arriba, entre los orbes (6 slots a 320–360 px, 7 a 375–412, los
+  12 en una tablet); apaisado comparten la línea con los orbes y dos botones (3 a 568 px, 5
+  a 667, 8 a 844, los 12 a 915; una muesca de 47 px por lado cuesta un slot a 844).
+- **Botones de las secciones** con los íconos pixel de la botonera de escritorio a 2x, de
+  44 px (`PanelTabs`, un `tablist` ARIA; orden `MOBILE_TABS`: inventario, batalla,
+  habilidades, misiones, grupo, gremio, apariencia, chat; con punto rojo si hay invitaciones
+  o chat sin leer).
+- **Menú** (`MobileMenu`, ícono propio `menu`: tres barras de hierro): lo que tenía la
+  hamburguesa (experiencia, ayuda con los controles táctiles `client.mobile.help`, idioma y
+  opciones, salir del juego con su bloqueo de combate) en una hoja enmarcada con esquinas
+  doradas. Es un `<details>`: su `summary` es el botón y, abierto, también el fondo oscuro,
+  así un toque afuera lo cierra sin script.
+
+**Vertical** (`column`; 390x844 de referencia), de arriba abajo: el mapa (arriba de su caja:
+la ventana de 31x21 es más baja que la caja, y lo que sobra debajo aloja la placa y el chat
+compacto, fuera de las casillas); la barra (experiencia entre los orbes, flechas y lápiz de
+la hotbar, slots); y la **consola**: el pad en el pulgar izquierdo y, en el derecho, la
+grilla de botones (las 8 secciones, el menú y el zoom +/−; `consoleColumns`: 4 por fila
+junto al pad en un teléfono). Nada importante queda sobre el mapa ni bajo la barra de inicio.
+Una sección se abre en una **hoja** que sube desde el techo de la consola (46 % del alto
+como mucho, para que el jugador, al centro del mapa, siga a la vista): tapa la barra y la
+parte baja del mapa; el pad y los botones siguen a mano debajo, así se cambia de sección o
+se camina con la hoja abierta. Se cierra con su ×.
+
+**Apaisado** (`row`; 844x390, el más difícil: 390 px de alto): una sola línea de 60 px. Los
+orbes en las dos esquinas de abajo, la experiencia a lo largo del borde de arriba con la
+placa sobre ella, y entre los orbes la hotbar, el botón del panel y el menú. El pad flota
+sobre la esquina inferior izquierda del mapa (pulgar izquierdo) y el zoom sobre la derecha
+(pulgar derecho). Las secciones se abren en un **cajón** sobre la derecha del mapa, encima
+de la barra, con los botones de sección a lo largo de su borde de arriba.
+
+**Chat.** Sobre el mapa, abajo a la izquierda (apaisado con pad, encima del pad), un
+registro compacto y translúcido (`ChatGlance`): las últimas 3 líneas dichas en los últimos
+12 s, cada una se desvanece en sus últimos 2 s (`glanceLines`, `GLANCE_MS`). Es un solo
+botón: un toque abre el chat entero en la hoja, con las pestañas de UI-10 (Todo, Local,
+Grupo, Gremio, Global, Registro; el registro del sistema va arriba de "Todo" y solo en su
+pestaña) y la línea para escribir (campos de 44 px y 16 px de letra: iOS no hace zoom). El
+teclado virtual no tapa el campo (`--game-height` sigue al `visualViewport`, T5.6). Los
+globos sobre las cabezas son del canvas y no cambian.
+
+**Lo demás sobre el mapa**, acomodado a pantalla chica: los avisos bajo la fila de arriba;
+la subida de nivel bajo ellos (arriba del todo en apaisado); las pistas del tutorial bajo la
+bandeja; el chequeo de presencia al centro y las invitaciones sobre el borde de abajo del
+mapa (en apaisado la del gremio va a la derecha del chequeo: no hay alto para apilarlas); la
+pantalla de muerte se desplaza por dentro si no entra; el fundido del viaje cubre el mapa.
+Todos sus botones miden 44 px.
+
+**Reglas.** Objetivos táctiles de 44 px o más; nada depende de `:hover`; solo se animan
+`transform` y `opacity` (UI-9; la hoja y el cajón entran en 150 ms); área segura como en
+T5.6 (el padding de `.game` la cuenta una vez; solo la hoja del menú, que es `fixed`, toma
+los insets en sus bordes); cada texto por i18n es+en. El escritorio no cambia.
+
+**Verificación.** `ui/layout.test.ts` (cortes, slots, columnas de la consola),
+`ui/mobile-hud.test.ts` (íconos y botones por sección, dónde va el tablist, la barra con sus
+orbes, el registro compacto, y `mobile.css`: medidas, transiciones, área segura).
+`make ui-preview` suma el tamaño `tablet-1024x768` y las escenas `social`, `voyage`,
+`mobilemenu`, `mobilechat`, `mobilebattle`, `mobilenopad` y `mobilemap`; `ONLY` acepta
+varias escenas separadas por coma y `SIZES=phone,tablet` filtra los tamaños.
+
 ## 8. Cómo se verifica
 - **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**
   (`assets/README.md`). Un screenshot del E2E pasado a grises cumple las bandas de ART-6:
@@ -3570,3 +3678,44 @@ Consultadas el 2026-11-17. No se bajó ni se incrustó ninguna imagen de estas p
   https://www.gamedeveloper.com/programming/unet-unity-5-networking-entity-interpolation-part-2-of-6-clientside-input-buffering
 - Fuentes: `METADATA.pb` y `OFL.txt` de cada familia en https://github.com/google/fonts
   (rutas de UI-3).
+
+### UI móvil: controles táctiles (lote 21, rama `feat/mobile-touch`)
+El detalle (la tabla de cada acción con su camino táctil, la entrada híbrida y el modo app)
+está en `docs/15-movil.md`; aquí, lo que toca a la estética.
+- **Botones de acción:** redondos, de 52 px (44 a 62 según la opción), con el mismo hierro
+  de los engastes de los orbes (anillo `--ui-iron-600` sobre `--ui-iron-900`, fondo en
+  degradado radial) y el ícono pixel de 16x16 a 2x en dorado. Apretado o activo, el anillo
+  pasa a `--ui-gold-500` con un halo; el de atacar lleva el anillo `--ui-danger` mientras
+  hay objetivo. Íconos nuevos en `ui/icons.tsx` (arte propio, la misma paleta): `target`,
+  `look`, `hand`, `chase`, `climb`, `hammer`, `push`, `fullscreen`, `install`, `share` y
+  `addhome`.
+- **Palanca:** un aro de hierro de 146 px con una guía punteada dorada y un pomo con borde
+  dorado que se ilumina mientras sostiene una dirección.
+- **Dónde van:** abajo a la derecha del mapa (a la izquierda con "para zurdos"), sobre el
+  cajón y bajo las hojas (z-index 9, como el pad); en apaisado dejan la esquina a los
+  botones de zoom. Con teclado o mouse en uso se atenúan al 30 %.
+- **Modo app:** los botones "Pantalla completa" e "Instalar como app" llevan su ícono pixel;
+  los pasos de iOS son una hoja con el marco de hierro y tres pasos ilustrados con íconos
+  propios (ningún logo ni captura de otro sistema).
+- **Vista previa:** escenas `touchstick` y `touchleft` de `make ui-preview`
+  (`SIZES=phone,tablet`).
+
+### UI móvil: las ventanas como hojas (lote 21, rama `feat/mobile-windows`)
+Las ventanas del servidor (diálogo y tienda, crafteo y forja, mercado, casa, intercambio,
+alijo, libros) ya eran hojas con el marco gótico sobre el mapa; este paso les da las reglas
+de una pila y los gestos de un teléfono.
+- **Pila de hojas** (`client/src/ui/sheets.ts`, puro, con tests): una hoja a la vez, la de
+  adelante es la que cierran Escape, el gesto atrás de Android y un deslizamiento hacia
+  abajo sobre su encabezado (`isCloseSwipe`: 72 px y casi vertical, para no confundirlo con
+  el desplazamiento de las pestañas). `syncStack` pone arriba lo recién abierto, `closeTop`
+  deja ver la de abajo.
+- **Pares**: diálogo con tienda, estación (crafteo y forja), intercambio, alijo y
+  contenedores se ven con los bolsillos (`pairMode`: `split` en vertical, `tabs` apaisado);
+  mercado, casa y libros van solos. Las reglas están; dibujar la mitad de inventario junto
+  a cada hoja queda pendiente (docs/14).
+- **Atrás y Escape** (`ui/use-sheets.ts`): una entrada de la History API por hoja abierta,
+  así el botón atrás cierra la de arriba y no saca del juego. Solo en teléfono y tablet
+  (`tabbed`); el escritorio no cambia. Cada encabezado de hoja lleva `data-sheet-head`.
+  Al salir del juego con hojas abiertas sus entradas se retiran; una hoja que cierra el
+  servidor (intercambio, mercado, baúl) recupera su entrada a los 50 ms si sigue abierta,
+  así un segundo atrás durante el lag vuelve a pedir el cierre y no saca del juego.

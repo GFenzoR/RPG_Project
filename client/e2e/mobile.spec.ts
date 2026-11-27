@@ -7,7 +7,7 @@
 //
 // The devices run on Chromium (Pixel 7, iPad Mini) and, in the "webkit-mobile" project of
 // playwright.config.ts, on WebKit (iPhone 13, iPad Mini): those titles say "(webkit)".
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { devices, expect, test } from "@playwright/test";
 import type { APIRequestContext, Locator, Page } from "@playwright/test";
@@ -16,6 +16,8 @@ import { openWindow } from "./windows.ts";
 import { stepToward } from "./keys.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 import { characterName } from "./names.ts";
+import { formatFindings, touchAudit } from "./touch-audit.ts";
+import type { Insets, TouchFinding } from "./touch-audit.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -309,9 +311,9 @@ const mapDrawn = (page: Page): Promise<boolean> =>
   );
 
 /**
- * How the header sits on the screen: nothing sticks out sideways (`page`), its last
- * control (the ☰ menu) is on screen (`end`), and health and mana show whole (the name and
- * then the level are the ones that give way, with an ellipsis).
+ * How the mobile HUD's bar sits on the screen (docs/17 "UI movil"): nothing sticks out
+ * sideways (`page`), its menu button is on screen (`end`), and health and mana show whole
+ * on their orbs.
  */
 const headerFit = (
   page: Page,
@@ -322,7 +324,7 @@ const headerFit = (
       const el = document.querySelector(`[data-testid="${id}"]`);
       return el !== null && el.scrollWidth <= el.clientWidth;
     };
-    const last = document.querySelector(".hud")?.lastElementChild;
+    const last = document.querySelector('[data-testid="hud-menu"] > summary');
     return {
       page: root.scrollWidth <= root.clientWidth,
       end: last ? last.getBoundingClientRect().right <= root.clientWidth + 0.5 : false,
@@ -458,7 +460,10 @@ async function openDirection(
   throw new Error("no open direction around the player");
 }
 
-/** Shows a side panel tab: tabs under the map, or the drawer opened over it. */
+/**
+ * Shows a section (docs/17 "UI movil"): in portrait its button in the console opens the
+ * sheet; on its side the bar's panel button opens the drawer, with the buttons on its top.
+ */
 async function showTab(page: Page, tab: string): Promise<void> {
   const toggle = page.getByTestId("panel-toggle");
   if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) !== "true")
@@ -467,7 +472,7 @@ async function showTab(page: Page, tab: string): Promise<void> {
   await expect(page.locator(`[data-pane="${tab}"]`).first()).toBeVisible();
 }
 
-/** Closes the drawer (phone landscape) so the map takes taps again; no-op with tabs. */
+/** Closes the sheet or the drawer so the map takes taps again; no-op when it is closed. */
 async function closeDrawer(page: Page): Promise<void> {
   const toggle = page.getByTestId("panel-toggle");
   if ((await toggle.count()) > 0 && (await toggle.getAttribute("aria-expanded")) === "true") {
@@ -494,10 +499,10 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
     ),
   ).toBe(true);
   // Also with a wide font: Linux draws system-ui with DejaVu Sans, far wider than Segoe UI
-  // or San Francisco, and on CI the header of the 390 px iPhone stuck out ~20 px (Verdana,
-  // as wide, shows it on Windows and macOS).
+  // or San Francisco, and on CI the old header of the 390 px iPhone stuck out ~20 px
+  // (Verdana, as wide, shows it on Windows and macOS). The bar must not either.
   const wide = await page.addStyleTag({
-    content: '.hud { font-family: "DejaVu Sans", Verdana, sans-serif; }',
+    content: '.hud-bar, .mconsole { font-family: "DejaVu Sans", Verdana, sans-serif; }',
   });
   expect(await headerFit(page)).toEqual({ page: true, end: true, health: true, mana: true });
   await shot("00-wide-font");
@@ -518,15 +523,21 @@ async function touchFlow(page: Page, prefix: string, layout: string): Promise<vo
   const pad = page.getByTestId("touch-pad");
   await expect(pad).toBeVisible();
   if (layout === "phone-portrait") {
-    // Under the map, right of the pad: the slots on their own line under the arrows, at
-    // least four whole ones on a 390-412 px phone (one fitted beside the arrows before).
-    await expect.poll(() => wholeSlots(page)).toBeGreaterThanOrEqual(4);
+    // In the bar under the map (docs/17 "UI movil"): the slots edge to edge on their own
+    // line under the arrows, at least six whole ones on a 390-412 px phone (layout.ts
+    // mobileHotbarFit), and the pad in the console under them, never over the map.
+    await expect.poll(() => wholeSlots(page)).toBeGreaterThanOrEqual(6);
     const bar = await page.getByTestId("hotbar").boundingBox();
     const map = await page.getByTestId("game-canvas").boundingBox();
     const padBox = await pad.boundingBox();
     if (!bar || !map || !padBox) throw new Error("no hotbar, map or pad");
     expect(bar.y).toBeGreaterThanOrEqual(map.y + map.height - 0.5);
-    expect(bar.x).toBeGreaterThanOrEqual(padBox.x + padBox.width - 0.5);
+    expect(padBox.y).toBeGreaterThanOrEqual(bar.y + bar.height - 0.5);
+    // The section buttons are a finger wide, each one.
+    for (const tab of await page.getByTestId("panel-tabs").getByRole("tab").all()) {
+      const b = await tab.boundingBox();
+      expect(Math.min(b?.width ?? 0, b?.height ?? 0)).toBeGreaterThanOrEqual(44);
+    }
     // Nothing covers the first slot.
     const first = page.getByTestId("hotbar").locator("li").first();
     expect(
@@ -872,8 +883,8 @@ const NOTCHED: {
   },
 ];
 
-/** Hotbar offset beside the pad (PAD_RESERVE_PX in src/ui/TouchPad.tsx, touch.css). */
-const PAD_RESERVE = 162;
+/** The padding of the mobile HUD's bar and console (MOBILE_HUD.pad, mobile.css --m-pad). */
+const CONSOLE_PAD = 6;
 /** The long-press menu's width (MENU_WIDTH in src/ui/ActionMenu.tsx, touch.css). */
 const MENU_WIDTH = 224;
 
@@ -925,14 +936,16 @@ for (const { prefix, device, column, insets } of NOTCHED) {
         );
       const vp = page.viewportSize();
       if (!vp) throw new Error("no viewport size");
-      // What the game draws starts and ends where the safe area does: the header at its
-      // top, the body (the map, and in portrait the panel under it) at its bottom.
-      const hud = await page.locator(".game > .hud").boundingBox();
-      if (!hud) throw new Error("no header");
-      near("header top", hud.y, insets.top);
+      // What the game draws starts and ends where the safe area does: the map at its top,
+      // the gothic bar (and in portrait the console under it) at its bottom.
       const body = await page.locator(".game-body").boundingBox();
       if (!body) throw new Error("no game body");
+      near("body top", body.y, insets.top);
       near("body bottom", vp.height - (body.y + body.height), insets.bottom);
+      const hudBar = await box("hud-bar");
+      near("bar left", hudBar.l, insets.left);
+      near("bar right", vp.width - hudBar.r, insets.right);
+      if (!column) near("bar bottom", vp.height - hudBar.b, insets.bottom);
       // The map's box (the pad's strip included in portrait) is inside the safe area: on its
       // side the map reaches the bottom one, in portrait the panel lies under it.
       const mapBox = await page.locator(".viewport").boundingBox();
@@ -945,22 +958,27 @@ for (const { prefix, device, column, insets } of NOTCHED) {
       };
       near("map left", map.l, insets.left);
       near("map right", vp.width - map.r, insets.right);
-      if (!column) near("map bottom", vp.height - map.b, insets.bottom);
-      // The widgets over it keep 8 px from its edges, not 8 px plus the inset again.
+      near("map top", map.t, insets.top);
+      // The widgets keep their own margin from the safe area's edges, not that margin plus
+      // the inset again: on its side the pad floats 8 px in and 12 px over the bar, and
+      // the zoom 8 px from the map's right; in portrait both are in the console (6 px).
       const pad = await box("touch-pad");
-      near("pad left", pad.l - map.l, 8);
-      near("pad bottom", map.b - pad.b, 8);
+      near("pad left", pad.l - map.l, column ? CONSOLE_PAD : 8);
+      if (column) near("pad bottom", vp.height - insets.bottom - pad.b, CONSOLE_PAD);
+      else near("pad bottom", map.b - pad.b, 12);
       const hotbar = await box("hotbar");
-      near("hotbar left", hotbar.l - map.l, PAD_RESERVE);
+      expect(hotbar.l - map.l, "hotbar left").toBeGreaterThanOrEqual(CONSOLE_PAD - 0.5);
+      expect(map.r - hotbar.r, "hotbar right").toBeGreaterThanOrEqual(CONSOLE_PAD - 0.5);
       const zoom = await box("zoom-buttons");
-      near("zoom right", map.r - zoom.r, 8);
-      // Picked, the backpack's banner goes top left of the map (in portrait, in the strip
-      // beside the pad, where the zoom buttons were).
+      if (column) expect(map.r - zoom.r, "zoom right").toBeGreaterThanOrEqual(CONSOLE_PAD - 0.5);
+      else near("zoom right", map.r - zoom.r, 8);
+      // Picked, the backpack's banner goes over the map, 8 px from its left edge (and in
+      // portrait from its right one too).
       await showTab(page, "inventory");
       await page.getByTestId("slot-backpack").locator("[data-item=backpack]").tap();
       await closeDrawer(page);
       const banner = await box("pick-banner");
-      near("banner left", banner.l - map.l, column ? PAD_RESERVE : 8);
+      near("banner left", banner.l - map.l, 8);
       if (column) near("banner right", map.r - banner.r, 8);
       await page.getByTestId("pick-cancel").tap();
       await expect(page.getByTestId("pick-banner")).toBeHidden();
@@ -1047,15 +1065,34 @@ for (const { prefix, device, column, insets } of NOTCHED) {
       const canvas = await page.getByTestId("game-canvas").boundingBox();
       if (!canvas) throw new Error("no canvas");
       expect(canvas.x, "zoomed map left").toBeGreaterThanOrEqual(insets.left - 0.5);
-      const press = { x: canvas.x + 6, y: canvas.y + canvas.height / 4 };
+      // Near the left edge of the map, where the HUD leaves room: on a phone on its side
+      // the minimap button, the chat button and the pad line that edge. A fingertip clear
+      // of them all: a touch a few px from a control goes to the control.
+      const press = await page.evaluate(
+        ({ left, top, height }) => {
+          const map = (x: number, y: number): boolean =>
+            document.elementFromPoint(x, y)?.tagName === "CANVAS";
+          const r = 24;
+          for (const dx of [6, 30, 50, 70, 90])
+            for (const f of [0.25, 0.3, 0.35, 0.2, 0.4, 0.15, 0.45, 0.5]) {
+              const x = left + dx;
+              const y = top + height * f;
+              const clear =
+                map(x, y) &&
+                map(x, y - r) &&
+                map(x, y + r) &&
+                map(x + r, y) &&
+                (dx < r || map(x - r, y));
+              if (clear) return { x, y };
+            }
+          return undefined;
+        },
+        { left: canvas.x, top: canvas.y, height: canvas.height },
+      );
+      if (!press) throw new Error("no free spot near the left edge of the map");
       // Centred on the finger the menu would cross the safe area's edge: the margin from
       // that edge decides where it goes.
       expect(press.x - MENU_WIDTH / 2).toBeLessThan(insets.left + 8);
-      const under = await page.evaluate(
-        ({ x, y }) => document.elementFromPoint(x, y)?.tagName ?? "",
-        press,
-      );
-      expect(under, "the press lands on the map").toBe("CANVAS");
       await hold(page, press.x, press.y, 1200);
       const menu = page.getByTestId("action-menu");
       await expect(menu).toBeVisible();
@@ -1197,4 +1234,546 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   await expect.poll(async () => (await zoomOf(page)).scale).toBe(2);
   expect(await rememberedZoom(page)).toBeNull();
   expect(errors).toEqual([]);
+});
+
+// ---- Lote 21 (docs/15): touch controls, hybrid input, full screen and install ----------
+
+/** Asks for the analog stick before the page loads (Options → Controls keeps it on the device). */
+async function preferStick(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      window.localStorage.setItem("rpg.touch", JSON.stringify({ pad: "stick" }));
+    } catch {
+      // No storage: the pad stays.
+    }
+  });
+}
+
+/** Every on-screen action button is a 44 px target inside the screen. */
+async function clusterFits(page: Page): Promise<void> {
+  const cluster = page.getByTestId("touch-cluster");
+  await expect(cluster).toBeVisible();
+  const vp = page.viewportSize();
+  if (!vp) throw new Error("no viewport");
+  const buttons = cluster.locator(".touch-action");
+  const n = await buttons.count();
+  expect(n).toBeGreaterThanOrEqual(4);
+  for (let i = 0; i < n; i++) {
+    const box = await buttons.nth(i).boundingBox();
+    if (!box) throw new Error("an action button has no box");
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(vp.width + 1);
+    expect(box.y + box.height).toBeLessThanOrEqual(vp.height + 1);
+  }
+}
+
+const TOUCH21 = DEVICES.filter((d) =>
+  ["pixel7-portrait", "pixel7-landscape", "webkit-iphone13-portrait", "webkit-ipad-mini"].includes(
+    d.prefix,
+  ),
+);
+
+for (const { prefix, device, browser } of TOUCH21) {
+  const title =
+    browser === "chromium"
+      ? `lote 21 touch on ${device}`
+      : `lote 21 touch on ${device} (${browser})`;
+  test.describe(title, () => {
+    test.use(deviceOptions(device));
+
+    test("touch: the stick walks, inspect looks, the attack button targets a wolf", async ({
+      page,
+      playwright,
+    }) => {
+      test.setTimeout(150_000);
+      const errors = watchErrors(page);
+      await preferStick(page);
+      const who = await newGuardian(playwright, "Stick");
+      await enterGame(page, who.email, who.password);
+      errors.length = 0; // the 401 of opening the page without a session cookie
+      const game = page.getByTestId("game");
+      await expect(game).toHaveAttribute("data-input", "touch");
+      await expect(page.getByTestId("touch-pad")).toHaveCount(0);
+      const stick = page.getByTestId("touch-stick");
+      await expect(stick).toBeVisible();
+      await clusterFits(page);
+
+      // The stick: a thumb held toward an open way walks that way, and stops when it lifts.
+      const start = await settled(page);
+      const way = await openDirection(page, start, 3);
+      const box = await stick.boundingBox();
+      if (!box) throw new Error("no stick");
+      const sx = box.x + box.width / 2 + way.dx * box.width * 0.4;
+      const sy = box.y + box.height / 2 + way.dy * box.height * 0.4;
+      await hold(page, sx, sy, 1300);
+      const walked = await settled(page);
+      const along = (walked.x - start.x) * way.dx + (walked.y - start.y) * way.dy;
+      expect(along).toBeGreaterThanOrEqual(1);
+      expect(
+        Math.abs((walked.x - start.x) * way.dy) + Math.abs((walked.y - start.y) * way.dx),
+      ).toBe(0);
+      await expect(stick).not.toHaveAttribute("data-held", /.+/);
+      await page.screenshot({ path: join(shots, `mobile-${prefix}-21-stick.png`) });
+
+      // Inspect: the eye, then a tap on the map looks at that tile and does not walk there.
+      const look = page.getByTestId("touch-look");
+      await look.tap();
+      await expect(look).toHaveAttribute("aria-pressed", "true");
+      await tapTile(page, walked.x - way.dx, walked.y - way.dy);
+      await expect(look).toHaveAttribute("aria-pressed", "false");
+      await expect(
+        page.getByTestId("notices").locator('[data-key^="look."]').first(),
+      ).toBeVisible();
+      const after = await settled(page);
+      expect({ x: after.x, y: after.y }).toEqual({ x: walked.x, y: walked.y });
+
+      // The attack button: back to the start, north to the wolves, and press it until the
+      // client has a target (none is in view at first).
+      await tapTile(page, start.x, start.y);
+      await arrived(page, start.x, start.y);
+      await tapTile(page, start.x, start.y - 5);
+      await arrived(page, start.x, start.y - 5);
+      const attack = page.getByTestId("touch-attack");
+      await expect
+        .poll(
+          async () => {
+            const has = await page.evaluate(() => window.__rpgClient?.target() !== undefined);
+            if (has) return true;
+            const wolves = await page.evaluate(() => (window.__rpgClient?.monsters() ?? []).length);
+            if (wolves > 0) await attack.tap();
+            else {
+              const me = await self(page);
+              const p = await tileClient(page, me.x, me.y - 2);
+              if ((await hitAt(page, p)) === "CANVAS") await page.touchscreen.tap(p.x, p.y);
+            }
+            return page.evaluate(() => window.__rpgClient?.target() !== undefined);
+          },
+          { timeout: 60_000, intervals: [1000] },
+        )
+        .toBe(true);
+      await expect(attack).toHaveAttribute("data-targeting", "");
+      const targeted = await page.evaluate(() => {
+        const id = window.__rpgClient?.target();
+        return (window.__rpgClient?.monsters() ?? []).some((m) => m.id === id);
+      });
+      expect(targeted).toBe(true); // a monster, never a player
+      await page.screenshot({ path: join(shots, `mobile-${prefix}-21-attack.png`) });
+      expect(errors).toEqual([]);
+    });
+
+    test("touch: the context button talks to the NPC beside the player", async ({
+      page,
+      playwright,
+    }) => {
+      const errors = watchErrors(page);
+      const who = await newGuardian(playwright, "Ctx");
+      psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${who.name}'`]);
+      await enterGame(page, who.email, who.password);
+      errors.length = 0;
+      let priest: { id: number; x: number; y: number } | undefined;
+      await expect
+        .poll(async () => {
+          const list = await page.evaluate(() => window.__rpgClient?.npcs() ?? []);
+          priest = list.find((n) => n.contentId === "puerto_priest");
+          return priest !== undefined;
+        })
+        .toBe(true);
+      if (!priest) throw new Error("no priestess");
+      const hide = page.getByTestId("tutorial-hide");
+      if (await hide.isVisible()) {
+        await hide.tap();
+        await expect(page.getByTestId("tutorial-show")).toBeVisible();
+      }
+      // Walk beside her: the nearest walkable tile next to her.
+      const me = await settled(page);
+      const spots: { x: number; y: number }[] = [];
+      for (const [dx, dy] of [
+        [0, 1],
+        [1, 0],
+        [-1, 0],
+        [0, -1],
+      ] as const) {
+        const x = priest.x + dx;
+        const y = priest.y + dy;
+        if (await walkable(page, x, y, me.z)) spots.push({ x, y });
+      }
+      spots.sort(
+        (a, b) =>
+          Math.abs(a.x - me.x) +
+          Math.abs(a.y - me.y) -
+          (Math.abs(b.x - me.x) + Math.abs(b.y - me.y)),
+      );
+      const spot = spots[0];
+      if (!spot) throw new Error("no tile beside the priestess");
+      if (spot.x !== me.x || spot.y !== me.y) {
+        await tapTile(page, spot.x, spot.y);
+        await arrived(page, spot.x, spot.y);
+      }
+      const interact = page.getByTestId("touch-interact");
+      await expect(interact).toHaveAttribute("data-context", "talk");
+      await expect(interact).toBeEnabled();
+      await page.screenshot({ path: join(shots, `mobile-${prefix}-21-context.png`) });
+      await interact.tap();
+      const dialog = page.getByTestId("dialog");
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("heading")).toHaveText("Hermana Liora");
+      await dialog.getByRole("button", { name: "Cerrar" }).tap();
+      await expect(dialog).toBeHidden();
+      expect(errors).toEqual([]);
+    });
+  });
+}
+
+test.describe("lote 21 hybrid input on Pixel 7", () => {
+  test.use(deviceOptions("Pixel 7"));
+
+  test("hybrid: keyboard and mouse play on the phone layout, then fingers, in one session", async ({
+    page,
+    playwright,
+  }) => {
+    test.setTimeout(120_000);
+    const errors = watchErrors(page);
+    const who = await newGuardian(playwright, "Hybrid");
+    await enterGame(page, who.email, who.password);
+    errors.length = 0;
+    const game = page.getByTestId("game");
+    await expect(game).toHaveAttribute("data-ui", "mobile");
+    await expect(game).toHaveAttribute("data-input", "touch");
+    await page.evaluate(() => {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && el !== document.body) el.blur();
+    });
+
+    // Keyboard: an arrow walks one tile on the mobile layout, and the on-screen controls
+    // step back (they stay on screen, dimmed).
+    const start = await settled(page);
+    const way = await openDirection(page, start, 2);
+    const KEYS: Record<string, string> = {
+      east: "ArrowRight",
+      west: "ArrowLeft",
+      south: "ArrowDown",
+      north: "ArrowUp",
+    };
+    const key = KEYS[way.dir];
+    if (!key) throw new Error("no key");
+    await stepToward(page, key, () => page.keyboard.press(key));
+    await arrived(page, start.x + way.dx, start.y + way.dy);
+    await expect(game).toHaveAttribute("data-input", "keyboard");
+    await expect(game).toHaveAttribute("data-controls", "faded");
+    await expect(page.getByTestId("touch-pad")).toBeVisible();
+    await page.screenshot({ path: join(shots, "mobile-pixel7-portrait-21-hybrid-keyboard.png") });
+
+    // The window keys: I opens the inventory section, Escape closes the sheet.
+    await page.keyboard.press("i");
+    await expect(page.locator('[data-pane="inventory"]').first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#side-panel")).toBeHidden();
+
+    // F1 casts the first hotbar slot (when the vocation starts with a spell there).
+    const f1 = await page.locator('[data-hotkey="F1"] button').first().getAttribute("data-spell");
+    if (f1) {
+      await page.keyboard.press("F1");
+      await expect.poll(() => page.evaluate(() => window.__rpgClient?.lastCast())).toBe(f1);
+      await page.keyboard.press("Escape"); // drops the aim of an aimed spell
+    }
+
+    // Mouse: a left click on a tile walks there.
+    const here = await settled(page);
+    const back = await tileClient(page, here.x - way.dx, here.y - way.dy);
+    expect(await hitAt(page, back)).toBe("CANVAS");
+    await page.mouse.click(back.x, back.y);
+    await arrived(page, here.x - way.dx, here.y - way.dy);
+    await expect(game).toHaveAttribute("data-input", "mouse");
+    await expect(game).toHaveAttribute("data-controls", "faded");
+
+    // Fingers again, same session: the controls come back and the pad walks.
+    const again = await settled(page);
+    await tapTile(page, again.x + way.dx, again.y + way.dy);
+    await arrived(page, again.x + way.dx, again.y + way.dy);
+    await expect(game).toHaveAttribute("data-input", "touch");
+    await expect(game).not.toHaveAttribute("data-controls", "faded");
+    const pad = page.getByTestId("touch-pad");
+    const opposite: Record<string, string> = {
+      east: "west",
+      west: "east",
+      south: "north",
+      north: "south",
+    };
+    const dir = opposite[way.dir];
+    if (!dir) throw new Error("no way back");
+    await stepToward(page, dir, () => pad.locator(`[data-dir="${dir}"]`).tap());
+    await arrived(page, again.x, again.y);
+    await page.screenshot({ path: join(shots, "mobile-pixel7-portrait-21-hybrid-touch.png") });
+    expect(errors).toEqual([]);
+  });
+
+  test("app mode: the manifest, full screen and the install button on Chromium", async ({
+    page,
+    request,
+  }) => {
+    const res = await request.get("/manifest.webmanifest");
+    expect(res.ok()).toBe(true);
+    const manifest = (await res.json()) as Record<string, unknown>;
+    expect(manifest["display"]).toBe("fullscreen");
+    expect(manifest["display_override"]).toEqual(["fullscreen", "standalone"]);
+    expect(manifest["start_url"]).toBe("/play/");
+    expect(manifest["orientation"]).toBe("any");
+
+    await page.goto("/play/?lang=es");
+    const mode = page.getByTestId("app-mode").first();
+    await expect(mode).toHaveAttribute("data-platform", "chromium");
+    // No install button until the browser says the app can be installed.
+    await expect(page.getByTestId("install-button")).toHaveCount(0);
+    await page.evaluate(() => window.dispatchEvent(new Event("beforeinstallprompt")));
+    const install = page.getByTestId("install-button");
+    await expect(install).toBeVisible();
+    await expect(install).toHaveAttribute("data-install", "prompt");
+    await page.screenshot({ path: join(shots, "mobile-pixel7-portrait-21-app-mode.png") });
+    // Dismissed, it is remembered across a reload (it stays in Options).
+    await page.getByTestId("install-dismiss").tap();
+    await expect(page.locator('[data-where="screen"] [data-testid="install-button"]')).toHaveCount(
+      0,
+    );
+    await page.reload();
+    await page.evaluate(() => window.dispatchEvent(new Event("beforeinstallprompt")));
+    await expect(page.getByTestId("app-mode").first()).toBeVisible();
+    await expect(page.locator('[data-where="screen"] [data-testid="install-button"]')).toHaveCount(
+      0,
+    );
+    // Installed: no button anywhere.
+    await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
+    await expect(page.getByTestId("install-button")).toHaveCount(0);
+  });
+});
+
+test.describe("lote 21 app mode on iPhone 13 (webkit)", () => {
+  test.use(deviceOptions("iPhone 13"));
+
+  test("app mode: an iPhone gets the install steps and no fullscreen button", async ({ page }) => {
+    await page.goto("/play/?lang=es");
+    const mode = page.getByTestId("app-mode").first();
+    await expect(mode).toHaveAttribute("data-platform", "iphone");
+    await expect(page.getByTestId("fullscreen-button")).toHaveCount(0);
+    const install = page.getByTestId("install-button");
+    await expect(install).toHaveAttribute("data-install", "ios-steps");
+    await install.tap();
+    const steps = page.getByTestId("install-steps");
+    await expect(steps).toBeVisible();
+    await expect(steps.locator("li")).toHaveCount(3);
+    await page.screenshot({ path: join(shots, "mobile-webkit-iphone13-portrait-21-install.png") });
+    await page.getByTestId("install-steps-close").tap();
+    await expect(steps).toBeHidden();
+  });
+});
+
+// ---- Lote 21 QA (docs/08 "Auditoría táctil", docs/15) -------------------------------------
+// Every screen a finger meets on the way into the game and around its HUD, measured by
+// e2e/touch-audit.ts: 44 px hit areas, no clipped label, nothing off the screen, no
+// sideways scroll and, on Chromium with the insets of a notch and a home bar, nothing under
+// them. The screens no server is needed for are measured by `make ui-preview AUDIT=1`.
+
+const QA: { prefix: string; device: string; browser: string; insets?: Insets }[] = [
+  {
+    prefix: "pixel7-portrait",
+    device: "Pixel 7",
+    browser: "chromium",
+    insets: { top: 32, right: 0, bottom: 24, left: 0 },
+  },
+  {
+    prefix: "pixel7-landscape",
+    device: "Pixel 7 landscape",
+    browser: "chromium",
+    insets: { top: 0, right: 0, bottom: 24, left: 32 },
+  },
+  { prefix: "ipad-mini", device: "iPad Mini", browser: "chromium" },
+  { prefix: "ipad-mini-landscape", device: "iPad Mini landscape", browser: "chromium" },
+  { prefix: "webkit-iphone13-portrait", device: "iPhone 13", browser: "webkit" },
+  { prefix: "webkit-iphone13-landscape", device: "iPhone 13 landscape", browser: "webkit" },
+];
+
+for (const { prefix, device, browser, insets } of QA) {
+  const title =
+    browser === "chromium" ? `lote 21 QA on ${device}` : `lote 21 QA on ${device} (${browser})`;
+  test.describe(title, () => {
+    test.use(deviceOptions(device));
+
+    test("qa: every screen on the way in and around the HUD passes the touch audit", async ({
+      page,
+      playwright,
+    }) => {
+      test.setTimeout(180_000);
+      const errors = watchErrors(page);
+      const who = await newGuardian(playwright, "Qa");
+      // In Puerto: the tutorial's panel and the priestess's dialog are screens to measure.
+      psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${who.name}'`]);
+      const found: { screen: string; findings: TouchFinding[] }[] = [];
+      /** Measures the screen as it is now and keeps its picture. */
+      const measure = async (screen: string): Promise<void> => {
+        await page.screenshot({ path: join(shots, `mobile-qa-${prefix}-${screen}.png`) });
+        const findings = await touchAudit(page, { insets });
+        if (findings.length > 0) found.push({ screen, findings });
+      };
+
+      await page.goto("/play/?lang=es");
+      if (insets) {
+        // The override lives as long as this CDP session: it stays attached to the end.
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets });
+      }
+      const loginForm = page.getByTestId("login-form");
+      await expect(loginForm).toBeVisible();
+      await measure("01-login");
+      // The corner (language, options, full screen, install) is a strip above the title on
+      // a phone: fixed to the corner it lay over the title and the form (a real 384 px one).
+      const vp = page.viewportSize();
+      if (vp && (vp.width <= 640 || vp.height <= 500)) {
+        const corner = await page.locator(".corner").boundingBox();
+        const form = await loginForm.boundingBox();
+        if (!corner || !form) throw new Error("no corner or no form");
+        expect(corner.y + corner.height).toBeLessThanOrEqual(form.y + 1);
+      }
+      await loginForm.getByLabel("Email").fill(who.email);
+      await loginForm.getByLabel("Contraseña").fill(who.password);
+      await loginForm.getByRole("button", { name: "Entrar", exact: true }).tap();
+      const play = page.getByTestId("characters").getByRole("button", { name: "Jugar" });
+      await expect(play).toBeVisible();
+      await measure("02-characters");
+      await play.tap();
+      await page.waitForFunction(() => window.__rpgClient?.ready === true);
+      await expect.poll(() => mapDrawn(page)).toBe(true);
+      errors.length = 0; // the 401 of opening the page without a session cookie
+      await measure("03-hud");
+
+      // Every section of the sheet (upright) or the drawer (on its side); a tablet on its
+      // side is the desktop screen with fingers, which has no sections.
+      const tabs = page.getByTestId("panel-tabs");
+      const toggle = page.getByTestId("panel-toggle");
+      if ((await tabs.count()) > 0 || (await toggle.count()) > 0) {
+        await showTab(page, "inventory");
+        const names = await page
+          .getByTestId("panel-tabs")
+          .locator("[data-tab]")
+          .evaluateAll((els) => els.map((el) => el.getAttribute("data-tab") ?? ""));
+        expect(names.length).toBeGreaterThan(4);
+        for (const name of names) {
+          await showTab(page, name);
+          await opened(page.locator("#side-panel"));
+          await measure(`04-${name}`);
+        }
+        await closeDrawer(page);
+      }
+
+      // The menu (experience, help, language, options, full screen, leave).
+      const menu = page.locator('[data-testid="hud-menu"] > summary');
+      if (await menu.isVisible()) {
+        await menu.tap();
+        await expect(page.getByTestId("hud-menu-close")).toBeVisible();
+        await measure("05-menu");
+        await page.getByTestId("hud-menu-close").tap();
+      }
+
+      // An NPC's dialog, from a tap on her.
+      let priest: { x: number; y: number } | undefined;
+      await expect
+        .poll(async () => {
+          const list = await page.evaluate(() => window.__rpgClient?.npcs() ?? []);
+          priest = list.find((n) => n.contentId === "puerto_priest");
+          return priest !== undefined;
+        })
+        .toBe(true);
+      if (!priest) throw new Error("no priestess");
+      const hide = page.getByTestId("tutorial-hide");
+      if (await hide.isVisible()) {
+        await measure("06-tutorial");
+        await hide.tap();
+      }
+      await tapTile(page, priest.x, priest.y);
+      const dialog = page.getByTestId("dialog");
+      await expect(dialog).toBeVisible();
+      await opened(dialog);
+      await measure("07-dialog");
+
+      expect(
+        found.flatMap((f) => f.findings),
+        found.map((f) => `${f.screen}\n${formatFindings(f.findings)}`).join("\n\n"),
+      ).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+  });
+}
+
+// The numbers of docs/07 "Teléfonos" come from here: Puerto's square (a town: NPCs, torches,
+// the living world) on a Pixel 7 with the CPU four times slower (CDP), five seconds of
+// frames. It writes them down (mobile-qa-performance.json beside the screenshots) and
+// fails only if the game stops drawing: a runner without a GPU draws WebGL in software,
+// so a budget asserted here would measure the runner.
+test.describe("lote 21 QA performance on Pixel 7", () => {
+  test.use(deviceOptions("Pixel 7"));
+
+  test("qa: frame times and memory under a 4x CPU throttle are written down", async ({
+    page,
+    playwright,
+  }) => {
+    test.setTimeout(150_000);
+    const who = await newGuardian(playwright, "Perf");
+    psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${who.name}'`]);
+    await enterGame(page, who.email, who.password);
+    const cdp = await page.context().newCDPSession(page);
+    const sample = (): Promise<{
+      frames: number;
+      fps: number;
+      p50: number;
+      p95: number;
+      worst: number;
+    }> =>
+      page.evaluate(
+        () =>
+          new Promise((done) => {
+            const times: number[] = [];
+            const start = performance.now();
+            const tick = (now: number): void => {
+              times.push(now);
+              if (now - start < 5000) requestAnimationFrame(tick);
+              else {
+                const gaps = times.slice(1).map((t, i) => t - (times[i] ?? t));
+                gaps.sort((a, b) => a - b);
+                const at = (q: number): number =>
+                  Math.round(
+                    (gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * q))] ?? 0) * 10,
+                  ) / 10;
+                done({
+                  frames: gaps.length,
+                  fps: Math.round((gaps.length * 1000) / (now - start)),
+                  p50: at(0.5),
+                  p95: at(0.95),
+                  worst: at(1),
+                });
+              }
+            };
+            requestAnimationFrame(tick);
+          }),
+      );
+    const heapMb = async (): Promise<number> => {
+      await cdp.send("Performance.enable");
+      const { metrics } = await cdp.send("Performance.getMetrics");
+      const used = metrics.find((m) => m.name === "JSHeapUsedSize")?.value ?? 0;
+      return Math.round(used / 1024 / 1024);
+    };
+    const plain = await sample();
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    const throttled = await sample();
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    const report = {
+      device: "Pixel 7 (emulated)",
+      plain,
+      throttled4x: throttled,
+      heapMb: await heapMb(),
+    };
+    writeFileSync(join(shots, "mobile-qa-performance.json"), JSON.stringify(report, null, 1));
+    test.info().annotations.push({ type: "performance", description: JSON.stringify(report) });
+    await page.screenshot({ path: join(shots, "mobile-qa-performance.png") });
+    expect(throttled.frames).toBeGreaterThan(10);
+  });
 });

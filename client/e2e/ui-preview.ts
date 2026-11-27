@@ -4,21 +4,37 @@
 // server, no Postgres and no HTTP server: Playwright answers every request from the build.
 // A plain script, not a Playwright test (it has no .spec in its name).
 //
-//   node --experimental-strip-types client/e2e/ui-preview.ts [--no-build] [--only <scene>]
+//   node --experimental-strip-types client/e2e/ui-preview.ts [--no-build] [--only <scene>[,<scene>]] [--sizes <part>[,<part>]]
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdirSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import type { BrowserContextOptions } from "@playwright/test";
+import { formatFindings, touchAudit } from "./touch-audit.ts";
+import type { Insets, TouchFinding } from "./touch-audit.ts";
 
 const client = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(client, "..");
 const out = join(root, "build", "ui-preview");
 const shots = join(client, "e2e", "screenshots", "actual", "ui-preview");
 const args = process.argv.slice(2);
-const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : undefined;
+// --only takes one scene or several, comma separated; --sizes keeps the sizes whose name
+// has one of its comma separated parts ("phone,tablet": the touch sizes).
+const listArg = (flag: string): string[] | undefined =>
+  args.includes(flag) ? (args[args.indexOf(flag) + 1] ?? "").split(",").filter(Boolean) : undefined;
+const only = listArg("--only");
+const sizes = listArg("--sizes");
+// --audit: the touch audit (e2e/touch-audit.ts, docs/08) of every scene at the touch sizes;
+// findings go to build/ui-preview/touch-audit.json and the script exits 1 with any.
+// --lang es|en picks the language; --notch draws each touch size with the safe-area insets
+// of a phone with a notch and a home bar (and the audit checks nothing sits under them).
+const audit = args.includes("--audit");
+const lang = listArg("--lang")?.[0] ?? "es";
+const notch = args.includes("--notch");
+// --covered: also list big enough controls that something covers in part (to hunt overlaps).
+const covered = args.includes("--covered");
 
 /**
  * Puerto's temple square (grass, walls, cobbles, a sign and the market board) in the
@@ -82,6 +98,8 @@ const TYPES: Record<string, string> = {
 interface Size {
   name: string;
   opts: BrowserContextOptions;
+  /** A touch size: the audit runs here, and --notch gives it these insets. */
+  insets?: Insets;
 }
 const desktop = (w: number, h: number): Size => ({
   name: `${w}x${h}`,
@@ -90,6 +108,11 @@ const desktop = (w: number, h: number): Size => ({
 const touch = (name: string, w: number, h: number): Size => ({
   name,
   opts: { viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+  // A notch on the short side at the top (or at the left, on its side) and a home bar.
+  insets:
+    w < h
+      ? { top: 47, right: 0, bottom: 34, left: 0 }
+      : { top: 0, right: 47, bottom: 21, left: 47 },
 });
 const SIZES: Size[] = [
   desktop(1920, 1080),
@@ -98,7 +121,11 @@ const SIZES: Size[] = [
   desktop(960, 700),
   touch("phone-390x844", 390, 844),
   touch("phone-844x390", 844, 390),
+  // A phone on its side inside the browser, as measured on a Galaxy S22 Ultra (lote 21):
+  // the address bar and the system buttons leave 298 px of height.
+  touch("phone-748x298", 748, 298),
   touch("tablet-768x1024", 768, 1024),
+  touch("tablet-1024x768", 1024, 768),
 ];
 
 /** rpg.windows of each scene (ui/windows.ts format, version 3); absent = the defaults. */
@@ -331,13 +358,50 @@ const SCENES = [
   // docs/02 "Cuentas": an account without characters goes straight to the form.
   "createfirst",
   "appearance",
+  // docs/17 "UI movil": the states of the mobile HUD (on the desktop sizes they show the
+  // same things on the floating windows' screen).
+  "social", // a party and a guild invitation and the presence check, at once
+  "voyage", // the fade of a boat trip
+  "mobilemenu", // the menu that replaced the header's hamburger (desktop: Options)
+  "mobilechat", // the whole chat, opened from the compact log over the map
+  "mobilebattle", // the battle section in the sheet (or drawer)
+  "mobilenopad", // without the direction pad (Options): the console is the buttons alone
+  "mobilemap", // the minimap unfolded, with the tracked objective
+  // Lote 21 (docs/15): the touch controls in their other shapes.
+  "touchstick", // the analog stick instead of the pad
+  "touchleft", // left-handed and large: the buttons at the left thumb, the stick at the right
+];
+/**
+ * What the touch audit lets through, each with its reason. Keep it short: a finding is a
+ * bug until someone decides otherwise.
+ */
+const AUDIT_ALLOW: { scene?: string; re: RegExp }[] = [
+  // The item menu of this scene is the one a mouse opens (30 px rows, at the cursor); a
+  // long press opens the 44 px one, which e2e/mobile-qa.spec.ts measures in the game.
+  { scene: "itemmenu", re: /^tap button\.touch-menu-action/ },
+  // A spell's name in its slot is cut on purpose (the whole name is the slot's label).
+  { re: /^clip button "F\d+/ },
+  // The title of a narrow floating window, on a tablet on its side (the desktop screen).
+  { re: /^clip h2\.gwin-title/ },
+];
+const findings: { scene: string; size: string; found: TouchFinding[] }[] = [];
+
+/** Scenes of the mobile HUD that are the base scene plus taps of this script. */
+const MOBILE_TAPS = [
+  "mobilemenu",
+  "mobilechat",
+  "mobilebattle",
+  "mobilenopad",
+  "mobilemap",
+  "touchstick",
+  "touchleft",
 ];
 
 mkdirSync(shots, { recursive: true });
 const browser = await chromium.launch();
 try {
-  for (const scene of SCENES.filter((s) => !only || s === only)) {
-    for (const size of SIZES) {
+  for (const scene of SCENES.filter((s) => !only || only.includes(s))) {
+    for (const size of SIZES.filter((z) => !sizes || sizes.some((p) => z.name.includes(p)))) {
       const context = await browser.newContext({ ...size.opts, reducedMotion: "no-preference" });
       await context.route("**/*", async (route) => {
         const url = new URL(route.request().url());
@@ -394,6 +458,11 @@ try {
         });
       });
       const page = await context.newPage();
+      const insets = notch ? size.insets : undefined;
+      if (insets) {
+        const cdp = await context.newCDPSession(page);
+        await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets });
+      }
       const windows = WINDOWS[scene];
       await page.addInitScript((w) => {
         localStorage.clear();
@@ -414,13 +483,23 @@ try {
         "questsdone",
         "questsmilestones",
         "scale",
+        ...MOBILE_TAPS,
       ].includes(scene)
         ? "game"
         : scene;
       // docs/17 UI-3: the interface at 125 % with the text at 115 %.
-      const scales = scene === "scale" ? "&ui=1.25&text=1.15" : "";
+      const scales =
+        scene === "scale"
+          ? "&ui=1.25&text=1.15"
+          : scene === "mobilenopad"
+            ? "&pad=0"
+            : scene === "touchstick"
+              ? "&stick=1"
+              : scene === "touchleft"
+                ? "&stick=1&mirror=1&size=large"
+                : "";
       await page.goto(
-        `http://ui.preview/preview/?scene=${sceneParam}&mapx=${mapx}&mapy=${mapy}${scales}`,
+        `http://ui.preview/preview/?scene=${sceneParam}&mapx=${mapx}&mapy=${mapy}${scales}&lang=${lang}`,
       );
       await page.waitForSelector(".game, .panel");
       await page.evaluate(() => document.fonts.ready);
@@ -451,6 +530,33 @@ try {
           await tab.click();
           await page.waitForTimeout(150);
         }
+      }
+      // docs/17 "UI movil": the mobile HUD's own states, by the taps a player gives (on the
+      // desktop sizes none of these buttons exists: the scene is the base one).
+      if (scene === "mobilemenu") {
+        const menu = page.locator('[data-testid="hud-menu"] > summary');
+        if (await menu.isVisible()) await menu.click();
+        else await page.getByTestId("options-button").click();
+        await page.waitForTimeout(300);
+      }
+      if (scene === "mobilechat") {
+        const glance = page.getByTestId("chat-glance");
+        if (await glance.isVisible()) {
+          await glance.click();
+          await page.waitForTimeout(300);
+        }
+      }
+      if (scene === "mobilebattle") {
+        const toggle = page.getByTestId("panel-toggle");
+        if (await toggle.isVisible()) await toggle.click();
+        const tab = page.locator('[data-testid="panel-tabs"] [data-tab="battle"]');
+        if (await tab.isVisible()) await tab.click();
+        await page.waitForTimeout(300);
+      }
+      if (scene === "mobilemap") {
+        const fold = page.getByTestId("minimap-fold");
+        if ((await fold.getAttribute("aria-expanded")) === "false") await fold.click();
+        await page.waitForTimeout(300);
       }
       // docs/17 UI-6: the card of an item under the mouse, at once (the Diablo II idea):
       // the sword in the right hand (stats, a requirement), the coins in the backpack (gold).
@@ -528,7 +634,16 @@ try {
           await page.waitForTimeout(300);
         }
       }
-      await page.screenshot({ path: join(shots, `${scene}-${size.name}.png`) });
+      const suffix = (lang === "es" ? "" : `-${lang}`) + (notch ? "-notch" : "");
+      await page.screenshot({ path: join(shots, `${scene}-${size.name}${suffix}.png`) });
+      if (audit && size.insets) {
+        const found = await touchAudit(page, {
+          allow: AUDIT_ALLOW.filter((a) => !a.scene || a.scene === scene).map((a) => a.re),
+          insets,
+          covered,
+        });
+        if (found.length > 0) findings.push({ scene, size: size.name, found });
+      }
       await context.close();
     }
   }
@@ -536,3 +651,17 @@ try {
   await browser.close();
 }
 console.log(`ui-preview: screenshots in ${shots}`);
+if (audit) {
+  writeFileSync(
+    join(out, `touch-audit-${lang}${notch ? "-notch" : ""}.json`),
+    JSON.stringify(findings, null, 1),
+  );
+  for (const f of findings)
+    console.log(`
+${f.scene} @ ${f.size}
+${formatFindings(f.found)}`);
+  const total = findings.reduce((n, f) => n + f.found.length, 0);
+  console.log(`
+touch audit (${lang}${notch ? ", notch" : ""}): ${total} finding(s)`);
+  if (total > 0) process.exitCode = 1;
+}

@@ -1,6 +1,11 @@
 // Screens of the client: login, sign up, characters (list and creation) and the game.
 // DOM with Preact over the canvas (client/CLAUDE.md): accessible, translatable and easy to
 // drive from Playwright. Every visible text goes through t().
+import { Haptics, browserVibrate } from "../state/haptics.ts";
+import { coarsePointer } from "../state/touch-prefs.ts";
+import { DEFAULT_TOUCH_PREFS } from "../state/touch-controls.ts";
+import type { TouchPrefs } from "../state/touch-controls.ts";
+import { keepAwake } from "./app-mode.ts";
 import { CREATURE_NAME_MAX_CHARS } from "@rpg/content-schema/npc-role";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
@@ -55,6 +60,8 @@ export interface AppProps {
   audio?: AudioEngine | undefined;
   /** T5.6: show the on-screen direction pad (switched in Options, state/touch-prefs.ts). */
   touchPad?: boolean | undefined;
+  /** Lote 21: the touch controls this device chose (state/touch-controls.ts). */
+  touchControls?: TouchPrefs | undefined;
   /** The desktop game's Options window (docs/17 UI-5): language, sound, controls. */
   settings?: GameSettings | undefined;
   /**
@@ -95,6 +102,7 @@ function Screens({
   languagePicker,
   audio,
   touchPad,
+  touchControls,
   settings,
   onOptionsSynced,
 }: AppProps): JSX.Element {
@@ -201,6 +209,7 @@ function Screens({
             settings={settings}
             audio={audio}
             touchPad={touchPad ?? false}
+            touchControls={touchControls}
             character={screen.character}
             sessionToken={screen.sessionToken}
             onEnd={(reason, inFight) => {
@@ -609,6 +618,7 @@ function GameScreen(props: {
   settings: GameSettings | undefined;
   audio: AudioEngine | undefined;
   touchPad: boolean;
+  touchControls: TouchPrefs | undefined;
   character: Character;
   sessionToken: string;
   /** inFight: the logout lock of a fight lasted when the game ended (state/stayed.ts). */
@@ -641,8 +651,21 @@ function GameScreen(props: {
   const nameSize = useRef(props.settings?.nameSize);
   nameSize.current = props.settings?.nameSize;
 
+  // Lote 21: a light vibration on a hit, a level up or a refusal (Options; off where the
+  // device cannot vibrate), and the screen kept awake while in the game.
+  const hapticsOn = useRef(props.touchControls?.haptics);
+  hapticsOn.current = props.touchControls?.haptics;
+  useEffect(() => {
+    keepAwake(true);
+    return () => keepAwake(false);
+  }, []);
+
   useEffect(() => {
     if (!host.current) return undefined;
+    const haptics = new Haptics(
+      browserVibrate(typeof navigator === "undefined" ? undefined : navigator, coarsePointer()),
+      () => hapticsOn.current ?? DEFAULT_TOUCH_PREFS.haptics,
+    );
     const g = new Game({
       host: host.current,
       content: props.content,
@@ -655,6 +678,7 @@ function GameScreen(props: {
       cameraShake: () => shake.current ?? loadCameraShake(storage),
       chatBubbles: () => bubbles.current ?? loadChatBubbles(storage),
       nameSize: () => nameSize.current ?? loadNameSize(storage),
+      haptic: (kind) => void haptics.pulse(kind, performance.now()),
       audio: props.audio,
       entered: () => setEntered(true),
       loadFailed: () => setLoadFailed(true),
@@ -685,6 +709,7 @@ function GameScreen(props: {
       languagePicker={props.languagePicker}
       settings={props.settings}
       touchPad={props.touchPad}
+      touchControls={props.touchControls}
       characterName={props.character.name}
       ui={ui}
       game={game.current}

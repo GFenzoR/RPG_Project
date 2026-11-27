@@ -161,50 +161,6 @@ body.picking-item [data-drop] {
   border-radius: 8px;
 }
 
-/* ---- placement over the map (App.tsx mounts these inside .viewport) ----
-   The pad docks bottom-left; the hotbar starts after it (PAD_RESERVE_PX in TouchPad.tsx).
-   In portrait the map sits at the top of a taller viewport and both go in the strip under
-   it, so the pad never covers the map.
-   Safe area: .viewport lies inside the padding of .game, which already keeps the game out
-   of the notch, the rounded corners and the home indicator (client.css). The offsets here
-   are from the viewport's edges and never add env(safe-area-inset-*) again: that counted
-   the inset twice on a notched phone on its side. */
-.game[data-pad] .hotbar {
-  left: 162px;
-  transform: none;
-  max-width: calc(100% - 170px);
-}
-/* The strip is the viewport's bottom padding: game-canvas.ts sizes the map to the content
-   box, so a zoomed-in map is cut above the strip and never slides under the pad. */
-.game[data-flow="column"][data-pad] .viewport {
-  align-items: flex-start;
-  box-sizing: border-box;
-  height: min(calc(100vw * 11 / 15 + 154px), 72%);
-  padding-bottom: 154px;
-}
-
-/* Portrait with the pad (Hotbar.tsx `stacked`): right of the pad, the arrows and the edit
-   button on a line of their own above the slots, and narrower slots, so a 412 px phone
-   shows four of them (ui/layout.ts hotbarRoom). */
-.game[data-pad] .hotbar.stacked {
-  flex-direction: column;
-  align-items: flex-start;
-}
-.hotbar-controls {
-  display: flex;
-  gap: 0.25rem;
-  height: 44px;
-}
-.hotbar-controls .page,
-.hotbar-controls .edit {
-  width: 44px;
-  height: 44px;
-}
-.game[data-pad] .hotbar.stacked li button,
-.game[data-pad] .hotbar.stacked li select {
-  /* px, not rem: the root text size (17 px since 2026-11-26) must not cost the fourth slot. */
-  width: 51px;
-}
 /* Over the map and the phone drawer (z-index 8 in client.css), under the windows over the
    map (12: dialog, crafting, market, house, trade). Upright the dialog's sheet can reach
    the pad's last row (iPad Mini, iPhone 13, more with a notch); before, at 20, the pad
@@ -225,20 +181,6 @@ body.picking-item [data-drop] {
   /* Over the map, under the phone drawer (z-index 8 in client.css) and the windows. */
   z-index: 7;
   max-width: min(calc(100% - 16px), 440px);
-}
-
-/* Portrait with the pad: the banner goes in the strip under the map, over the hotbar's
-   arrows and where the zoom buttons were (App.tsx hides them meanwhile), so it never
-   covers the tiles a finger may tap as the destination. */
-.game[data-flow="column"][data-pad] .viewport > .pick-banner {
-  top: auto;
-  bottom: 3.4rem;
-  left: 162px;
-  right: 8px;
-  transform: none;
-  max-width: none;
-  /* Opaque here: the hotbar's arrows under it would show through. */
-  background: var(--panel);
 }
 
 /* ---- map zoom (ZoomButtons.tsx, touch screens) ----
@@ -275,13 +217,6 @@ body.picking-item [data-drop] {
 .zoom-button:focus-visible {
   outline: 2px solid var(--ui-gold-300);
   outline-offset: 1px;
-}
-
-/* Portrait with the pad: side by side in the strip under the map, above the hotbar's
-   arrows (the strip is 154 px: slots, arrows, then these). */
-.game[data-flow="column"][data-pad] .zoom-buttons {
-  flex-direction: row;
-  bottom: 108px;
 }
 
 /* ---- the right-click menu (docs/17 UI-6): compact for the mouse, with the item's card ---- */
@@ -342,4 +277,449 @@ body.picking-item [data-drop] {
   margin-top: 4px;
   padding-top: 8px;
   border-top: 1px solid var(--ui-gold-700);
+}
+
+/* ==== Lote 21: touch play (docs/15 "Controles táctiles") ============================ */
+
+/* Nothing of the game scrolls, zooms or selects under a finger: no pull-to-refresh, no
+   double-tap zoom, no callout nor selection on a long press. Text fields and the lists
+   that scroll keep their own behaviour (they set touch-action themselves). */
+.game {
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.game[data-touch] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.game[data-touch] input,
+.game[data-touch] textarea,
+.game[data-touch] .chat-lines,
+.game[data-touch] .user-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The size of the on-screen controls (Options): never under 44 px. */
+.game {
+  --touch-btn: 52px;
+  --touch-pad-scale: 1;
+}
+.game[data-touch-size="small"] {
+  --touch-btn: 44px;
+}
+.game[data-touch-size="large"] {
+  --touch-btn: 62px;
+  --touch-pad-scale: 1.2;
+}
+.game[data-touch-size="large"] .touch-pad {
+  grid-template-columns: repeat(3, 52px);
+  grid-template-rows: repeat(3, 52px);
+}
+.game[data-touch-size="large"] .touch-pad-button {
+  min-width: 52px;
+  min-height: 52px;
+}
+
+/* ---- the analog stick: an iron ring with a gold-rimmed knob ---- */
+.touch-stick {
+  position: relative;
+  width: calc(146px * var(--touch-pad-scale, 1));
+  height: calc(146px * var(--touch-pad-scale, 1));
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgb(0 0 0 / 55%) 0 38%,
+    rgb(33 28 23 / 80%) 39% 100%
+  );
+  box-shadow:
+    0 0 0 1px var(--ui-iron-900),
+    inset 0 0 0 2px var(--ui-iron-600),
+    inset 0 0 0 3px var(--ui-iron-900),
+    0 2px 6px rgb(0 0 0 / 60%);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.touch-stick-ring {
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  border: 1px dashed rgb(226 196 122 / 35%);
+  pointer-events: none;
+}
+.touch-stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44%;
+  height: 44%;
+  margin: -22% 0 0 -22%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--ui-iron-600), var(--ui-iron-900) 70%);
+  box-shadow:
+    0 0 0 1px var(--ui-iron-900),
+    inset 0 0 0 2px var(--ui-gold-500),
+    0 2px 4px rgb(0 0 0 / 70%);
+  pointer-events: none;
+  will-change: transform;
+}
+.touch-stick[data-held] .touch-stick-knob {
+  box-shadow:
+    0 0 0 1px var(--ui-iron-900),
+    inset 0 0 0 2px var(--ui-gold-300),
+    0 0 8px rgb(226 196 122 / 45%);
+}
+
+/* ---- the action buttons: round, iron-framed, gold on press ---- */
+.touch-cluster {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  /* Over the map and the drawer, under the windows over the map: as the pad. */
+  z-index: 9;
+  display: grid;
+  grid-template-columns: repeat(2, var(--touch-btn));
+  grid-auto-rows: var(--touch-btn);
+  gap: 8px;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.touch-action {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--touch-btn);
+  height: var(--touch-btn);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-iron-900);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, rgb(74 69 64 / 90%), rgb(26 24 22 / 92%) 72%);
+  box-shadow:
+    inset 0 0 0 2px var(--ui-iron-600),
+    inset 0 0 0 3px var(--ui-iron-900),
+    0 2px 5px rgb(0 0 0 / 65%);
+  color: var(--ui-gold-300);
+  font: 600 0.62rem/1.05 var(--ui-font);
+  touch-action: none;
+}
+.touch-action .icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+.touch-action.small .icon {
+  width: 24px;
+  height: 24px;
+}
+.touch-action:active,
+.touch-action[aria-pressed="true"] {
+  box-shadow:
+    inset 0 0 0 2px var(--ui-gold-500),
+    inset 0 0 0 3px var(--ui-iron-900),
+    0 0 8px rgb(226 196 122 / 40%);
+}
+.touch-action:focus-visible {
+  outline: 2px solid var(--ui-gold-300);
+  outline-offset: 2px;
+}
+.touch-action:disabled {
+  opacity: 0.45;
+}
+.touch-action.attack {
+  grid-area: 3 / 2;
+}
+.touch-action.attack[data-targeting] {
+  box-shadow:
+    inset 0 0 0 2px var(--ui-danger),
+    inset 0 0 0 3px var(--ui-iron-900),
+    0 2px 5px rgb(0 0 0 / 65%);
+}
+.touch-action.context {
+  grid-area: 3 / 1;
+}
+.touch-action[data-testid="touch-look"] {
+  grid-area: 2 / 2;
+}
+.touch-action[data-testid="touch-chase"] {
+  grid-area: 2 / 1;
+}
+.touch-action.quick {
+  grid-row: 1;
+}
+.touch-action.quick .quick-name {
+  max-width: 86%;
+  overflow: hidden;
+  text-align: center;
+  overflow-wrap: anywhere;
+  max-height: 2.2em;
+}
+.touch-action.quick .cd {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgb(0 0 0 / 60%);
+  pointer-events: none;
+}
+/* The inspect mode: the map says the next tap looks. */
+body.inspecting [data-testid="game-canvas"] {
+  cursor: help;
+}
+
+/* Where the cluster stands. On its side the map's zoom buttons keep the corner. */
+.game[data-ui="mobile"][data-flow="row"] .touch-cluster {
+  right: 60px;
+  bottom: 12px;
+}
+.game[data-ui="windows"] .touch-cluster {
+  right: 60px;
+  bottom: calc(var(--bar-px) + 12px);
+}
+/* With the sheet or the drawer open the buttons leave (lote 21 QA): they floated over it
+   and took the taps meant for what was under them (in English the third tab of the quest
+   log sat under "attack"). The pad stays: it is in the console, clear of the sheet. */
+.game[data-ui="mobile"][data-sheet] .touch-cluster {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* The same under the ☰ menu (the full E2E's capture of lote 21: the six buttons lay over
+   the menu's right half, on "Options" in a wider language). */
+.game[data-ui="mobile"]:has(.mmenu[open]) .touch-cluster {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Upright the compact chat log leaves the corner of the buttons free. */
+.game[data-ui="mobile"][data-flow="column"][data-cluster] .chat-glance {
+  max-width: calc(100% - 2 * var(--touch-btn) - 30px);
+}
+
+/* Left-handed (Options): the buttons at the left thumb, the pad or stick at the right. */
+.game[data-mirror] .touch-cluster {
+  right: auto;
+  left: 8px;
+  direction: rtl;
+}
+.game[data-mirror] .mconsole {
+  flex-direction: row-reverse;
+}
+.game[data-mirror] .mconsole .mconsole-tools {
+  justify-content: start;
+}
+.game[data-mirror][data-ui="mobile"] .mobile-bar[data-flow="row"] .touch-pad-dock {
+  left: auto;
+  right: 60px;
+}
+/* `right: auto` again: the row's own rule is more specific than the mirror's, and with
+   both sides set the box stretched across the map and its right-to-left columns landed
+   on the stick (lote 21 QA). */
+.game[data-mirror][data-ui="mobile"][data-flow="row"] .touch-cluster {
+  right: auto;
+  left: 8px;
+  bottom: 12px;
+}
+/* On the desktop screen the status tray stands over the life orb: the buttons go above it,
+   and the pad takes the corner beside the zoom buttons. */
+.game[data-mirror][data-ui="windows"] .touch-cluster {
+  left: 8px;
+  bottom: calc(var(--bar-px) + 96px);
+}
+.game[data-mirror][data-ui="windows"][data-touch] .touch-pad-dock {
+  left: auto;
+  right: 60px;
+  bottom: calc(var(--bar-px) + 12px);
+}
+.game[data-mirror][data-ui="mobile"][data-cluster] .chat-glance {
+  left: calc(2 * var(--touch-btn) + 24px);
+}
+
+/* Hybrid input (docs/15 "Entrada híbrida"): while a mouse or a keyboard plays, the
+   on-screen controls step back; the next touch brings them back (Options can pin them).
+   Where a fine pointer exists (a mouse plugged into the tablet) they also let it through
+   to the map. */
+.game[data-touch] .touch-pad-dock,
+.game[data-touch] .touch-cluster {
+  transition: opacity 160ms;
+}
+.game[data-touch][data-controls="faded"] .touch-pad-dock,
+.game[data-touch][data-controls="faded"] .touch-cluster {
+  opacity: 0.3;
+}
+@media (any-pointer: fine) {
+  .game[data-touch][data-controls="faded"] .touch-pad-dock,
+  .game[data-touch][data-controls="faded"] .touch-cluster {
+    pointer-events: none;
+  }
+}
+
+/* ---- touch options ---- */
+.touch-options {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--ui-iron-600);
+}
+.touch-options legend {
+  padding: 0 0.3rem;
+  color: var(--ui-gold-300);
+}
+.touch-opt-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.75rem;
+}
+.game[data-touch] .touch-options .check,
+.game[data-touch] .touch-opt-row {
+  min-height: 44px;
+}
+
+/* ---- full screen and install (ui/AppMode.tsx) ---- */
+.app-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.app-mode:empty {
+  display: none;
+}
+.app-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  padding: 0 0.7rem;
+}
+.app-button .icon {
+  width: 16px;
+  height: 16px;
+  image-rendering: pixelated;
+}
+.app-button[data-reoffer] {
+  box-shadow: 0 0 0 1px var(--ui-gold-500);
+}
+.app-install {
+  display: inline-flex;
+  align-items: center;
+}
+.app-dismiss {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: 1.2rem;
+}
+.app-hint,
+.app-update {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.app-sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background: rgb(0 0 0 / 60%);
+}
+.app-sheet {
+  width: min(26rem, calc(100% - 16px));
+  margin: 8px;
+  padding: 1rem;
+  background: var(--ui-grain), var(--ui-stone-800);
+  box-shadow: var(--ui-frame-shadow);
+  color: var(--ui-text);
+  font-size: 1rem;
+}
+.app-sheet h2 {
+  margin: 0 0 0.6rem;
+  font: 600 1.1rem var(--ui-font-title);
+  color: var(--ui-gold-300);
+}
+.app-steps {
+  margin: 0 0 0.8rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: grid;
+  gap: 0.6rem;
+}
+.app-steps li {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 0.6rem;
+}
+.app-step-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  background: var(--ui-void);
+  box-shadow: inset 0 0 0 1px var(--ui-iron-600);
+}
+.app-step-icon .icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+.app-sheet button {
+  min-height: 44px;
+  width: 100%;
+}
+.fullscreen-reoffer {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  background: var(--ui-stone-800);
+  box-shadow: var(--ui-frame-shadow);
+}
+
+/* The corner of the login and character screens holds more now: it wraps instead of
+   leaving the screen of a phone. */
+.corner {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100vw - 1.5rem);
+}
+/* On a phone the corner is a strip of its own above the title (the real device pass of
+   lote 21, 384 px wide: fixed to the corner, "Full screen" and "Install as an app" lay
+   over the game's name and the heading of the login, and "Options" over the email label).
+   It keeps the safe areas it had as a fixed box. `div.corner`, not `.corner`: the game
+   loads this sheet before client.css, whose `.corner { position: fixed }` would win a tie
+   (it did in the first full E2E; the preview loads them the other way round). */
+@media (max-width: 640px), (max-height: 500px) {
+  div.corner {
+    position: static;
+    max-width: none;
+    padding: calc(0.5rem + env(safe-area-inset-top, 0px))
+      calc(0.75rem + env(safe-area-inset-right, 0px)) 0
+      calc(0.75rem + env(safe-area-inset-left, 0px));
+  }
+  div.corner + .brand {
+    margin-top: 0.75rem;
+  }
+}
+@media (pointer: coarse) {
+  .corner button,
+  .corner select,
+  .corner summary {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }

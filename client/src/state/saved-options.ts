@@ -358,6 +358,26 @@ export const OPTIONS: readonly OptionDef[] = [
     reason: "a note to this browser's next start (the character stayed in a fight), not an option",
   },
   {
+    id: "touch_controls",
+    persistence: "session",
+    storageKey: "rpg.touch",
+    reason:
+      "how this device is held (stick or pad, left hand, button size, vibration): another phone or tablet of the same account differs",
+  },
+  {
+    id: "effects_preset",
+    persistence: "session",
+    storageKey: "rpg.effects",
+    reason: "what this device can draw smoothly, picked by its own capability check",
+  },
+  {
+    id: "app_mode",
+    persistence: "session",
+    storageKey: "rpg.appMode",
+    reason:
+      "whether this browser was offered the install and asked for full screen: it is about this device before any login",
+  },
+  {
     id: "last_email",
     persistence: "session",
     storageKey: "rpg.lastEmail",

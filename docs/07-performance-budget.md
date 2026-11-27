@@ -213,6 +213,14 @@ mide `packages/content-schema/src/world-capacity.test.ts` (corre con `make test`
 | Descarga inicial (web) | < 5 MB sin contar sprites; atlas cargados por demanda |
 | Memoria | < 300 MB |
 
+- **Teléfonos (lote 21, `docs/15` "QA móvil"):** el objetivo en un teléfono de gama media
+  es 30 cuadros estables con "Efectos reducidos" y 60 en uno de gama alta. **Todavía sin
+  números del juego real:** la etapa de QA no tuvo servidor. Lo medido: la interfaz sola
+  (HUD, hojas, sin canvas) en un Galaxy S22 Ultra va a 59-60 cuadros, peor cuadro 17-34 ms.
+  El test "lote 21 QA performance" de `e2e/mobile.spec.ts` mide la plaza de Puerto en un
+  Pixel 7 emulado con la CPU 4 veces más lenta (CDP) y deja cuadros, percentiles y memoria
+  en `client/e2e/screenshots/actual/mobile-qa-performance.json`: copia aquí esos números
+  cuando corra (`docs/14`).
 - Movimiento fluido (`client/src/state/motion.ts`, `world.ts`): por frame y criatura,
   `drawPos`/`facing`/`activeWalk` miran a lo sumo la cadena de pasos que se dibujan (uno o
   dos) y no recorren nada más; el colchón de jitter (`Playout`) es una cuenta por batch
@@ -444,6 +452,14 @@ vista.
 - **Si no entrara:** degradar por distancia o tamaño (no proyectar lo que mide menos de
   una casilla lejos del jugador) y anotar los números; nunca quitar objetos en silencio.
   Hoy no se degrada nada.
+
+### Teléfonos de gama media (lote 21)
+- Al primer arranque en una pantalla táctil con 4 GB de memoria o menos, o 4 núcleos o
+  menos (`lowEndDevice`, `client/src/state/touch-controls.ts`), el cliente elige **Efectos
+  reducidos**: sin partículas de ambiente y con el mundo vivo quieto. Opciones lo cambia.
+- Los controles en pantalla no cuestan frames: el pomo de la palanca se mueve con
+  `transform` desde el propio evento de puntero (sin render de Preact), los botones no usan
+  hooks y un frame del juego no crea objetos por ellos.
 
 ## Pruebas de carga
 `tools/bots` simula jugadores que caminan, atacan monstruos, hablan y abren diálogos.

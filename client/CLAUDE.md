@@ -1001,6 +1001,119 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `hud-menu`, `notices`. Hook `__rpgClient.monsters()` para tocar un monstruo.
 - Un diálogo de NPC pasa `{name}` (el nombre del jugador) a su texto.
 
+## Notas del HUD móvil (lote 21, rama `feat/mobile-hud`; docs/17 "UI móvil")
+**Reemplaza** lo que "Notas de T5.6" y "Notas de la UI oscura" dicen del encabezado compacto,
+el menú ☰, las pestañas bajo el mapa, la hotbar junto al pad (`PAD_RESERVE_PX`, la franja de
+154 px) y los botones de zoom en esa franja. Los gestos, el área segura, el teclado virtual
+y la PWA de T5.6 siguen igual.
+- **Layout** (`ui/layout.ts`, la tabla de cortes está en su cabecera): `Layout` ya no tiene
+  `compactHeader`; `PanelMode` es `sidebar` (escritorio), `sheet` (vertical) o `drawer`
+  (apaisado); `isMobile(layout)`. `.game` lleva además `data-ui="mobile"` (como
+  `data-ui="windows"` en escritorio) y `data-sheet` con la hoja abierta. `MOBILE_HUD` son
+  las medidas (slot 48, botón 44, columna del orbe 68…), `mobileHotbarFit(ancho, flow)` los
+  slots que entran y `consoleColumns` las columnas de botones; `ui/mobile.css` repite esas
+  medidas como `--m-*` y `mobile-hud.test.ts` las compara.
+- **Árbol** (`GameView.tsx`, rama no `windowed`): `.game-body` es siempre columna:
+  `.viewport` (el mapa y lo que flota: bandeja de estados arriba a la derecha, minimapa
+  arriba a la izquierda, `ChatGlance` abajo a la izquierda, avisos, zoom en apaisado),
+  `MobileBar` (`section.hud-bar.mobile-bar[data-flow]`, test id `hud-bar` como en
+  escritorio: orbes, `ExperienceBar`, la `Hotbar` con `margin={0}` y `stacked` en vertical,
+  y en apaisado el pad flotando sobre la barra y los botones del panel y del menú),
+  `.sheet-anchor > aside.side#side-panel` (la hoja: alto 0 y la hoja `bottom: 0`, así sube
+  desde el techo de la consola sin medir nada; en apaisado el ancla es `display: contents`
+  y el cajón cuelga de `.game-body` hasta `--m-row-h`) y, solo en vertical, `.mconsole`
+  (test id `mobile-console`: el pad y `.mconsole-tools` con el tablist, el menú y el zoom).
+  `.viewport` y `.game-body` conservan sus `key`: cruzar un corte no reemplaza el canvas.
+- **Dónde va cada botón** (`ui/mobile-hud.ts`, puro): `tabsPlace` → `console` (vertical,
+  siempre: la hoja no tapa la consola), `sheet` (apaisado con el cajón abierto) o `none`;
+  `togglePlace` → `bar` (apaisado), `sheet` (la × de la hoja en vertical) o `none`. Un toque
+  en un botón de sección siempre la muestra (`openTab`); no la cierra. Las teclas de ventana
+  (I, K, L…) abren la hoja en su sección. Un paso del tutorial resalta el botón de su
+  sección (`data-tutorial` en cada tab) y no abre la hoja.
+- **Test ids**: se conservan `panel-tabs` `[data-tab=…]` (ahora botones de ícono con
+  `aria-label`), `panel-toggle` (`aria-expanded`; en vertical solo existe con la hoja
+  abierta), `hud-menu` (el `<details>` del menú; `hud-menu-close`), `logout-menu`,
+  `controls-help`, `touch-pad`, `zoom-buttons`, `health`, `mana`, `level`, `experience` (la
+  barra; el número del menú es `experience-total`). Nuevos: `chat-glance` (`data-lines`),
+  `side-panel`, `mobile-console`. En el E2E, `showTab` y `closeDrawer` de
+  `e2e/mobile.spec.ts` sirven para las dos formas.
+- **Chat**: `ChatGlance` (el único componente del HUD móvil con hooks: su reloj) usa
+  `glanceLines`/`glanceExpiry`; `KIND_CLASS` de `ui/Chat.tsx` da el color de cada línea. La
+  sección del chat en la hoja lleva `ChatTabs` (las de escritorio); "visto" cuenta solo con
+  la hoja abierta en esa sección (`viewedTab`).
+- **Tablet táctil apaisada** (≥ 1024 px): pantalla de escritorio con
+  `.game[data-ui="windows"][data-touch]` (`windows.css`, al final).
+- **Vista previa**: `make ui-preview ONLY=game,social SIZES=phone,tablet`; en tamaños
+  táctiles muestra el pad (`?pad=0` lo quita: escena `mobilenopad`).
+
+## Notas de las hojas móviles (lote 21, rama `feat/mobile-windows`)
+- `ui/sheets.ts` (puro, `sheets.test.ts`): pila de hojas (`syncStack`, `topSheet`, `closeTop`,
+  `raise`), pares con inventario (`pairMode`, `sheetView`) y `isCloseSwipe`.
+- `ui/use-sheets.ts` (`useSheets`, llamado en `GameView` solo con `tabbed && entered`): una
+  entrada de History por hoja, `popstate`/Escape/deslizar sobre `[data-sheet-head]` llaman al
+  cierre de la hoja de arriba (`closeDialog`, `closeStation`, `marketClose`, `houseClose`,
+  `tradeCancel`, `stashClose`, `closeBook`, o la hoja del panel). Un encabezado nuevo de hoja
+  lleva `data-sheet-head`.
+
+## Notas de los controles táctiles (lote 21, rama `feat/mobile-touch`; docs/15)
+- **Reglas puras, con tests** (`input/`): `joystick.ts` (`stickState`: 8 direcciones, zona
+  muerta, histéresis), `pointers.ts` (`PointerOwner`: un dedo por control; `isPalm`;
+  `TapGuard`: el `click` que sigue a un toque ya atendido se descarta), `input-mode.ts`
+  (`InputMode`, `controlsShow`: el método de entrada es el del último evento),
+  `targeting.ts` (`nearestTarget`, `nextTarget`: solo monstruos), `context-action.ts`
+  (`tileContext`, `contextAction`) y `touchDrag` en `gestures.ts`.
+- **`Game`**: `targetNext()`, `interact()` (la acción de contexto: manda `NpcTalk`,
+  `SetTarget`, `PushObject` o `UseItem` como un click), `setInspect(on)` (el siguiente
+  `tapTile` mira; clase `inspecting` en `body`), `setChase(on)`; `GameUi.context` e
+  `inspect`; `GameOptions.haptic(kind)`; hook E2E `__rpgClient.lastCast()`.
+- **Mantener para caminar con el dedo** (reemplaza "El dedo no mantiene" de "Movimiento
+  fluido"): `GameCanvasOptions.touchDrag` → `Game.touchDragOn`: un arrastre desde una
+  casilla sin item movible es `holdAt`/`holdEnd` siguiendo al dedo; con item, lo arrastra;
+  con mira, item elegido o el modo mirar, nada. El dedo quieto sigue siendo el toque largo.
+- **UI**: `ui/TouchStick.tsx` (test id `touch-stick`, `data-held`), `ui/ActionCluster.tsx`
+  (sin hooks; `touch-cluster`, `touch-attack` con `data-targeting`, `touch-interact` con
+  `data-context`, `touch-look` y `touch-chase` con `aria-pressed`, `touch-quick-<n>`),
+  `ui/tap.ts` (`tapProps`: úsalo en todo botón que deba responder mientras otro dedo está
+  en el pad; la hotbar ya lo usa), `ui/TouchOptions.tsx` (`touch-options`,
+  `[data-touch-pad=dpad|stick]`, `touch-opt-size`, `touch-opt-actions|mirrored|pinned|haptics`,
+  `effects-reduced`).
+- **`.game`** suma `data-input` (`touch`, `mouse`, `keyboard`), `data-controls="faded"`,
+  `data-mirror`, `data-touch-size` y `data-cluster`; todo el CSS está al final de
+  `ui/touch.css`. El atenuado solo rige con `data-touch`; `pointer-events: none` solo con
+  `any-pointer: fine` (un mouse real): en la emulación de Playwright los controles
+  atenuados siguen tomando toques.
+- **Preferencias del dispositivo** (`state/touch-controls.ts`, declaradas `session` en
+  `saved-options.ts`): `rpg.touch` (`TouchPrefs`), `rpg.effects` (`data-effects="reduced"`
+  en `<html>`, que `game-canvas.ts` lee en `reducedEffects`) y `rpg.appMode`.
+- **Modo app**: `state/install.ts` (puro), `ui/app-mode.ts` (el almacén de la página:
+  `beforeinstallprompt`, `appinstalled`, `fullscreenchange`, `UPDATE_EVENT` de `pwa.ts`,
+  `keepAwake`) y `ui/AppMode.tsx` (`AppModeButtons` con `where` y `fallback`,
+  `FullscreenReoffer`, `IosSteps`). Test ids: `app-mode` (`data-platform`, `data-where`),
+  `fullscreen-button`, `fullscreen-hint`, `fullscreen-reoffer`, `install-button`
+  (`data-install=prompt|ios-steps`), `install-dismiss`, `install-steps`,
+  `install-steps-close`, `app-update`, `app-update-reload`.
+- **Vista previa**: escenas `touchstick` y `touchleft` (`?stick=1&mirror=1&size=large`).
+- **E2E** (`e2e/mobile.spec.ts`, grupos "lote 21 …"): `preferStick` (siembra `rpg.touch`
+  antes de cargar), `clusterFits`. Un `.click()` de Playwright es un mouse: después de uno,
+  `data-input` es `mouse` y los controles salen atenuados en la captura.
+
+## Notas del QA móvil (lote 21, rama `feat/mobile-qa`; docs/15 "QA móvil")
+- **Auditoría táctil**: `e2e/touch-audit.ts` (`touchAudit(page, { insets, allow, covered })`,
+  `formatFindings`). La usan `e2e/ui-preview.ts` (`--audit`, `--lang`, `--notch`,
+  `--covered`; `make ui-preview AUDIT=1 UILANG=en NOTCH=1 COVERED=1`; `AUDIT_ALLOW` con el
+  motivo de cada excepción), los tests "lote 21 QA on …" de `e2e/mobile.spec.ts` y
+  `e2e/device-check.ts` (un Chrome de Android por CDP). Una pantalla táctil nueva pasa por
+  ella: 44 px de área de toque, sin texto cortado, nada fuera de pantalla.
+- `e2e/contact-sheet.ts`: hojas de contacto de una carpeta de capturas.
+- La vista previa tiene un quinto tamaño táctil, `phone-748x298`: un teléfono apaisado
+  dentro del navegador, medido en uno real.
+- **CSS** (`mobile-css.test.ts` lo fija): con `pointer: coarse` todo `button`/`summary`
+  mide 44 px de ancho y de alto y la etiqueta de un checkbox o radio es el objetivo; un
+  botón más angosto a propósito necesita su regla y su entrada en `AUDIT_ALLOW`.
+  `.alerts` (`GameView`) envuelve invitaciones y chequeo de presencia: `display: contents`
+  salvo en el HUD móvil, donde es una columna. `.touch-cluster` se oculta con `data-sheet`.
+  `.corner` deja de ser `fixed` hasta 640 px de ancho o 500 de alto.
+
 ## Zoom del mapa
 - **Vista ancha** (decisión del dueño, `docs/02` "La vista", `docs/17` UI-4): el servidor
   manda 31x21 (+1) a todos (`Welcome.view_width`/`view_height` → `WorldState.view`,
@@ -1141,7 +1254,7 @@ pasos a 400 ms); dos flechas no daban diagonal; un rechazo era un salto.
     se dan los pasos ya mandados. Cada presión (sin mira ni item elegido) llama a
     `retryWalk`, como una tecla pulsada de nuevo; el mantener en que se convierte no lo
     vuelve a llamar (un rechazo y un aviso por presión).
-    El dedo no mantiene (gestos de T5.6).
+    El dedo mantiene arrastrando desde el lote 21 ("Notas de los controles táctiles").
   - **Doble click** (controles de menú): `Steering.cancel()` termina el camino del primer
     click, sin `StopWalk` (dejaría `Walk` sin respuesta).
 - **Respuesta visual** (MOV-7): el anillo (`render/walk-mark.ts` `markRing`, puro: 300 ms,

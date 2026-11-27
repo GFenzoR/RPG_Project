@@ -45,7 +45,7 @@ export function CraftingWindow({ t, content, game, ui, framed }: Props): JSX.Ele
       aria-label={title}
     >
       {!framed && (
-        <header>
+        <header data-sheet-head="">
           <h2>{title}</h2>
           <button
             type="button"

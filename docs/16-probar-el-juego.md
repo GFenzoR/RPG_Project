@@ -448,6 +448,33 @@ con la instructora en una isla sin la marca), `TestDevOnlyActionsNeedADevIsland`
 `TestLoadWorldRefusesADevWorldInProduction` (`cmd/gameserver`) y "only lets NPCs placed on
 dev_only islands use dev-only actions" (`packages/content-schema`).
 
+## 9. Abrir el juego desde un teléfono
+Tres caminos, del más simple al más completo. Para la lista de qué mirar, `docs/14`
+("Móvil, QA", punto 7).
+
+1. **Por USB (Android), sin tocar la red.** Con `make play` (o `make home-up`) corriendo en
+   la PC, el teléfono con *Depuración USB* y conectado:
+   ```
+   adb reverse tcp:8080 tcp:8080
+   adb reverse tcp:5173 tcp:5173
+   ```
+   (la segunda línea solo con `make play`, que sirve el cliente en el 5173) y en Chrome del
+   teléfono abre `http://localhost:8080/play/` (con `make play`, la dirección que imprime).
+   `localhost` es un contexto seguro: funcionan el service worker y "Instalar como app"
+   aunque no haya HTTPS. Al terminar: `adb reverse --remove-all`.
+2. **Por la misma Wi-Fi.** En `deploy/.env.home` pon `HOME_BIND=0.0.0.0` y
+   `COOKIE_SECURE=false`, `make home-up`, permite el puerto en el firewall de Windows y
+   abre `http://<IP de la PC>:8080/play/` (la IP sale de `ipconfig`). Se juega, pero sin
+   HTTPS el navegador no instala la app ni registra el service worker (`docs/13`, "Mis
+   amigos no entran por la LAN").
+3. **Por el túnel (cualquier red, también iPhone).** `make home-up` y `make home-tunnel`:
+   imprime un link `https://….trycloudflare.com`; ábrelo en el teléfono y agrega `/play/`.
+   Es HTTPS: se puede instalar (Android: "Instalar como app"; iPhone: Compartir → "Agregar
+   a inicio"). El link cambia en cada arranque.
+
+Para medir en el teléfono lo mismo que la auditoría de la PC (áreas seguras, tamaños de
+toque, cuadros por segundo): `docs/15` "Pasada en un teléfono real".
+
 ## Por qué la isla queda fuera del juego
 Decisión: Thimblewick es una herramienta de desarrollo, no contenido.
 - **Es `dev_only`** (`world/world.yaml`): `mapcompile` la deja afuera salvo con `-dev`.

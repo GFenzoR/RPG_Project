@@ -1288,3 +1288,40 @@ body.dragging-window * {
     calc(100% - 2rem)
   );
 }
+
+/* ---- A touch screen on the desktop screen (docs/17 "UI movil": a tablet on its side, from
+   1024 px wide) -------------------------------------------------------------------------
+   The same floating windows, scaled to fingers: a taller bar with the toolbar's buttons at
+   44 px in two rows, the windows' title bar buttons and the chat's tabs a finger tall, and
+   the direction pad and the map's zoom over the map, above the bar. */
+.game[data-ui="windows"][data-touch] {
+  --bar-h: 124px;
+}
+.game[data-ui="windows"][data-touch] .toolbar {
+  grid-template-columns: repeat(6, 44px);
+  grid-auto-rows: 44px;
+  gap: 4px;
+}
+.game[data-ui="windows"][data-touch] .tool .icon {
+  width: 32px;
+  height: 32px;
+}
+.game[data-ui="windows"][data-touch] .gwin-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 1.3rem;
+}
+.game[data-ui="windows"][data-touch] .gwin-bar {
+  min-height: 44px;
+}
+.game[data-ui="windows"][data-touch] .chat-tabs [role="tab"] {
+  min-height: 44px;
+  padding: 0 0.5rem;
+}
+.game[data-ui="windows"][data-touch] .touch-pad-dock {
+  left: 4px;
+  bottom: calc(var(--bar-px) + 96px);
+}
+.game[data-ui="windows"][data-touch] .zoom-buttons {
+  bottom: calc(var(--bar-px) + 12px);
+}

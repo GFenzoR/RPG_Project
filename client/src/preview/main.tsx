@@ -47,12 +47,16 @@ import {
   withPockets,
   withServerWindows,
   withShop,
+  withSocial,
   withStatuses,
   withTrade,
   withTutorial,
+  withVoyage,
 } from "./fixtures.ts";
 import { InterfaceOptions } from "../ui/InterfaceOptions.tsx";
 import { applyScales } from "../state/ui-prefs.ts";
+import { coarsePointer } from "../state/touch-prefs.ts";
+import { DEFAULT_TOUCH_PREFS } from "../state/touch-controls.ts";
 import { SLOT_KEYS } from "../ui/Inventory.tsx";
 import { STATUS_ORDER } from "../state/status.ts";
 import "../ui/client.css";
@@ -248,6 +252,8 @@ function Preview(props: { game: Game }): JSX.Element {
       y: Math.round(window.innerHeight * 0.3),
     });
   if (scene === "danger") s = withDanger(s, now);
+  if (scene === "social") s = withSocial(s, now);
+  if (scene === "voyage") s = withVoyage(s, now);
   if (scene === "status") s = withStatuses(s, now);
   if (scene === "death") s = withDeath(s, now, content.death?.noviceMaxLevel ?? 0);
   if (scene === "server")
@@ -320,9 +326,16 @@ function Preview(props: { game: Game }): JSX.Element {
         content={content}
         languagePicker={settings.language}
         settings={settings}
-        touchPad={false}
+        touchPad={params.get("pad") !== "0" && coarsePointer()}
+        touchControls={{
+          ...DEFAULT_TOUCH_PREFS,
+          pad: params.get("stick") === "1" ? "stick" : "dpad",
+          mirrored: params.get("mirror") === "1",
+          size: params.get("size") === "large" ? "large" : "normal",
+        }}
         characterName={s.ui.selfName}
-        ui={s.ui}
+        // The context button of the touch cluster shows what it would do (a body ahead).
+        ui={{ ...s.ui, context: "loot" }}
         game={props.game}
         entered={true}
         loadFailed={false}

@@ -96,7 +96,6 @@ function rules(css: string, selector: string): string[] {
 
 const NAMES: [file: string, selector: string][] = [
   ["windows.css", ".vname"],
-  ["client.css", ".hud .name"],
   ["touch.css", ".touch-menu-title"],
   ["touch.css", ".touch-menu-name"],
 ];
@@ -113,7 +112,6 @@ describe("the names of the interface", () => {
 
   it.each([
     ["windows.css", '.vname[data-fit="wrap"]'],
-    ["client.css", '.hud .name[data-fit="wrap"]'],
     ["touch.css", '.touch-menu-name[data-fit="wrap"]'],
   ])("%s lets %s break onto more lines, at any letter", (file, sel) => {
     const [body] = rules(sheet(file), sel);
@@ -154,10 +152,14 @@ describe("the names of the interface", () => {
     expect(name?.key).toBe("lobo gris del monte");
   });
 
-  it("fits the compact header's name, keyed by its text", () => {
-    const src = readFileSync(new URL("./GameView.tsx", import.meta.url), "utf8");
-    expect(src).toMatch(
-      /<span\s+class="name"\s+key=\{props\.characterName\}\s+ref=\{fitTextRef\}\s+title=\{props\.characterName\}\s*>/,
-    );
+  it("the mobile HUD has no header of its own: its name is the plate's, fitted too", () => {
+    // The plain header of T5.6 (a span.name) is gone; the mobile bar draws the same
+    // ExperienceBar as the desktop, whose name plate fits its text (checked above).
+    const view = readFileSync(new URL("./GameView.tsx", import.meta.url), "utf8");
+    expect(view).not.toMatch(/class="name"/);
+    const bar = readFileSync(new URL("./MobileHud.tsx", import.meta.url), "utf8");
+    expect(bar).toContain("<ExperienceBar");
+    const vitals = readFileSync(new URL("./Vitals.tsx", import.meta.url), "utf8");
+    expect(vitals).toMatch(/class="vname" key=\{props\.name\} ref=\{fitTextRef\}/);
   });
 });

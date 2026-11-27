@@ -61,7 +61,14 @@ export function itemPrimary(f: ItemFacts): ActionKind {
 /** What the client knows of a long-pressed map tile. */
 export interface TileFacts {
   /** The creature on it, if any. */
-  creature?: { npc: boolean; self: boolean } | undefined;
+  creature?:
+    | {
+        npc: boolean;
+        self: boolean;
+        /** Another player's character (the context button never attacks one). */
+        player?: boolean | undefined;
+      }
+    | undefined;
   /**
    * Its top item above the ground, if any, but not the look of a portal (state/items.ts
    * menuItem): a bare ladder offers "climb", not "use" and "move" of its own item.

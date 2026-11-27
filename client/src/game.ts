@@ -43,6 +43,13 @@ import { equipSlot, groundCard, itemCard } from "./state/item-card.ts";
 import type { ItemCardView, Viewer } from "./state/item-card.ts";
 import { dialogLayout, optionForKey } from "./state/dialog.ts";
 import { HeldDirection } from "./input/dpad.ts";
+import { contextAction } from "./input/context-action.ts";
+import { touchDrag } from "./input/gestures.ts";
+import type { TouchDrag } from "./input/gestures.ts";
+import type { ContextKind, ContextTile } from "./input/context-action.ts";
+import { nearestTarget, nextTarget } from "./input/targeting.ts";
+import type { HapticKind } from "./state/haptics.ts";
+import { delta, step } from "./state/geometry.ts";
 import { DEFAULT_GESTURES, GestureRecognizer, isTouchPointer } from "./input/gestures.ts";
 import type { Gesture } from "./input/gestures.ts";
 import { creatureName } from "./state/messages.ts";
@@ -209,6 +216,13 @@ export interface GameUi {
   /** The fight stance and chasing: the server keeps them per character (Welcome.options). */
   fightStance: FightStance;
   chase: boolean;
+  /**
+   * Lote 21: what the context button of the touch cluster would do now on the tile faced
+   * (input/context-action.ts); undefined when there is nothing to do around.
+   */
+  context: ContextKind | undefined;
+  /** Lote 21: the inspect mode is on: the next tap on the map looks instead of acting. */
+  inspect: boolean;
   guildInvitations: GuildInvitationView[];
   /** The player's own name (to tell itself apart in the guild's member list). */
   selfName: string;
@@ -334,6 +348,8 @@ export interface ClientTestHooks {
   /** The battle list as [id, contentId, health %]. */
   battle(): { id: number; contentId: string; health: number }[];
   target(): number | undefined;
+  /** Lote 21: the id of the last spell used from the hotbar or a quick slot, if any. */
+  lastCast(): string | undefined;
   stats(): PlayerStatsState | undefined;
   skills(): SkillState[];
   /** Floating texts that appeared less than `ms` ago. */
@@ -476,6 +492,11 @@ export interface GameOptions {
    * frame. Without it, DEFAULT_NAME_SIZE.
    */
   nameSize?(): NameSize;
+  /**
+   * Lote 21: a light vibration (state/haptics.ts) on a hit taken, a level up or a refusal.
+   * Without it, none.
+   */
+  haptic?(kind: HapticKind): void;
   /** The world is on screen. */
   entered(): void;
   /**
@@ -577,6 +598,8 @@ export class Game {
   private stance: FightStance = FightStance.BALANCED;
   private chase = false;
   private zoomView: ZoomView | undefined;
+  /** Lote 21: the next tap on the map looks at what is there (the touch "inspect" button). */
+  private inspect = false;
 
   constructor(opts: GameOptions) {
     this.opts = opts;
@@ -604,7 +627,11 @@ export class Game {
         // The steps of this batch start on the server's tick timeline (state/motion.ts).
         const at = this.world.batchTime(Number(batch.tick), now);
         const cues: Cue[] = [];
+        const healthBefore = this.world.stats?.health;
+        const heavyBefore = this.world.heavyHitAt;
+        const levelBefore = this.world.levelUp?.at;
         for (const e of batch.events) {
+          if (e.message.case === "walkRejected") opts.haptic?.("error");
           if (opts.audio) cues.push(...cuesOf(e.message, this.cueContext()));
           this.world.apply(e.message, now, at);
           this.steer.heard(e.message);
@@ -625,6 +652,13 @@ export class Game {
           }
         }
         this.sound(cues);
+        if (opts.haptic) {
+          const health = this.world.stats?.health;
+          if (this.world.levelUp && this.world.levelUp.at !== levelBefore) opts.haptic("levelUp");
+          if (this.world.heavyHitAt !== heavyBefore) opts.haptic("heavyHit");
+          else if (healthBefore !== undefined && health !== undefined && health < healthBefore)
+            opts.haptic("hit");
+        }
         if (this.trackAfterWelcome && this.world.self) {
           // The tracked quest is not saved by the server (docs/05 TrackQuest): sent again.
           this.trackAfterWelcome = false;
@@ -667,6 +701,108 @@ export class Game {
     this.chase = chase;
     this.publish();
     this.conn.send({ case: "setFightMode", value: { stance, chase } });
+  }
+
+  /**
+   * Lote 21, the attack button of the touch cluster (input/targeting.ts): with no target,
+   * the nearest monster; with one, the next of the battle list. Never a player nor an NPC.
+   */
+  targetNext(): void {
+    const list = this.world
+      .battleList()
+      .map((c) => ({ id: c.id, monster: c.kind === CreatureKind.MONSTER }));
+    const current = this.world.target;
+    const id = current === undefined ? nearestTarget(list) : nextTarget(list, current);
+    if (id !== undefined && id !== current) this.attack(id);
+  }
+
+  /** Lote 21: the chase switch alone (the toggle of the cluster); the stance stays. */
+  setChase(on: boolean): void {
+    this.setFightMode(this.stance, on);
+  }
+
+  /** Lote 21: the inspect mode of the touch cluster: the next tap on the map looks. */
+  setInspect(on: boolean): void {
+    if (this.inspect === on) return;
+    this.inspect = on;
+    document.body.classList.toggle("inspecting", on);
+    this.publish();
+  }
+
+  /**
+   * The tiles the context button looks at, in order: the one faced, the own one, then the
+   * rest around.
+   */
+  private contextTiles(): { pos: Pos; tile: ContextTile }[] {
+    const self = this.world.self;
+    if (!self) return [];
+    const [fx, fy] = delta(self.dir);
+    const faces = fx !== 0 || fy !== 0;
+    const around: Pos[] = [];
+    if (faces) around.push(step(self.pos, self.dir));
+    around.push({ ...self.pos });
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        if ((dx === 0 && dy === 0) || (faces && dx === fx && dy === fy)) continue;
+        around.push({ x: self.pos.x + dx, y: self.pos.y + dy, z: self.pos.z });
+      }
+    return around.map((pos, i) => {
+      const { x, y, z } = pos;
+      const c = this.world.creatureAt(x, y, z);
+      const item = menuItem(this.world, x, y, z);
+      const stack = this.world.tile(x, y, z) ?? [];
+      const living = stack
+        .map((id) => this.world.item(id)?.living)
+        .find((l) => l === "breakable" || l === "pushable");
+      const remains = item?.mods?.remainsOf !== undefined || item?.mods?.bodyOf !== undefined;
+      return {
+        pos,
+        tile: {
+          facts: {
+            ...this.groundFacts(x, y, z, item),
+            creature: c && {
+              npc: c.kind === CreatureKind.NPC,
+              self: c.id === this.world.selfId,
+              player: c.kind === CreatureKind.PLAYER,
+            },
+          },
+          living: living === "breakable" || living === "pushable" ? living : undefined,
+          corpse: remains,
+          ahead: faces && i === 0 && (fx === 0 || fy === 0),
+        },
+      };
+    });
+  }
+
+  /** Lote 21: the context button of the touch cluster: acts on the tile faced (or around). */
+  interact(): void {
+    const tiles = this.contextTiles();
+    const choice = contextAction(tiles.map((t) => t.tile));
+    const at = choice && tiles[choice.index];
+    const self = this.world.self;
+    if (!choice || !at || !self) return;
+    const { x, y, z } = at.pos;
+    const c = this.world.creatureAt(x, y, z);
+    switch (choice.kind) {
+      case "talk":
+        if (c) this.talk(c.id);
+        break;
+      case "attack":
+        if (c && this.world.target !== c.id) this.attack(c.id);
+        break;
+      case "push":
+        this.pushAhead(self.dir, performance.now());
+        break;
+      case "climb":
+        this.useTop(x, y, z);
+        break;
+      default:
+        // open, loot, read, break, use: the top item (a breakable is hit by using it).
+        this.cancelUse();
+        this.useTop(x, y, z, choice.kind !== "use");
+        break;
+    }
+    this.publish();
   }
 
   /** The safe mode (T5.2): the server keeps it per character and enforces it. */
@@ -1644,12 +1780,41 @@ export class Game {
       this.placePicked({ kind: "pos", pos });
       return;
     }
+    if (this.inspect) {
+      // The inspect button (lote 21): this tap looks, as Shift+click does with a mouse.
+      this.lookTileAt(pos.x, pos.y, pos.z);
+      this.setInspect(false);
+      return;
+    }
     const c = this.world.creatureAt(pos.x, pos.y, pos.z);
     // A "use with" tool goes on the tile even with a creature there; else the creature is
     // what the finger meant (the mouse's right click: attack it, or talk to an NPC).
     if (c && c.id !== this.world.selfId && this.pending?.kind !== "item")
       this.click({ creature: c.id });
     else this.click({ pos });
+  }
+
+  /**
+   * Lote 21: what a finger dragged from a map tile does (input/gestures.ts touchDrag): it
+   * moves the tile's top item if it has one within grasp, else it walks toward the finger.
+   * A walk is a fresh intent, like a press of the mouse: a refused step is tried again.
+   */
+  private touchDragOn(pos: Pos): TouchDrag {
+    if (this.closeMenuQuietly()) {
+      this.publish();
+      return "none";
+    }
+    const aiming = this.picker.picked !== undefined || this.pending !== undefined || this.inspect;
+    const top = aiming ? undefined : topItem(this.world, pos.x, pos.y, pos.z, false);
+    const draggable =
+      top !== undefined &&
+      dragFromTile(this.opts.content.items[top.itemId], top.mods, this.world.self?.pos, pos);
+    const does = touchDrag(aiming, draggable);
+    if (does === "walk") {
+      this.steer.cancel();
+      this.world.retryWalk();
+    }
+    return does;
   }
 
   /**
@@ -2034,6 +2199,8 @@ export class Game {
       safeMode: this.safe,
       fightStance: this.stance,
       chase: this.chase,
+      context: contextAction(this.contextTiles().map((t) => t.tile))?.kind,
+      inspect: this.inspect,
       guildInvitations: [...w.guild.invitations(performance.now())],
       selfName: w.self?.name ?? "",
       selfId: w.selfId,
@@ -2135,6 +2302,7 @@ export class Game {
     this.opts.audio?.setAmbience([]);
     this.cancelUse();
     this.picker.cancel();
+    document.body.classList.remove("inspecting");
     this.watchPick(false);
     this.pad.clear();
     window.removeEventListener("keydown", this.onKeyDown);
@@ -2241,6 +2409,7 @@ export class Game {
         this.startDrag(ref, e.shiftKey);
       },
       tapTile: (x, y, z) => this.tapTile({ x, y, z }),
+      touchDrag: (x, y, z) => this.touchDragOn({ x, y, z }),
       longPressTile: (x, y, z, cx, cy) => this.longPressTile({ x, y, z }, cx, cy),
       touched: () => {
         this.touchAt = performance.now();
@@ -2295,6 +2464,7 @@ export class Game {
       battle: () =>
         world.battleList().map((c) => ({ id: c.id, contentId: c.contentId, health: c.health })),
       target: () => world.target,
+      lastCast: () => this.cast?.spellId,
       stats: () => world.stats,
       skills: () => world.skills,
       floatingTexts: (ms) => {

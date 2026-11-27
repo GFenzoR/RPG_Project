@@ -104,6 +104,85 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+
+- **Móvil, QA (lote 21, `feat/mobile-qa`; `docs/15` "QA móvil"):** la auditoría táctil
+  (`make ui-preview AUDIT=1`) da 0 hallazgos en español e inglés y en el Galaxy S22 Ultra
+  del dueño (vista previa y login del build, por USB). **Lo que falta:**
+  1. **`make e2e` de la rama** (lo corre la etapa final): los tests "lote 21 QA on …" y
+     "lote 21 QA performance" de `e2e/mobile.spec.ts` se escribieron a ciegas. Además,
+     ocultar los botones de acción con la hoja abierta y la franja del login pueden pedir
+     ajustes en tests táctiles anteriores (`clusterFits`, los que tocan `.corner`).
+  2. **Flujos de punta a punta con dedos:** solo hay E2E táctil de entrar, caminar, mover
+     un item, chat, hablar con un NPC, atacar un lobo y los controles nuevos. No hay E2E
+     táctil (ni en WebKit) de: registro y reglas de sesión del lote 17, crear personaje con
+     el equipo inicial, tutorial completo, morir y revivir, saquear, bolsillos y alijo,
+     comprar y vender, misión con objetivo en el minimapa, invitación al grupo y trueque
+     entre dos dispositivos, forja y crafteo, mercado, rompibles y la roca, día y noche,
+     opciones, y salir con el bloqueo de combate. En escritorio todos tienen E2E.
+  3. **Rendimiento en teléfonos:** no se midió con el juego real. El test de rendimiento
+     deja `client/e2e/screenshots/actual/mobile-qa-performance.json` (cuadros a CPU 4x y
+     memoria, Pixel 7 emulado); con esos números hay que completar `docs/07` "Teléfonos" y,
+     si no llega a 30 cuadros estables, bajar el preset de efectos reducidos.
+  4. **Red lenta con dedos:** el proxy de `movement.spec.ts` solo se usa con teclado y
+     mouse; falta el mismo test con el pad y la palanca.
+  5. **Contraste del HUD móvil:** no se midió (los tokens son los de escritorio;
+     `label-style.test.ts` comprueba los nombres del canvas, no el DOM).
+  6. **Tablet apaisada (1024x768):** usa la pantalla de escritorio con dedos; con las
+     ventanas de fábrica abiertas (batalla, chat, inventario, minimapa) queda poco mapa y el
+     pad cae sobre el chat. Decidir si esa medida debe usar el HUD móvil. Ahí la auditoría
+     con `COVERED=1` marca además la última pestaña del chat bajo los botones de su barra.
+  7. **Para probar en tu teléfono** (lo que ninguna automatización vio). Abre el juego
+     como dice `docs/16` §9 y revisa, en vertical y apaisado:
+     - *Android, Chrome:* (a) toca "Pantalla completa": ¿se va la barra de direcciones?
+       ¿queda algo bajo el agujero de la cámara o bajo la barra de gestos? (b) "Instalar
+       como app" → abre la app instalada: ¿arranca en el login a pantalla completa, con el
+       ícono y el fondo oscuros al abrir? (c) toca el campo del chat: ¿el teclado deja ver
+       la línea que escribes? (d) ¿se oye la música después del primer toque? (e) recibe un
+       golpe: ¿vibra? (Opciones → Controles táctiles). (f) deja el juego abierto 2 minutos
+       sin tocar: ¿la pantalla sigue encendida? (g) desliza desde el borde para "atrás" con
+       una hoja abierta: ¿cierra la hoja y no sale del juego? (h) en un pueblo de noche y en
+       el bosque con viento, ¿se mueve fluido? Si no, prueba "Efectos reducidos".
+     - *iPhone, Safari* (**no hubo iPhone: sigue sin verificar en un dispositivo real**):
+       todo lo anterior salvo (a) y (e), que en iOS no existen; además Compartir → "Agregar
+       a inicio" y abrir la app; el notch y la barra de inicio en apaisado; y la música tras
+       el primer toque (el desbloqueo de audio de WebKit).
+     - *Tablet:* vertical (HUD móvil) y apaisada (ventanas de escritorio con dedos).
+- **Móvil, controles táctiles (lote 21, `feat/mobile-touch`), lo que falta:** (1) nada de
+  esto se probó con dedos en un teléfono real ni con `make e2e` en la rama (lo corre la
+  etapa final del lote): los E2E nuevos de `e2e/mobile.spec.ts` ("lote 21 …": palanca,
+  mirar, botón de atacar, botón de contexto con un NPC, teclado y mouse en el layout de
+  teléfono, manifest y botones de instalar por plataforma) se escribieron a ciegas. (2)
+  **Palanca o pad por defecto**: quedó el pad; que el dueño pruebe la palanca (Opciones →
+  Controles táctiles) y decida (`docs/15` "Palanca o pad"). (3) Faltan los E2E táctiles de:
+  lanzar un hechizo apuntado, saquear con el botón de contexto, mover un item al alijo,
+  empujar una roca, el chat con el teclado virtual arriba con los botones nuevos, y
+  arrastrar un item con el mouse en el layout de teléfono; la tabla de `docs/15` los marca
+  "sin E2E". (4) Con un mouse en el layout móvil no se revisó que la ficha al pasar por un
+  item y el texto junto al cursor se vean bien sobre las hojas. (5) Los botones de acción
+  repiten 2 slots de la hotbar con el nombre del hechizo en texto (no hay íconos de
+  hechizos todavía); que sean 2 a 4 a elección es una opción por agregar. (6) "Efectos
+  reducidos" apaga partículas de ambiente y el movimiento del mundo vivo, no las sombras:
+  falta un interruptor de sombras en el renderer. (7) Pantallas de inicio (*splash*) de iOS
+  y un logo definitivo para los íconos (hoy el emblema de spritegen). (8) En iPhone la
+  instalación y la app a pantalla completa hay que probarlas en el dispositivo (Safari no
+  se puede automatizar para eso); lo mismo el *wake lock* y la vibración en Android. (9)
+  Las opciones táctiles (`rpg.touch`, `rpg.effects`, `rpg.appMode`) se guardan solo en el
+  dispositivo: si el dueño las quiere por cuenta y clase de pantalla, hacen falta campos en
+  `server/internal/accountopts`.
+- **Móvil, ventanas (lote 21, `feat/mobile-windows`)**: faltan los pares como hojas partidas (la hoja con el inventario en la otra mitad o en pestaña), el aviso persistente de item elegido sobre cada hoja, la revisión de todas las escenas de `make ui-preview` en inglés y al 130 % de texto, y hojas propias para opciones, cuenta, selector de personajes y servidor. La pila, atrás, Escape y deslizar para cerrar ya están.
+- **UI móvil (lote 21, `feat/mobile-hud`), lo que falta:** (1) el HUD nuevo no se probó en
+  un teléfono real ni con `make e2e` en esta rama (lo corre la etapa final del lote):
+  `e2e/mobile.spec.ts` se adaptó a ciegas (la barra en vez del encabezado, la hoja y el
+  cajón, el pad en la consola). (2) En apaisado y en vertical el mapa conserva la regla de
+  "nunca menos de 15x11 casillas", así que a 844x390 quedan franjas oscuras a los lados y a
+  390x844 una franja bajo el mapa (donde van la placa y el chat compacto): cubrir la caja
+  como en escritorio (`--map-cover`) daría casillas de 32 px, más cómodas para el dedo,
+  pero muestra 12 columnas en vertical; lo decide el dueño. (3) Los slots de la hotbar
+  siguen siendo texto (48 px alcanzan para dos palabras cortas): piden íconos de hechizo.
+  (4) Una tablet táctil apaisada (≥ 1024 px) usa las ventanas flotantes a escala de dedo;
+  arrastrarlas y cambiarles el tamaño con el dedo no se probó en un dispositivo. (5) Las
+  ventanas del servidor (diálogo, tienda, mercado, casa, intercambio) siguen con las hojas
+  de T5.6: son de los puntos siguientes del lote.
 - **Criaturas al ritmo de su paso (hecho, rama `feat/creature-walk`, lote 20e; el dueño el
   2026-11-27: "los sprites de los enemigos deben animarse al ritmo de como se mueven; no
   deben verse deslizándose ni flotando")**: cada sprite de criatura dice su cuerpo y su

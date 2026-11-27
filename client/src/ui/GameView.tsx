@@ -49,14 +49,23 @@ import { Minimap } from "./Minimap.tsx";
 import { CreditsLink } from "./CreditsLink.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
-import { PANEL_TABS, TAB_TITLE, layoutFor, tabForHighlight } from "./layout.ts";
+import { useSheets } from "./use-sheets.ts";
+import { PANEL_TABS, TAB_TITLE, isMobile, layoutFor, tabForHighlight } from "./layout.ts";
 import type { Layout, PanelTab } from "./layout.ts";
 import { activeNotices, nextExpiry } from "./notices.ts";
 import { ActionMenu, PickBanner, paddingInsets } from "./ActionMenu.tsx";
 import { ItemTooltip } from "./ItemTooltip.tsx";
 import type { ControlsMode } from "../state/controls.ts";
 import { LoadStatus } from "./LoadStatus.tsx";
-import { PAD_RESERVE_PX, TouchPad } from "./TouchPad.tsx";
+import { TouchPad } from "./TouchPad.tsx";
+import { TouchStick } from "./TouchStick.tsx";
+import { ActionCluster } from "./ActionCluster.tsx";
+import { FullscreenReoffer } from "./AppMode.tsx";
+import { InputMode, controlsShow, initialMethod } from "../input/input-mode.ts";
+import type { InputMethod } from "../input/input-mode.ts";
+import { isTextField } from "../input/keyboard.ts";
+import { DEFAULT_TOUCH_PREFS } from "../state/touch-controls.ts";
+import type { TouchPrefs } from "../state/touch-controls.ts";
 import { ZoomButtons } from "./ZoomButtons.tsx";
 import { coarsePointer } from "../state/touch-prefs.ts";
 import { GameWindow } from "./GameWindow.tsx";
@@ -64,8 +73,10 @@ import type { IconName } from "./icons.tsx";
 import { SplitPrompt } from "./SplitPrompt.tsx";
 import { LogoutLock, LogoutTextButton } from "./LogoutButton.tsx";
 import { Toolbar, windowIcon } from "./Toolbar.tsx";
-import { lowHealth } from "./Vitals.tsx";
+import { lowHealth, orbFill } from "./Vitals.tsx";
 import { HudBar } from "./HudBar.tsx";
+import { ChatGlance, MobileBar, MobileMenu, PanelTabs, PanelToggle } from "./MobileHud.tsx";
+import { tabsPlace, togglePlace } from "./mobile-hud.ts";
 import { StatusTray } from "./StatusTray.tsx";
 import { ornamentStyle } from "./ornaments.ts";
 import { partyBonus } from "../state/party.ts";
@@ -79,7 +90,6 @@ import {
 } from "./window-dom.ts";
 import type { NameSize } from "../render/label-style.ts";
 import type { DragEnv, PageBox, WatchedRef } from "./window-dom.ts";
-import { fitTextRef } from "./fit-text.ts";
 import {
   WINDOWS_STORAGE_KEY,
   WINDOW_KEYS,
@@ -155,6 +165,8 @@ export function emptyGameUi(): GameUi {
     safeMode: true,
     fightStance: FightStance.BALANCED,
     chase: false,
+    context: undefined,
+    inspect: false,
     target: undefined,
     stats: undefined,
     skills: [],
@@ -197,6 +209,8 @@ export interface GameViewProps {
   /** The desktop Options window's pieces. */
   settings: GameSettings | undefined;
   touchPad: boolean;
+  /** Lote 21: pad or stick, the action buttons, mirror, size and pin (state/touch-controls.ts). */
+  touchControls?: TouchPrefs | undefined;
   characterName: string;
   ui: GameUi;
   game: Game | undefined;
@@ -223,18 +237,46 @@ export function GameView(props: GameViewProps): JSX.Element {
   const { fightStance: stance, chase } = ui;
   // T4.1: the player being reported from the battle list (the reason form is open).
   const [reporting, setReporting] = useState<{ id: number; name: string } | undefined>(undefined);
-  // T5.6: small screens. The layout follows the window; the side panel becomes tabs (or a
-  // drawer over the map) and the server messages float over the map.
+  // Small screens (T5.6; the mobile HUD of lote 21, docs/17 "UI movil"). The layout follows
+  // the window: phones and upright or small tablets get the map above one gothic bar, the
+  // sections in a sheet (or a drawer over the map's right) and the server messages floating
+  // over the map.
   const layout = useLayout();
   useKeyboardViewport();
   // A touch screen gets the map's zoom buttons (a PC zooms with Ctrl+wheel).
   const [touch] = useState(coarsePointer);
-  // Portrait with the pad: the hotbar goes right of the pad, slots under their arrows.
-  const stackedHotbar = props.touchPad && layout.flow === "column";
+  // Lote 21 (docs/15 "Entrada híbrida"): the input method is the one of the last event,
+  // whatever the layout or the device. With a mouse or a keyboard in use the on-screen
+  // controls step back (unless pinned); the next touch brings them back.
+  const touchPrefs = props.touchControls ?? DEFAULT_TOUCH_PREFS;
+  const inputMethod = useInputMethod(touch);
+  const controlsFaded = controlsShow(inputMethod, touchPrefs.pinned) === "faded";
+  const padControl =
+    touchPrefs.pad === "stick" ? (
+      <TouchStick t={t} game={props.game} />
+    ) : (
+      <TouchPad t={t} game={props.game} />
+    );
+  // The action buttons: wherever fingers play (a touch screen, or the pad switched on).
+  const cluster = props.entered && (touch || props.touchPad) && touchPrefs.actions;
+  const touchAttrs = {
+    "data-input": inputMethod,
+    "data-controls": controlsFaded ? "faded" : undefined,
+    "data-mirror": touchPrefs.mirrored ? "" : undefined,
+    "data-touch-size": touchPrefs.size,
+    "data-cluster": cluster ? "" : undefined,
+  };
   const [tab, setTab] = useState<PanelTab>("battle");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // The sheet (or drawer) of the mobile HUD: closed until a section button opens it.
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const openTab = (name: PanelTab): void => {
+    setTab(name);
+    setSheetOpen(true);
+  };
   const [, setNoticeTick] = useState(0);
-  const tabbed = layout.panel !== "sidebar";
+  const tabbed = isMobile(layout);
+  // Upright, the hotbar's slots take a line of their own under their arrows.
+  const stackedHotbar = tabbed && layout.flow === "column";
   // Desktop: the windows of the toolbar (docs/17 UI-5), remembered per device.
   const windowed = !tabbed;
   const zoom = props.settings?.uiScale ?? 1;
@@ -299,7 +341,10 @@ export function GameView(props: GameViewProps): JSX.Element {
   // with lines not seen yet gets a dot, the log one when its newest message is.
   const [chatTab, setChatTab] = useState<ChatTab>("chat");
   const chatPlace = placeOf(win.state, "chat");
-  const viewed = viewedTab(chatTab, !windowed || (chatPlace.open && !chatPlace.collapsed));
+  const viewed = viewedTab(
+    chatTab,
+    windowed ? chatPlace.open && !chatPlace.collapsed : sheetOpen && tab === "chat",
+  );
   const [logSeen, setLogSeen] = useState(0);
   const lastLog = ui.log[ui.log.length - 1]?.at ?? 0;
   useEffect(() => {
@@ -365,6 +410,32 @@ export function GameView(props: GameViewProps): JSX.Element {
   uiRef.current = ui;
   const gameRef = useRef(game);
   gameRef.current = game;
+  // Phones and small tablets: back gesture, Escape and a swipe on a header close the front
+  // sheet (ui/sheets.ts rules, ui/use-sheets.ts History entries).
+  useSheets(
+    {
+      panel: sheetOpen,
+      dialog: ui.dialog !== undefined,
+      station: ui.station !== undefined,
+      market: ui.market !== undefined,
+      house: ui.house !== undefined,
+      trade: ui.trade !== undefined,
+      stash: ui.stash !== undefined,
+      book: ui.book !== undefined,
+      containers: false,
+    },
+    {
+      panel: () => setSheetOpen(false),
+      dialog: () => gameRef.current?.closeDialog(),
+      station: () => gameRef.current?.closeStation(),
+      market: () => gameRef.current?.marketClose(),
+      house: () => gameRef.current?.houseClose(),
+      trade: () => gameRef.current?.tradeCancel(),
+      stash: () => gameRef.current?.stashClose(),
+      book: () => gameRef.current?.closeBook(),
+    },
+    tabbed && props.entered,
+  );
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.repeat || typingInField(e)) return;
@@ -372,7 +443,7 @@ export function GameView(props: GameViewProps): JSX.Element {
         if (e.defaultPrevented) return;
         if (!windowed) {
           const id = WINDOW_KEYS[e.code];
-          if (id && !e.ctrlKey && !e.altKey && !e.metaKey && isPanelTab(id)) setTab(id);
+          if (id && !e.ctrlKey && !e.altKey && !e.metaKey && isPanelTab(id)) openTab(id);
           return;
         }
         if (e.code === "KeyM" && !e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -400,7 +471,7 @@ export function GameView(props: GameViewProps): JSX.Element {
   });
   const stats = ui.stats;
   const experience = stats && (
-    <span class="stat" data-testid="experience">
+    <span class="stat" data-testid="experience-total">
       {t("client.game.experience", { experience: stats.experience })}
     </span>
   );
@@ -569,7 +640,7 @@ export function GameView(props: GameViewProps): JSX.Element {
       content={props.content}
       game={game}
       ui={ui}
-      tab={windowed && chatTab !== "log" ? chatTab : undefined}
+      tab={chatTab !== "log" ? chatTab : undefined}
     />
   );
   const guild = (tabs: boolean): JSX.Element => (
@@ -622,30 +693,37 @@ export function GameView(props: GameViewProps): JSX.Element {
         ))}
       </div>
       {death && <DeathScreen t={t} death={death} onOk={() => setDeathSeen(death.at)} />}
-      {/* The hotbar: in the bottom bar on the desktop (below), over the map elsewhere. */}
-      {props.entered && !windowed && (
-        <Hotbar
+      {/* The mobile HUD (docs/17 "UI movil"): the status tray at the map's top left and the
+          compact chat log at its bottom left; a tap on the log opens the whole chat. */}
+      {tabbed && (
+        <StatusTray
           t={t}
-          content={props.content}
+          conditions={ui.conditions}
+          partyBonus={partyBonus(ui.party)}
           game={game}
-          ui={ui}
-          reserve={props.touchPad ? PAD_RESERVE_PX : 0}
-          stacked={stackedHotbar}
+          compact={true}
         />
       )}
-      {/* T5.6 touch controls, over the map and under the windows: the direction pad
-          (Options), the banner of an item picked by a tap and the long-press menu. */}
-      {props.entered && props.touchPad && (
-        <div class="touch-pad-dock">
-          <TouchPad t={t} game={game} />
-        </div>
+      {tabbed && props.entered && !(sheetOpen && tab === "chat") && (
+        <ChatGlance
+          t={t}
+          content={props.content}
+          chat={ui.chat}
+          unread={chatUnread.size > 0}
+          onOpen={() => openTab("chat")}
+        />
       )}
-      {/* The map's zoom (pinch does the same): bottom right of the map, or in the strip
-          under it in portrait with the pad (touch.css), where the banner of a picked
-          item takes its place while it shows. */}
-      {props.entered && touch && !(stackedHotbar && ui.picked) && (
-        <ZoomButtons t={t} game={game} zoom={ui.zoom} />
+      {/* T5.6 touch controls on the desktop screen (a tablet on its side), over the map and
+          under the windows: the direction pad (Options). The mobile HUD has it in its bar. */}
+      {props.entered && props.touchPad && windowed && (
+        <div class="touch-pad-dock">{padControl}</div>
       )}
+      {/* The map's zoom (pinch does the same): bottom right of the map. Upright, the mobile
+          HUD has the two buttons in its console (below). */}
+      {props.entered && touch && !stackedHotbar && <ZoomButtons t={t} game={game} zoom={ui.zoom} />}
+      {/* Lote 21: the action buttons at the thumb that does not walk (docs/15). */}
+      {cluster && <ActionCluster t={t} content={props.content} game={game} ui={ui} />}
+      {props.entered && touch && <FullscreenReoffer t={t} />}
       {props.entered && ui.picked && (
         <PickBanner t={t} content={props.content} picked={ui.picked} game={game} />
       )}
@@ -672,9 +750,15 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && !windowed && ui.book && (
         <BookWindow key={ui.book.at} t={t} content={props.content} game={game} ui={ui} />
       )}
-      {props.entered && <PartyInvitations t={t} game={game} ui={ui} />}
-      {props.entered && <GuildInvitations t={t} game={game} ui={ui} />}
-      {props.entered && <PresenceCheck t={t} game={game} ui={ui} />}
+      {/* One box for what asks for an answer: on a phone held upright they stack under the
+          top row (mobile.css); everywhere else the box does not exist (display: contents). */}
+      {props.entered && (
+        <div class="alerts">
+          <PartyInvitations t={t} game={game} ui={ui} />
+          <GuildInvitations t={t} game={game} ui={ui} />
+          <PresenceCheck t={t} game={game} ui={ui} />
+        </div>
+      )}
       {props.entered && (
         <TutorialPanel
           t={t}
@@ -751,7 +835,7 @@ export function GameView(props: GameViewProps): JSX.Element {
         case "options":
           return <OptionsBody t={t} settings={props.settings} onReset={() => win.reset()} />;
         case "help":
-          return <HelpBody t={t} />;
+          return <HelpBody t={t} touch={touch} />;
         case "chat":
           return (
             <ChatPanes tab={chatTab} log={log}>
@@ -937,6 +1021,7 @@ export function GameView(props: GameViewProps): JSX.Element {
         data-ui="windows"
         data-pad={props.touchPad ? "" : undefined}
         data-touch={touch ? "" : undefined}
+        {...touchAttrs}
         style={ornamentStyle()}
       >
         <div class="game-body" key="body" data-shop={ui.dialog && ui.shop ? "" : undefined}>
@@ -997,17 +1082,45 @@ export function GameView(props: GameViewProps): JSX.Element {
     );
   }
 
-  const panelToggle = layout.panel === "drawer" && (
-    <button
-      type="button"
-      class="panel-toggle"
-      data-testid="panel-toggle"
-      aria-expanded={drawerOpen}
-      aria-controls="side-panel"
-      onClick={() => setDrawerOpen(!drawerOpen)}
-    >
-      {t(drawerOpen ? "client.panel.close" : "client.panel.open")}
-    </button>
+  // ---- The mobile HUD (docs/17 "UI movil"): the map, the gothic bar and the sheet --------
+  const tabs = tabsPlace(layout, sheetOpen);
+  const toggle = togglePlace(layout, sheetOpen);
+  const badges = new Set<PanelTab>();
+  if (ui.guildInvitations.length > 0) badges.add("guild");
+  if (ui.invitations.length > 0) badges.add("party");
+  if (chatUnread.size > 0) badges.add("chat");
+  const panelTabs = (
+    <PanelTabs
+      t={t}
+      tab={tab}
+      open={sheetOpen}
+      // A tap on a section's button always shows it (the sheet's cross closes).
+      onTab={openTab}
+      badges={badges}
+    />
+  );
+  const panelToggle = (place: "bar" | "sheet"): JSX.Element => (
+    <PanelToggle
+      t={t}
+      open={sheetOpen}
+      place={place}
+      onToggle={() => setSheetOpen(!sheetOpen)}
+      badge={badges.size > 0}
+    />
+  );
+  // What the header's hamburger held (T5.6), in a framed sheet: experience, how to play,
+  // the options with the language, and leaving the game.
+  const mobileMenu = (
+    <MobileMenu t={t}>
+      {experience}
+      <details class="controls-help" data-testid="controls-help">
+        <summary>{t("client.help.title")}</summary>
+        <p class="controls-text">{t("client.mobile.help")}</p>
+        <p class="controls-text">{t("client.game.controls")}</p>
+      </details>
+      {props.languagePicker}
+      {logout}
+    </MobileMenu>
   );
   return (
     <div
@@ -1017,94 +1130,121 @@ export function GameView(props: GameViewProps): JSX.Element {
       data-layout={layout.id}
       data-panel={layout.panel}
       data-flow={layout.flow}
+      data-ui="mobile"
       data-pad={props.touchPad ? "" : undefined}
       data-touch={touch ? "" : undefined}
+      {...touchAttrs}
+      data-sheet={sheetOpen ? "" : undefined}
+      style={ornamentStyle()}
     >
-      <header key="hud" class={layout.compactHeader ? "hud compact" : "hud"} data-tutorial="stats">
-        <span class="name" key={props.characterName} ref={fitTextRef} title={props.characterName}>
-          {props.characterName}
-        </span>
-        {stats && (
-          <span class="stat" data-testid="health">
-            {t("client.game.health", { health: stats.health, max: stats.maxHealth })}
-          </span>
-        )}
-        {stats && (
-          <span class="stat" data-testid="mana">
-            {t("client.game.mana", { mana: stats.mana, max: stats.maxMana })}
-          </span>
-        )}
-        {stats && (
-          <span class="stat level" data-testid="level">
-            {t("client.game.level", { level: stats.level, percent: stats.levelPercent })}
-          </span>
-        )}
-        {!layout.compactHeader && experience}
-        <StatusTray
-          t={t}
-          conditions={ui.conditions}
-          partyBonus={partyBonus(ui.party)}
-          game={game}
-          compact={true}
-        />
-        {layout.compactHeader ? (
-          <>
-            {panelToggle}
-            {/* Phones: experience, the controls help, language, sound and logout fold into
-                one menu so the header stays one line. */}
-            <details class="hud-menu" data-testid="hud-menu">
-              <summary aria-label={t("client.hud.menu")} title={t("client.hud.menu")}>
-                ☰
-              </summary>
-              <div class="hud-menu-body">
-                {experience}
-                <p class="controls-text">{t("client.game.controls")}</p>
-                {props.languagePicker}
-                {logout}
-              </div>
-            </details>
-          </>
-        ) : (
-          <>
-            {/* Tablets on their side: the help folds into a button so the header stays
-                one line and the map keeps its height. */}
-            <details class="controls-help" data-testid="controls-help">
-              <summary>{t("client.game.controls_button")}</summary>
-              <p>{t("client.game.controls")}</p>
-            </details>
-            {panelToggle}
-            {props.languagePicker}
-            {logout}
-          </>
-        )}
-      </header>
       <div class="game-body" key="body">
         <div class="viewport" key="viewport" ref={props.host} data-low={low ? "" : undefined}>
           {overMap}
         </div>
-        <aside
-          class="side"
-          id="side-panel"
-          data-open={layout.panel === "drawer" && drawerOpen ? "" : undefined}
-          inert={layout.panel === "drawer" && !drawerOpen ? true : undefined}
-        >
-          <PanelTabs t={t} tab={tab} onTab={setTab} />
-          <div class="side-scroll">
-            <div {...pane("battle", true)}>{battle}</div>
-            <div {...pane("party", true)}>{party}</div>
-            <div {...pane("guild", true)}>{guild(false)}</div>
-            {/* The fight mode goes with the battle list. */}
-            <div {...pane("battle", false)}>{fight}</div>
-            <div {...pane("inventory", true)}>{inventory}</div>
-            <div {...pane("skills", true)}>{skills}</div>
-            <div {...pane("quests", true)}>{quests}</div>
-            <div {...pane("appearance", true)}>{appearance}</div>
+        <MobileBar
+          key="bar"
+          t={t}
+          flow={layout.flow}
+          name={props.characterName}
+          stats={stats}
+          levelUp={levelNotice !== undefined}
+          curve={props.content.experience}
+          hotbar={
+            props.entered && (
+              <Hotbar
+                t={t}
+                content={props.content}
+                game={game}
+                ui={ui}
+                margin={0}
+                stacked={stackedHotbar}
+              />
+            )
+          }
+          // On its side the pad floats over the map's corner, above the bar.
+          pad={props.entered && props.touchPad && layout.flow === "row" ? padControl : undefined}
+          tools={
+            layout.flow === "row" && (
+              <>
+                {panelToggle("bar")}
+                {mobileMenu}
+              </>
+            )
+          }
+        />
+        {/* The sheet: upright it slides up from the console's top, over the bar and the
+            lower part of the map; on its side it is a drawer over the map's right, above
+            the bar (mobile.css). Closed it is inert and clipped away. */}
+        <div class="sheet-anchor" key="sheet">
+          <aside
+            class="side"
+            id="side-panel"
+            data-testid="side-panel"
+            data-open={sheetOpen ? "" : undefined}
+            inert={!sheetOpen ? true : undefined}
+            aria-label={t(TAB_TITLE[tab])}
+          >
+            <header class="sheet-head" data-sheet-head="">
+              {tabs === "sheet" ? panelTabs : <h2>{t(TAB_TITLE[tab])}</h2>}
+              {toggle === "sheet" && panelToggle("sheet")}
+            </header>
+            {/* The bar's orbs are under the sheet while it is up: two gothic bars carry
+                life and mana meanwhile. */}
+            {stats && (
+              <div class="sheet-vitals" aria-hidden="true">
+                <span class="sheet-vital life" data-low={low ? "" : undefined}>
+                  <span
+                    style={{
+                      transform: `scaleX(${orbFill(stats.health, stats.maxHealth).toFixed(3)})`,
+                    }}
+                  />
+                </span>
+                <span class="sheet-vital mana">
+                  <span
+                    style={{
+                      transform: `scaleX(${orbFill(stats.mana, stats.maxMana).toFixed(3)})`,
+                    }}
+                  />
+                </span>
+              </div>
+            )}
+            <div class="side-scroll">
+              <div {...pane("battle", true)}>{battle}</div>
+              <div {...pane("party", true)}>{party}</div>
+              <div {...pane("guild", true)}>{guild(false)}</div>
+              {/* The fight mode goes with the battle list. */}
+              <div {...pane("battle", false)}>{fight}</div>
+              <div {...pane("inventory", true)}>{inventory}</div>
+              <div {...pane("skills", true)}>{skills}</div>
+              <div {...pane("quests", true)}>{quests}</div>
+              <div {...pane("appearance", true)}>{appearance}</div>
+            </div>
+            {/* The whole chat: its tabs (docs/17 UI-10), the system log atop "All" and alone
+                on its own tab, the lines and the line to type. */}
+            <div {...pane("chat", true)}>
+              <ChatTabs t={t} tab={chatTab} onTab={setChatTab} unread={chatUnread} />
+              {(chatTab === "chat" || chatTab === "log") && log}
+              <div class="chat-pane" hidden={chatTab === "log"}>
+                {chat}
+              </div>
+            </div>
+          </aside>
+        </div>
+        {layout.flow === "column" && (
+          <div
+            class="mconsole"
+            key="console"
+            data-testid="mobile-console"
+            data-has-pad={props.entered && props.touchPad ? "" : undefined}
+          >
+            {props.entered && props.touchPad && <div class="touch-pad-dock">{padControl}</div>}
+            <div class="mconsole-tools">
+              {panelTabs}
+              {mobileMenu}
+              {props.entered && touch && <ZoomButtons t={t} game={game} zoom={ui.zoom} />}
+            </div>
           </div>
-          <div {...pane("chat", true)}>
-            {log}
-            {chat}
-          </div>
-        </aside>
+        )}
       </div>
       {menu}
     </div>
@@ -1593,7 +1733,7 @@ function OptionsBody(props: {
 }
 
 /** The help window: how to play and the keys of the windows. */
-function HelpBody(props: { t: Translate }): JSX.Element {
+function HelpBody(props: { t: Translate; touch?: boolean }): JSX.Element {
   const { t } = props;
   const keys: [string, string][] = [
     ["I", "client.inventory.title"],
@@ -1608,6 +1748,13 @@ function HelpBody(props: { t: Translate }): JSX.Element {
   ];
   return (
     <div class="help-body" data-testid="controls-help">
+      {/* On a touch screen the fingers come first (lote 21); the keys stay below for a
+          keyboard and a mouse plugged into the tablet. */}
+      {props.touch && (
+        <p class="controls-text" data-testid="touch-help">
+          {t("client.mobile.help")}
+        </p>
+      )}
       <p class="controls-text">{t("client.game.controls")}</p>
       <h3>{t("client.help.keys")}</h3>
       <dl class="keys">
@@ -1634,62 +1781,6 @@ function HelpBody(props: { t: Translate }): JSX.Element {
       </dl>
       {/* docs/17 UI-1: the windows from the keyboard (their ✥ handle). */}
       <p class="help-windows">{t("client.help.windows")}</p>
-    </div>
-  );
-}
-
-/**
- * The tab bar of the side panel on small screens (T5.6): an ARIA tablist; the arrow keys,
- * Home and End move between tabs.
- */
-function PanelTabs(props: {
-  t: Translate;
-  tab: PanelTab;
-  onTab(tab: PanelTab): void;
-}): JSX.Element {
-  const { t } = props;
-  const move = (e: KeyboardEvent): void => {
-    const i = PANEL_TABS.indexOf(props.tab);
-    const n = PANEL_TABS.length;
-    const to =
-      e.key === "ArrowRight"
-        ? (i + 1) % n
-        : e.key === "ArrowLeft"
-          ? (i - 1 + n) % n
-          : e.key === "Home"
-            ? 0
-            : e.key === "End"
-              ? n - 1
-              : -1;
-    if (to < 0) return;
-    e.preventDefault();
-    const next = PANEL_TABS[to] ?? props.tab;
-    props.onTab(next);
-    document.getElementById(`tab-${next}`)?.focus();
-  };
-  return (
-    <div
-      class="panel-tabs"
-      role="tablist"
-      aria-label={t("client.panel.tabs")}
-      data-testid="panel-tabs"
-      onKeyDown={move}
-    >
-      {PANEL_TABS.map((name) => (
-        <button
-          key={name}
-          type="button"
-          role="tab"
-          id={`tab-${name}`}
-          data-tab={name}
-          aria-controls={`pane-${name}`}
-          aria-selected={props.tab === name}
-          tabIndex={props.tab === name ? 0 : -1}
-          onClick={() => props.onTab(name)}
-        >
-          {t(TAB_TITLE[name])}
-        </button>
-      ))}
     </div>
   );
 }
@@ -1723,10 +1814,7 @@ function useLayout(): Layout {
         if (width === s.width && typingFocused()) return s;
         const next = layoutFor(width, window.innerHeight);
         const same =
-          next.id === s.layout.id &&
-          next.panel === s.layout.panel &&
-          next.flow === s.layout.flow &&
-          next.compactHeader === s.layout.compactHeader;
+          next.id === s.layout.id && next.panel === s.layout.panel && next.flow === s.layout.flow;
         if (same && width === s.width) return s;
         return { width, layout: same ? s.layout : next };
       });
@@ -1746,6 +1834,35 @@ function useLayout(): Layout {
  * the others (Safari on iOS) only shrink the visual viewport, so while a text field has
  * the focus the game takes the visual viewport's height (--game-height in client.css).
  */
+/**
+ * The input method in use (input/input-mode.ts): the one of the last pointer press or key
+ * of a hardware keyboard, anywhere on the page.
+ */
+function useInputMethod(coarse: boolean): InputMethod {
+  const [method, setMethod] = useState<InputMethod>(() => initialMethod(coarse));
+  useEffect(() => {
+    const mode = new InputMode(initialMethod(coarse));
+    const onPointer = (e: PointerEvent): void => {
+      if (mode.pointer(e.pointerType)) setMethod(mode.method);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      const facts = {
+        key: e.key,
+        editable: isTextField(e.target),
+        composing: e.isComposing || e.keyCode === 229,
+      };
+      if (mode.key(facts)) setMethod(mode.method);
+    };
+    window.addEventListener("pointerdown", onPointer, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointer, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [coarse]);
+  return method;
+}
+
 function useKeyboardViewport(): void {
   useEffect(() => {
     const vv = window.visualViewport;

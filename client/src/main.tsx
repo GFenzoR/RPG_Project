@@ -16,6 +16,18 @@ import { ControlsOptions } from "./ui/ControlsOptions.tsx";
 import { loadControls, saveControls } from "./state/controls.ts";
 import { coarsePointer, loadTouchPad, saveTouchPad } from "./state/touch-prefs.ts";
 import {
+  applyEffects,
+  deviceHints,
+  loadEffects,
+  loadTouchPrefs,
+  saveEffects,
+  saveTouchPrefs,
+} from "./state/touch-controls.ts";
+import { browserVibrate } from "./state/haptics.ts";
+import { TouchOptions } from "./ui/TouchOptions.tsx";
+import { AppModeButtons } from "./ui/AppMode.tsx";
+import { appMode } from "./ui/app-mode.ts";
+import {
   applyReducedMotion,
   applyChatOpacity,
   applyScales,
@@ -50,6 +62,9 @@ const languages = Object.keys(content.i18n);
 // Every option goes through the watched storage: a change reaches the account's saved
 // options a moment later (state/option-storage.ts).
 const storage = optionStorage();
+// Lote 21: the app-mode store listens from the start (Chromium fires beforeinstallprompt
+// once, early: ui/app-mode.ts keeps it for the install button).
+appMode();
 const audio = new AudioEngine(content.sounds, loadPrefs(storage), browserPorts());
 // Browsers only start audio after a gesture: the first one unlocks it. On touch screens
 // pointerdown does not count as one (pointerup, touchend and click do).
@@ -114,6 +129,13 @@ function Root(): JSX.Element {
   const t = useMemo(() => translator(content.i18n[lang] ?? {}, lang), [lang]);
   // T5.6: the on-screen direction pad, switched in Options (on by default on touch screens).
   const [touchPad, setTouchPad] = useState(() => loadTouchPad(storage, coarsePointer()));
+  // Lote 21 (docs/15): the touch controls of this device and its effects preset (picked by
+  // a quick capability check until the player chooses).
+  const [touchPrefs, setTouchPrefs] = useState(() => loadTouchPrefs(storage));
+  const [effects, setEffects] = useState(() => loadEffects(storage, deviceHints()));
+  useEffect(() => {
+    applyEffects(document.documentElement, effects);
+  }, [effects]);
   // docs/17 UI-6: what the right button does on items (Options → Controls).
   const [controls, setControls] = useState(() => loadControls(storage));
   // docs/17 UI-9: "reduced animations" (Options), on top of prefers-reduced-motion.
@@ -148,6 +170,8 @@ function Root(): JSX.Element {
     const stored = readStored();
     if (stored !== null && languages.includes(stored)) setLang(stored);
     setTouchPad(loadTouchPad(storage, coarsePointer()));
+    setTouchPrefs(loadTouchPrefs(storage));
+    setEffects(loadEffects(storage, deviceHints()));
     setControls(loadControls(storage));
     setReducedMotion(loadReducedMotion(storage));
     setUiScale(loadUiScale(storage));
@@ -171,14 +195,30 @@ function Root(): JSX.Element {
     />
   );
   const padToggle = (): JSX.Element => (
-    <TouchPadToggle
-      t={t}
-      on={touchPad}
-      onChange={(on) => {
-        saveTouchPad(on, storage);
-        setTouchPad(on);
-      }}
-    />
+    <>
+      <TouchPadToggle
+        t={t}
+        on={touchPad}
+        onChange={(on) => {
+          saveTouchPad(on, storage);
+          setTouchPad(on);
+        }}
+      />
+      <TouchOptions
+        t={t}
+        prefs={touchPrefs}
+        canVibrate={browserVibrate(navigator, coarsePointer()) !== undefined}
+        effects={effects}
+        onChange={(next) => {
+          saveTouchPrefs(next, storage);
+          setTouchPrefs(next);
+        }}
+        onEffects={(next) => {
+          saveEffects(next, storage);
+          setEffects(next);
+        }}
+      />
+    </>
   );
   const interfaceOptions = (): JSX.Element => (
     <InterfaceOptions
@@ -219,9 +259,13 @@ function Root(): JSX.Element {
   const picker = (
     <>
       {language()}
+      {/* Full screen and "install as an app" (docs/15): on the login and character screens
+          and in the game's menu; once the install offer is dismissed it stays in Options. */}
+      <AppModeButtons t={t} where="screen" />
       <AudioOptions key={syncs} t={t} audio={audio} storage={storage}>
         {padToggle()}
         {interfaceOptions()}
+        <AppModeButtons t={t} where="options" fallback={true} />
       </AudioOptions>
     </>
   );
@@ -234,7 +278,12 @@ function Root(): JSX.Element {
       settings={{
         language: language(),
         sound: <SoundOptions key={syncs} t={t} audio={audio} storage={storage} />,
-        touchPad: padToggle(),
+        touchPad: (
+          <>
+            {padToggle()}
+            <AppModeButtons t={t} where="options" />
+          </>
+        ),
         controlsMode: controls,
         controls: (
           <ControlsOptions
@@ -259,6 +308,7 @@ function Root(): JSX.Element {
       }}
       audio={audio}
       touchPad={touchPad}
+      touchControls={touchPrefs}
       onOptionsSynced={reloadOptions}
     />
   );

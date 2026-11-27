@@ -209,7 +209,7 @@ export function MarketWindow(props: Props & { now?: number }): JSX.Element | nul
           </span>
         </p>
       ) : (
-        <header>
+        <header data-sheet-head="">
           <h2>{t("client.market.title")}</h2>
           <span class="money" data-testid="market-money">
             {t("client.shop.money", { money: m.money })}

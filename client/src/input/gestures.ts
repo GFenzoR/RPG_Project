@@ -158,6 +158,20 @@ export class GestureRecognizer {
 
 const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 
+/**
+ * What a finger dragged over the map does (lote 21, docs/15 "Mantener para caminar"):
+ * with a mira or an item picked, nothing (the tap that ends it decides); from a tile whose
+ * top item can be dragged, it moves that item; from any other tile it walks toward the
+ * finger for as long as it stays down, like the left mouse button held (docs/17 MOV-3).
+ * A finger held still is still the long press: only a drag walks.
+ */
+export type TouchDrag = "none" | "item" | "walk";
+
+export function touchDrag(aiming: boolean, draggableItem: boolean): TouchDrag {
+  if (aiming) return "none";
+  return draggableItem ? "item" : "walk";
+}
+
 /** True for the pointers the touch controls handle; the mouse keeps its own handlers. */
 export const isTouchPointer = (pointerType: string): boolean =>
   pointerType === "touch" || pointerType === "pen";
