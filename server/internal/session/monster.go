@@ -654,7 +654,9 @@ func (w *World) unseenSpawnTile(ctx *game.TickContext, sp *world.Spawn, eyes []w
 func (w *World) spawnMonster(ctx *game.TickContext, slot *spawnSlot, initial bool) bool {
 	var pos world.Pos
 	var ok bool
-	if eyes := w.spawnWatchers(slot.spawn); initial || len(eyes) == 0 {
+	if initial { // the world starts: nobody is asked who looks
+		pos, ok = w.spawnTile(ctx, slot.spawn)
+	} else if eyes := w.spawnWatchers(slot.spawn); len(eyes) == 0 {
 		pos, ok = w.spawnTile(ctx, slot.spawn)
 	} else {
 		pos, ok = w.unseenSpawnTile(ctx, slot.spawn, eyes)

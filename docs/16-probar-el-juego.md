@@ -315,7 +315,9 @@ Al norte del templo, entre la costa y los corrales (tabla de arriba; reglas en
    placa de 2105,2070. Con las dos placas presionadas el rastrillo (2105,2068) se abre; si
    sacas una roca, se cierra (no sobre ti). Las rocas vuelven solas a su lugar 3 min después
    del último empuje, cuando nadie las ve (ni a su lugar): mientras estés ahí el rastrillo
-   sigue abierto. Si quedas adentro con el rastrillo cerrado (saliste del juego ahí, o
+   sigue abierto, hasta 6 min después del último empuje (a las dos veces el tiempo vuelven
+   aunque las mires, para que una roca no encierre a nadie; empújala otra vez y el plazo
+   empieza de nuevo). Si quedas adentro con el rastrillo cerrado (saliste del juego ahí, o
    tras un reinicio), el
    teleport de 2105,2066 te deja afuera, en 2104,2071.
 3. **Herramientas.** La roca agrietada solo se parte con un pico (usa el pico sobre ella);

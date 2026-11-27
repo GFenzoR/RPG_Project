@@ -349,6 +349,14 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
     mundo). Un staff visible sí, y también un jugador invisible por cualquier otro medio.
   - **Mundo vivo.** Lo mismo para los objetos que vuelven: un objeto roto no vuelve a
     estar y una roca empujada no vuelve a su lugar mientras alguien los vea ("Mundo vivo").
+    La roca tiene un tope: a las dos veces su `reset_seconds` desde el último empuje
+    vuelve aunque la miren, para que nadie quede encerrado detrás de ella.
+  - **Aparecer no es entrar.** La regla es sobre dónde aparece un monstruo, no sobre
+    dónde camina después: uno que reaparece en una casilla sin ver puede entrar caminando
+    a la vista en el mismo tick (deambula o persigue como cualquier otro). El jugador lo
+    ve llegar, no materializarse.
+  - **Desconectados en combate.** Un personaje que quedó en el mundo tras cerrar la
+    conexión en combate (link-dead) sigue viendo: frena los respawns hasta que sale.
   - **Capacidad.** Antes (lote 6) el bloqueo miraba solo la ventana clásica de 15x11 para
     no frenar a los vecinos; la casilla alternativa lo compensa en parte, pero la
     "Eficiencia 2/3" de `07` "Capacidad del mundo" se midió con la regla vieja y queda por
@@ -3994,9 +4002,10 @@ para avanzar. Todo el detalle (contrato, datos, números) está en
   no gasta el golpe y dice `living.wrong_way`.
 - **Restos.** Roto, deja restos caminables que se desvanecen (`debris_seconds`) y vuelve a
   estar `respawn_seconds` después de romperse, solo si ningún jugador ve su casilla
-  ("Respawns") y no hay una criatura en ella (si no, lo intenta cada segundo). Los items sueltos que haya ahí (el botín que nadie
-  levantó, una moneda tirada para trabarlo) se corren a una casilla vecina libre; solo
-  unos restos de criatura, que se pudren solos, lo hacen esperar.
+  ("Respawns") y no hay una criatura en ella (si no, lo intenta cada segundo). Los items
+  sueltos que haya ahí (el botín que nadie levantó, una moneda tirada para trabarlo) se
+  corren a una casilla vecina libre; solo unos restos de criatura, que se pudren solos, lo
+  hacen esperar.
 - **Botín.** Algunos tienen una tabla chica (monedas, una galleta, una poción, seda): se tira
   una vez por rotura y cae en la casilla, a nombre de quien la rompió para la economía.
   Queda en el suelo sin dueño, a propósito: a diferencia de los restos de un monstruo,
@@ -4004,8 +4013,11 @@ para avanzar. Todo el detalle (contrato, datos, números) está en
 - **Empujar.** Una roca musgosa o un cajón pesado se empujan caminando contra ellos (en
   línea recta): se mueven una casilla si la de atrás está libre; el jugador no se mueve. Dos
   empujes en el mismo tick: el primero gana. Vuelven a su lugar `reset_seconds` después del
-  último empuje, cuando no hay nadie en ese lugar (el puzzle se arma solo para el
-  siguiente); los items sueltos que haya ahí se corren a una casilla vecina.
+  último empuje, cuando no hay nadie en ese lugar y ningún jugador los ve (el puzzle se
+  arma solo para el siguiente); los items sueltos que haya ahí se corren a una casilla
+  vecina. La vista los retiene como mucho hasta las dos veces `reset_seconds` desde el
+  último empuje: después vuelven aunque los miren, porque quien quedó del lado ciego de una
+  roca no puede empujarla de vuelta y su propia vista lo dejaría encerrado.
 - **Placas y compuertas.** Una placa de presión se hunde con una criatura o un objeto
   empujable encima; un rastrillo se abre mientras todas sus placas (las que están a su
   radio) están presionadas y se cierra cuando una se libera, si no hay nadie debajo (un

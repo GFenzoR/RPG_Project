@@ -242,6 +242,75 @@ func TestRespawnWatchedAcrossFloors(t *testing.T) {
 	}
 }
 
+// The floors the other way round: a player in a cave sees only its own floor, so the spawn
+// on the surface right above it comes back and the cave's own waits.
+func TestRespawnUnderARoofOfRock(t *testing.T) {
+	row := strings.Repeat(".", 12)
+	rows := []string{row, row, row, row}
+	m := worldtest.Floors(t, 0, 0, worldtest.Layer{Z: 7, Rows: rows}, worldtest.Layer{Z: 8, Rows: rows})
+	ground, cave := spawnAt("wolf", 5, 2, 0, 5), spawnAt("wolf", 5, 2, 0, 5)
+	cave.ID, cave.Center.Z = "cave_spawn", 8
+	m.Islands()[0].Spawns = []world.Spawn{ground, cave}
+	wolf := wolfDef()
+	wolf.Behavior.Aggressive = false
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Monsters = content.Monsters{"wolf": wolf}
+		c.Items = testItems()
+	})
+	_, ana := h.join("Ana", &world.Pos{X: 6, Y: 2, Z: 8})
+	h.sim.Step()
+	ms := h.w.Monsters()
+	if len(ms) != 2 {
+		t.Fatalf("%d monsters, want one per floor", len(ms))
+	}
+	h.do(func(ctx *game.TickContext) {
+		for _, w := range ms {
+			h.w.DamageMonsterForTest(ctx, w, ana, 1000)
+		}
+	})
+	h.sim.RunFor(60 * time.Second)
+	if got := onlyMonster(t, h).Pos(); got.Z != 7 {
+		t.Fatalf("with Ana in the cave the monster back is at %v, want only the surface's", got)
+	}
+}
+
+// A link-dead character (its connection closed in a fight) still stands in the world and
+// still sees: the spawn it looks at waits until the character is taken out.
+func TestRespawnWaitsForALinkDeadWatcher(t *testing.T) {
+	def := wolfDef()
+	def.Behavior.FleeAtHealthPct, def.Loot = 0, nil
+	def.Attacks[0].Min, def.Attacks[0].Max = 15, 15
+	m := worldtest.Open(t, 0, 0, 64, 64)
+	m.Islands()[0].Spawns = []world.Spawn{spawnAt("wolf", 20, 20, 0, 5)}
+	h := newHarness(t, m, func(c *session.Config) {
+		c.Monsters = content.Monsters{"wolf": def}
+		c.Items = testItems()
+	}, blockMs)
+	cl, p := h.hunter("Watcher", 1) // stands at 21,20, next to the spawn
+	h.bitten(p)
+	wolf := onlyMonster(t, h)
+	h.do(func(ctx *game.TickContext) { h.w.DamageMonsterForTest(ctx, wolf, p, 1_000_000) })
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Step()
+	if !p.LinkDead() {
+		t.Fatal("the watcher is not link-dead after leaving in a fight")
+	}
+	held := 0
+	for ; h.w.PlayerByCharacter(p.CharacterID()) == p; held++ {
+		if held > 20*600 {
+			t.Fatal("the link-dead watcher never left the world")
+		}
+		if n := len(h.w.Monsters()); n != 0 {
+			t.Fatalf("%d monsters respawned in front of a link-dead character (tick %d)", n, held)
+		}
+		h.sim.Step()
+	}
+	if held < 20*6 {
+		t.Fatalf("the watcher left after %d ticks: the test did not outlast respawn_seconds", held)
+	}
+	h.sim.RunUntil(func() bool { return len(h.w.Monsters()) == 1 }, sim.MaxSeconds(10))
+}
+
 // Staff walking invisible inspects the world without changing it: its view does not hold
 // a respawn back. A visible staff member does, and so does a player made invisible by
 // anything else (no camping a spawn unseen to farm it in sight).

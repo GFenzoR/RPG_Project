@@ -916,7 +916,9 @@ empujable manda `PushObject` (`Game.pushAhead`, `WorldState.pushableAhead`).
    empujado vuelve a su lugar, solo cuando ningún jugador ve la casilla (`Watched`; para
    la roca, ni donde está ni su lugar: decisión del dueño del 2026-11-26, "si el jugador
    está viendo un área el respawn no debiese pasar") y no hay una criatura en ella; si
-   no, reintenta cada segundo. Primero se pregunta `Watched`: una casilla vigilada
+   no, reintenta cada segundo. La roca espera la vista con tope: a las dos veces su
+   `reset_seconds` desde el último empuje (`resetSightHold`) vuelve aunque la miren
+   (invariante 7). Primero se pregunta `Watched`: una casilla vigilada
    conserva sus items donde están. Un puzzle no se rearma con alguien mirándolo.
    Los items sueltos de la casilla (el botín que nadie levantó, una moneda tirada para
    trabarlo) se corren antes a una vecina (`ClearItems`), así que nadie traba un objeto,
@@ -934,7 +936,13 @@ empujable manda `PushObject` (`Game.pushAhead`, `WorldState.pushableAhead`).
 7. **Estado transitorio.** Roto, empujado y abierto no se guardan: un reinicio deja todo
    como está en el mapa. Es más simple, no puede romper un guardado y los puzzles vuelven a
    empezar solos (`reset_seconds`, obligatorio y mayor que 0: una roca que no vuelve nunca
-   podría tapar un pasillo hasta el reinicio).
+   podría tapar un pasillo hasta el reinicio). Por lo mismo la espera de "nadie la ve"
+   (invariante 5) tiene tope: una roca empujada a la boca de un pasillo sin salida no se
+   puede empujar de vuelta desde adentro (un empuje pide la casilla de atrás), y la vista
+   del propio encerrado frenaría el reset para siempre. A las `resetSightHold` (2) veces
+   `reset_seconds` desde el último empuje la roca vuelve a la vista; solo la siguen
+   frenando una criatura en su lugar u otro objeto ahí
+   (`TestResetDoesNotWaitForEverWhileWatched`).
 8. **Un objeto por casilla**, siempre arriba de los items del mapa (el índice de pila que
    usa el cliente es `1 + len(pila del mapa)`).
 

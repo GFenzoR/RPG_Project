@@ -749,6 +749,12 @@ tiempos de `go test -bench` (mediana de 3):
     compensa solo donde el área del vecino sale de la vista. Falta la prueba con bots
     (`make bots` pide Postgres y el servidor: queda para la verificación final del lote)
     y, si la XP/h cae, ajustar `count`/`respawn_seconds` o separar spawns.
+  - **Mundo vivo, sin medir:** un objeto roto o una roca empujada que alguien mira
+    reintenta cada segundo, y cada intento es una pregunta `Host.Watched` (un
+    `eachObserver`; dos por roca, y la roca deja de preguntar a las dos veces su
+    `reset_seconds`). No es por tick y hoy hay decenas de objetos, no miles:
+    `BenchmarkRespawnsHeld` solo cubre monstruos. Si el mundo vivo crece a miles de
+    objetos rotos a la vista a la vez, medirlo antes.
 - **`make bots` contra un servidor real (lote 6, 2026-11-18).** Punta del lote
   (`lote6/verify`), mismo notebook y mismo script que "Resultados del stack T5.5–T5.7":
   Windows nativo, servidor, bots y Postgres (Docker) en la misma máquina, 5 islas (146

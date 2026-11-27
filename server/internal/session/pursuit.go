@@ -436,8 +436,10 @@ func (w *World) straying(ctx *game.TickContext, m *Monster) {
 }
 
 // onScreen reports whether any player has p in its view (the wide one, eachObserver; not
-// the classic window a monster notices players in, watched): who would see a monster
-// there vanish.
+// the classic window a monster notices players in, InSight): who would see a monster
+// there vanish. It is watched without the staff exception, on purpose: watched asks who
+// holds a respawn back (an invisible GM inspects without changing the world), onScreen
+// asks whose client would show the monster vanish, and an invisible GM's does.
 func (w *World) onScreen(p world.Pos) bool {
 	seen := false
 	w.eachObserver(nil, p, func(*Player) { seen = true })
