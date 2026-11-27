@@ -8,6 +8,8 @@ import { createImage } from "./image.ts";
 import type { Image } from "./image.ts";
 import { parseHexColor } from "./image.ts";
 import { TILE } from "./placeholder.ts";
+import { FALL_DIRS, fallArt } from "../../../packages/renderer/src/anim.ts";
+import type { FallArt, FallDir } from "../../../packages/renderer/src/anim.ts";
 
 // attack: melee (the LPC slash); shoot: a ranged attack (bow); cast: a spell (docs/17 ANI-2).
 export const ANIM_ACTIONS = ["idle", "walk", "attack", "shoot", "cast", "death"] as const;
@@ -746,17 +748,21 @@ export function restOf(
   return single ? tippedRest(single) : undefined;
 }
 
-/** The ways a body falls dead (FallDir of packages/renderer anim.ts). */
-export type FallDir = "s" | "e" | "n" | "w";
-export const FALL_DIRS: readonly FallDir[] = ["s", "e", "n", "w"];
+/**
+ * The ways a body falls dead and how each is drawn: packages/renderer anim.ts itself (a
+ * file without imports, read by path as tools/spritegen does), so the rests written here,
+ * the corpses spritegen makes and the fall the client plays follow one rule, not copies.
+ */
+export { FALL_DIRS };
+export type { FallDir };
 
 /**
- * Where the body fallen facing each way rests, as restOf says of the south: the rule of
- * packages/renderer fallArt, which the client plays the fall with and tools/spritegen makes
- * the corpses with. A death clip drawn in that facing: its last frame. A clip without that
- * facing: the south one's (mirrored or not, it rests on the same rows). A single image:
- * tipped clockwise from the drawing as it is to the south and (mirrored afterwards) to the
- * north, and from its mirror image to the east and the west.
+ * Where the body fallen facing each way rests, as restOf says of the south, by the rule of
+ * packages/renderer fallArt (the client plays the fall with it, tools/spritegen makes the
+ * corpses with it). A death clip: the last frame of the facing fallArt draws (its own, or
+ * the south's, which mirrored or not rests on the same rows). A single image: tipped over;
+ * tipping it the other way, or mirroring it before, puts its other side on the floor, so
+ * exactly one of the two measures its mirror image.
  */
 export function restsOf(
   sprite: string,
@@ -768,14 +774,16 @@ export function restsOf(
   const death = meta.actions.death;
   const south = restOf(sprite, meta, frame, single);
   const flipped = !death && single ? tippedRest(mirrorImage(single)) : undefined;
+  const art: FallArt = { clip: "s", mirror: false, tip: 1 };
   for (const dir of FALL_DIRS) {
+    fallArt(death?.dirs, dir, art);
     let rest = south;
     if (death) {
-      if (dir !== "s" && death.dirs.includes(dir) && death.frames >= 1) {
-        const last = frame(frameName(sprite, "death", dir, death.frames - 1));
+      if (art.clip !== "s" && death.frames >= 1) {
+        const last = frame(frameName(sprite, "death", art.clip, death.frames - 1));
         rest = last ? rowsUnder(last) : undefined;
       }
-    } else if (dir === "e" || dir === "w") rest = flipped;
+    } else if (art.mirror !== (art.tip === -1)) rest = flipped;
     if (rest !== undefined) out[dir] = rest;
   }
   return out;
