@@ -72,6 +72,9 @@ func (w *World) dieBy(ctx *game.TickContext, p, killer *Player) {
 	if w.corpseItem != nil {
 		corpse := &Corpse{Item: newItem(w.playerCorpse(p), 1), Owner: p.charID, OwnerUntil: ctx.Tick + w.corpseOwnerFor}
 		corpse.Item.mods.BodyOf = p.name // "body of <player>" (docs/02 "Muerte")
+		// The body lies the way the player faced, a woman's or a man's (docs/05 "Restos").
+		corpse.Item.mods.Facing = fallFacing(p.dir)
+		corpse.Item.mods.BodySex = p.look.Sex
 		fall := func(it *Item) {
 			w.econTree(p, EconDeath, "", it, -1)
 			w.detach(it)

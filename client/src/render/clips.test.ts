@@ -154,6 +154,26 @@ describe("eight facings (docs/17 ANI-1)", () => {
     expect(c?.frames.death?.[dirIndex("nw")]).toEqual(["c/p/death_s_0"]);
   });
 
+  it("stays eight ways with a death drawn in the four straight facings (docs/17)", () => {
+    // The engine humanoids: a person falls the way it faced, one of four; that never
+    // turns the living figure four ways.
+    const person: AnimMeta = {
+      ...PERSON,
+      actions: { ...PERSON.actions, death: { frames: 1, ms: 150, dirs: ["n", "e", "s", "w"] } },
+    };
+    const keys = [...keysOf(ALL), "c/p/death_n_0", "c/p/death_e_0", "c/p/death_w_0"];
+    const c = spriteClips("c/p", { "c/p": person }, atlasOf(keys));
+    expect(c?.eight).toBe(true);
+    expect(c?.frames.walk).toHaveLength(8);
+    expect(c?.frames.death).toHaveLength(8);
+    expect(c?.frames.death?.[dirIndex("e")]).toEqual(["c/p/death_e_0"]);
+    expect(c?.frames.death?.[dirIndex("w")]).toEqual(["c/p/death_w_0"]);
+    expect(c?.frames.death?.[dirIndex("n")]).toEqual(["c/p/death_n_0"]);
+    // A diagonal has no death frames of its own: the body draws the east or west ones
+    // (CreatureBody.draw), never this slot.
+    expect(c?.frames.death?.[dirIndex("ne")]).toEqual(["c/p/death_s_0"]);
+  });
+
   it("stays four ways when an action lacks the diagonals, or a diagonal frame is missing", () => {
     const four: AnimMeta = {
       ...PERSON,

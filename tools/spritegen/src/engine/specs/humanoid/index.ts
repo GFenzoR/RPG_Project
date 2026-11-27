@@ -62,9 +62,21 @@ export const HUMANOID_PER_TILE_DIAG = Math.hypot(HUMANOID_PER_TILE, HUMANOID_PER
 
 /**
  * The facings an engine humanoid is drawn in (docs/17 ANI-1): all eight, every layer, so
- * the client turns a person to the diagonal it walks or attacks. Death falls facing south.
+ * the client turns a person to the diagonal it walks or attacks.
  */
 export const HUMANOID_DIRS = DIRS8;
+/**
+ * The facings a humanoid's death is drawn in: the four straight ones (docs/17 "Un cadáver
+ * por dirección"). A person facing a diagonal falls east or west (packages/renderer fallDir).
+ */
+export const HUMANOID_DEATH_DIRS: readonly Dir[] = ["s", "e", "n", "w"];
+/**
+ * Facing east or west a person falls along the screen's depth, away from the viewer or
+ * toward it: lying that way the 3/4 view squeezes it into a lump. It turns as it falls
+ * (degrees by the last frame) and ends lying across the tile, its head up and to the east
+ * or down and to the west: four bodies that read apart.
+ */
+const HUMANOID_DEATH_TURN = { e: -45, w: -65 } as const;
 
 /** The ms per frame of the timed actions (ANI-2), as sprites.yaml must repeat them. */
 export const HUMANOID_MS = { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } as const;
@@ -99,8 +111,14 @@ function actionsFor(def: LayerDef): Partial<Record<ActionName, ActionSpec>> {
     attack: { frames: 4, ms: HUMANOID_MS.attack, keys: keysOf("attack"), dirs },
     shoot: { frames: 3, ms: HUMANOID_MS.shoot, keys: keysOf("shoot"), dirs },
     cast: { frames: 3, ms: HUMANOID_MS.cast, keys: keysOf("cast"), dirs },
-    // Falling is drawn facing south, like today's player (the client turns it).
-    death: { frames: 4, ms: HUMANOID_MS.death, keys: keysOf("death"), dirs: ["s"] },
+    // It falls the way it faced, one of the four straight ones (HUMANOID_DEATH_DIRS).
+    death: {
+      frames: 4,
+      ms: HUMANOID_MS.death,
+      keys: keysOf("death"),
+      dirs: HUMANOID_DEATH_DIRS,
+      turn: HUMANOID_DEATH_TURN,
+    },
   };
 }
 

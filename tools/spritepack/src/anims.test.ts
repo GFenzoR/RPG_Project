@@ -8,6 +8,7 @@ import {
   measureStance,
   recolorImage,
   restOf,
+  restsOf,
   specColumns,
   stancesOf,
   tippedRest,
@@ -282,6 +283,46 @@ describe("animation images", () => {
     expect(tippedRest(createImage(32, 32))).toBeUndefined();
     expect(tippedRest(createImage(32, 64))).toBeUndefined();
     expect(restOf("m", still, () => undefined, undefined)).toBeUndefined();
+  });
+});
+
+describe("restsOf: where the body fallen each way rests (docs/17)", () => {
+  const img = (y0: number, rows: number, x0 = 4, cols = 24): Image => {
+    const out = createImage(32, 32);
+    fillRect(out, x0, y0, cols, rows, GREY);
+    return out;
+  };
+
+  it("measures the last frame of the death drawn in each facing", () => {
+    const frames: Record<string, Image> = {
+      "m/death_s_1": img(20, 6), // rows 20..25: 6 under it
+      "m/death_e_1": img(10, 12), // rows 10..21: 10 under it
+      "m/death_n_1": img(26, 6), // rows 26..31: none
+      "m/death_w_1": img(20, 6),
+    };
+    const meta = {
+      actions: { death: { frames: 2, ms: 100, dirs: ["n", "e", "s", "w"] } },
+    } as unknown as AnimMeta;
+    expect(restsOf("m", meta, (n) => frames[n], undefined)).toEqual({ s: 6, e: 10, n: 0, w: 6 });
+  });
+
+  it("gives a death drawn facing south only the south's rest every way (it is mirrored)", () => {
+    const frames: Record<string, Image> = { "m/death_s_2": img(18, 5) };
+    const meta = {
+      actions: { death: { frames: 3, ms: 100, dirs: ["s"] } },
+    } as unknown as AnimMeta;
+    expect(restsOf("m", meta, (n) => frames[n], undefined)).toEqual({ s: 9, e: 9, n: 9, w: 9 });
+    // No frames to measure: nothing to say.
+    expect(restsOf("m", meta, () => undefined, undefined)).toEqual({});
+  });
+
+  it("tips a single image from the drawing or from its mirror image, by the way", () => {
+    const still = { actions: {} } as unknown as AnimMeta;
+    // Columns 8..21: 10 empty at the right (5 rows once flattened), 8 at the left (4).
+    const narrow = img(2, 28, 8, 14);
+    expect(tippedRest(narrow)).toBe(5);
+    expect(restsOf("m", still, () => undefined, narrow)).toEqual({ s: 5, n: 5, e: 4, w: 4 });
+    expect(restsOf("m", still, () => undefined, undefined)).toEqual({});
   });
 });
 

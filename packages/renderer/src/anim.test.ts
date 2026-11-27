@@ -8,7 +8,11 @@ import {
   FEET_LINE,
   TIP_SQUASH,
   fallMs,
+  FALL_DIRS,
+  fallArt,
+  fallDir,
   fallShift,
+  restFor,
   tipPlacement,
   HIT_FLASH_MS,
   HIT_MS,
@@ -482,7 +486,7 @@ describe("procedural motion of single-frame sprites (ANI-5)", () => {
     expect(animate(s, STILL, in_, out).done).toBe(true);
   });
 
-  it("tips a mirrored single image over as it was drawn: the corpse is never mirrored", () => {
+  it("tips a mirrored single image over as its corpse was drawn, not as it looked alive", () => {
     const { s, in_, out } = setup();
     in_.dir = "e"; // STILL looks left: mirrored to look east
     in_.now = 0;
@@ -490,6 +494,120 @@ describe("procedural motion of single-frame sprites (ANI-5)", () => {
     startDeath(s, 10);
     in_.now = 200;
     expect(animate(s, STILL, in_, out).scaleX).toBe(1);
+  });
+
+  it("falls one of four ways: a diagonal falls east or west (docs/17)", () => {
+    expect(FALL_DIRS).toEqual(["s", "e", "n", "w"]);
+    expect(ANIM_DIRS.map((d) => fallDir(d))).toEqual(["n", "e", "s", "w", "e", "e", "w", "w"]);
+  });
+
+  it("draws each fall from the art the creature has: its own facing, a mirror, a tip", () => {
+    // The engine's creatures and humanoids: a death drawn in the four facings.
+    for (const d of FALL_DIRS)
+      expect(fallArt(["n", "e", "s", "w"], d)).toEqual({ clip: d, mirror: false, tip: 1 });
+    // A hand-made monster: south only. East and west differ, and so do north and south.
+    expect(fallArt(["s"], "s")).toEqual({ clip: "s", mirror: false, tip: 1 });
+    expect(fallArt(["s"], "e")).toEqual({ clip: "s", mirror: false, tip: 1 });
+    expect(fallArt(["s"], "n")).toEqual({ clip: "s", mirror: true, tip: 1 });
+    expect(fallArt(["s"], "w")).toEqual({ clip: "s", mirror: true, tip: 1 });
+    // A clip with some facings: its own where it has them.
+    expect(fallArt(["s", "w"], "w")).toEqual({ clip: "w", mirror: false, tip: 1 });
+    expect(fallArt(["s", "w"], "n")).toEqual({ clip: "s", mirror: true, tip: 1 });
+    // A single image: four different bodies, south the one there always was.
+    expect(fallArt(undefined, "s")).toEqual({ clip: "s", mirror: false, tip: 1 });
+    expect(fallArt([], "e")).toEqual({ clip: "s", mirror: true, tip: 1 });
+    expect(fallArt(undefined, "n")).toEqual({ clip: "s", mirror: true, tip: -1 });
+    expect(fallArt(undefined, "w")).toEqual({ clip: "s", mirror: false, tip: -1 });
+    const seen = new Set(FALL_DIRS.map((d) => JSON.stringify(fallArt(undefined, d))));
+    expect(seen.size).toBe(4);
+    // It fills the object it is given (the canvas draws without allocating).
+    const out = { clip: "s" as const, mirror: false, tip: 1 as const };
+    expect(fallArt(undefined, "n", out)).toBe(out);
+  });
+
+  it("rests where the atlas says for the way it fell, the south's without a word", () => {
+    const meta = { ...LPC, rest: 9, rests: { e: 4, w: 12 } };
+    expect(restFor(meta, "s")).toBe(9);
+    expect(restFor(meta, "e")).toBe(4);
+    expect(restFor(meta, "n")).toBe(9);
+    expect(restFor(meta, "w")).toBe(12);
+    expect(restFor(LPC, "e")).toBeUndefined(); // an older atlas
+    expect(restFor(undefined, "e")).toBeUndefined();
+  });
+
+  it("mirrors the fall of a south-only death to the north and the west, the whole of it", () => {
+    for (const [way, scaleX] of [
+      ["s", 1],
+      ["e", 1],
+      ["n", -1],
+      ["w", -1],
+    ] as const) {
+      const { s, in_, out } = setup();
+      in_.dir = way;
+      startDeath(s, 0, 3, way);
+      expect(s.fallDir).toBe(way);
+      for (const now of [0, 150, 599, 650]) {
+        in_.now = now;
+        const p = animate(s, LPC, in_, out);
+        expect(p.action).toBe("death");
+        expect(p.scaleX, `${way} at ${now}`).toBe(scaleX);
+        expect(p.tip).toBe(0);
+      }
+    }
+    // The way may change while it falls (the remains came a moment later).
+    const { s, in_, out } = setup();
+    startDeath(s, 0, 3, "e");
+    in_.now = 20;
+    expect(animate(s, LPC, in_, out).scaleX).toBe(1);
+    s.fallDir = "w";
+    in_.now = 40;
+    expect(animate(s, LPC, in_, out).scaleX).toBe(-1);
+    // By default a death falls facing south, as it always did.
+    const old = setup();
+    startDeath(old.s, 0);
+    expect(old.s.fallDir).toBe("s");
+  });
+
+  it("tips a single image the way it fell: clockwise or counter, mirrored or not", () => {
+    for (const [way, scaleX, tip] of [
+      ["s", 1, 1],
+      ["e", -1, 1],
+      ["n", -1, -1],
+      ["w", 1, -1],
+    ] as const) {
+      const { s, in_, out } = setup();
+      in_.dir = "w"; // STILL looks left: drawn as it is while alive
+      in_.now = 0;
+      animate(s, STILL, in_, out);
+      startDeath(s, 10, 0, way);
+      in_.now = 10 + DEATH_MS;
+      const p = animate(s, STILL, in_, out);
+      expect(p.scaleX, way).toBe(scaleX);
+      expect(p.tip, way).toBeCloseTo((Math.PI / 2) * tip);
+      expect(p.scaleY, way).toBeCloseTo(TIP_SQUASH);
+    }
+  });
+
+  it("places a frame tipped counter-clockwise as the mirror image of the clockwise one", () => {
+    const n = 32;
+    const mk = () => ({ x: 0, y: 0, scaleX: 1, scaleY: 1, skewX: 0, skewY: 0 });
+    const cw = tipPlacement(Math.PI / 2, TIP_SQUASH, n, mk());
+    const ccw = tipPlacement(-Math.PI / 2, TIP_SQUASH, n, mk());
+    const at = (t: typeof cw, u: number, v: number): [number, number] => [
+      t.x + Math.cos(t.skewY) * t.scaleX * u + Math.sin(t.skewX) * t.scaleY * v,
+      t.y + Math.sin(t.skewY) * t.scaleX * u + Math.cos(t.skewX) * t.scaleY * v,
+    ];
+    for (const [u, v] of [
+      [-16, -32],
+      [16, -32],
+      [-16, 0],
+      [5, -11],
+    ] as const) {
+      const [x, y] = at(cw, u, v);
+      const [mx, my] = at(ccw, -u, v); // the mirrored drawing, tipped the other way
+      expect(mx).toBeCloseTo(-x);
+      expect(my).toBeCloseTo(y);
+    }
   });
 
   it("places a tipped frame on the pixels spritegen's tipOver gives (the corpse)", () => {

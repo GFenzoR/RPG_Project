@@ -1,6 +1,7 @@
 // An item instance's mods (ItemStack.mods, docs/05; docs/02 "Atributos de items"): the one
 // attribute an equipable rolled, with its value, and its refine level; for the remains a
-// death leaves, whose they are (remainsOf, bodyOf).
+// death leaves, whose they are (remainsOf, bodyOf), the way the creature fell (facing) and
+// the sex of the player a body is of (bodySex).
 import type { ItemMods } from "../content-types.ts";
 
 /** The mods of an ItemStack as the client keeps them (undefined: a plain item). */
@@ -11,6 +12,7 @@ export function modsOf(s: { mods?: ItemMods | undefined } | undefined): ItemMods
   if (m.remainsOf) out.remainsOf = m.remainsOf;
   if (m.bodyOf) out.bodyOf = m.bodyOf;
   if (m.bodySex) out.bodySex = m.bodySex;
+  if (m.facing) out.facing = m.facing;
   if (m.attribute === "" && m.value === 0 && m.refine === 0 && !out.remainsOf && !out.bodyOf)
     return undefined;
   return out;

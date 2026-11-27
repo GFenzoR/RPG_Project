@@ -1315,13 +1315,20 @@ export class WorldState implements TileSource {
     this.trailWear.applyArea(a.x, a.y, a.width, a.height, a.wear);
   }
 
-  /** Who is seen to be a woman or a man, by name: what a body is drawn as (bodySex). */
+  /**
+   * Who is seen to be a woman or a man, by name: what a body that does not say its sex (an
+   * older server) is drawn as (bodySex).
+   */
   private readonly sexByName = new Map<string, string>();
 
-  /** The mods with the sex of the player a body is of, if the client saw them (bodySex). */
+  /**
+   * The mods of a body with its owner's sex: the one the server sent (ItemMods body_sex),
+   * else, for a server from before that, the one the client saw that player alive with.
+   */
   private withBodySex(m: ItemMods | undefined): ItemMods | undefined {
-    const sex = m?.bodyOf ? this.sexByName.get(m.bodyOf) : undefined;
-    return m && sex ? { ...m, bodySex: sex } : m;
+    if (!m?.bodyOf || m.bodySex) return m;
+    const sex = this.sexByName.get(m.bodyOf);
+    return sex ? { ...m, bodySex: sex } : m;
   }
 
   /** Remembers the sex of a player in view (a body is drawn as its owner was). */

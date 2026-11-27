@@ -117,6 +117,11 @@ jobs:
         run: pnpm lint
       - name: typecheck
         run: pnpm typecheck
+      # assets/atlas is not committed. client/src/render/fall-atlas.test.ts plays every
+      # creature's fall with the client's renderer against the real atlas (docs/17 "Un
+      # cadáver por dirección"): it skips without one locally and fails without one here.
+      - name: sprite atlas
+        run: make sprites
       - name: vitest
         run: pnpm test
 

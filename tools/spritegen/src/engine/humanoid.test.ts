@@ -184,7 +184,8 @@ describe("engine humanoid: the stride rule (the planted foot holds)", () => {
     for (const l of HUMANOID_LAYERS)
       for (const [action, a] of Object.entries(l.spec.actions ?? {}))
         expect(a?.dirs, `${l.sprite} ${action}`).toEqual(
-          action === "death" ? ["s"] : HUMANOID_DIRS,
+          // A person falls one of the four straight ways (docs/17 "Un cadáver por dirección").
+          action === "death" ? ["s", "e", "n", "w"] : HUMANOID_DIRS,
         );
     // One tile east and one south is 1 unit across for 1/depth of depth: 60°, not 45°.
     expect(DIAGONAL_TURN).toBeCloseTo(60, 5);

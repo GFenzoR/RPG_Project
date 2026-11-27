@@ -33,12 +33,24 @@ import {
   SHADOW_ALPHA,
   SHADOW_H,
   SHADOW_W,
+  FALL_DIRS,
   actionDir,
+  fallArt,
+  fallDir,
   fallShift,
+  restFor,
   stanceOf,
   tipPlacement,
 } from "@rpg/renderer";
-import type { AnimDir, AnimMeta, LayerSlot, Pose, TipPlacement } from "@rpg/renderer";
+import type {
+  AnimDir,
+  AnimMeta,
+  FallArt,
+  FallDir,
+  LayerSlot,
+  Pose,
+  TipPlacement,
+} from "@rpg/renderer";
 import type { ShadowSink } from "./cast-shadows.ts";
 import { clipTexture, dirIndex, headLift } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
@@ -54,9 +66,6 @@ const shadowShape = (): GraphicsContext =>
   (shadowContext ??= new GraphicsContext()
     .ellipse(0, 0, SHADOW_W / 2, SHADOW_H / 2)
     .fill({ color: 0x000000, alpha: SHADOW_ALPHA }));
-
-/** South in ANIM_DIRS: the facing every death is drawn in. */
-const SOUTH = ANIM_DIRS.indexOf("s");
 
 /** A body drawn fainter than this casts no shadow and stands on its contact ellipse. */
 export const CAST_MIN_ALPHA = 0.5;
@@ -171,14 +180,16 @@ export class CreatureBody {
   /** Its frame's height, sprite px: a single image tips over about the middle of it. */
   private readonly frameH: number;
   /**
-   * How far down the body moves while it falls dead, to lie where its corpse sprite does
-   * (packages/renderer fallShift): a paper doll rests on the lowest of its layers, as its
-   * corpse was composed. 0 for an atlas that does not say where the fallen body rests.
+   * How far down the body moves while it falls dead facing each way (FALL_DIRS order), to
+   * lie where the corpse sprite of that way does (packages/renderer fallShift): a paper
+   * doll rests on the lowest of its layers, as its corpse was composed. 0 for an atlas
+   * that does not say where the fallen body rests.
    */
-  readonly fallY: number;
+  private readonly fallYs: number[];
   /** A single image falling dead is drawn tipped (Pose.tip): it casts no shadow then. */
   private tipped = false;
   private readonly tipAt: TipPlacement = { x: 0, y: 0, scaleX: 1, scaleY: 1, skewX: 0, skewY: 0 };
+  private readonly fallArt: FallArt = { clip: "s", mirror: false, tip: 1 };
   /**
    * Where its feet are on its tile (sprite pixels from the tile's top-left): the middle of
    * the drawing across, the lowest row of its walk frames down. The living world drops
@@ -247,12 +258,14 @@ export class CreatureBody {
     const foot = bc ? (meta?.foot ?? 0) : 0;
     this.baseY = bc ? tile - FEET_LINE + foot : tile;
     this.frameH = h;
-    let rest = meta?.rest;
-    for (const l of layers) {
-      const r = l.clips.meta?.rest;
-      if (r !== undefined && (rest === undefined || r < rest)) rest = r;
-    }
-    this.fallY = fallShift(meta, rest);
+    this.fallYs = FALL_DIRS.map((d) => {
+      let rest = restFor(meta, d);
+      for (const l of layers) {
+        const r = restFor(l.clips.meta, d);
+        if (r !== undefined && (rest === undefined || r < rest)) rest = r;
+      }
+      return fallShift(meta, rest);
+    });
     this.feetX = this.baseX;
     this.feetY = this.baseY - foot;
     // A paper doll stands on its body and on what it wears on its feet (a boot's sole);
@@ -348,6 +361,14 @@ export class CreatureBody {
     this.faded = true;
   }
 
+  /**
+   * How far down the body moves while it falls dead facing `dir`, to end on the corpse
+   * sprite of that way (startDeath's fallY).
+   */
+  fallY(dir: FallDir = "s"): number {
+    return this.fallYs[FALL_DIRS.indexOf(dir)] ?? 0;
+  }
+
   /** Where it stands facing `dir` (index in ANIM_DIRS): the south's for an unknown one. */
   footingOf(dir: number): Footing {
     return (this.footing[dir] ?? this.footing[2]) as Footing;
@@ -377,11 +398,18 @@ export class CreatureBody {
     );
   }
 
-  /** Draws `pose` facing `dir` (index in ANIM_DIRS). */
+  /**
+   * Draws `pose` facing `dir` (index in ANIM_DIRS). A death: `dir` is the way it falls
+   * (AnimState.fallDir), one of the four straight ones.
+   */
   draw(pose: Pose, dir: number): void {
-    // A death is drawn facing south, the facing its corpse was made from (a body with a
-    // fall in every facing too: it must end on the corpse).
-    if (pose.action === "death") dir = SOUTH;
+    // A death is drawn with the frames its corpse was made from (packages/renderer
+    // fallArt): its own facing's, or the south ones when its clip has no other (mirrored
+    // by the pose where the corpse is).
+    if (pose.action === "death") {
+      const way = fallDir(ANIM_DIRS[dir] ?? "s");
+      dir = dirIndex(fallArt(this.clips.meta?.actions.death?.dirs, way, this.fallArt).clip);
+    }
     const alpha = pose.alpha * this.opacity;
     this.drawnAlpha = alpha;
     this.drawnX = pose.x;

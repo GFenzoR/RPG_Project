@@ -254,6 +254,16 @@ server/
   aplanados (`mailFlat`) al buzón del mercado en el mismo transfer. `/api/houses` es público: solo el
   nombre del dueño, con las exclusiones del ranking (`queries/houses.sql`).
 
+- **Restos (`Mods.RemainsOf`, `BodyOf`, `Facing`, `BodySex`; docs/05 "Restos", docs/17 "Un
+  cadáver por dirección"):** quien crea restos (`combat.go` para un monstruo, `death.go`
+  para un jugador) marca el item con de quién son, hacia dónde miraba la criatura al morir
+  (`fallFacing(dir)`: norte, este, sur u oeste, una diagonal al este o al oeste) y, en el
+  cuerpo de un jugador, su sexo (`p.look.Sex`). Son del `Item`, así que viajan en todo
+  `ItemStack` de los restos (`Mods.msg`) y unos restos arrastrados (`dragCorpse`) los
+  conservan. No se guardan (los restos no se guardan). Un camino nuevo que deje restos de
+  una criatura tiene que poner `Facing`; sin él, el cliente los dibuja caídos al sur.
+  Tests: `session/corpse_facing_test.go`.
+
 - **Atributos de items (`session/attributes.go`, `content/attributes.go`, docs/02
   "Atributos de items"):** cada instancia lleva `Item.mods` (atributo, valor, refinado). Todo
   camino que **crea** un equipable lo hace con `w.created` o `giveItem` (tira el atributo

@@ -32,11 +32,13 @@ export { dirIndex } from "@rpg/renderer";
 
 /**
  * Whether an atlas animation is drawn in eight facings: some action has the diagonals, and
- * every action drawn in more than one facing has all eight (death, facing south only, does
- * not count).
+ * every action drawn in more than one facing has all eight. Death does not count: a body
+ * falls one of the four straight ways (packages/renderer fallDir), or only facing south.
  */
 export function hasEightFacings(meta: AnimMeta): boolean {
-  const many = Object.values(meta.actions).filter((a) => a && a.dirs.length > 1);
+  const many = Object.entries(meta.actions)
+    .filter(([action, a]) => action !== "death" && a && a.dirs.length > 1)
+    .map(([, a]) => a);
   return (
     many.length > 0 &&
     many.every((a) => a !== undefined && ANIM_DIRS.every((d) => a.dirs.includes(d)))

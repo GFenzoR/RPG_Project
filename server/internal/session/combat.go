@@ -426,10 +426,12 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 
 	// Remains with the loot, on the tile where it died: the container of its family (its
 	// `corpse`) or the default remains, marked with the monster that fell (RemainsOf): the
-	// client names them after it and draws its own corpse (docs/02 "Muerte"). Loot beyond
-	// the remains' slots is lost (data/monsters keeps loot tables short).
+	// client names them after it and draws its own corpse, fallen the way the monster faced
+	// (Facing; docs/02 "Muerte"). Loot beyond the remains' slots is lost (data/monsters
+	// keeps loot tables short).
 	corpse := &Corpse{Monster: def.ID, Item: newItem(m.kind.corpse, 1)}
 	corpse.Item.mods.RemainsOf = def.ID
+	corpse.Item.mods.Facing = fallFacing(m.dir) // the corpse lies the way it fell
 	add := func(it *Item) {
 		if len(corpse.Item.items) < m.kind.corpse.Slots() {
 			it.parent = corpse.Item

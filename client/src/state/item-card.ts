@@ -4,7 +4,9 @@
 // The server's "look" text is still the one that knows live data (a house's owner,
 // charges): "Look" in the menu keeps sending LookAt.
 import { EquipmentSlot } from "@rpg/protocol";
+import type { FallDir } from "@rpg/renderer";
 import type { AttributeDef, ForgeRules, ItemDef, ItemMods } from "../content-types.ts";
+import { bodyCorpse, corpseDir } from "./corpse-art.ts";
 import { refineGain, refineKind } from "./forge.ts";
 import type { RefineKind } from "./forge.ts";
 
@@ -86,6 +88,8 @@ export interface ItemCardView {
   /** The remains of a death: whose they are (the title names them after it). */
   remainsOf?: string | undefined;
   bodyOf?: string | undefined;
+  /** Remains: the atlas name of their corpse and the way it fell (state/corpse-art.ts). */
+  corpse?: { who: string; dir: FallDir } | undefined;
 }
 
 /**
@@ -138,6 +142,8 @@ export function itemCard(
   };
   if (mods?.remainsOf) card.remainsOf = mods.remainsOf;
   if (mods?.bodyOf) card.bodyOf = mods.bodyOf;
+  const fell = mods?.remainsOf || (mods?.bodyOf ? bodyCorpse(mods.bodySex) : "");
+  if (fell) card.corpse = { who: fell, dir: corpseDir(mods?.facing) };
   if (!def) return card;
   const kind = def.kind ?? "";
   card.type = typeLine(def, kind);

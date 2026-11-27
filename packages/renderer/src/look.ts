@@ -7,6 +7,7 @@
 // worn piece per slot, each a shape the sprite engine drew (data/looks.yaml `shapes`) and a
 // tint (data/looks.yaml `tints`). Layers are drawn in a neutral ramp and tinted at runtime
 // (a multiply), so a piece of the catalog costs no atlas space of its own (docs/07).
+import { fallDir } from "./anim.ts";
 import type { AnimAction, AnimDir } from "./anim.ts";
 
 /** The slots of the paper doll, the body's own and the worn ones. */
@@ -96,9 +97,12 @@ export interface LayerDraw {
   tint: number;
 }
 
-/** Death is drawn facing south (like today's player): every layer falls the same way. */
+/**
+ * The facing an action's frames are drawn in: a death falls one of the four straight ways
+ * (anim.ts fallDir: a diagonal falls east or west), every layer the same.
+ */
 export const actionDir = (action: AnimAction, dir: AnimDir): AnimDir =>
-  action === "death" ? "s" : dir;
+  action === "death" ? fallDir(dir) : dir;
 
 /** The sex whose body is drawn _female (data/looks.yaml sexes); any other draws a man's. */
 export const FEMALE = "female";

@@ -179,6 +179,11 @@ export interface AnimMeta {
    * Absent in older atlases and for a drawing nothing can be said of.
    */
   rest?: number;
+  /**
+   * The same for a body fallen facing another way, where it differs from `rest` (restFor):
+   * the last frame of its death in that facing, or its image tipped the way fallArt says.
+   */
+  rests?: Partial<Record<FallDir, number>>;
   actions: Partial<Record<AnimAction, AnimActionMeta>>;
 }
 
@@ -276,6 +281,62 @@ export const DEATH_MS = 400;
 export const DEATH_SETTLE_MS = 100;
 /** A single image tipped over is flattened to this share of its height (spritegen tipOver). */
 export const TIP_SQUASH = 3 / 5;
+
+/**
+ * The ways a body falls dead and its corpse lies (docs/17 "Un cadáver por dirección"): the
+ * four straight facings. The server says which in the remains (ItemMods facing).
+ */
+export type FallDir = "s" | "e" | "n" | "w";
+export const FALL_DIRS: readonly FallDir[] = ["s", "e", "n", "w"];
+
+/** The way a creature facing `dir` falls: a diagonal falls east or west. */
+export function fallDir(dir: AnimDir): FallDir {
+  if (dir === "s" || dir === "n") return dir;
+  return dir === "e" || dir === "ne" || dir === "se" ? "e" : "w";
+}
+
+/** How the fall facing one way is drawn from the art a creature has (fallArt). */
+export interface FallArt {
+  /** The facing whose death frames are drawn (a single image has none). */
+  clip: FallDir;
+  /** Drawn mirrored left to right, the whole fall. */
+  mirror: boolean;
+  /** A single image tips over clockwise (1) or counter-clockwise (-1). */
+  tip: 1 | -1;
+}
+
+/**
+ * How a death facing `dir` is drawn, and so what its corpse is (tools/spritegen
+ * recipes/corpses.ts makes each corpse with this same rule, the client plays the fall
+ * with it: they end on the same pixels). `deathDirs`: the facings its death clip has
+ * (AnimActionMeta.dirs; undefined or empty: no clip, a single image that tips over).
+ * - A clip drawn facing `dir`: those frames, as they are.
+ * - A clip without that facing (the hand-made monsters fall facing south only): the south
+ *   frames, as they are to the south and the east and mirrored to the north and the west.
+ * - A single image: tipped clockwise to the south, counter-clockwise to the west, and the
+ *   mirror image of each to the north and the east: four different bodies.
+ */
+export function fallArt(
+  deathDirs: readonly AnimDir[] | undefined,
+  dir: FallDir,
+  out: FallArt = { clip: "s", mirror: false, tip: 1 },
+): FallArt {
+  if (deathDirs && deathDirs.length > 0) {
+    const own = deathDirs.includes(dir);
+    out.clip = own ? dir : "s";
+    out.mirror = !own && (dir === "n" || dir === "w");
+    out.tip = 1;
+    return out;
+  }
+  out.clip = "s";
+  out.mirror = dir === "n" || dir === "e";
+  out.tip = dir === "s" || dir === "e" ? 1 : -1;
+  return out;
+}
+
+/** Transparent rows under the body fallen facing `dir` (AnimMeta rests, else rest). */
+export const restFor = (meta: AnimMeta | undefined, dir: FallDir): number | undefined =>
+  meta?.rests?.[dir] ?? meta?.rest;
 
 /** How long the fall of a death lasts, ms: its clip, or the procedural tip (DEATH_MS). */
 export function fallMs(meta: AnimMeta | undefined): number {
@@ -379,6 +440,8 @@ export interface AnimState {
   diedAt: number;
   /** How far down its body moves as it falls, to lie where its corpse does (fallShift). */
   fallY: number;
+  /** The way it falls dead (fallArt): the facing of the corpse it leaves. */
+  fallDir: FallDir;
   /** When it left by a teleport or a logout (NaN while here). */
   vanishAt: number;
   /** Single-frame sprites with `facing`: drawn mirrored (kept while walking north or south). */
@@ -408,6 +471,7 @@ export function newAnimState(id: number, now: number): AnimState {
     bornAt: now,
     diedAt: Number.NaN,
     fallY: 0,
+    fallDir: "s",
     vanishAt: Number.NaN,
     flip: false,
     facing: "s",
@@ -519,12 +583,14 @@ export function startHit(s: AnimState, now: number, dx: number, dy: number): voi
 
 /**
  * It died: the fall starts (the first one counts). `fallY` is how far down the body moves
- * while it falls so its last pose lies on its corpse (fallShift; 0: it falls in place).
+ * while it falls so its last pose lies on its corpse (fallShift; 0: it falls in place),
+ * `dir` the way it falls. Both may be set again while it falls (the remains say the way).
  */
-export function startDeath(s: AnimState, now: number, fallY = 0): void {
+export function startDeath(s: AnimState, now: number, fallY = 0, dir: FallDir = "s"): void {
   if (!Number.isNaN(s.diedAt)) return;
   s.diedAt = now;
   s.fallY = fallY;
+  s.fallDir = dir;
 }
 
 /** It leaves by a teleport or a logout: the shimmer of VANISH_MS (the first one counts). */
@@ -601,9 +667,11 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
 
   let mirror = s.flip;
   if (!Number.isNaN(s.diedAt)) {
-    // A single image tips over as its corpse was drawn, from the drawing as it is (never
-    // mirrored): the body ends on the corpse's own pixels.
-    if (dying(meta, now - s.diedAt, s.fallY, out)) mirror = false;
+    // The fall is drawn as its corpse was (fallArt), whatever way the drawing looked alive:
+    // the body ends on the corpse's own pixels.
+    const art = fallArt(meta?.actions.death?.dirs, s.fallDir, FALL_ART);
+    dying(meta, now - s.diedAt, s.fallY, art.tip, out);
+    mirror = art.mirror;
   } else {
     const sinceAttack = now - s.attackAt;
     const attack = attackClip(meta, s.attackAction, in_.dir);
@@ -841,12 +909,21 @@ function idle(
   if ((now + s.seed) % period < BREATH_MS) out.scaleY = (top + 1) / top;
 }
 
+/** animate()'s own, so that drawing a frame allocates nothing. */
+const FALL_ART: FallArt = { clip: "s", mirror: false, tip: 1 };
+
 /**
  * The fall of a death (docs/17 "Muerte continua"), `el` ms after it: one motion that ends
  * in the pose of the corpse, `fallY` px lower, and holds it DEATH_SETTLE_MS fading over the
- * corpse the map shows by then. Answers whether it is the procedural tip of a single image.
+ * corpse the map shows by then. A single image tips over `tip` (1 clockwise, -1 counter).
  */
-function dying(meta: AnimMeta | undefined, el: number, fallY: number, out: Pose): boolean {
+function dying(
+  meta: AnimMeta | undefined,
+  el: number,
+  fallY: number,
+  tip: number,
+  out: Pose,
+): void {
   const clip = meta?.actions.death;
   const ms = fallMs(meta);
   out.action = "death";
@@ -856,17 +933,16 @@ function dying(meta: AnimMeta | undefined, el: number, fallY: number, out: Pose)
     out.frame = Math.min(clip.frames - 1, Math.floor(Math.max(0, el) / clip.ms));
     // Lowered frame by frame: the last one, the fallen body, is already on the corpse.
     out.y = clip.frames > 1 ? Math.round((fallY * out.frame) / (clip.frames - 1)) : fallY;
-    return false;
+    return;
   }
   // ANI-5: a flash, then it tips over clockwise, faster as it goes, and flattens against
   // the floor: at the end, spritegen's tipOver of the same image.
   const t = Math.min(1, Math.max(0, el) / DEATH_MS);
   const e = t * t;
   out.flash = el < HIT_FLASH_MS;
-  out.tip = (Math.PI / 2) * e;
+  out.tip = (Math.PI / 2) * e * tip;
   out.scaleY = 1 - (1 - TIP_SQUASH) * e;
   out.y = Math.round(fallY * e);
-  return true;
 }
 
 /** A well-spread non-negative integer from a creature id (idle phases). */

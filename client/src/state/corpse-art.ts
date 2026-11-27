@@ -4,28 +4,75 @@
 // corpses/<monster id>, which tools/spritegen makes for every monster of data/monsters
 // from its own art (recipes/corpses.ts). The map's tile stacks are strings (MapView item
 // keys): a plain item is its number, the remains of a monster "<number>@<monster id>".
-import { DEFAULT_FRAME_MS } from "@rpg/renderer";
-import type { TileArt } from "@rpg/renderer";
+//
+// A corpse per direction (docs/17 "Un cadáver por dirección"): the remains say the way the
+// creature faced when it died (ItemMods facing) and the atlas has a corpse fallen each of
+// the four straight ways, corpses/<monster> to the south and corpses/<monster>_<e|n|w>.
+// The key of remains fallen another way than south ends in "/<e|n|w>".
+import { CreatureKind, Direction } from "@rpg/protocol";
+import { DEFAULT_FRAME_MS, fallDir } from "@rpg/renderer";
+import type { AnimDir, FallDir, TileArt } from "@rpg/renderer";
 import type { ItemMods } from "../content-types.ts";
 
-/** The atlas sprite of a monster's corpse. */
-export const corpseSprite = (monster: string): string => `corpses/${monster}`;
+/**
+ * The atlas sprite of a monster's corpse fallen facing `dir` (tools/spritegen corpsePath):
+ * the south one has the plain path.
+ */
+export const corpseSprite = (monster: string, dir: FallDir = "s"): string =>
+  dir === "s" ? `corpses/${monster}` : `corpses/${monster}_${dir}`;
+
+const FACINGS: Partial<Record<Direction, AnimDir>> = {
+  [Direction.NORTH]: "n",
+  [Direction.NORTH_EAST]: "ne",
+  [Direction.EAST]: "e",
+  [Direction.SOUTH_EAST]: "se",
+  [Direction.SOUTH]: "s",
+  [Direction.SOUTH_WEST]: "sw",
+  [Direction.WEST]: "w",
+  [Direction.NORTH_WEST]: "nw",
+};
+
+/**
+ * The way a creature facing `facing` (a Direction of the protocol) falls dead, and its
+ * corpse lies: one of the four straight ways (a diagonal falls east or west). Remains that
+ * do not say (an older server: UNSPECIFIED or absent) lie facing south.
+ */
+export const corpseDir = (facing: Direction | undefined): FallDir =>
+  fallDir(FACINGS[facing ?? Direction.UNSPECIFIED] ?? "s");
 
 /**
  * The corpse a player's body is drawn as: "body_<sex>" (tools/spritegen corpses.ts), a person
- * lying in the last pose of the fall, in plain clothes. A body whose owner was never seen
- * (it lay there before the client came) is a man's.
+ * lying in the last pose of the fall, in plain clothes. The server says the sex (ItemMods
+ * body_sex); a body that does not say (an older server) and whose owner the client never
+ * saw alive is a man's.
  */
 export const bodyCorpse = (sex: string | undefined): string =>
   sex === "female" ? "body_female" : "body_male";
 
 /**
+ * Whose remains a creature leaves when it dies, as their key names them (remainsAre): a
+ * monster's id, "body_<sex>" for a player. Undefined: none that the client can tell (an
+ * NPC, a creature without a content id).
+ */
+export function remainsWho(
+  kind: CreatureKind,
+  contentId: string,
+  sex: string | undefined,
+): string | undefined {
+  if (kind === CreatureKind.PLAYER) return bodyCorpse(sex);
+  return kind === CreatureKind.MONSTER && contentId ? contentId : undefined;
+}
+
+/**
  * The MapView key of a tile item: its number, "<number>@<monster>" for the remains of a
- * monster and "<number>@body_<sex>" for the body of a player.
+ * monster and "<number>@body_<sex>" for the body of a player, each followed by "/<e|n|w>"
+ * when they lie fallen another way than south.
  */
 export function mapItemKey(itemId: number, mods: ItemMods | undefined): string {
-  if (mods?.remainsOf) return `${itemId}@${mods.remainsOf}`;
-  return mods?.bodyOf ? `${itemId}@${bodyCorpse(mods.bodySex)}` : String(itemId);
+  const who = mods?.remainsOf || (mods?.bodyOf ? bodyCorpse(mods.bodySex) : "");
+  if (!who) return String(itemId);
+  const dir = corpseDir(mods?.facing);
+  return dir === "s" ? `${itemId}@${who}` : `${itemId}@${who}/${dir}`;
 }
 
 /**
@@ -46,11 +93,67 @@ export function plainItemKey(key: string): string {
   return at < 0 ? key : key.slice(0, at);
 }
 
-/** A MapView key back as the item's number and, for remains, the monster that fell. */
-export function parseMapItemKey(key: string): { itemId: number; remainsOf?: string } {
+/**
+ * A MapView key back as the item's number and, for remains, the monster that fell (or
+ * "body_<sex>") and the way it fell.
+ */
+export function parseMapItemKey(key: string): {
+  itemId: number;
+  remainsOf?: string;
+  dir?: FallDir;
+} {
   const at = key.indexOf("@");
   if (at < 0) return { itemId: Number(key) };
-  return { itemId: Number(key.slice(0, at)), remainsOf: key.slice(at + 1) };
+  const itemId = Number(key.slice(0, at));
+  const slash = key.indexOf("/", at);
+  if (slash < 0) return { itemId, remainsOf: key.slice(at + 1), dir: "s" };
+  return { itemId, remainsOf: key.slice(at + 1, slash), dir: wayOf(key, slash + 1) };
+}
+
+/**
+ * The way the remains of the MapView key `key` lie (undefined: it is not remains): what
+ * parseMapItemKey(key).dir says, allocating nothing.
+ */
+export function keyFallDir(key: string): FallDir | undefined {
+  const at = key.indexOf("@");
+  if (at < 0) return undefined;
+  const slash = key.indexOf("/", at);
+  return slash < 0 ? "s" : wayOf(key, slash + 1);
+}
+
+/** The way written from `from` to the end of `key`: e, n or w, else south. */
+function wayOf(key: string, from: number): FallDir {
+  if (key.length !== from + 1) return "s";
+  const d = key[from];
+  return d === "e" || d === "n" || d === "w" ? d : "s";
+}
+
+/**
+ * Whether the MapView key `key` is the remains of `who` (a monster's id, or "body_<sex>"),
+ * whatever way they lie: what parseMapItemKey(key).remainsOf === who says, allocating
+ * nothing.
+ */
+export function remainsAre(key: string, who: string): boolean {
+  const at = key.indexOf("@");
+  if (at < 0) return false;
+  const slash = key.indexOf("/", at);
+  const end = slash < 0 ? key.length : slash;
+  return end - at - 1 === who.length && key.startsWith(who, at + 1);
+}
+
+/**
+ * The atlas sprite of the corpse of `who` fallen facing `dir` that `has` (the atlas) knows:
+ * that facing's, else the south one (an atlas from before the four), else undefined.
+ */
+export function corpseSpriteIn(
+  who: string,
+  dir: FallDir | undefined,
+  has: (sprite: string) => boolean,
+): string | undefined {
+  const own = corpseSprite(who, dir ?? "s");
+  if (has(own)) return own;
+  const south = corpseSprite(who);
+  return has(south) ? south : undefined;
 }
 
 /**
@@ -127,19 +230,33 @@ const CARRIED_KINDS: ReadonlySet<string> = new Set([
   "tool",
 ]);
 
+/** The corpse texture of remains: fallen their way, else the south one (corpseSpriteIn). */
+function corpseTexture<T>(
+  remainsOf: string | undefined,
+  dir: FallDir | undefined,
+  atlas: MapItemAtlas<T>,
+): T | undefined {
+  if (!remainsOf) return undefined;
+  return (
+    (dir !== undefined && dir !== "s" ? atlas.texture(corpseSprite(remainsOf, dir)) : undefined) ??
+    atlas.texture(corpseSprite(remainsOf))
+  );
+}
+
 /**
  * The texture the map draws for the tile item `key`: the corpse of the monster whose
- * remains it is when the atlas has one (corpses/<monster>), else the item's own sprite
- * (the family's remains: an atlas older than the monster still shows a body). Undefined:
- * no art at all.
+ * remains it is, fallen the way the key says, when the atlas has one (corpses/<monster>
+ * for the south, and for any way an older atlas lacks), else the item's own sprite (the
+ * family's remains: an atlas older than the monster still shows a body). Undefined: no
+ * art at all.
  */
 export function mapItemTexture<T>(
   key: string,
   items: MapItemSprites,
   atlas: MapItemAtlas<T>,
 ): T | undefined {
-  const { itemId, remainsOf } = parseMapItemKey(key);
-  const corpse = remainsOf ? atlas.texture(corpseSprite(remainsOf)) : undefined;
+  const { itemId, remainsOf, dir } = parseMapItemKey(key);
+  const corpse = corpseTexture(remainsOf, dir, atlas);
   if (corpse) return corpse;
   const sprite = items[itemId]?.sprite;
   return sprite ? atlas.texture(sprite) : undefined;
@@ -154,8 +271,8 @@ export function mapItemArt<T>(
   items: MapItemSprites,
   atlas: MapItemAtlas<T>,
 ): TileArt<T> | undefined {
-  const { itemId, remainsOf } = parseMapItemKey(key);
-  const corpse = remainsOf ? atlas.texture(corpseSprite(remainsOf)) : undefined;
+  const { itemId, remainsOf, dir } = parseMapItemKey(key);
+  const corpse = corpseTexture(remainsOf, dir, atlas);
   if (corpse) return corpseArt(corpse);
   const def = items[itemId];
   const sprite = def?.sprite;

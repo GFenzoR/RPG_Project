@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { laidRemains, remainsKeys } from "./corpse-art.ts";
+import { CreatureKind, Direction } from "@rpg/protocol";
+import { FALL_DIRS } from "@rpg/renderer";
+import {
+  bodyCorpse,
+  corpseArt,
+  corpseDir,
+  corpseSprite,
+  corpseSpriteIn,
+  keyFallDir,
+  laidRemains,
+  mapItemArt,
+  mapItemId,
+  mapItemKey,
+  mapItemTexture,
+  parseMapItemKey,
+  plainItemKey,
+  remainsAre,
+  remainsKeys,
+  remainsWho,
+} from "./corpse-art.ts";
 
 const plain = { attribute: "", value: 0, refine: 0 };
 
@@ -25,5 +44,181 @@ describe("laidRemains", () => {
     expect(laidRemains(["40@wolf"], ["40@wolf"])).toBeUndefined();
     expect(laidRemains(["40@wolf", "41"], ["41"])).toBeUndefined();
     expect(laidRemains(["41"], undefined)).toBeUndefined();
+  });
+});
+
+describe("a corpse per direction (docs/17)", () => {
+  const wolf = { ...plain, remainsOf: "wolf" };
+  const ana = { ...plain, bodyOf: "Ana" };
+
+  it("reduces the facing the server sent to the four ways a corpse lies", () => {
+    expect(corpseDir(Direction.NORTH)).toBe("n");
+    expect(corpseDir(Direction.EAST)).toBe("e");
+    expect(corpseDir(Direction.SOUTH)).toBe("s");
+    expect(corpseDir(Direction.WEST)).toBe("w");
+    // The server already turns a diagonal east or west; a client does the same anyway.
+    expect(corpseDir(Direction.NORTH_EAST)).toBe("e");
+    expect(corpseDir(Direction.SOUTH_EAST)).toBe("e");
+    expect(corpseDir(Direction.SOUTH_WEST)).toBe("w");
+    expect(corpseDir(Direction.NORTH_WEST)).toBe("w");
+    // An older server says nothing: south, as every corpse lay before.
+    expect(corpseDir(Direction.UNSPECIFIED)).toBe("s");
+    expect(corpseDir(undefined)).toBe("s");
+    expect(corpseDir(99 as Direction)).toBe("s");
+  });
+
+  it("keys the remains by who fell and the way: south keeps the key it always had", () => {
+    expect(mapItemKey(40, wolf)).toBe("40@wolf");
+    expect(mapItemKey(40, { ...wolf, facing: Direction.SOUTH })).toBe("40@wolf");
+    expect(mapItemKey(40, { ...wolf, facing: Direction.EAST })).toBe("40@wolf/e");
+    expect(mapItemKey(40, { ...wolf, facing: Direction.NORTH })).toBe("40@wolf/n");
+    expect(mapItemKey(40, { ...wolf, facing: Direction.WEST })).toBe("40@wolf/w");
+    expect(mapItemKey(41, { ...ana, bodySex: "female", facing: Direction.WEST })).toBe(
+      "41@body_female/w",
+    );
+    expect(mapItemKey(41, { ...ana, facing: Direction.NORTH })).toBe("41@body_male/n");
+    // A plain item has no way to lie, whatever its mods say.
+    expect(mapItemKey(9, { ...plain, facing: Direction.EAST })).toBe("9");
+    expect(bodyCorpse("female")).toBe("body_female");
+    expect(bodyCorpse(undefined)).toBe("body_male");
+    expect(bodyCorpse("")).toBe("body_male");
+  });
+
+  it("says one way for remains however it is asked: the mods, the key, the key read back", () => {
+    // corpseDir (the mods), keyFallDir and parseMapItemKey (the key) are three readings of
+    // the same facing: the fall follows one and the map draws another.
+    const facings = [
+      undefined,
+      Direction.UNSPECIFIED,
+      Direction.NORTH,
+      Direction.NORTH_EAST,
+      Direction.EAST,
+      Direction.SOUTH_EAST,
+      Direction.SOUTH,
+      Direction.SOUTH_WEST,
+      Direction.WEST,
+      Direction.NORTH_WEST,
+    ];
+    const seen = new Set<string>();
+    for (const who of [
+      { remainsOf: "wolf", bodyOf: "" },
+      { remainsOf: "ember_wyrm_2", bodyOf: "" },
+      { remainsOf: "", bodyOf: "Ana", bodySex: "female" },
+    ])
+      for (const facing of facings) {
+        const mods = { ...plain, ...who, ...(facing === undefined ? {} : { facing }) };
+        const key = mapItemKey(40, mods);
+        const way = corpseDir(facing);
+        expect(keyFallDir(key), key).toBe(way);
+        const back = parseMapItemKey(key);
+        expect(back.dir, key).toBe(way);
+        expect(back.itemId, key).toBe(40);
+        const name = who.remainsOf || bodyCorpse(who.bodySex);
+        expect(back.remainsOf, key).toBe(name);
+        expect(remainsAre(key, name), key).toBe(true);
+        seen.add(way);
+      }
+    expect([...seen].sort()).toEqual([...FALL_DIRS].sort());
+    // A key that says no known way lies south, for the two of them.
+    for (const key of ["40@wolf/x", "40@wolf/", "40@wolf/ne", "40@wolf/e/w"]) {
+      expect(keyFallDir(key), key).toBe("s");
+      expect(parseMapItemKey(key).dir, key).toBe("s");
+    }
+  });
+
+  it("tells whose remains a key is, and whose a creature leaves", () => {
+    expect(remainsAre("40@wolf", "wolf")).toBe(true);
+    expect(remainsAre("40@wolf/e", "wolf")).toBe(true);
+    expect(remainsAre("40@wolf_alpha/e", "wolf")).toBe(false);
+    expect(remainsAre("40@wolf", "wolf_alpha")).toBe(false);
+    expect(remainsAre("40@dire_wolf", "wolf")).toBe(false);
+    expect(remainsAre("41@body_female/w", "body_female")).toBe(true);
+    expect(remainsAre("41@body_female/w", "body_male")).toBe(false);
+    expect(remainsAre("40", "40")).toBe(false);
+    expect(remainsAre("40", "")).toBe(false);
+    // What the canvas tells a fall: the same name the remains' key will carry.
+    expect(remainsWho(CreatureKind.MONSTER, "wolf", undefined)).toBe("wolf");
+    expect(remainsWho(CreatureKind.PLAYER, "", "female")).toBe("body_female");
+    expect(remainsWho(CreatureKind.PLAYER, "", undefined)).toBe("body_male");
+    expect(remainsWho(CreatureKind.NPC, "smith", undefined)).toBeUndefined();
+    expect(remainsWho(CreatureKind.MONSTER, "", undefined)).toBeUndefined();
+  });
+
+  it("reads a key back: the item, who fell and the way", () => {
+    expect(parseMapItemKey("40@wolf")).toEqual({ itemId: 40, remainsOf: "wolf", dir: "s" });
+    expect(parseMapItemKey("40@wolf/e")).toEqual({ itemId: 40, remainsOf: "wolf", dir: "e" });
+    expect(parseMapItemKey("41@body_female/w")).toEqual({
+      itemId: 41,
+      remainsOf: "body_female",
+      dir: "w",
+    });
+    expect(parseMapItemKey("40@wolf/x")).toEqual({ itemId: 40, remainsOf: "wolf", dir: "s" });
+    expect(parseMapItemKey("48")).toEqual({ itemId: 48 });
+    expect(keyFallDir("40@wolf")).toBe("s");
+    expect(keyFallDir("40@wolf/n")).toBe("n");
+    expect(keyFallDir("40@body_male/w")).toBe("w");
+    expect(keyFallDir("48")).toBeUndefined();
+    // Code that knows items by their number gets the number, whatever follows.
+    expect(mapItemId("40@wolf/e")).toBe(40);
+    expect(plainItemKey("40@wolf/e")).toBe("40");
+    // Remains dragged to another tile keep their key: the same sprite, the same way.
+    expect(laidRemains(undefined, ["40@wolf/e"])).toBe("40@wolf/e");
+    expect(laidRemains(["40@wolf"], ["40@wolf", "40@wolf/e"])).toBe("40@wolf/e");
+  });
+
+  it("names the corpse sprite of each way, the south one with the plain path", () => {
+    expect(corpseSprite("wolf")).toBe("corpses/wolf");
+    expect(corpseSprite("wolf", "s")).toBe("corpses/wolf");
+    expect(corpseSprite("wolf", "e")).toBe("corpses/wolf_e");
+    expect(corpseSprite("body_female", "n")).toBe("corpses/body_female_n");
+  });
+
+  it("draws the corpse of the way sent, by sex, with every fallback", () => {
+    const items = { 40: { sprite: "decor/remains_fur" }, 41: { sprite: "decor/remains_humanoid" } };
+    const atlasOf = (...sprites: string[]) => {
+      const has = new Set(sprites);
+      return {
+        has: (s: string) => has.has(s),
+        texture: (s: string) => (has.has(s) ? `tex:${s}` : undefined),
+        tileArt: () => undefined,
+      };
+    };
+    const full = atlasOf(
+      "decor/remains_fur",
+      "decor/remains_humanoid",
+      ...["wolf", "body_male", "body_female"].flatMap((who) =>
+        (["s", "e", "n", "w"] as const).map((d) => corpseSprite(who, d)),
+      ),
+    );
+    for (const [facing, d] of [
+      [Direction.SOUTH, "s"],
+      [Direction.EAST, "e"],
+      [Direction.NORTH, "n"],
+      [Direction.WEST, "w"],
+    ] as const) {
+      const key = mapItemKey(40, { ...wolf, facing });
+      expect(mapItemTexture(key, items, full)).toBe(`tex:${corpseSprite("wolf", d)}`);
+      expect(mapItemArt(key, items, full)).toEqual(corpseArt(`tex:${corpseSprite("wolf", d)}`));
+      for (const sex of ["male", "female"]) {
+        const body = mapItemKey(41, { ...ana, bodySex: sex, facing });
+        expect(mapItemTexture(body, items, full)).toBe(`tex:${corpseSprite(`body_${sex}`, d)}`);
+      }
+      // A body of unknown sex is a man's, lying the way it fell.
+      expect(mapItemTexture(mapItemKey(41, { ...ana, facing }), items, full)).toBe(
+        `tex:${corpseSprite("body_male", d)}`,
+      );
+    }
+    // An atlas from before the four ways: the south corpse for any of them.
+    const old = atlasOf("decor/remains_fur", "decor/remains_humanoid", "corpses/wolf");
+    expect(mapItemTexture("40@wolf/e", items, old)).toBe("tex:corpses/wolf");
+    expect(mapItemArt("40@wolf/w", items, old)).toEqual(corpseArt("tex:corpses/wolf"));
+    expect(corpseSpriteIn("wolf", "e", old.has)).toBe("corpses/wolf");
+    expect(corpseSpriteIn("wolf", "e", full.has)).toBe("corpses/wolf_e");
+    expect(corpseSpriteIn("wolf", undefined, full.has)).toBe("corpses/wolf");
+    // No corpse of that monster at all: the family's remains, as before.
+    expect(mapItemTexture("40@boar/n", items, old)).toBe("tex:decor/remains_fur");
+    expect(mapItemTexture("41@body_female/w", items, old)).toBe("tex:decor/remains_humanoid");
+    expect(corpseSpriteIn("boar", "n", old.has)).toBeUndefined();
+    expect(mapItemTexture("40@boar/n", items, atlasOf())).toBeUndefined();
   });
 });

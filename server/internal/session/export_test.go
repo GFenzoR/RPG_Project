@@ -701,3 +701,6 @@ func SetsFlagForTest(npc *content.NPC, key string, value int64) bool {
 
 // NameForTest is the character name.
 func (p *Player) NameForTest() string { return p.name }
+
+// FallFacing is fallFacing: the way the remains of a creature facing d say it fell.
+func FallFacing(d world.Direction) pb.Direction { return fallFacing(d) }

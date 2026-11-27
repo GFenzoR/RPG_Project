@@ -12,6 +12,22 @@
 // ends. Remains that were already there are older and stay drawn; remains that come later,
 // or never, are not waited for: the hide is capped at the fall's length, so nothing on the
 // floor is ever out of sight (and out of reach of a click or a drag) for longer.
+//
+// Other remains may be laid on that tile in the same moment (a corpse dragged onto it, a
+// second death): a fall that knows who died takes only the remains of that creature, and
+// among several the ones laid nearest to the moment it began, so a body never falls onto,
+// nor hides, a corpse that is not its own.
+import type { FallDir } from "@rpg/renderer";
+import { keyFallDir, remainsAre } from "../state/corpse-art.ts";
+
+/**
+ * A fall as the canvas holds it (begin): the remains it left, once the world saw them
+ * laid. Their key says the way the corpse lies (state/corpse-art.ts keyFallDir), and the
+ * body falls that way.
+ */
+export interface FallHandle {
+  readonly laid: LaidRemains | undefined;
+}
 
 /** A fall the canvas plays: where the creature died, when, and how long it falls. */
 interface Fall {
@@ -20,6 +36,8 @@ interface Fall {
   z: number;
   start: number;
   ms: number;
+  /** Whose remains it leaves (state/corpse-art.ts remainsAre); undefined: any on its tile. */
+  who: string | undefined;
   /** The remains it left, once the world saw them laid. */
   laid: LaidRemains | undefined;
   /** The map sprite hidden for it in the frame being drawn. */
@@ -59,9 +77,50 @@ export class CorpseVeil {
   private readonly ended: Fall[] = [];
   private floor = 0;
 
-  /** A body starts to fall on tile (x, y, z) at `start` and falls for `ms`. */
-  begin(x: number, y: number, z: number, start: number, ms: number): void {
-    this.falls.push({ x, y, z, start, ms, laid: undefined, top: undefined });
+  /**
+   * A body starts to fall on tile (x, y, z) at `start` and falls for `ms`. `laid` (the
+   * world's remains, oldest first): the ones it left, if they came before the death was
+   * heard of, are its own from this moment. The handle says which, now or once they come.
+   * `who`: the creature that died, as its remains name it (a monster's id, "body_<sex>" for
+   * a player): remains of anything else on the tile are never this fall's.
+   */
+  begin(
+    x: number,
+    y: number,
+    z: number,
+    start: number,
+    ms: number,
+    laid?: readonly LaidRemains[],
+    who?: string,
+  ): FallHandle {
+    const fall: Fall = { x, y, z, start, ms, who, laid: undefined, top: undefined };
+    this.falls.push(fall);
+    if (laid) this.claim(fall, laid);
+    return fall;
+  }
+
+  /**
+   * Gives `f` the remains it left, if `laid` has them and no other fall took them: the
+   * ones of the creature that died (when the fall knows it), laid nearest to the moment it
+   * began. A fall that already has remains changes them only for nearer ones (its own
+   * came a moment after another corpse was dragged onto the tile); the ones it held are
+   * shown again.
+   */
+  private claim(f: Fall, laid: readonly LaidRemains[]): void {
+    const held = f.laid;
+    let best = held;
+    for (const l of laid) {
+      if (l === best || l.x !== f.x || l.y !== f.y || l.z !== f.z) continue;
+      if (l.start < f.start - LAID_BEFORE_MS || l.start >= f.start + f.ms) continue;
+      if (f.who !== undefined && !remainsAre(l.key, f.who)) continue;
+      if (best && Math.abs(l.start - f.start) >= Math.abs(best.start - f.start)) continue;
+      if (this.falls.some((o) => o !== f && o.laid === l)) continue;
+      best = l;
+    }
+    if (best === held) return;
+    // What it hid until now is another's: apply() shows it again.
+    if (held) this.ended.push({ ...f, laid: held, top: undefined });
+    f.laid = best;
   }
 
   /**
@@ -76,16 +135,7 @@ export class CorpseVeil {
       if (f.laid) this.ended.push(f);
       falls.splice(i, 1);
     }
-    for (const f of falls) {
-      if (f.laid) continue;
-      for (const l of laid) {
-        if (l.x !== f.x || l.y !== f.y || l.z !== f.z) continue;
-        if (l.start < f.start - LAID_BEFORE_MS || l.start >= f.start + f.ms) continue;
-        if (falls.some((o) => o.laid === l)) continue;
-        f.laid = l;
-        break;
-      }
-    }
+    for (const f of falls) this.claim(f, laid);
   }
 
   /** Whether apply() has anything to do this frame. */
@@ -146,6 +196,36 @@ export class CorpseVeil {
     for (const f of this.falls) if (f.laid) this.ended.push(f);
     this.falls.length = 0;
   }
+}
+
+/** What the remains decide of a falling body (packages/renderer AnimState). */
+export interface FallingState {
+  fallDir: FallDir;
+  fallY: number;
+}
+
+/**
+ * A falling body falls the way its corpse lies (docs/17 "Un cadáver por dirección"): the
+ * remains the server laid say it (their key), and they may come a moment after the death;
+ * until then it falls the way the client had it facing. Turns `state` to the remains of
+ * `fall` if they are not the ones it already `follows` (so it costs nothing per frame),
+ * lowering it to where the corpse of that way rests (`body.fallY`, CreatureBody). Returns
+ * the remains it follows now.
+ */
+export function followRemains(
+  fall: FallHandle | undefined,
+  follows: LaidRemains | undefined,
+  state: FallingState,
+  body: { fallY(way: FallDir): number },
+): LaidRemains | undefined {
+  const laid = fall?.laid;
+  if (!laid || laid === follows) return follows;
+  const way = keyFallDir(laid.key);
+  if (way !== undefined && way !== state.fallDir) {
+    state.fallDir = way;
+    state.fallY = body.fallY(way);
+  }
+  return laid;
 }
 
 /**

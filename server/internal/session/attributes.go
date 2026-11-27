@@ -6,6 +6,7 @@ import (
 
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
+	"github.com/GFenzoR/RPG_Project/server/internal/world"
 )
 
 // Item attributes (docs/02-game-design.md "Atributos de items"). Every equipable (a
@@ -24,14 +25,36 @@ import (
 //
 // The remains a death leaves carry whose they are (docs/02 "Muerte", docs/05 "Restos"):
 // RemainsOf, the data/monsters id of the monster that fell, and BodyOf, the name of the
-// player whose body it is. The client names and draws the remains from them. Remains are
-// never saved (houseItems leaves them out), so neither is stored.
+// player whose body it is. The client names and draws the remains from them. Both kinds
+// also carry Facing, the way the creature faced when it died (fallFacing: one of the four
+// straight directions), so every client draws the corpse fallen the same way, and a body
+// BodySex, its owner's sex then (the body of a woman or a man). They are the item's own,
+// so remains that are dragged keep them. Remains are never saved (houseItems leaves them
+// out), so none of it is stored.
 type Mods struct {
 	Attr      string
 	Value     int
 	Refine    int
 	RemainsOf string
 	BodyOf    string
+	Facing    pb.Direction
+	BodySex   string
+}
+
+// fallFacing is the way a creature facing d falls dead, as its remains say it (Mods.Facing):
+// north, east, south or west, the facings a corpse is drawn in (docs/17 "Un cadáver por
+// dirección"). A diagonal falls east or west.
+func fallFacing(d world.Direction) pb.Direction {
+	switch d & 7 {
+	case world.North:
+		return pb.Direction_DIRECTION_NORTH
+	case world.South:
+		return pb.Direction_DIRECTION_SOUTH
+	case world.NorthEast, world.East, world.SouthEast:
+		return pb.Direction_DIRECTION_EAST
+	default:
+		return pb.Direction_DIRECTION_WEST
+	}
 }
 
 // Zero reports whether m is a plain item's.
@@ -43,7 +66,7 @@ func (m Mods) msg() *pb.ItemMods {
 		return nil
 	}
 	return &pb.ItemMods{Attribute: m.Attr, Value: int32(m.Value), Refine: uint32(max(m.Refine, 0)),
-		RemainsOf: m.RemainsOf, BodyOf: m.BodyOf}
+		RemainsOf: m.RemainsOf, BodyOf: m.BodyOf, Facing: m.Facing, BodySex: m.BodySex}
 }
 
 // modsOf reads mods sent by a client (nil: none). Only a comparison key: the server never
@@ -53,7 +76,7 @@ func modsOf(m *pb.ItemMods) Mods {
 		return Mods{}
 	}
 	return Mods{Attr: m.GetAttribute(), Value: int(m.GetValue()), Refine: int(m.GetRefine()),
-		RemainsOf: m.GetRemainsOf(), BodyOf: m.GetBodyOf()}
+		RemainsOf: m.GetRemainsOf(), BodyOf: m.GetBodyOf(), Facing: m.GetFacing(), BodySex: m.GetBodySex()}
 }
 
 // Mods returns the instance's mods (tests and tools).

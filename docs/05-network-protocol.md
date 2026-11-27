@@ -35,6 +35,24 @@
   `TileUpdate` y en la `palette` de un `MapArea`), el intercambio, el buzón del mercado y los cadáveres. Un item con `mods` nunca se apila. Un
   cliente que no conoce el atributo no muestra su línea. Es un campo aditivo: un cliente
   viejo lo ignora.
+- **Restos: hacia dónde cayó y el sexo del cuerpo** (2026-11-27, aditivo; docs/17 "Un
+  cadáver por dirección"): `ItemMods.facing` (6, un `Direction`) es hacia dónde miraba la
+  criatura al morir, en los restos de un monstruo (`remains_of`) y en el cuerpo de un
+  jugador (`body_of`). El servidor lo reduce a `NORTH`, `EAST`, `SOUTH` o `WEST`
+  (`fallFacing`: una diagonal es `EAST` u `WEST`), las cuatro direcciones que tienen
+  cadáver; el cliente hace la misma reducción con lo que reciba (`corpseDir`), dibuja el
+  cadáver caído hacia ahí (`corpses/<id>_<e|n|w>`, o `corpses/<id>` al sur) y juega la
+  caída hacia el mismo lado. `ItemMods.body_sex` (7) es el sexo (`data/looks.yaml`
+  `sexes`) que tenía el jugador al morir, solo en su cuerpo: el cliente dibuja el cuerpo
+  de una mujer o de un hombre sin haberlo visto vivo. Los dos son del item: viajan donde
+  viajan `remains_of` y `body_of` (el `TileUpdate`, `ContainerOpen.mods`, el parámetro
+  `item`) y unos restos arrastrados los conservan. Compatibilidad: `facing`
+  `UNSPECIFIED` o ausente (un servidor anterior, o un item que no son restos) es el sur,
+  como caía todo antes; `body_sex` vacío hace que el cliente use el sexo con que vio vivo
+  a ese jugador (y hombre si no lo vio), como antes. Un cliente viejo ignora los dos
+  campos y dibuja el cadáver del sur. No se guardan (los restos no se guardan). No hay
+  campo nuevo en `CreatureDisappear`: la caída toma la dirección de los restos, que salen
+  en el mismo tick.
 - **Restos** (2026-11-23, aditivo): `ItemMods.remains_of` (4) es el id de `data/monsters`
   del monstruo cuyos restos son, y `ItemMods.body_of` (5) el nombre del jugador cuyo
   cuerpo es. Los pone el servidor al crear los restos (`session/combat.go`, `death.go`) y

@@ -884,7 +884,7 @@ de un sprite con `death` juega su clip y se desvanece.
 | Volador (`flying: true`) | Oscila ±2 px siempre, y su sombra de contacto se achica cuando sube | 600 ms por ciclo |
 | Atacar | Embestida: avanza 6 px hacia el objetivo y vuelve | 90 ms de ida y 160 ms de vuelta |
 | Recibir golpe | Silueta blanca (textura generada al cargar el atlas) y retroceso de 2 px | 60 ms y después 120 ms |
-| Morir | Destello, se vuelca un cuarto de vuelta hacia la derecha y se aplasta a 3/5 del alto contra el piso: la pose de su cadáver, que toma su lugar ("Muerte continua (hecho, 2026-11-27)"; antes se aplastaba a la mitad y se disolvía) | 400 ms + 100 ms |
+| Morir | Destello, se vuelca un cuarto de vuelta (hacia la derecha o la izquierda, espejada o no, según hacia dónde miraba: "Un cadáver por dirección") y se aplasta a 3/5 del alto contra el piso: la pose de su cadáver, que toma su lugar ("Muerte continua (hecho, 2026-11-27)"; antes se aplastaba a la mitad y se disolvía) | 400 ms + 100 ms |
 | Aparecer | La disolución al revés | 300 ms |
 
 ### ANI-6 Atuendos y cosméticos
@@ -3286,7 +3286,113 @@ borra"); en corto:
   la playa abierta, desde barlovento; al abrigo dura hasta el tope), la ola siguiente en
   la arena mojada, o el pie de otra criatura; las más viejas se desvanecen al pasar el tope.
 
+### Un cadáver por dirección (hecho, 2026-11-27, rama `feat/corpse-dirs`)
+Pedido del dueño (2026-11-27): "tienes que dibujar un cadáver por dirección, si no sería muy
+raro que siempre caen igual". La muerte continua (abajo) dibujaba toda caída mirando al sur
+porque había un cadáver por criatura. Ahora cada criatura cae hacia donde miraba y su cadáver
+queda en el piso como cayó. **Reemplaza** lo que "Muerte continua" y "Cadáveres" dicen de la
+caída "siempre al sur"; todo lo demás de esas dos secciones sigue igual.
+- **Cuatro direcciones** (`FallDir`: `s`, `e`, `n`, `w`; `fallDir` de
+  `packages/renderer/src/anim.ts`): una criatura que miraba en diagonal cae al este o al
+  oeste. Cuatro y no ocho: ningún arte tiene muertes en diagonal y el atlas ya crece 729
+  sprites con cuatro.
+- **Quién dice hacia dónde:** el servidor, en los restos (`ItemMods.facing`, docs/05
+  "Restos"; `fallFacing` en `session/attributes.go`), así todos los clientes ven el mismo
+  cadáver, también quien llega después. El cuerpo de un jugador lleva además su sexo
+  (`ItemMods.body_sex`): el cliente ya no lo adivina (lo adivina solo con un servidor viejo).
+  Es del item: unos restos arrastrados conservan su dirección.
+- **Los sprites** (`tools/spritegen/src/recipes/corpses.ts`, `corpsePath`): `corpses/<id>`
+  es el cadáver caído al sur (la ruta de siempre: un cliente viejo sigue encontrándolo) y
+  `corpses/<id>_e`, `_n`, `_w` los otros tres; lo mismo `corpses/body_<sexo>[_<dir>]`. Son
+  (21 monstruos + 2 cuerpos) x 4 = 92 (antes 23). Ningún monstruo puede llamarse como el
+  cadáver de otro (`<id>_e`...) ni como un cuerpo: `bodyClashes` de `checkPaths`.
+- **Una sola regla para la caída y para el cadáver** (`fallArt` de `anim.ts`: la usa
+  spritegen para hacer cada cadáver y el cliente para dibujar la caída, así terminan en los
+  mismos píxeles):
+
+  | Arte de la criatura | Caída y cadáver por dirección | Quiénes |
+  |---|---|---|
+  | Muerte dibujada en las cuatro direcciones (`death_s/e/n/w`) | **Arte propio** en las cuatro: el último frame de la muerte de esa dirección | `bristleback_boar`, `bramble_stag` (motor de sprites) y todo humanoide del motor: `coffer_smuggler`, `drowned_miner`, `obsidian_delver`, `wreck_looter`, y el cuerpo de un jugador (hombre y mujer) |
+  | Muerte dibujada solo al sur (`death_s`) | **Derivado**: sur y este, los frames como son; norte y oeste, los mismos espejados (toda la caída, no solo el final). Dos cuerpos distintos, no cuatro | las 14 criaturas de Gemini: `ash_hound`, `bilge_rat`, `cinder_salamander`, `ember_wyrmling`, `gloom_bat`, `hollow_crawler`, `mire_toad`, `moss_spider`, `ore_beetle`, `slag_golem`, `slagbound_warden`, `thornling`, `tide_crab`, `wolf` |
+  | Una sola imagen (sin clip) | **Derivado**: volcada en el sentido del reloj al sur (la de siempre), en contra al oeste, y la imagen espejo de cada una al norte y al este. Cuatro cuerpos distintos | `thieving_gull` |
+
+  Un test de spritegen (`corpses.test.ts`, "have their own art...") fija esta tabla: si una
+  criatura gana una muerte en otra dirección, pasa sola a "arte propio" y el test avisa.
+- **Los humanoides caen en cuatro direcciones** (`HUMANOID_DEATH_DIRS`): el motor ya giraba
+  el modelo, así que la muerte al este, norte y oeste es la misma animación vista desde
+  otro lado (660 frames de capa nuevos: 55 capas x 4 frames x 3 direcciones; los del sur no
+  cambiaron ni un píxel). Mirando al este o al oeste la persona cae a lo largo de la
+  profundidad de la pantalla y la vista 3/4 la aplasta en un bulto que no se lee como un
+  cuerpo: por eso gira mientras cae (`ActionSpec.turn`, grados al último frame:
+  `HUMANOID_DEATH_TURN` este -45, oeste -65) y queda tendida en diagonal, la cabeza arriba
+  a la derecha (este) o abajo a la izquierda (oeste). Sur: tendida a lo ancho con la cabeza
+  a la derecha; norte, con la cabeza a la izquierda y de espaldas. Cuatro cuerpos que se
+  distinguen. Una figura viva sigue girando en ocho direcciones (`hasEightFacings` no
+  cuenta la muerte).
+- **Dónde descansa cada caída:** `atlas.json` `anims.<sprite>.rest` sigue siendo la del sur
+  y `rests` trae las de este, norte y oeste cuando son distintas (`restsOf`, que usa el
+  `fallArt` de `packages/renderer` importado, no una copia de la regla, de
+  `tools/spritepack`; `restFor` en el cliente). `CreatureBody.fallY(dir)` baja el cuerpo
+  hasta ahí (un muñeco, a la más baja de sus capas en esa dirección).
+- **El cliente** (`render/game-canvas.ts` `leave`; `render/death-fall.ts` `followRemains`,
+  puro y con tests): al morir, el cuerpo
+  empieza a caer hacia donde el cliente lo tenía mirando; los restos que el servidor dejó
+  en esa casilla tienen la última palabra: `CorpseVeil.begin` devuelve la caída
+  (`FallHandle`) y, en cuanto conoce sus restos (ya al empezar, si el `TileUpdate` llegó
+  antes que la muerte; si no, en el cuadro en que llega), la caída toma la dirección de su
+  clave (`keyFallDir`). Los dos mensajes salen del mismo tick, así que el cambio, si lo
+  hay, cae en el primer frame de la caída (si el `TileUpdate` se procesa uno o más
+  cuadros después, el cuerpo cambia de clip y de espejo a mitad de la caída: un salto
+  solo cosmético, el servidor manda). Una muerte sin restos (una invocación) cae
+  hacia donde miraba. **De quién son los restos:** la caída sabe quién murió
+  (`remainsWho`: el id del monstruo, `body_<sexo>` de un jugador) y solo toma restos de
+  esa criatura (`remainsAre`), y entre varios los que llegaron más cerca del momento de
+  la muerte; un cadáver arrastrado a esa casilla en el mismo instante no es el suyo (ni
+  lo esconde ni cae hacia él), y si llegó antes que los propios, la caída lo suelta en
+  cuanto estos llegan. `AnimState.fallDir` + `fallArt` deciden frames, espejo y sentido del
+  vuelco; `CreatureBody.draw` elige los frames.
+- **El mapa** (`state/corpse-art.ts`): la clave de `MapView` de unos restos caídos a otro
+  lado que el sur termina en `/<e|n|w>` (`40@wolf/e`, `41@body_female/w`; al sur, la clave
+  de siempre). `mapItemTexture` dibuja `corpses/<quién>_<dir>`; si el atlas no lo tiene (un
+  atlas de antes), el del sur; si tampoco, el sprite de la familia. El ícono del menú del
+  click derecho es el mismo cadáver (`ItemCardView.corpse`), ahora también para el cuerpo
+  de un jugador.
+- **Todo lo de la muerte continua sigue valiendo**, por dirección: el cadáver escondido
+  hasta que termina la caída, los 100 ms de fundido, los voladores aterrizan, restos que
+  llegan tarde o no llegan, movimiento reducido (sin caída), restos arrastrados (misma
+  clave, mismo dibujo), cadáveres que ya estaban en el piso (se ven en el acto).
+- **Comprobado:** `corpses.test.ts` de spritegen compara, para los 16 monstruos con clip y
+  las cuatro direcciones (64 casos), el último frame de la caída como lo dibuja el cliente
+  (`fallArt`, `fallShift`, `restsOf`) con el PNG del cadáver, píxel por píxel, y el vuelco
+  de una imagen en las cuatro direcciones contra `tipPlacement`.
+  `client/src/render/fall-atlas.test.ts` lo comprueba contra el atlas real con el
+  renderer del cliente (los clips de `spriteClips`, un `CreatureBody` de verdad, la pose
+  de `animate` al terminar una muerte empezada con `startDeath` y `CreatureBody.draw`;
+  compara dónde quedaría cada sprite de Pixi con el cadáver) después de `make sprites`
+  (sin atlas se salta en local y FALLA en CI, que arma el atlas antes de vitest): 64 casos de monstruos con clip y 24 de muñecos (los
+  4 humanoides y los 2 cuerpos, todas sus capas juntas) con 0 píxeles de diferencia, y la
+  gaviota a un píxel de redondeo.
+- **Atlas:** de 11.185 a 11.914 sprites (+729: 660 frames de muerte de los humanoides y 69
+  cadáveres). Páginas: 2048x2030 + 2048x1238 → 2048x2026 + 2048x1443; los dos PNG, de
+  4,36 MB a 4,64 MB (+6,4 %); `atlas.json`, de 1,21 MB a 1,29 MB.
+- **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts corpses [--only
+  <id>] [--out FILE.png] [--scale N]`: una fila por monstruo (y por cuerpo de jugador), la
+  criatura de pie y sus cuatro cadáveres (sur, este, norte, oeste). Revisado el 2026-11-27
+  a 4x: el jabalí, el ciervo y las personas se leen distintos en las cuatro; las criaturas
+  de Gemini son el mismo cuerpo y su espejo (el lobo y el murciélago, casi simétricos, se
+  distinguen poco).
+- **Pendiente (arte):** muertes al este, norte y oeste para las 14 criaturas de Gemini (sus
+  frames los hace el dueño con Gemini: con `death_e/n/w_<n>.png` en su carpeta pasan solas
+  a arte propio, sin tocar código) y un clip de muerte para la gaviota. Una criatura de
+  Gemini que miraba al norte o al este sigue pasando a su frame "de frente" al empezar a
+  caer, como antes del lote 20f: su muerte solo existe mirando al sur.
+- **E2E (no corrido en esta rama):** `shotFall` exige ahora que la dirección de la caída
+  sea la de su cadáver (`poses().dying[].way` y `corpseWay`) desde la mitad de la caída.
+
 ### Muerte continua (hecho, 2026-11-27, rama `feat/death-anim`)
+> La caída ya no es siempre al sur: ver "Un cadáver por dirección" (arriba), que reemplaza
+> lo que esta sección dice de la dirección. El resto sigue igual.
+
 Pedido del dueño (2026-11-25/27): "cuando un enemigo muere, de repente muere hacia cierta
 dirección y aparece su cuerpo en la otra; debiese ser una animación continua hasta que queda
 el cuerpo en el piso". Lo que pasaba (comprobado en el código y en el atlas): (1) el servidor
@@ -3348,6 +3454,10 @@ donde quedaba el último frame (el ciervo; 4 px los humanoides).
   `11b-death`). `poses().dying` trae `fall` y `veiled`.
 
 ### Cadáveres (hecho, 2026-11-23, rama `feat/corpse-names`)
+> Desde el 2026-11-27 cada monstruo tiene cuatro cadáveres, uno por dirección, y el cuerpo
+> de un jugador lleva el sexo que manda el servidor: ver "Un cadáver por dirección". Lo de
+> abajo describe el cadáver caído al sur (`corpses/<monstruo>`) y vale para los otros tres.
+
 Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo el nombre.
 - **De qué sale:** `tools/spritegen/src/recipes/corpses.ts` hace `corpses/<monstruo>`
   para cada monstruo de `data/monsters`, determinista y desde su propio arte: el último
