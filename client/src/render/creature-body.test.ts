@@ -1,7 +1,7 @@
 import { Container, Graphics, Texture } from "pixi.js";
 import type { AlphaFilter, Sprite } from "pixi.js";
 import { describe, expect, it } from "vitest";
-import { FEET_LINE, SHADOW_W, newPose } from "@rpg/renderer";
+import { FEET_LINE, SHADOW_W, TIP_SQUASH, newPose } from "@rpg/renderer";
 import type { AnimMeta } from "@rpg/renderer";
 import {
   CONTACT_MARGIN,
@@ -16,6 +16,7 @@ import {
   layerOrder,
 } from "./creature-body.ts";
 import { CONTACT_GONE, contactShare } from "./cast-shadows.ts";
+import type { ShadowSink } from "./cast-shadows.ts";
 import type { ClipSet } from "./clips.ts";
 
 const DIRS: ("n" | "e" | "s" | "w")[] = ["n", "e", "s", "w"];
@@ -70,6 +71,70 @@ describe("CreatureBody", () => {
     pose.shimmer = false;
     body.draw(pose, 1);
     expect(body.sprite.tint).toBe(0x808080);
+  });
+
+  it("draws every death facing south, lowered onto where its corpse lies (docs/17)", () => {
+    // A boar: its fall is drawn in the four facings, its corpse from the south one.
+    const death = DIRS.map(() => [tex(64, 64), tex(64, 64)]);
+    const base = hero();
+    const meta: AnimMeta = {
+      ...(base.meta as AnimMeta),
+      rest: 9,
+      actions: { ...base.meta?.actions, death: { frames: 2, ms: 100, dirs: DIRS } },
+    };
+    const body = new CreatureBody({ ...base, meta, frames: { ...base.frames, death } }, T);
+    // The fallen body rests 9 rows over its frame's bottom; it is drawn 2 (foot) under the
+    // feet line, where the corpse has its lowest pixel: 7 px down.
+    expect(body.fallY).toBe(7);
+    const pose = newPose();
+    pose.action = "death";
+    pose.frame = 1;
+    pose.y = body.fallY;
+    body.draw(pose, 1); // it died facing east
+    expect(body.sprite.texture).toBe(death[2]?.[1]);
+    expect(body.sprite.position).toMatchObject({ x: T / 2, y: T - FEET_LINE + 2 + 7 });
+    // An atlas that does not say where the body rests: it falls in place.
+    expect(new CreatureBody(hero(), T).fallY).toBe(0);
+  });
+
+  it("tips a single image over onto the pixels of its corpse (spritegen tipOver)", () => {
+    const still = tex(32, 32);
+    const body = new CreatureBody({ meta: undefined, frames: {}, still, eight: false }, T);
+    const pose = newPose();
+    pose.action = "death";
+    pose.tip = Math.PI / 2;
+    pose.scaleY = TIP_SQUASH;
+    body.draw(pose, 2);
+    const sp = body.sprite;
+    // Pixi's local matrix of the sprite (rotation 0), and where it puts the image's corners
+    // (from its bottom-centre anchor): the top-left one goes to the top-right of a box 32
+    // wide and 3/5 as high standing on the tile's bottom, the bottom-left one to its
+    // top-left: a quarter turn clockwise, flattened against the floor.
+    const a = Math.cos(sp.skew.y) * sp.scale.x;
+    const b = Math.sin(sp.skew.y) * sp.scale.x;
+    const c = Math.sin(sp.skew.x) * sp.scale.y;
+    const d = Math.cos(sp.skew.x) * sp.scale.y;
+    const at = (u: number, v: number): [number, number] => [
+      sp.position.x + a * u + c * v,
+      sp.position.y + b * u + d * v,
+    ];
+    const close = (p: [number, number], x: number, y: number): void => {
+      expect(p[0]).toBeCloseTo(x);
+      expect(p[1]).toBeCloseTo(y);
+    };
+    close(at(-16, -32), T, T - 32 * TIP_SQUASH);
+    close(at(-16, 0), 0, T - 32 * TIP_SQUASH);
+    close(at(16, 0), 0, T);
+    close(at(16, -32), T, T);
+    // Tipped, it casts no shadow of its own (the corpse on the floor has none either).
+    let parts = 0;
+    body.castShadow({ part: () => void parts++ } as unknown as ShadowSink, 0, 0);
+    expect(parts).toBe(0);
+    // Drawn standing again (a pooled pose), nothing of the tip is left.
+    body.draw(newPose(), 2);
+    expect(sp.skew.y).toBe(0);
+    expect(sp.scale).toMatchObject({ x: 1, y: 1 });
+    expect(sp.position).toMatchObject({ x: T / 2, y: T });
   });
 
   it("keeps a single-frame sprite on the tile's bottom-right corner, with no extra shadow", () => {

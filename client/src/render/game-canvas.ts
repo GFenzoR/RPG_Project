@@ -27,8 +27,7 @@ import { CreatureKind, FloatingTextKind, Skull } from "@rpg/protocol";
 import type { AttackKind, Direction } from "@rpg/protocol";
 import {
   Atlas,
-  DEATH_FADE_MS,
-  DEATH_MS,
+  DEATH_SETTLE_MS,
   DecoratedSource,
   HOUSE_DOOR_FRAME,
   LUNGE_BACK_MS,
@@ -39,7 +38,6 @@ import {
   animate,
   attackClip,
   attackClipAction,
-  clipMs,
   entityZIndex,
   newAnimInput,
   faceTo,
@@ -49,6 +47,7 @@ import {
   screenToWorld,
   isFlyer,
   startAttack,
+  fallMs,
   startDeath,
   startHit,
   startVanish,
@@ -162,6 +161,7 @@ import {
   mapItemTexture,
   parseMapItemKey,
 } from "../state/corpse-art.ts";
+import { CorpseVeil, settle } from "./death-fall.ts";
 import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
@@ -431,6 +431,12 @@ export interface PoseTime {
   id: number;
   ms: number;
   of: number;
+  /**
+   * A body falling dead: how long the fall itself lasts (the rest of `of` is its last pose
+   * fading over the corpse), and whether the remains it left are hidden under it now.
+   */
+  fall?: number;
+  veiled?: boolean;
   /** The clip it plays: attack, shoot or cast (lunge: a single image's), death, vanish. */
   action: string;
   /** Its tile (a body falling or shimmering away: where it stays). */
@@ -1492,7 +1498,11 @@ export async function createGameCanvas(
   // Leaving the view (ANI-2, ANI-5, ANI-7), as CreatureDisappear.reason says
   // (render/creature-events.ts leaveStyle): a creature that died stays where it fell,
   // without name or bar, while its death plays (an LPC body its clip, a single image the
-  // procedural fall), over the corpse the server already put on the tile; one that left by
+  // procedural tip), on the tile it died on (it ends there the step it was taking). The
+  // server puts its remains on that tile at once: they stay hidden until the fall ends
+  // (render/death-fall.ts CorpseVeil), the fall ends in the pose of the corpse and the body
+  // fades over it (docs/17 "Muerte continua"). With reduced motion there is no fall: the
+  // body goes and the remains are there. One that left by
   // a teleport or a logout shimmers away where it was (VANISH_MS). Any other way out of the
   // view drops it. Each departure plays once, also when the creature is already back: a
   // player that dies in view and wakes up at a temple in view leaves its falling body at
@@ -1503,9 +1513,26 @@ export async function createGameCanvas(
     figure: CreatureBody;
     state: AnimState;
     dir: CreatureState["dir"];
+    /** A fall: where the body was drawn when it died and where its tile is, sprite px. */
+    fromX: number;
+    fromY: number;
+    toX: number;
+    toY: number;
+    /** The tile it died on (a body shimmering away: where it was last). */
+    x: number;
+    y: number;
+    z: number;
   }
   const ghosts: Ghost[] = [];
-  const lastSeen = new Map<number, CreatureState["dir"]>();
+  /** How each creature drawn last frame looked and where the world had it. */
+  interface Seen {
+    dir: CreatureState["dir"];
+    x: number;
+    y: number;
+    z: number;
+  }
+  const lastSeen = new Map<number, Seen>();
+  const corpseVeil = new CorpseVeil();
   const departures = new DepartureFeed();
   const dropGhost = (i: number): void => {
     const g = ghosts[i];
@@ -1522,18 +1549,41 @@ export async function createGameCanvas(
     const state = animStates.get(id);
     animStates.delete(id);
     living?.forgetCreature(id);
-    const dir = lastSeen.get(id);
+    const last = lastSeen.get(id);
     lastSeen.delete(id);
-    if (!s || !s.figure || !state || style === "drop" || dir === undefined) {
+    // Reduced motion: no fall, the remains are simply there.
+    const still = style === "fall" && reducedMotion();
+    if (!s || !s.figure || !state || style === "drop" || last === undefined || still) {
       dropSprite(id);
       return;
     }
     dropLabels(s);
     sprites.delete(id);
     s.halo.update(undefined, now, false);
-    if (style === "fall") startDeath(state, now);
-    else startVanish(state, now);
-    ghosts.push({ id, body: s.body, figure: s.figure, state, dir });
+    const ghost: Ghost = {
+      id,
+      body: s.body,
+      figure: s.figure,
+      state,
+      dir: last.dir,
+      fromX: s.body.x,
+      fromY: s.body.y,
+      toX: s.body.x,
+      toY: s.body.y,
+      x: last.x,
+      y: last.y,
+      z: last.z,
+    };
+    if (style === "fall") {
+      // It falls on the tile it died on, where its remains lie: a death mid-step ends the
+      // step first (death-fall.ts settle), drawn among that tile's items.
+      ghost.toX = last.x * T;
+      ghost.toY = last.y * T - view.elevationAt(last.x, last.y);
+      view.placeEntity(s.body, last.x, last.y);
+      startDeath(state, now, s.figure.fallY);
+      corpseVeil.begin(last.x, last.y, last.z, now, fallMs(s.figure.clips.meta));
+    } else startVanish(state, now);
+    ghosts.push(ghost);
   };
   /** Plays the departures that arrived since the last frame on the bodies drawn then. */
   const depart = (now: number): void => {
@@ -1549,6 +1599,11 @@ export async function createGameCanvas(
   const drawGhosts = (now: number): void => {
     for (let i = ghosts.length - 1; i >= 0; i--) {
       const g = ghosts[i] as Ghost;
+      if (!Number.isNaN(g.state.diedAt) && (g.fromX !== g.toX || g.fromY !== g.toY)) {
+        const el = now - g.state.diedAt;
+        const ms = fallMs(g.figure.clips.meta);
+        g.body.position.set(settle(g.fromX, g.toX, el, ms), settle(g.fromY, g.toY, el, ms));
+      }
       const shaded = shade(g.figure, g.body.x / T, g.body.y / T);
       animInput.now = now;
       const [gx, gy] = delta(g.dir);
@@ -1738,7 +1793,14 @@ export async function createGameCanvas(
         if (shaded & 2) s.figure.castShadow(lightShadows, s.body.x, s.body.y);
       }
       s.body.alpha = s.figure ? 1 : see;
-      if (lastSeen.get(c.id) !== c.dir) lastSeen.set(c.id, c.dir);
+      const last = lastSeen.get(c.id);
+      if (!last) lastSeen.set(c.id, { dir: c.dir, x: c.pos.x, y: c.pos.y, z: c.pos.z });
+      else {
+        last.dir = c.dir;
+        last.x = c.pos.x;
+        last.y = c.pos.y;
+        last.z = c.pos.z;
+      }
       // While walking, draw on whichever end of the step comes later in row order, so the
       // creature is never hidden under the items of the tile it is entering or leaving.
       const step = w && now < w.start + w.duration ? w : undefined;
@@ -1830,6 +1892,11 @@ export async function createGameCanvas(
     // The bodies falling or shimmering away cast their shadow too, until they fade below
     // half (CreatureBody.castShadow): it does not vanish the moment a creature dies.
     drawGhosts(now);
+    // The remains of a body that still falls stay hidden under it (death-fall.ts).
+    if (corpseVeil.busy) {
+      corpseVeil.update(now, world.remainsLaid);
+      corpseVeil.apply(view, self.pos.z);
+    }
     if (casting) castShadows.end();
     if (lit) lightShadows.end();
     world.expire(now);
@@ -2348,19 +2415,20 @@ export async function createGameCanvas(
       const dying: PoseTime[] = [];
       const vanishing: PoseTime[] = [];
       for (const g of ghosts) {
-        // Where its body stays: the tile it was drawn on last.
-        const x = Math.round(g.body.x / T);
-        const y = Math.round(g.body.y / T);
+        // Where its body stays: the tile it died on, or was on last.
+        const { x, y } = g;
         if (Number.isNaN(g.state.diedAt)) {
           const ms = now - g.state.vanishAt;
           vanishing.push({ id: g.id, ms, of: VANISH_MS, action: "vanish", x, y });
           continue;
         }
-        const clip = clipMs(g.figure.clips.meta, "death");
+        const fall = fallMs(g.figure.clips.meta);
         dying.push({
           id: g.id,
           ms: now - g.state.diedAt,
-          of: clip ? clip + DEATH_FADE_MS : DEATH_MS,
+          of: fall + DEATH_SETTLE_MS,
+          fall,
+          veiled: corpseVeil.hides(x, y, g.z),
           action: "death",
           x,
           y,
@@ -2418,6 +2486,7 @@ export async function createGameCanvas(
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);
       while (ghosts.length > 0) dropGhost(ghosts.length - 1);
+      corpseVeil.clear();
       effects.destroy();
       speech.destroy();
       lights.destroy();

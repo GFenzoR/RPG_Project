@@ -42,6 +42,43 @@ export function parseMapItemKey(key: string): { itemId: number; remainsOf?: stri
 }
 
 /**
+ * The MapView keys of the remains among a tile's items (`mods` by item, as the tile has
+ * them): what a monster left (remainsOf) and the body of a player (bodyOf). Undefined: none.
+ */
+export function remainsKeys(
+  items: readonly number[] | undefined,
+  mods: readonly (ItemMods | undefined)[] | undefined,
+): string[] | undefined {
+  if (!items || !mods) return undefined;
+  let out: string[] | undefined;
+  for (let i = 0; i < items.length; i++) {
+    const m = mods[i];
+    if (m?.remainsOf || m?.bodyOf) (out ??= []).push(mapItemKey(items[i] ?? 0, m));
+  }
+  return out;
+}
+
+/**
+ * The remains a tile got: the key there are more of `after` than `before` (remainsKeys of
+ * the tile around one TileUpdate), the topmost one. Undefined: none came (one taken away,
+ * another item changed).
+ */
+export function laidRemains(
+  before: readonly string[] | undefined,
+  after: readonly string[] | undefined,
+): string | undefined {
+  if (!after) return undefined;
+  for (let i = after.length - 1; i >= 0; i--) {
+    const key = after[i] as string;
+    let more = 0;
+    for (const k of after) if (k === key) more++;
+    if (before) for (const k of before) if (k === key) more--;
+    if (more > 0) return key;
+  }
+  return undefined;
+}
+
+/**
  * How the map draws a corpse sprite: centred on its tile (anchor bc), as the creature stood
  * when it fell. The recipe already put the body where the creature's frame was.
  */
