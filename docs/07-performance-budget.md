@@ -749,6 +749,14 @@ tiempos de `go test -bench` (mediana de 3):
     compensa solo donde el área del vecino sale de la vista. Falta la prueba con bots
     (`make bots` pide Postgres y el servidor: queda para la verificación final del lote)
     y, si la XP/h cae, ajustar `count`/`respawn_seconds` o separar spawns.
+  - **`make bots N=100` en la verificación final del lote 20e (2026-11-27, PC del dueño,
+    Windows nativo, 10 min, escenario base):** 100/100 adentro, 0 desconexiones, tick
+    p50/p95/p99 0,03 / 1,02 / **2,09 ms** (máx. ≤ 6, 0 ticks pasados), RSS máx. 179 MB,
+    602 B/s por jugador, latencia de comando p95 48,1 ms. Todo dentro del presupuesto; el
+    p99 queda algo por encima de los 1,7–1,8 ms de las corridas anteriores, dentro del
+    mismo bucket del histograma. Los bots del escenario base casi no cazan (147 ataques
+    en 10 min), así que **la XP/h con la regla nueva sigue sin medir**: hace falta un
+    escenario de caza en `tools/bots`.
   - **Mundo vivo, sin medir:** un objeto roto o una roca empujada que alguien mira
     reintenta cada segundo, y cada intento es una pregunta `Host.Watched` (un
     `eachObserver`; dos por roca, y la roca deja de preguntar a las dos veces su
