@@ -40,6 +40,8 @@ const (
 	HotkeySlots   = 12 // F1..F12
 	MaxHotkeyBars = 16 // one per vocation
 	MaxTracked    = 32 // one per character
+	ItemKeySlots  = 12 // item hotkeys per character (the bar shows six)
+	maxItemID     = 65535
 	MaxWindows    = 64 // the toolbar's, the server's and the remembered containers
 	maxIDLen      = 64
 	maxNameLen    = 32
@@ -65,6 +67,9 @@ type Doc struct {
 	ChatOpacity   *int                 `json:"chat_opacity,omitempty"`
 	Hotkeys       map[string][]*string `json:"hotkeys,omitempty"`
 	Track         map[string]string    `json:"track,omitempty"`
+	// ItemKeys is the item hotkeys of each character by name: the numeric item id of each
+	// slot, 0 = empty (docs/02 "Teclas rapidas de items").
+	ItemKeys map[string][]uint32 `json:"item_keys,omitempty"`
 	// Devices holds what only makes sense on one kind of screen (window places in
 	// pixels, the zoom, the direction pad), per device class: DeviceClasses.
 	Devices map[string]*Device `json:"devices,omitempty"`
@@ -308,6 +313,19 @@ func (d *Doc) validate() error {
 	for name, quest := range d.Track {
 		if !isName(name) || !isID(quest) {
 			return errors.New("track")
+		}
+	}
+	if len(d.ItemKeys) > MaxTracked {
+		return errors.New("item_keys: too many characters")
+	}
+	for name, bar := range d.ItemKeys {
+		if !isName(name) || len(bar) > ItemKeySlots {
+			return errors.New("item_keys")
+		}
+		for _, id := range bar {
+			if id > maxItemID {
+				return errors.New("item_keys: item id")
+			}
 		}
 	}
 	for class, dev := range d.Devices {

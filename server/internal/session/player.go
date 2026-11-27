@@ -141,9 +141,14 @@ type Player struct {
 	minimapBudgetAt  game.Tick
 	minimapBudgetRem int // twentieths of a sector the last refill left over
 	tracked          string
-	hintStale        bool
-	hintForce        bool
-	hintSent         hintKey
+	// Item hotkeys (itemhotkeys.go): the item types whose carried totals the client tracks,
+	// the totals last sent (nil: none yet) and whether they must be recomputed at the flush.
+	itemKeys    []*content.Item
+	countsSent  []uint32
+	countsStale bool
+	hintStale   bool
+	hintForce   bool
+	hintSent    hintKey
 	// milestoneMarks is the fingerprint of the met marks last sent in the quest log.
 	milestoneMarks uint64
 	// sigilMet is what it met of the milestone of the plate it stands on when last

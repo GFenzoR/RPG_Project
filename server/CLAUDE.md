@@ -599,3 +599,15 @@ server/
   `stepPlace` elige el más cercano: un tipo nuevo de `complete_when` necesita su caso ahí
   y en `TestEveryObjectiveMarkHoldsARealTarget` (`hint_data_test.go`), que recorre todos
   los pasos de `data/quests` sobre el mapa real.
+
+- **Teclas rápidas de items** (`session/itemhotkeys.go`, docs/02 y docs/05): `UseItemType` usa una
+  unidad de un **tipo** donde el personaje la lleve: `findCarried` (bolsillos, equipo, contenedores
+  en anchura; abiertos o no) y después `useConsumable` (extraído de `useItem`: el mismo
+  enfriamiento `nextUse`, estómago y tutorial) o `useRune`. Un camino nuevo de "usar" un
+  consumible pasa por `useConsumable`. `SetItemHotkeys` fija `Player.itemKeys` (máx.
+  `MaxItemHotkeys`, solo consumibles y runas) y `ItemCounts` sale de `flushItemCounts`, después de
+  `questRecheck` en el tick: solo recalcula si el inventario cambió (`questDirty` →
+  `countsStale`) y solo manda si un total difiere del último enviado. Un camino nuevo que cambie lo
+  que el jugador lleva sin pasar por `sendInventory`/`containerChanged` tiene que levantar
+  `questDirty`, como ya exige el diario de misiones. Tests: `session/itemhotkeys_test.go`. El
+  documento de opciones de la cuenta suma `item_keys` (`accountopts`).

@@ -54,6 +54,8 @@ message ClientMessage {
     PushObject push_object = 39;
     MinimapRequest minimap_request = 40;
     TrackQuest track_quest = 41;
+    UseItemType use_item_type = 42;
+    SetItemHotkeys set_item_hotkeys = 43;
   }
 }
 
@@ -125,6 +127,27 @@ message UseItem {
   ItemLocation from = 1;
   uint32 item_id = 2;
   uint32 stack_index = 3;
+}
+
+// UseItemType uses one unit of an item TYPE the character carries, wherever it is: the
+// pockets, the equipped backpack and the containers inside them, open or not (the item
+// hotkeys of the bottom bar, docs/02 "Teclas rapidas de items"). Only consumables (food,
+// potions) and runes. The server picks the first matching stack (pockets first, then the
+// equipment and the containers breadth-first) and applies the rules of a normal use.
+// `to` is the target of an aimed rune (a creature or a tile); without it a rune goes on
+// the current target, or the caster for a heal, and a consumable ignores it.
+message UseItemType {
+  uint32 item_id = 1;
+  ActionTarget to = 2;
+}
+
+// SetItemHotkeys tells the server which item types the item hotkeys of the bottom bar
+// hold, so it can keep the client's carried totals up to date (ItemCounts). It replaces the
+// previous list; at most 12 ids, repeated or unknown or not usable ids are dropped. An
+// empty list stops the counts. The assignment itself is the client's option (saved with
+// the account options); the server keeps nothing of it past the session.
+message SetItemHotkeys {
+  repeated uint32 item_ids = 1;
 }
 
 // UseItemOn uses an item on a tile or a creature (runes, tools, keys).
