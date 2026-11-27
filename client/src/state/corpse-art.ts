@@ -9,7 +9,7 @@
 // creature faced when it died (ItemMods facing) and the atlas has a corpse fallen each of
 // the four straight ways, corpses/<monster> to the south and corpses/<monster>_<e|n|w>.
 // The key of remains fallen another way than south ends in "/<e|n|w>".
-import { Direction } from "@rpg/protocol";
+import { CreatureKind, Direction } from "@rpg/protocol";
 import { DEFAULT_FRAME_MS, fallDir } from "@rpg/renderer";
 import type { AnimDir, FallDir, TileArt } from "@rpg/renderer";
 import type { ItemMods } from "../content-types.ts";
@@ -48,6 +48,20 @@ export const corpseDir = (facing: Direction | undefined): FallDir =>
  */
 export const bodyCorpse = (sex: string | undefined): string =>
   sex === "female" ? "body_female" : "body_male";
+
+/**
+ * Whose remains a creature leaves when it dies, as their key names them (remainsAre): a
+ * monster's id, "body_<sex>" for a player. Undefined: none that the client can tell (an
+ * NPC, a creature without a content id).
+ */
+export function remainsWho(
+  kind: CreatureKind,
+  contentId: string,
+  sex: string | undefined,
+): string | undefined {
+  if (kind === CreatureKind.PLAYER) return bodyCorpse(sex);
+  return kind === CreatureKind.MONSTER && contentId ? contentId : undefined;
+}
 
 /**
  * The MapView key of a tile item: its number, "<number>@<monster>" for the remains of a
@@ -93,20 +107,38 @@ export function parseMapItemKey(key: string): {
   const itemId = Number(key.slice(0, at));
   const slash = key.indexOf("/", at);
   if (slash < 0) return { itemId, remainsOf: key.slice(at + 1), dir: "s" };
-  const d = key.slice(slash + 1);
-  return {
-    itemId,
-    remainsOf: key.slice(at + 1, slash),
-    dir: d === "e" || d === "n" || d === "w" ? d : "s",
-  };
+  return { itemId, remainsOf: key.slice(at + 1, slash), dir: wayOf(key, slash + 1) };
 }
 
-/** The way the remains of the MapView key `key` lie (undefined: it is not remains). */
+/**
+ * The way the remains of the MapView key `key` lie (undefined: it is not remains): what
+ * parseMapItemKey(key).dir says, allocating nothing.
+ */
 export function keyFallDir(key: string): FallDir | undefined {
   const at = key.indexOf("@");
   if (at < 0) return undefined;
-  const d = key.charCodeAt(key.length - 2) === 47 /* "/" */ ? key[key.length - 1] : "s";
+  const slash = key.indexOf("/", at);
+  return slash < 0 ? "s" : wayOf(key, slash + 1);
+}
+
+/** The way written from `from` to the end of `key`: e, n or w, else south. */
+function wayOf(key: string, from: number): FallDir {
+  if (key.length !== from + 1) return "s";
+  const d = key[from];
   return d === "e" || d === "n" || d === "w" ? d : "s";
+}
+
+/**
+ * Whether the MapView key `key` is the remains of `who` (a monster's id, or "body_<sex>"),
+ * whatever way they lie: what parseMapItemKey(key).remainsOf === who says, allocating
+ * nothing.
+ */
+export function remainsAre(key: string, who: string): boolean {
+  const at = key.indexOf("@");
+  if (at < 0) return false;
+  const slash = key.indexOf("/", at);
+  const end = slash < 0 ? key.length : slash;
+  return end - at - 1 === who.length && key.startsWith(who, at + 1);
 }
 
 /**

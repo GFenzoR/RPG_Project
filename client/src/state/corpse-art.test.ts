@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Direction } from "@rpg/protocol";
+import { CreatureKind, Direction } from "@rpg/protocol";
+import { FALL_DIRS } from "@rpg/renderer";
 import {
   bodyCorpse,
   corpseArt,
@@ -14,7 +15,9 @@ import {
   mapItemTexture,
   parseMapItemKey,
   plainItemKey,
+  remainsAre,
   remainsKeys,
+  remainsWho,
 } from "./corpse-art.ts";
 
 const plain = { attribute: "", value: 0, refine: 0 };
@@ -79,6 +82,66 @@ describe("a corpse per direction (docs/17)", () => {
     expect(bodyCorpse("female")).toBe("body_female");
     expect(bodyCorpse(undefined)).toBe("body_male");
     expect(bodyCorpse("")).toBe("body_male");
+  });
+
+  it("says one way for remains however it is asked: the mods, the key, the key read back", () => {
+    // corpseDir (the mods), keyFallDir and parseMapItemKey (the key) are three readings of
+    // the same facing: the fall follows one and the map draws another.
+    const facings = [
+      undefined,
+      Direction.UNSPECIFIED,
+      Direction.NORTH,
+      Direction.NORTH_EAST,
+      Direction.EAST,
+      Direction.SOUTH_EAST,
+      Direction.SOUTH,
+      Direction.SOUTH_WEST,
+      Direction.WEST,
+      Direction.NORTH_WEST,
+    ];
+    const seen = new Set<string>();
+    for (const who of [
+      { remainsOf: "wolf", bodyOf: "" },
+      { remainsOf: "ember_wyrm_2", bodyOf: "" },
+      { remainsOf: "", bodyOf: "Ana", bodySex: "female" },
+    ])
+      for (const facing of facings) {
+        const mods = { ...plain, ...who, ...(facing === undefined ? {} : { facing }) };
+        const key = mapItemKey(40, mods);
+        const way = corpseDir(facing);
+        expect(keyFallDir(key), key).toBe(way);
+        const back = parseMapItemKey(key);
+        expect(back.dir, key).toBe(way);
+        expect(back.itemId, key).toBe(40);
+        const name = who.remainsOf || bodyCorpse(who.bodySex);
+        expect(back.remainsOf, key).toBe(name);
+        expect(remainsAre(key, name), key).toBe(true);
+        seen.add(way);
+      }
+    expect([...seen].sort()).toEqual([...FALL_DIRS].sort());
+    // A key that says no known way lies south, for the two of them.
+    for (const key of ["40@wolf/x", "40@wolf/", "40@wolf/ne", "40@wolf/e/w"]) {
+      expect(keyFallDir(key), key).toBe("s");
+      expect(parseMapItemKey(key).dir, key).toBe("s");
+    }
+  });
+
+  it("tells whose remains a key is, and whose a creature leaves", () => {
+    expect(remainsAre("40@wolf", "wolf")).toBe(true);
+    expect(remainsAre("40@wolf/e", "wolf")).toBe(true);
+    expect(remainsAre("40@wolf_alpha/e", "wolf")).toBe(false);
+    expect(remainsAre("40@wolf", "wolf_alpha")).toBe(false);
+    expect(remainsAre("40@dire_wolf", "wolf")).toBe(false);
+    expect(remainsAre("41@body_female/w", "body_female")).toBe(true);
+    expect(remainsAre("41@body_female/w", "body_male")).toBe(false);
+    expect(remainsAre("40", "40")).toBe(false);
+    expect(remainsAre("40", "")).toBe(false);
+    // What the canvas tells a fall: the same name the remains' key will carry.
+    expect(remainsWho(CreatureKind.MONSTER, "wolf", undefined)).toBe("wolf");
+    expect(remainsWho(CreatureKind.PLAYER, "", "female")).toBe("body_female");
+    expect(remainsWho(CreatureKind.PLAYER, "", undefined)).toBe("body_male");
+    expect(remainsWho(CreatureKind.NPC, "smith", undefined)).toBeUndefined();
+    expect(remainsWho(CreatureKind.MONSTER, "", undefined)).toBeUndefined();
   });
 
   it("reads a key back: the item, who fell and the way", () => {

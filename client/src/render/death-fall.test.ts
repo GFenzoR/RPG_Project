@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CorpseVeil, LAID_BEFORE_MS, SETTLE_STEP_MS, settle } from "./death-fall.ts";
+import { CorpseVeil, LAID_BEFORE_MS, SETTLE_STEP_MS, followRemains, settle } from "./death-fall.ts";
 import type { LaidRemains, Veilable } from "./death-fall.ts";
 
 interface Item extends Veilable {
@@ -211,6 +211,109 @@ describe("the remains of a fall (docs/17: the body falls the way its corpse lies
     const b = veil.begin(3, 4, 7, 1001, FALL, [old, other, one]);
     expect(a.laid).toBe(one);
     expect(b.laid).toBeUndefined();
+  });
+});
+
+describe("the remains of a fall that knows who died", () => {
+  it("are that creature's, never a corpse dragged onto its tile in the same moment", () => {
+    // A west-facing rat corpse is dragged onto the tile; a wolf dies there facing east.
+    const veil = new CorpseVeil();
+    const dragged = laid(3, 4, "40@rat/w", 950);
+    const own = laid(3, 4, "40@wolf/e", 1000);
+    const fall = veil.begin(3, 4, 7, 1000, FALL, [dragged, own], "wolf");
+    expect(fall.laid).toBe(own);
+    const rat = item(3, 4, "40@rat/w");
+    const wolf = item(3, 4, "40@wolf/e");
+    frame(veil, 1016, [dragged, own], [rat, wolf]);
+    expect([rat.renderable, wolf.renderable]).toEqual([true, false]);
+    // Its own remains never come (a summon): the dragged corpse is still not its own.
+    const veil2 = new CorpseVeil();
+    const alone = veil2.begin(3, 4, 7, 1000, FALL, [dragged], "wolf");
+    frame(veil2, 1100, [dragged], [rat]);
+    expect(alone.laid).toBeUndefined();
+    expect(rat.renderable).toBe(true);
+    // A player's body, by sex, whatever way it lies.
+    const body = laid(3, 4, "41@body_female/n", 1000);
+    expect(veil2.begin(3, 4, 7, 1000, FALL, [dragged, body], "body_female").laid).toBe(body);
+    expect(new CorpseVeil().begin(3, 4, 7, 1000, FALL, [body], "body_male").laid).toBeUndefined();
+  });
+
+  it("are the ones laid nearest to its death among several of its kind", () => {
+    // A wolf corpse dragged onto the tile 100 ms before another wolf dies on it.
+    const veil = new CorpseVeil();
+    const dragged = laid(3, 4, "40@wolf/w", 900);
+    const own = laid(3, 4, "40@wolf/e", 1000);
+    expect(veil.begin(3, 4, 7, 1000, FALL, [dragged, own], "wolf").laid).toBe(own);
+  });
+
+  it("leave a corpse that came first for its own when they come, and show it again", () => {
+    // The dragged wolf is all there is when the death is heard of; its own come a frame on.
+    const veil = new CorpseVeil();
+    const dragged = laid(3, 4, "40@wolf/w", 900);
+    const fall = veil.begin(3, 4, 7, 1000, FALL, [dragged], "wolf");
+    expect(fall.laid).toBe(dragged);
+    const west = item(3, 4, "40@wolf/w");
+    frame(veil, 1005, [dragged], [west]);
+    expect(west.renderable).toBe(false);
+    const own = laid(3, 4, "40@wolf/e", 1010);
+    const east = item(3, 4, "40@wolf/e");
+    frame(veil, 1016, [dragged, own], [west, east]);
+    expect(fall.laid).toBe(own);
+    expect([west.renderable, east.renderable]).toEqual([true, false]);
+    // Nothing nearer comes: it keeps them, and a later frame changes nothing.
+    frame(veil, 1100, [dragged, own, laid(3, 4, "40@wolf/n", 1090)], [west, east]);
+    expect(fall.laid).toBe(own);
+    expect([west.renderable, east.renderable]).toEqual([true, false]);
+  });
+});
+
+describe("followRemains: the body falls the way its remains lie", () => {
+  // CreatureBody.fallY: where the corpse of each way rests.
+  const body = { fallY: (way: string): number => ({ s: 7, e: 3, n: 7, w: 10 })[way] ?? 0 };
+
+  it("falls the way the client had it until the remains come, then turns once", () => {
+    const veil = new CorpseVeil();
+    const fall = veil.begin(3, 4, 7, 1000, FALL, [], "wolf");
+    const state = { fallDir: "e" as const, fallY: 3 };
+    // No remains yet: nothing changes.
+    expect(followRemains(fall, undefined, state, body)).toBeUndefined();
+    expect(state).toEqual({ fallDir: "e", fallY: 3 });
+    // The monster turned in the tick it died: its remains lie west, and come mid-fall.
+    const west = laid(3, 4, "40@wolf/w", 1040);
+    frame(veil, 1050, [west], []);
+    let follows = followRemains(fall, undefined, state, body);
+    expect(follows).toBe(west);
+    expect(state).toEqual({ fallDir: "w", fallY: 10 });
+    // The same remains on the next frames: not read again (whatever the state says now).
+    state.fallY = 99;
+    follows = followRemains(fall, follows, state, body);
+    expect(follows).toBe(west);
+    expect(state).toEqual({ fallDir: "w", fallY: 99 });
+  });
+
+  it("keeps the fall as it is for remains lying the way it already falls", () => {
+    const veil = new CorpseVeil();
+    const south = laid(3, 4, "40@wolf", 1000);
+    const fall = veil.begin(3, 4, 7, 1000, FALL, [south], "wolf");
+    const state = { fallDir: "s" as const, fallY: 7 };
+    expect(followRemains(fall, undefined, state, body)).toBe(south);
+    expect(state).toEqual({ fallDir: "s", fallY: 7 });
+    // A fall that is not one (a body shimmering away) follows nothing.
+    expect(followRemains(undefined, undefined, state, body)).toBeUndefined();
+  });
+
+  it("turns again when the fall changes a dragged corpse for its own remains", () => {
+    const veil = new CorpseVeil();
+    const dragged = laid(3, 4, "40@wolf/w", 900);
+    const fall = veil.begin(3, 4, 7, 1000, FALL, [dragged], "wolf");
+    const state = { fallDir: "n" as const, fallY: 7 };
+    let follows = followRemains(fall, undefined, state, body);
+    expect(state.fallDir).toBe("w");
+    const own = laid(3, 4, "40@wolf/e", 1010);
+    frame(veil, 1016, [dragged, own], []);
+    follows = followRemains(fall, follows, state, body);
+    expect(follows).toBe(own);
+    expect(state).toEqual({ fallDir: "e", fallY: 3 });
   });
 });
 

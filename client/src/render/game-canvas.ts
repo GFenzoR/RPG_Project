@@ -163,8 +163,9 @@ import {
   mapItemId,
   mapItemTexture,
   parseMapItemKey,
+  remainsWho,
 } from "../state/corpse-art.ts";
-import { CorpseVeil, settle } from "./death-fall.ts";
+import { CorpseVeil, followRemains, settle } from "./death-fall.ts";
 import type { FallHandle, LaidRemains } from "./death-fall.ts";
 import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
@@ -1548,26 +1549,14 @@ export async function createGameCanvas(
     z: number;
     /** A fall: its remains, once laid (death-fall.ts), and the remains it already follows. */
     fall?: FallHandle;
-    follows?: LaidRemains;
+    follows?: LaidRemains | undefined;
   }
   const ghosts: Ghost[] = [];
-  /**
-   * A falling body falls the way its corpse lies (docs/17 "Un cadáver por dirección"): the
-   * remains the server laid say it (their key), and they may come a moment after the death.
-   * Until then it falls the way the client had it facing.
-   */
-  const followRemains = (g: Ghost): void => {
-    const laid = g.fall?.laid;
-    if (!laid || laid === g.follows) return;
-    g.follows = laid;
-    const way = keyFallDir(laid.key);
-    if (way === undefined || way === g.state.fallDir) return;
-    g.state.fallDir = way;
-    g.state.fallY = g.figure.fallY(way);
-  };
   /** How each creature drawn last frame looked and where the world had it. */
   interface Seen {
     dir: CreatureState["dir"];
+    /** Whose remains it leaves if it dies (death-fall.ts begin). */
+    who: string | undefined;
     x: number;
     y: number;
     z: number;
@@ -1632,8 +1621,9 @@ export async function createGameCanvas(
         now,
         fallMs(s.figure.clips.meta),
         world.remainsLaid,
+        last.who,
       );
-      followRemains(ghost);
+      ghost.follows = followRemains(ghost.fall, ghost.follows, state, s.figure);
     } else startVanish(state, now);
     ghosts.push(ghost);
   };
@@ -1665,7 +1655,7 @@ export async function createGameCanvas(
       animInput.moveDx = 0;
       animInput.moveDy = 0;
       const dying = !Number.isNaN(g.state.diedAt);
-      if (dying) followRemains(g);
+      if (dying) g.follows = followRemains(g.fall, g.follows, g.state, g.figure);
       animate(g.state, g.figure.clips.meta, animInput, pose);
       g.figure.draw(pose, dirIndex(dying ? g.state.fallDir : animInput.dir));
       if (pose.done) dropGhost(i);
@@ -1848,7 +1838,14 @@ export async function createGameCanvas(
       }
       s.body.alpha = s.figure ? 1 : see;
       const last = lastSeen.get(c.id);
-      if (!last) lastSeen.set(c.id, { dir: c.dir, x: c.pos.x, y: c.pos.y, z: c.pos.z });
+      if (!last)
+        lastSeen.set(c.id, {
+          dir: c.dir,
+          who: remainsWho(c.kind, c.contentId, c.look?.sex),
+          x: c.pos.x,
+          y: c.pos.y,
+          z: c.pos.z,
+        });
       else {
         last.dir = c.dir;
         last.x = c.pos.x;
