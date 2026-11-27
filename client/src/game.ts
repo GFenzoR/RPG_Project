@@ -438,6 +438,12 @@ interface PoseView {
   /** A fall: how long the fall itself lasts, and whether its remains are hidden under it. */
   fall?: number;
   veiled?: boolean;
+  /**
+   * A fall: the way the body falls (s, e, n, w) and the way the remains it left lie, once
+   * the client has them (docs/17 "Un cadáver por dirección"): they must be the same.
+   */
+  way?: string;
+  corpseWay?: string;
   action: string;
   x: number;
   y: number;

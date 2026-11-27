@@ -178,6 +178,42 @@ describe("CorpseVeil", () => {
   });
 });
 
+describe("the remains of a fall (docs/17: the body falls the way its corpse lies)", () => {
+  it("are the fall's own from the start when they came before the death was heard of", () => {
+    const veil = new CorpseVeil();
+    const east = laid(3, 4, "40@wolf/e", 990);
+    const fall = veil.begin(3, 4, 7, 1000, FALL, [east]);
+    expect(fall.laid).toBe(east);
+    expect(veil.hides(3, 4, 7, "40@wolf/e")).toBe(true);
+  });
+
+  it("come to the fall's handle when they arrive after it began, and stay once it ended", () => {
+    const veil = new CorpseVeil();
+    const fall = veil.begin(3, 4, 7, 1000, FALL, []);
+    expect(fall.laid).toBeUndefined();
+    const west = laid(3, 4, "40@wolf/w", 1010);
+    const body = item(3, 4, "40@wolf/w");
+    frame(veil, 1016, [west], [body]);
+    expect(fall.laid).toBe(west);
+    expect(body.renderable).toBe(false);
+    frame(veil, 1000 + FALL, [west], [body]);
+    expect(body.renderable).toBe(true);
+    expect(fall.laid).toBe(west); // the canvas still knows which way it fell
+  });
+
+  it("are never another tile's, older ones, or the ones another fall took", () => {
+    const veil = new CorpseVeil();
+    const old = laid(3, 4, "40@wolf/n", 1000 - LAID_BEFORE_MS - 1);
+    const other = laid(5, 4, "40@wolf/e", 1000);
+    expect(veil.begin(3, 4, 7, 1000, FALL, [old, other]).laid).toBeUndefined();
+    const one = laid(3, 4, "40@wolf/e", 1001);
+    const a = veil.begin(3, 4, 7, 1001, FALL, [old, other, one]);
+    const b = veil.begin(3, 4, 7, 1001, FALL, [old, other, one]);
+    expect(a.laid).toBe(one);
+    expect(b.laid).toBeUndefined();
+  });
+});
+
 describe("settle", () => {
   it("ends the step a creature died in, so it falls where its remains lie", () => {
     expect(settle(100, 128, 0, 360)).toBe(100);

@@ -130,6 +130,9 @@ interface FallHold extends PoseHold {
 interface FallFrame {
   falling: boolean;
   veiled: boolean;
+  /** The way the body falls and the way its remains lie (docs/17 "Un cadáver por dirección"). */
+  way: string | undefined;
+  corpseWay: string | undefined;
 }
 
 /**
@@ -141,6 +144,11 @@ interface FallFrame {
  * the page's clock (performance.now, which the canvas and the world read), and draws each
  * of the three frames itself at the time it wants. Returns what it saw when it caught the
  * fall (Caught), as shotPose does.
+ *
+ * docs/17 "Un cadáver por dirección": the body falls the way its corpse lies (the facing
+ * the server put in the remains), one of the four straight ways, the same from the middle
+ * of the fall to its end: on `-2-end` and `-3-corpse` the body and the corpse are the same
+ * drawing, whichever way the wolf faced when it died.
  */
 async function shotFall(page: Page, name: string, timeout: number): Promise<Caught> {
   const handle = await page.waitForFunction(
@@ -184,7 +192,12 @@ async function shotFall(page: Page, name: string, timeout: number): Promise<Caug
         // The frames held: the game's ticker among them. What they ask for next is held too.
         for (const cb of (w.e2eHeld ?? []).splice(0)) cb(w.e2eClock);
         const body = window.__rpgClient?.poses().dying.find((x) => x.id === id);
-        return { falling: body !== undefined, veiled: body?.veiled === true };
+        return {
+          falling: body !== undefined,
+          veiled: body?.veiled === true,
+          way: body?.way,
+          corpseWay: body?.corpseWay,
+        };
       },
       { id, ms },
     );
@@ -200,8 +213,14 @@ async function shotFall(page: Page, name: string, timeout: number): Promise<Caug
     // The body falls over its hidden remains to the end, then it is gone: the corpse is
     // what is left (never the two side by side, never a body fading to nothing first).
     expect(mid.falling).toBe(true);
-    expect(end).toEqual({ falling: true, veiled: true });
+    expect(end).toMatchObject({ falling: true, veiled: true });
     expect(after.falling).toBe(false);
+    // And it falls the way its corpse lies: the remains came with their facing, and the
+    // fall follows it from (at the latest) its middle to its end.
+    expect(["s", "e", "n", "w"]).toContain(end.way);
+    expect(end.corpseWay).toBe(end.way);
+    expect(mid.way).toBe(end.way);
+    expect(mid.corpseWay).toBe(end.way);
     return caught;
   } finally {
     await page.evaluate(() => {

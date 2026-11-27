@@ -13,6 +13,15 @@
 // or never, are not waited for: the hide is capped at the fall's length, so nothing on the
 // floor is ever out of sight (and out of reach of a click or a drag) for longer.
 
+/**
+ * A fall as the canvas holds it (begin): the remains it left, once the world saw them
+ * laid. Their key says the way the corpse lies (state/corpse-art.ts keyFallDir), and the
+ * body falls that way.
+ */
+export interface FallHandle {
+  readonly laid: LaidRemains | undefined;
+}
+
 /** A fall the canvas plays: where the creature died, when, and how long it falls. */
 interface Fall {
   x: number;
@@ -59,9 +68,34 @@ export class CorpseVeil {
   private readonly ended: Fall[] = [];
   private floor = 0;
 
-  /** A body starts to fall on tile (x, y, z) at `start` and falls for `ms`. */
-  begin(x: number, y: number, z: number, start: number, ms: number): void {
-    this.falls.push({ x, y, z, start, ms, laid: undefined, top: undefined });
+  /**
+   * A body starts to fall on tile (x, y, z) at `start` and falls for `ms`. `laid` (the
+   * world's remains, oldest first): the ones it left, if they came before the death was
+   * heard of, are its own from this moment. The handle says which, now or once they come.
+   */
+  begin(
+    x: number,
+    y: number,
+    z: number,
+    start: number,
+    ms: number,
+    laid?: readonly LaidRemains[],
+  ): FallHandle {
+    const fall: Fall = { x, y, z, start, ms, laid: undefined, top: undefined };
+    this.falls.push(fall);
+    if (laid) this.claim(fall, laid);
+    return fall;
+  }
+
+  /** Gives `f` the remains it left, if `laid` has them and no other fall took them. */
+  private claim(f: Fall, laid: readonly LaidRemains[]): void {
+    for (const l of laid) {
+      if (l.x !== f.x || l.y !== f.y || l.z !== f.z) continue;
+      if (l.start < f.start - LAID_BEFORE_MS || l.start >= f.start + f.ms) continue;
+      if (this.falls.some((o) => o.laid === l)) continue;
+      f.laid = l;
+      return;
+    }
   }
 
   /**
@@ -76,16 +110,7 @@ export class CorpseVeil {
       if (f.laid) this.ended.push(f);
       falls.splice(i, 1);
     }
-    for (const f of falls) {
-      if (f.laid) continue;
-      for (const l of laid) {
-        if (l.x !== f.x || l.y !== f.y || l.z !== f.z) continue;
-        if (l.start < f.start - LAID_BEFORE_MS || l.start >= f.start + f.ms) continue;
-        if (falls.some((o) => o.laid === l)) continue;
-        f.laid = l;
-        break;
-      }
-    }
+    for (const f of falls) if (!f.laid) this.claim(f, laid);
   }
 
   /** Whether apply() has anything to do this frame. */

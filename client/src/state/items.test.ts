@@ -345,6 +345,8 @@ describe("look messages", () => {
                   refine: 6,
                   remainsOf: "",
                   bodyOf: "",
+                  facing: 0,
+                  bodySex: "",
                 },
               },
             },

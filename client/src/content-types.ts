@@ -22,10 +22,17 @@ export interface ItemMods {
   /** A player's body: the player's name ("body of <player>"). */
   bodyOf?: string;
   /**
-   * The sex of that player as the client saw them alive (state/world.ts): not on the wire,
-   * which carries the name alone. What the body is drawn as (state/corpse-art.ts).
+   * The sex of that player: what the body is drawn as (state/corpse-art.ts). The server
+   * says it (ItemMods body_sex); for a server from before that, the sex the client saw
+   * that player alive with (state/world.ts), if it did.
    */
   bodySex?: string;
+  /**
+   * Remains: the way the creature faced when it died, a Direction of the protocol (north,
+   * east, south or west). The corpse is drawn fallen that way; absent (an older server, or
+   * not remains): south.
+   */
+  facing?: number;
 }
 
 export interface ItemDef {

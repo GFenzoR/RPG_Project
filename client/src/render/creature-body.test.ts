@@ -73,28 +73,67 @@ describe("CreatureBody", () => {
     expect(body.sprite.tint).toBe(0x808080);
   });
 
-  it("draws every death facing south, lowered onto where its corpse lies (docs/17)", () => {
-    // A boar: its fall is drawn in the four facings, its corpse from the south one.
+  it("draws a death in the facing it fell, lowered onto the corpse of that way (docs/17)", () => {
+    // A boar: its fall is drawn in the four facings, and so are its corpses.
     const death = DIRS.map(() => [tex(64, 64), tex(64, 64)]);
     const base = hero();
     const meta: AnimMeta = {
       ...(base.meta as AnimMeta),
       rest: 9,
+      rests: { e: 5, w: 12 },
       actions: { ...base.meta?.actions, death: { frames: 2, ms: 100, dirs: DIRS } },
     };
     const body = new CreatureBody({ ...base, meta, frames: { ...base.frames, death } }, T);
-    // The fallen body rests 9 rows over its frame's bottom; it is drawn 2 (foot) under the
-    // feet line, where the corpse has its lowest pixel: 7 px down.
-    expect(body.fallY).toBe(7);
+    // Fallen facing south the body rests 9 rows over its frame's bottom; it is drawn 2
+    // (foot) under the feet line, where the corpse has its lowest pixel: 7 px down. The
+    // other ways rest where the atlas says (`rests`), or like the south (north: no entry).
+    expect(body.fallY()).toBe(7);
+    expect(body.fallY("s")).toBe(7);
+    expect(body.fallY("e")).toBe(3);
+    expect(body.fallY("n")).toBe(7);
+    expect(body.fallY("w")).toBe(10);
     const pose = newPose();
     pose.action = "death";
     pose.frame = 1;
-    pose.y = body.fallY;
-    body.draw(pose, 1); // it died facing east
-    expect(body.sprite.texture).toBe(death[2]?.[1]);
-    expect(body.sprite.position).toMatchObject({ x: T / 2, y: T - FEET_LINE + 2 + 7 });
+    for (const [way, y] of [
+      ["n", 7],
+      ["e", 3],
+      ["s", 7],
+      ["w", 10],
+    ] as const) {
+      pose.y = body.fallY(way);
+      body.draw(pose, DIRS.indexOf(way));
+      // The frames of the facing it fell in: DIRS is ANIM_DIRS's straight ones, in order.
+      expect(body.sprite.texture, way).toBe(death[DIRS.indexOf(way)]?.[1]);
+      expect(body.sprite.position, way).toMatchObject({ x: T / 2, y: T - FEET_LINE + 2 + y });
+    }
     // An atlas that does not say where the body rests: it falls in place.
-    expect(new CreatureBody(hero(), T).fallY).toBe(0);
+    expect(new CreatureBody(hero(), T).fallY("e")).toBe(0);
+  });
+
+  it("draws a death that has only south frames with them, whatever way it fell", () => {
+    // A hand-made monster: its fall is drawn facing south; to the north and the west the
+    // pose mirrors it (packages/renderer fallArt), the frames are the same.
+    const south = [tex(64, 64), tex(64, 64)];
+    const base = hero();
+    const meta: AnimMeta = {
+      ...(base.meta as AnimMeta),
+      rest: 9,
+      actions: { ...base.meta?.actions, death: { frames: 2, ms: 100, dirs: ["s"] } },
+    };
+    // clips.ts fills every facing of a death with the south frames.
+    const death = DIRS.map(() => south);
+    const body = new CreatureBody({ ...base, meta, frames: { ...base.frames, death } }, T);
+    const pose = newPose();
+    pose.action = "death";
+    pose.frame = 1;
+    for (const way of ["n", "e", "s", "w"] as const) {
+      expect(body.fallY(way), way).toBe(7);
+      pose.scaleX = way === "n" || way === "w" ? -1 : 1;
+      body.draw(pose, DIRS.indexOf(way));
+      expect(body.sprite.texture, way).toBe(south[1]);
+      expect(body.sprite.scale.x, way).toBe(pose.scaleX);
+    }
   });
 
   it("tips a single image over onto the pixels of its corpse (spritegen tipOver)", () => {

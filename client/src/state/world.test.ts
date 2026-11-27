@@ -975,6 +975,52 @@ describe('minimap colours (docs/02 "Minimapa")', () => {
     body(300, "Stranger");
     expect(w.remainsLaid.at(-1)?.key).toBe("40@body_male");
   });
+  it("a body is of the sex the server says and lies the way it fell (docs/05 Restos)", () => {
+    const w = entered();
+    const body = (at: number, mods: Record<string, unknown>): void =>
+      w.apply(
+        {
+          case: "tileUpdate",
+          value: {
+            $typeName: "game.v1.TileUpdate",
+            pos: { $typeName: "game.v1.Position", x: 101, y: 201, z: 7 },
+            tile: create(TileSchema, {
+              items: [create(ItemStackSchema, { itemId: 40, mods })],
+            }),
+          },
+        },
+        at,
+      );
+    // Never seen alive: the server's word is enough.
+    body(100, { bodyOf: "Stranger", bodySex: "female", facing: Direction.WEST });
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@body_female/w");
+    // Seen alive as a man: the server still has the last word.
+    w.apply(
+      {
+        case: "creatureAppear",
+        value: {
+          creature: create(CreatureSchema, {
+            id: 31,
+            kind: CreatureKind.PLAYER,
+            name: "Brand",
+            pos: { x: 102, y: 200, z: 7 },
+            look: { sex: "male", body: "sturdy" },
+          }),
+        } as never,
+      },
+      0,
+    );
+    body(200, { bodyOf: "Brand", bodySex: "female", facing: Direction.NORTH });
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@body_female/n");
+    // An older server says neither: the sex seen alive, lying facing south.
+    body(300, { bodyOf: "Brand" });
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@body_male");
+    // A monster's remains carry the way too; a diagonal lies east or west.
+    body(400, { remainsOf: "wolf", facing: Direction.EAST });
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@wolf/e");
+    body(500, { remainsOf: "wolf", facing: Direction.SOUTH });
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@wolf");
+  });
   it("a tile update in view changes the remembered colour (a door, a felled tree)", () => {
     const w = entered();
     w.apply(

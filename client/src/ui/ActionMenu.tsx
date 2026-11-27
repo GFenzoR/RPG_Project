@@ -213,8 +213,12 @@ export function ActionMenu(props: {
   // Read when the click happens, not when the menu was drawn: the press that arms it comes
   // right before its click, maybe before any new render.
   const counts = (e: MouseEvent): boolean => menuClickCounts(game?.menuPressed ?? false, e.detail);
-  // The remains of a monster show its own corpse (state/corpse-art.ts), fitted to 64 px.
-  const corpse = card?.remainsOf ? game?.spriteIcon?.(corpseSprite(card.remainsOf)) : undefined;
+  // Remains show their own corpse, fallen the way it lies on the map (state/corpse-art.ts;
+  // the south one from an atlas without the four), fitted to 64 px.
+  const corpse = card?.corpse
+    ? (game?.spriteIcon?.(corpseSprite(card.corpse.who, card.corpse.dir)) ??
+      game?.spriteIcon?.(corpseSprite(card.corpse.who)))
+    : undefined;
   const icon = corpse ?? (card ? game?.itemIcon?.(card.itemId) : undefined);
   const stack = menu.stack ?? 1;
   return (

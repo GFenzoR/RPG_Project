@@ -49,6 +49,8 @@ import {
   startAttack,
   fallMs,
   startDeath,
+  dirOf,
+  fallDir,
   startHit,
   startVanish,
   strideOf,
@@ -155,13 +157,15 @@ import type { BubbleAnchor } from "./bubble-layer.ts";
 import { admitSpeech } from "./bubbles.ts";
 import type { BubbleStyle } from "./bubbles.ts";
 import {
-  corpseSprite,
+  corpseSpriteIn,
+  keyFallDir,
   mapItemArt,
   mapItemId,
   mapItemTexture,
   parseMapItemKey,
 } from "../state/corpse-art.ts";
 import { CorpseVeil, settle } from "./death-fall.ts";
+import type { FallHandle, LaidRemains } from "./death-fall.ts";
 import { skullColor } from "../state/pvp.ts";
 import { playerLook } from "./cosmetics.ts";
 import { MARK_BOX, isMarkArt, markSprite } from "./marks.ts";
@@ -437,6 +441,12 @@ export interface PoseTime {
    */
   fall?: number;
   veiled?: boolean;
+  /**
+   * The way it falls (s, e, n, w) and the way the remains it left lie, once the client has
+   * them (state/corpse-art.ts keyFallDir): the same, or the fall does not end on its corpse.
+   */
+  way?: string;
+  corpseWay?: string;
   /** The clip it plays: attack, shoot or cast (lunge: a single image's), death, vanish. */
   action: string;
   /** Its tile (a body falling or shimmering away: where it stays). */
@@ -808,10 +818,11 @@ export async function createGameCanvas(
   const shadowHint = (key: string): ObjectShadowHint | undefined => {
     let h = shadowHints.get(key);
     if (h === undefined) {
-      const { itemId, remainsOf } = parseMapItemKey(key);
+      const { itemId, remainsOf, dir } = parseMapItemKey(key);
       const def = content.items[itemId];
-      const corpse = remainsOf ? corpseSprite(remainsOf) : undefined;
-      const sprite = corpse !== undefined && atlas.has(corpse) ? corpse : def?.sprite;
+      const sprite =
+        (remainsOf ? corpseSpriteIn(remainsOf, dir, (s) => atlas.has(s)) : undefined) ??
+        def?.sprite;
       h = def?.shadow
         ? { ...def.shadow, foot: sprite === undefined ? 0 : atlas.foot(sprite) }
         : null;
@@ -1535,8 +1546,25 @@ export async function createGameCanvas(
     x: number;
     y: number;
     z: number;
+    /** A fall: its remains, once laid (death-fall.ts), and the remains it already follows. */
+    fall?: FallHandle;
+    follows?: LaidRemains;
   }
   const ghosts: Ghost[] = [];
+  /**
+   * A falling body falls the way its corpse lies (docs/17 "Un cadáver por dirección"): the
+   * remains the server laid say it (their key), and they may come a moment after the death.
+   * Until then it falls the way the client had it facing.
+   */
+  const followRemains = (g: Ghost): void => {
+    const laid = g.fall?.laid;
+    if (!laid || laid === g.follows) return;
+    g.follows = laid;
+    const way = keyFallDir(laid.key);
+    if (way === undefined || way === g.state.fallDir) return;
+    g.state.fallDir = way;
+    g.state.fallY = g.figure.fallY(way);
+  };
   /** How each creature drawn last frame looked and where the world had it. */
   interface Seen {
     dir: CreatureState["dir"];
@@ -1593,8 +1621,19 @@ export async function createGameCanvas(
       ghost.toX = last.x * T;
       ghost.toY = last.y * T - view.elevationAt(last.x, last.y);
       view.placeEntity(s.body, last.x, last.y);
-      startDeath(state, now, s.figure.fallY);
-      corpseVeil.begin(last.x, last.y, last.z, now, fallMs(s.figure.clips.meta));
+      // It falls the way it faced; its remains, laid by the server, have the last word.
+      const [fx, fy] = delta(last.dir);
+      const way = fallDir(fx === 0 && fy === 0 ? "s" : dirOf(fx, fy));
+      startDeath(state, now, s.figure.fallY(way), way);
+      ghost.fall = corpseVeil.begin(
+        last.x,
+        last.y,
+        last.z,
+        now,
+        fallMs(s.figure.clips.meta),
+        world.remainsLaid,
+      );
+      followRemains(ghost);
     } else startVanish(state, now);
     ghosts.push(ghost);
   };
@@ -1625,8 +1664,10 @@ export async function createGameCanvas(
       animInput.walkMs = 0;
       animInput.moveDx = 0;
       animInput.moveDy = 0;
+      const dying = !Number.isNaN(g.state.diedAt);
+      if (dying) followRemains(g);
       animate(g.state, g.figure.clips.meta, animInput, pose);
-      g.figure.draw(pose, dirIndex(animInput.dir));
+      g.figure.draw(pose, dirIndex(dying ? g.state.fallDir : animInput.dir));
       if (pose.done) dropGhost(i);
       else {
         if (shaded & 1) g.figure.castShadow(castShadows, g.body.x, g.body.y);
@@ -2459,6 +2500,8 @@ export async function createGameCanvas(
           of: fall + DEATH_SETTLE_MS,
           fall,
           veiled: corpseVeil.hides(x, y, g.z),
+          way: g.state.fallDir,
+          ...(g.fall?.laid ? { corpseWay: keyFallDir(g.fall.laid.key) ?? "s" } : {}),
           action: "death",
           x,
           y,

@@ -77,8 +77,24 @@ const content: ClientContent = {
   i18n: {},
 };
 
-const wolfRemains = { attribute: "", value: 0, refine: 0, remainsOf: "wolf", bodyOf: "" };
-const anaBody = { attribute: "", value: 0, refine: 0, remainsOf: "", bodyOf: "Ana" };
+const wolfRemains = {
+  attribute: "",
+  value: 0,
+  refine: 0,
+  remainsOf: "wolf",
+  bodyOf: "",
+  facing: 0,
+  bodySex: "",
+};
+const anaBody = {
+  attribute: "",
+  value: 0,
+  refine: 0,
+  remainsOf: "",
+  bodyOf: "Ana",
+  facing: 0,
+  bodySex: "",
+};
 
 const itemParam = (itemId: number, mods?: typeof wolfRemains): TextParam => ({
   $typeName: "game.v1.TextParam",
@@ -204,7 +220,7 @@ describe("the corpse on the map", () => {
     expect(mapItemKey(BODY, { ...anaBody, bodySex: "male" })).toBe(`${BODY}@body_male`);
     expect(mapItemKey(BODY, { ...anaBody, bodySex: "female" })).toBe(`${BODY}@body_female`);
     expect(mapItemKey(BODY, undefined)).toBe(String(BODY));
-    expect(parseMapItemKey(`${FUR}@wolf`)).toEqual({ itemId: FUR, remainsOf: "wolf" });
+    expect(parseMapItemKey(`${FUR}@wolf`)).toEqual({ itemId: FUR, remainsOf: "wolf", dir: "s" });
     expect(parseMapItemKey("48")).toEqual({ itemId: 48 });
     expect(corpseSprite("wolf")).toBe("corpses/wolf");
     expect(corpseArt("tex").anchorX).toBe(0.5);
