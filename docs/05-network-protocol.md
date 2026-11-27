@@ -1387,6 +1387,9 @@ Pasos en `data/tutorial.yaml` (`06-content-data.md`, "Tutorial"); diseño en
   `dialog.quest_updated`, `dialog.quest_kills` (`{monster} {count}/{total}`) y
   `dialog.quest_completed`, con el parámetro `content_id` `quest` (el cliente muestra
   `quest.<id>.name`).
+  Al completarse, cada recompensa se dice aparte, antes de entregarla:
+  `dialog.reward_xp` (número `amount`) y `dialog.reward_item` (un parámetro de item, que el
+  cliente muestra como `{items}`, igual que `dialog.quest_drop`).
 
 ### Minimapa (`server/internal/session/minimap.go`, pedido del dueño del 2026-11-23)
 Lo explorado vive en el servidor, por personaje (docs/02 "Minimapa"): un bit por casilla,

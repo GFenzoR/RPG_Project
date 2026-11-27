@@ -404,6 +404,10 @@ func TestSmithRingSideQuest(t *testing.T) {
 	if d.Text.Key != "npc.volcan_smith.ring_done" || !messageKeys(evs)["dialog.quest_completed"] {
 		t.Fatalf("ring: %s %v", d.Text.Key, messageKeys(evs))
 	}
+	// The ring itself is named in the chat, next to the experience.
+	if k := messageKeys(evs); !k["dialog.reward_item"] || !k["dialog.reward_xp"] {
+		t.Errorf("the ring quest did not say its rewards: %v", k)
+	}
 	s.rewarded("smith_ring", xp, money, 25000, 1500)
 	rings := h.w.ItemsForTest(s.p, "obsidian_ring")
 	if len(rings) != 1 {
