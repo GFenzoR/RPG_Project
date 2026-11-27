@@ -4207,7 +4207,11 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
     return g.strength;
   };
   // Between two gusts nothing moves: not the crown, not its shadow.
-  await calm(tree.x, tree.y, 4000);
+  // The calm may already be there on arrival (the gusts run on the server's clock), and
+  // then the frames below came while a creature behind the crown (the druid stands north
+  // of this tree) was still in the 300 ms fade of its first frame: the settle outlasts it.
+  await calm(tree.x, tree.y, 4500);
+  await page.waitForTimeout(500);
   await shot(page, `120-wind-plaza-calm-zoom${scale}`);
   expect(await frames(crown, 5), "the crown stands still between gusts").toBe(1);
   // The gust: the crown leans and swings, the foot of the trunk stands.
