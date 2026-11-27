@@ -109,6 +109,11 @@ export interface TileArt<T> {
   particles?: ParticleKind;
   /** A decal on its tile's ground (TileMeta flat): drawn with the grounds. */
   flat?: true;
+  /**
+   * Drawn at this share of its size, centred on its tile (absent: 1). The client sets it
+   * for the things a character carries, so a sword on the floor is not as big as a person.
+   */
+  scale?: number;
 }
 
 /** Share of the tiles that keep a ground's main look (ART-4: about 70 %). */
