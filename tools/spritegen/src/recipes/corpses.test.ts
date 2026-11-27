@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createImage } from "@rpg/spritepack";
+import { tippedRest, createImage } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { describe, expect, it } from "vitest";
 import { checkPaths, RECIPES, recipesAt, render, spriteFile } from "../index.ts";
@@ -170,5 +170,24 @@ describe("monster corpses", () => {
         }
     expect(maxX - minX + 1).toBe(28); // lying along x now
     expect(minY).toBeGreaterThanOrEqual(32 - 20); // in the bottom 3/5
+  });
+
+  it("rest where the atlas says a tipped image does (the client's fall ends there)", () => {
+    // atlas.json `rest` (tools/spritepack tippedRest) is measured without drawing the
+    // tipped image: it must be the rows this recipe really leaves under it.
+    for (const img of [
+      block(32, 32, 14, 17, 4, 31),
+      block(32, 32, 3, 21, 9, 30),
+      block(32, 32, 0, 31, 0, 31),
+      block(64, 64, 20, 50, 10, 63),
+      block(48, 48, 5, 6, 40, 41),
+    ]) {
+      const fallen = tipOver(img);
+      let low = -1;
+      for (let y = 0; y < fallen.height; y++)
+        for (let x = 0; x < fallen.width; x++)
+          if ((fallen.data[(y * fallen.width + x) * 4 + 3] ?? 0) > 0) low = y;
+      expect(tippedRest(img)).toBe(fallen.height - 1 - low);
+    }
   });
 });

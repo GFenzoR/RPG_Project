@@ -7,8 +7,10 @@ import {
   measureFrames,
   measureStance,
   recolorImage,
+  restOf,
   specColumns,
   stancesOf,
+  tippedRest,
 } from "./anims.ts";
 import type { AnimMeta } from "./anims.ts";
 import { buildAtlas, legacyFrame } from "./build.ts";
@@ -245,6 +247,42 @@ describe("animation images", () => {
     expect(stancesOf("m", still, () => undefined, frame(10, 25))).toEqual({ s: [6, 10, 16] });
     expect(stancesOf("m", still, () => undefined, undefined)).toBeUndefined();
   });
+
+  it("says where the fallen body rests: the last frame of its death facing south", () => {
+    const lying = createImage(32, 32);
+    fillRect(lying, 4, 20, 24, 6, GREY); // rows 20..25: 6 rows under it
+    const standing = createImage(32, 32);
+    fillRect(standing, 13, 4, 6, 26, GREY);
+    const frames: Record<string, Image> = {
+      "m/death_s_0": standing,
+      "m/death_s_1": lying,
+      "m/death_e_1": standing,
+    };
+    const meta = {
+      actions: { death: { frames: 2, ms: 100, dirs: ["s", "e"] } },
+    } as unknown as AnimMeta;
+    expect(restOf("m", meta, (n) => frames[n], standing)).toBe(6);
+    // A fall that is not drawn facing south has no corpse made from it: nothing to say.
+    const east = { actions: { death: { frames: 2, ms: 100, dirs: ["e"] } } } as unknown as AnimMeta;
+    expect(restOf("m", east, (n) => frames[n], standing)).toBeUndefined();
+    expect(restOf("m", meta, () => undefined, standing)).toBeUndefined();
+  });
+
+  it("says where a single image rests once tipped over (a quarter turn, 3/5 as high)", () => {
+    const still = { actions: {} } as unknown as AnimMeta;
+    // A drawing up to the right edge lies on the floor: the turn puts column x on row x.
+    const full = createImage(32, 32);
+    fillRect(full, 10, 2, 22, 28, GREY);
+    expect(tippedRest(full)).toBe(0);
+    expect(restOf("m", still, () => undefined, full)).toBe(0);
+    // 10 empty columns at the right are 10 empty rows once turned, 5 once flattened.
+    const narrow = createImage(32, 32);
+    fillRect(narrow, 8, 2, 14, 28, GREY); // columns 8..21
+    expect(tippedRest(narrow)).toBe(5);
+    expect(tippedRest(createImage(32, 32))).toBeUndefined();
+    expect(tippedRest(createImage(32, 64))).toBeUndefined();
+    expect(restOf("m", still, () => undefined, undefined)).toBeUndefined();
+  });
 });
 
 describe("buildAtlas with animations", () => {
@@ -375,6 +413,7 @@ describe("buildAtlas with animations", () => {
         anchor: "br",
         foot: 16,
         stance: { s: [16, 8, 24] },
+        rest: 4,
         top: 8,
         shadow: "baked",
         facing: "left",
@@ -422,6 +461,7 @@ describe("buildAtlas with animations", () => {
       anchor: "br",
       foot: 2,
       stance: { e: [2, 8, 24], w: [2, 8, 24] },
+      rest: 4,
       top: 13,
       shadow: "baked",
       facing: "left",
@@ -565,6 +605,7 @@ describe("buildAtlas with animations", () => {
       anchor: "bc",
       foot: 4,
       stance: { n: [4, 20, 44], e: [4, 20, 44], s: [4, 20, 44], w: [4, 20, 44] },
+      rest: 4,
       top: 25,
       shadow: "ellipse",
       actions: {

@@ -100,6 +100,11 @@ export interface AnimMeta {
    * the span of what touches the ground. The shadows start there (docs/17 ART-5).
    */
   stance?: Partial<Record<AnimDir, Stance>>;
+  /**
+   * Transparent rows under its fallen body (restOf): the client lowers the body by them as
+   * it falls dead, so the fall ends on the corpse sprite (docs/17 "Muerte continua").
+   */
+  rest?: number;
   actions: Partial<
     Record<
       AnimAction,
@@ -687,6 +692,53 @@ export function stancesOf(
     if (st) out.s = st;
   }
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** Transparent rows under the lowest opaque pixel of `img` (undefined: it is empty). */
+function rowsUnder(img: Image): number | undefined {
+  for (let y = img.height - 1; y >= 0; y--)
+    for (let x = 0; x < img.width; x++)
+      if ((img.data[(y * img.width + x) * 4 + 3] ?? 0) > 0) return img.height - 1 - y;
+  return undefined;
+}
+
+/**
+ * Transparent rows under a square single image once it is tipped over as its corpse is
+ * (tools/spritegen recipes/corpses.ts tipOver: a quarter turn clockwise, then flattened to
+ * 3/5 of its height against the bottom). The turn puts column x on row x, and the
+ * flattening keeps, for each of its rows, one row of the turned image: the same rows are
+ * walked here, without drawing anything. Undefined: not square, or empty.
+ */
+export function tippedRest(img: Image): number | undefined {
+  const n = img.width;
+  if (n !== img.height || n === 0) return undefined;
+  const h = Math.max(1, Math.round((n * 3) / 5));
+  for (let y = h - 1; y >= 0; y--) {
+    const x = Math.min(n - 1, Math.floor((y * n) / h));
+    for (let row = 0; row < n; row++)
+      if ((img.data[(row * n + x) * 4 + 3] ?? 0) > 0) return h - 1 - y;
+  }
+  return undefined;
+}
+
+/**
+ * Where the fallen body of an animated (or hinted) sprite rests, as transparent rows under
+ * it: the last frame of its death facing south (what its corpse is made from), or, with no
+ * death clip, its single image tipped over. Undefined when neither can be measured.
+ */
+export function restOf(
+  sprite: string,
+  meta: AnimMeta,
+  frame: (name: string) => Image | undefined,
+  single: Image | undefined,
+): number | undefined {
+  const death = meta.actions.death;
+  if (death) {
+    if (!death.dirs.includes("s") || death.frames < 1) return undefined;
+    const last = frame(frameName(sprite, "death", "s", death.frames - 1));
+    return last ? rowsUnder(last) : undefined;
+  }
+  return single ? tippedRest(single) : undefined;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

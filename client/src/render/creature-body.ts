@@ -34,9 +34,11 @@ import {
   SHADOW_H,
   SHADOW_W,
   actionDir,
+  fallShift,
   stanceOf,
+  tipPlacement,
 } from "@rpg/renderer";
-import type { AnimDir, AnimMeta, LayerSlot, Pose } from "@rpg/renderer";
+import type { AnimDir, AnimMeta, LayerSlot, Pose, TipPlacement } from "@rpg/renderer";
 import type { ShadowSink } from "./cast-shadows.ts";
 import { clipTexture, dirIndex, headLift } from "./clips.ts";
 import type { ClipSet } from "./clips.ts";
@@ -52,6 +54,9 @@ const shadowShape = (): GraphicsContext =>
   (shadowContext ??= new GraphicsContext()
     .ellipse(0, 0, SHADOW_W / 2, SHADOW_H / 2)
     .fill({ color: 0x000000, alpha: SHADOW_ALPHA }));
+
+/** South in ANIM_DIRS: the facing every death is drawn in. */
+const SOUTH = ANIM_DIRS.indexOf("s");
 
 /** A body drawn fainter than this casts no shadow and stands on its contact ellipse. */
 export const CAST_MIN_ALPHA = 0.5;
@@ -163,6 +168,17 @@ export class CreatureBody {
   private readonly shadow: Graphics | undefined;
   private readonly baseX: number;
   private readonly baseY: number;
+  /** Its frame's height, sprite px: a single image tips over about the middle of it. */
+  private readonly frameH: number;
+  /**
+   * How far down the body moves while it falls dead, to lie where its corpse sprite does
+   * (packages/renderer fallShift): a paper doll rests on the lowest of its layers, as its
+   * corpse was composed. 0 for an atlas that does not say where the fallen body rests.
+   */
+  readonly fallY: number;
+  /** A single image falling dead is drawn tipped (Pose.tip): it casts no shadow then. */
+  private tipped = false;
+  private readonly tipAt: TipPlacement = { x: 0, y: 0, scaleX: 1, scaleY: 1, skewX: 0, skewY: 0 };
   /**
    * Where its feet are on its tile (sprite pixels from the tile's top-left): the middle of
    * the drawing across, the lowest row of its walk frames down. The living world drops
@@ -230,6 +246,13 @@ export class CreatureBody {
     this.baseX = bc ? tile / 2 : tile - w / 2;
     const foot = bc ? (meta?.foot ?? 0) : 0;
     this.baseY = bc ? tile - FEET_LINE + foot : tile;
+    this.frameH = h;
+    let rest = meta?.rest;
+    for (const l of layers) {
+      const r = l.clips.meta?.rest;
+      if (r !== undefined && (rest === undefined || r < rest)) rest = r;
+    }
+    this.fallY = fallShift(meta, rest);
     this.feetX = this.baseX;
     this.feetY = this.baseY - foot;
     // A paper doll stands on its body and on what it wears on its feet (a boot's sole);
@@ -356,6 +379,9 @@ export class CreatureBody {
 
   /** Draws `pose` facing `dir` (index in ANIM_DIRS). */
   draw(pose: Pose, dir: number): void {
+    // A death is drawn facing south, the facing its corpse was made from (a body with a
+    // fall in every facing too: it must end on the corpse).
+    if (pose.action === "death") dir = SOUTH;
     const alpha = pose.alpha * this.opacity;
     this.drawnAlpha = alpha;
     this.drawnX = pose.x;
@@ -403,7 +429,7 @@ export class CreatureBody {
    * hop (the pose's lift is left out); a body fading away below half casts none.
    */
   castShadow(into: ShadowSink, x: number, y: number): void {
-    if (this.drawnAlpha < CAST_MIN_ALPHA) return;
+    if (this.drawnAlpha < CAST_MIN_ALPHA || this.tipped) return;
     const fx = x + this.baseX + this.drawnX;
     const foot = this.footingOf(this.drawnDir).foot;
     const fy = y + this.baseY - foot;
@@ -430,9 +456,21 @@ export class CreatureBody {
   }
 
   private place(sp: Sprite, pose: Pose, tint: number, alpha: number): void {
-    sp.position.set(this.baseX + pose.x, this.baseY + pose.y);
-    sp.scale.set(pose.scaleX, pose.scaleY);
-    sp.skew.x = pose.skewX;
+    if (pose.tip !== 0) {
+      // Tipping over (a single image's fall): turned about the middle of its frame, then
+      // flattened against the floor, as its corpse was drawn.
+      const at = tipPlacement(pose.tip, pose.scaleY, this.frameH, this.tipAt);
+      sp.position.set(this.baseX + pose.x + at.x, this.baseY + pose.y + at.y);
+      sp.scale.set(at.scaleX * pose.scaleX, at.scaleY);
+      sp.skew.set(at.skewX, at.skewY);
+      this.tipped = true;
+    } else {
+      sp.position.set(this.baseX + pose.x, this.baseY + pose.y);
+      sp.scale.set(pose.scaleX, pose.scaleY);
+      if (this.tipped) sp.skew.y = 0;
+      sp.skew.x = pose.skewX;
+      this.tipped = false;
+    }
     sp.alpha = alpha;
     sp.tint = pose.flash ? FLASH_TINT : pose.shimmer ? SHIMMER_TINT : tint;
   }

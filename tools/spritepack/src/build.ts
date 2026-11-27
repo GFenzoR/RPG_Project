@@ -13,6 +13,7 @@ import {
   gaitHints,
   layerOver,
   measureFrames,
+  restOf,
   stancesOf,
   mirrorImage,
   recolorImage,
@@ -513,6 +514,14 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
       resolved.get(target)?.image,
     );
     if (stance) meta.stance = stance;
+    // Where its fallen body rests: the client's fall ends on the corpse sprite.
+    const rest = restOf(
+      name,
+      meta,
+      (frame) => resolved.get(frame)?.image,
+      aliases.has(name) ? undefined : resolved.get(name)?.image,
+    );
+    if (rest !== undefined) meta.rest = rest;
   }
   index.anims = anims;
   index.tiles = tiles;
