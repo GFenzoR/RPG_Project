@@ -2288,6 +2288,15 @@ body.picking-item .map-hint {
   border-color: var(--ui-ok);
   color: #8fd07a;
 }
+.party .tag.blocked {
+  border-color: var(--ui-gold-700);
+  color: var(--muted);
+}
+.party .party-block {
+  margin: -0.2rem 0 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ui-gold-300);
+}
 .party .mname {
   font-weight: 500;
 }

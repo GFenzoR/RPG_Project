@@ -123,6 +123,28 @@ el punto 5:
     mientras alguien mire.
   - **El desgaste del pasto** (senderos) sigue recuperándose a la vista: es gradual y no
     es un objeto que reaparece; no se tocó.
+- **Compartir experiencia con hasta 5 niveles de diferencia y quests compartidas (hecho,
+  rama `feat/party-share`; el dueño el 2026-11-26: "compartir experiencia debiese ser
+  aunque haya máximo 5 niveles de diferencia; ahora al parecer hay que ser del mismo
+  nivel" y "si estás compartiendo experiencia también se avanzan las quests de ambos";
+  docs/02 "Grupos", docs/05 "Grupos"):** por qué parecía "mismo nivel": la regla era 70 %
+  del nivel más alto o hasta 3 niveles, y a niveles bajos el porcentaje no ayuda (3 con 7
+  es 43 %, 4 de diferencia: no compartían); además el indicador decía una sola frase para
+  todo ("hace falta otro miembro cerca que haya contribuido y en rango de nivel"), también
+  cuando lo único que faltaba era que el otro pegara un golpe. Ahora
+  `party.level_gap_always` es 5, la ventana dice la razón de cada miembro y la del propio
+  jugador (`PartyMember.share_block`), y la muerte cuenta para las quests de matar de
+  quienes comparten esa experiencia. Queda:
+  - **Mirarlo en el juego:** en la ventana de grupo, recién formado, cada nombre con "No
+    comparte: no está peleando" y la frase de arriba; tras pelear los dos, "Comparte" y el
+    bonus. Las etiquetas largas en la ventana angosta del teléfono no se miraron.
+  - Los textos `client.party.help` y `client.party.block_you.level` citan el 5 y el 70 %
+    de `balance.yaml`: si cambian los números, cambiar los textos (lo dice un comentario
+    en el YAML; no hay test que lo ate).
+  - El objetivo de matar se comparte solo con la experiencia compartida prendida y con las
+    mismas condiciones (hay que haber peleado en los últimos 75 s): quien solo acompaña
+    sin pelear no suma. Si el dueño quiere que baste con estar cerca, es cambiar
+    `questSharers`.
 - **Comida de monstruos (hecho, rama `feat/animal-food`; el dueño: "algunos monstruos deberían
   botar comida, especialmente los animales")**: seis comidas nuevas y 13 monstruos que las
   sueltan (docs/02 "Oficios", Cocina). Pendiente: sprites propios; por ahora reusan los

@@ -2024,7 +2024,13 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     // Shared experience is on from the start (docs/02 "Grupos"), but nobody fought yet:
     // no sharing, no bonus, and the panel says why.
     await expect(page.getByTestId("party-shared")).toContainText(
-      "Experiencia compartida: activada, sin reparto",
+      "Experiencia compartida: activada, pero ahora nadie comparte",
+    );
+    // ...and what to do about it: the player's own reason and a tag next to each name.
+    await expect(page.getByTestId("party-block")).toContainText("Todavía no compartes: pégale");
+    await expect(page.getByTestId("party-member-block")).toHaveCount(2);
+    await expect(page.getByTestId("party-member-block").first()).toContainText(
+      "No comparte: no está peleando",
     );
     await expect(page.getByTestId("party-bonus")).toHaveCount(0);
     await expect(page.getByTestId("game-log")).toContainText("El grupo comparte la experiencia");
@@ -2037,7 +2043,7 @@ test("T3.3: two players form a party from the battle list and see the panel", as
   );
   await leadPage.getByTestId("party-share").click();
   await expect(matePage.getByTestId("party-shared")).toContainText(
-    "Experiencia compartida: activada, sin reparto",
+    "Experiencia compartida: activada, pero ahora nadie comparte",
   );
   await expect(matePage.getByTestId("game-log")).toContainText(
     "El líder activó la experiencia compartida.",

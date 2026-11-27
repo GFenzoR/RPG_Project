@@ -8,7 +8,8 @@ import type { JSX } from "preact";
 import type { Game, GameUi } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { SharedExperience } from "@rpg/protocol";
-import { sharedKey, sharingCount } from "../state/party.ts";
+import type { ShareBlock } from "@rpg/protocol";
+import { blockKey, sharedKey, sharingCount } from "../state/party.ts";
 
 const SHARED_OFF = SharedExperience.OFF;
 
@@ -99,6 +100,16 @@ export function PartyInvite(props: {
   );
 }
 
+/** The tag that says why a member does not share experience, if it does not. */
+function blockTag(t: Translate, block: ShareBlock): JSX.Element | null {
+  const key = blockKey(block);
+  return key ? (
+    <span class="tag blocked" data-testid="party-member-block">
+      {t(key)}
+    </span>
+  ) : null;
+}
+
 export function PartyPanel(props: {
   t: Translate;
   game: Game | undefined;
@@ -107,6 +118,8 @@ export function PartyPanel(props: {
   const { t, ui } = props;
   const party = ui.party;
   const leader = party?.leaderId === ui.selfId;
+  const self = party?.members.find((m) => m.id === ui.selfId);
+  const ownBlock = self && blockKey(self.block, true);
   return (
     <section class="party" data-testid="party-panel" aria-label={t("client.party.title")}>
       <h2>{t("client.party.title")}</h2>
@@ -125,6 +138,11 @@ export function PartyPanel(props: {
           <p class={`shared shared-${party.shared}`} data-testid="party-shared">
             {t(sharedKey(party.shared))}
           </p>
+          {ownBlock && (
+            <p class="party-block" data-testid="party-block">
+              {t(ownBlock)}
+            </p>
+          )}
           {party.bonusPercent > 0 && (
             <p class="party-bonus" data-testid="party-bonus" data-percent={party.bonusPercent}>
               {t("client.party.bonus", {
@@ -140,6 +158,7 @@ export function PartyPanel(props: {
                   {m.name}
                   {m.id === party.leaderId && <span class="tag">{t("client.party.leader")}</span>}
                   {m.sharing && <span class="tag sharing">{t("client.party.sharing")}</span>}
+                  {blockTag(t, m.block)}
                 </span>
                 <span class="mlevel">
                   {t(`vocation.${m.vocation}.name`)} · {t("client.party.level", { level: m.level })}
