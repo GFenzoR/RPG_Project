@@ -181,13 +181,14 @@ type Share struct {
 	Amount int
 }
 
-// ShareForTest pays xp of a kill at pos by shares, as killMonster does (loop goroutine).
-func (w *World) ShareForTest(ctx *game.TickContext, pos world.Pos, xp int64, shares ...Share) {
+// ShareForTest pays xp of a kill at pos by shares, as killMonster does (loop goroutine),
+// and returns who else gets its quest credit.
+func (w *World) ShareForTest(ctx *game.TickContext, pos world.Pos, xp int64, shares ...Share) []*Player {
 	ds := make([]damageShare, len(shares))
 	for i, s := range shares {
 		ds[i] = damageShare{player: s.P.id, amount: s.Amount}
 	}
-	w.shareExperience(ctx.Tick, pos, xp, ds)
+	return w.shareExperience(ctx.Tick, pos, xp, ds)
 }
 
 // ContributeForTest marks that p just helped a fight (loop goroutine).
@@ -697,3 +698,6 @@ func (w *World) ReachContainsForTest(r *content.Reach, pos world.Pos) bool {
 func SetsFlagForTest(npc *content.NPC, key string, value int64) bool {
 	return setsFlag(npc, key, value)
 }
+
+// NameForTest is the character name.
+func (p *Player) NameForTest() string { return p.name }

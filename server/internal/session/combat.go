@@ -412,8 +412,7 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 	}
 	// The members that share this kill's experience also count it for their quests
 	// (kill objectives only: the loot, and so what a collect objective asks, is one).
-	partners := w.questSharers(ctx.Tick, m.pos, m.damage)
-	w.shareExperience(ctx.Tick, m.pos, def.Experience, m.damage)
+	partners := w.shareExperience(ctx.Tick, m.pos, def.Experience, m.damage)
 	for _, s := range m.damage {
 		if p := w.playerByID(s.player); p != nil {
 			w.questKill(p, def.ID)

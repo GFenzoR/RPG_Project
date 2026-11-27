@@ -372,25 +372,28 @@ func (w *World) contributed(now game.Tick, p *Player) bool {
 	return p.contributedAt > 0 && now-p.contributedAt < w.contribFor
 }
 
-// sharers returns the members of pt that share a kill at pos (or, with near false, the
-// ones that qualify wherever they are, among those viewer sees: the indicator). A member
-// shares if it is active, close enough (near) and its level is at least level_range_pct %
+// shareNear reports whether a member at at is close enough to a kill at pos to share
+// it: on its floor and within share_distance.
+func (w *World) shareNear(at, pos world.Pos) bool {
+	return at.Z == pos.Z && chebyshev(at, pos) <= w.cfg.Balance.Party.ShareDistance
+}
+
+// sharers returns the members of pt that share a kill at pos. The indicator of the
+// party window asks it with the position of who looks: who would share a kill next to
+// that member. A member shares if it is active, close enough (shareNear) and its level
+// is at least level_range_pct %
 // of the highest of the members that are active and close, or at most level_gap_always
 // below it (anti-carry; alts count for the highest level too). Two characters of one
 // account are one sharer: the first in join order that passed the level filter, so a
 // low alt never costs its main the bonus; alts never grow the bonus and the other keeps
 // its own damage share. A character without an account (id 0: hand-built test or bot
 // characters) is never merged with another. Fewer than two sharers = no sharing.
-func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player, dst []*Player) []*Player {
-	near := viewer == nil
+func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, dst []*Player) []*Player {
 	pc := w.cfg.Balance.Party
 	dst = dst[:0]
 	top := 0
 	for _, o := range pt.members {
-		if !near && o != viewer && !viewer.Knows(o.id) {
-			continue
-		}
-		if w.contributed(now, o) && o.health > 0 && (!near || o.pos.Z == pos.Z && chebyshev(o.pos, pos) <= pc.ShareDistance) {
+		if w.contributed(now, o) && o.health > 0 && w.shareNear(o.pos, pos) {
 			dst = append(dst, o)
 			top = max(top, o.level)
 		}
@@ -423,23 +426,26 @@ func sameAccount(ps []*Player, acc int64) bool {
 	return false
 }
 
-// shareBlock tells why o, a member of pt that v sees and that is not among the sharers v
-// sees, does not share: the first reason of sharers that leaves it out. Information
-// audit: every reason comes from what v already sees of o (health, level, whether it
-// fights), but that two characters are of one account is told only to that account;
-// anyone else gets no reason for the second one.
+// shareBlock tells why o, a member of pt, is not among the sharers of a kill next to v
+// (sharers at v.pos): the first reason of sharers that leaves it out. Information
+// audit: a reason says no more than the experience v gets from a kill already does
+// (who shared it), but that two characters are of one account is told only to that
+// account; anyone else gets no reason for the second one.
 func (w *World) shareBlock(now game.Tick, pt *party, v, o *Player) pb.ShareBlock {
+	if !w.shareNear(o.pos, v.pos) {
+		return pb.ShareBlock_SHARE_BLOCK_FAR
+	}
 	if o.health <= 0 {
 		return pb.ShareBlock_SHARE_BLOCK_DEAD
 	}
 	if !w.contributed(now, o) {
 		return pb.ShareBlock_SHARE_BLOCK_IDLE
 	}
-	// The same candidates as sharers with a viewer: active members that v sees.
+	// The same candidates as sharers at v.pos: active members close to v.
 	pc := w.cfg.Balance.Party
 	top := 0
 	for _, q := range pt.members {
-		if (q == v || v.Knows(q.id)) && q.health > 0 && w.contributed(now, q) {
+		if w.shareNear(q.pos, v.pos) && q.health > 0 && w.contributed(now, q) {
 			top = max(top, q.level)
 		}
 	}
@@ -451,7 +457,7 @@ func (w *World) shareBlock(now game.Tick, pt *party, v, o *Player) pb.ShareBlock
 			if q == o {
 				break
 			}
-			if q.accountID == o.accountID && (q == v || v.Knows(q.id)) && q.health > 0 && w.contributed(now, q) &&
+			if q.accountID == o.accountID && w.shareNear(q.pos, v.pos) && q.health > 0 && w.contributed(now, q) &&
 				pc.InLevelRange(q.level, top) {
 				if v.accountID != o.accountID {
 					return pb.ShareBlock_SHARE_BLOCK_UNSPECIFIED
@@ -463,59 +469,44 @@ func (w *World) shareBlock(now game.Tick, pt *party, v, o *Player) pb.ShareBlock
 	return pb.ShareBlock_SHARE_BLOCK_ALONE
 }
 
-// questSharers returns the players that get quest credit for a kill at pos besides
-// those that damaged the monster (shares): the members that share experience with one
-// of them right now. The eligibility is that of the shared pot (sharers: party.shared,
-// alive, on the floor and within share_distance, contributed, level range, one per
-// account), so a member that is far, dead, idle or out of level range gets nothing, and
-// nobody is listed twice. Call it before the kill pays its experience: a level up must
-// not change who shared.
-func (w *World) questSharers(now game.Tick, pos world.Pos, shares []damageShare) []*Player {
-	var out []*Player
-	var seen []*party
-	for _, s := range shares {
-		p := w.playerByID(s.player)
-		if p == nil || p.party == nil || !p.party.shared || slices.Contains(seen, p.party) {
-			continue
-		}
-		sh := w.sharers(now, p.party, pos, nil, nil)
-		if !slices.Contains(sh, p) {
-			// p does not share (too far, out of level range): another damager of its
-			// party may still do.
-			continue
-		}
-		seen = append(seen, p.party)
-		for _, o := range sh {
-			if !slices.Contains(out, o) && !slices.ContainsFunc(shares, func(d damageShare) bool { return d.player == o.id }) {
-				out = append(out, o)
-			}
-		}
-	}
-	return out
+// sharePot is the experience the members of one party pool from a kill.
+type sharePot struct {
+	pt      *party
+	sharers []*Player
+	xp      int64
 }
 
 // shareExperience pays def experience xp of a kill at pos, split by damage (shares).
 // The shares of members of a sharing party (party.shared and at least two sharers) go
 // to a pot that grows by the bonus of its number of sharers (party.bonus_pct_by_sharers)
 // and is split equally among them; every other share pays its owner, as without a party.
-func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares []damageShare) {
+//
+// It returns the players that get quest credit for the kill besides those that damaged
+// the monster: the sharers of a pot one of its sharers hit into. The eligibility is that
+// of the pot (sharers: party.shared, alive, on the floor and within share_distance,
+// contributed, level range, one per account), so a member that is far, dead, idle or out
+// of level range gets nothing, and nobody is listed twice. The pots are worked out once,
+// before anything is paid: a level up never changes who shared, and the experience and
+// the quest credit cannot disagree.
+func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares []damageShare) []*Player {
 	// Every share counts toward the total, online or not: the share of a player that
 	// left the world (logout, re-login with a new id) is lost, never handed to the rest.
 	total := 0
 	for _, s := range shares {
 		total += s.amount
 	}
-	if total == 0 {
-		return
+	// One pot per sharing party of the players that hit, in the order of shares.
+	var pots []sharePot
+	for _, s := range shares {
+		p := w.playerByID(s.player)
+		if p == nil || p.party == nil || !p.party.shared ||
+			slices.ContainsFunc(pots, func(pt sharePot) bool { return pt.pt == p.party }) {
+			continue
+		}
+		pots = append(pots, sharePot{pt: p.party, sharers: w.sharers(now, p.party, pos, nil)})
 	}
-	type pot struct {
-		pt      *party
-		sharers []*Player
-		xp      int64
-	}
-	var pots []pot
 	potOf := func(p *Player) int {
-		if p.party == nil || !p.party.shared {
+		if p.party == nil {
 			return -1
 		}
 		for i := range pots {
@@ -526,12 +517,26 @@ func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares [
 				return -1
 			}
 		}
-		sh := w.sharers(now, p.party, pos, nil, nil)
-		pots = append(pots, pot{pt: p.party, sharers: sh})
-		if slices.Contains(sh, p) {
-			return len(pots) - 1
-		}
 		return -1
+	}
+	hit := func(o *Player) bool {
+		return slices.ContainsFunc(shares, func(d damageShare) bool { return d.player == o.id })
+	}
+	var partners []*Player
+	for _, pt := range pots {
+		// A pot none of whose sharers hit the monster (its damager is too far or out of
+		// level range) shares nothing. A player is in one party, so no one is listed twice.
+		if !slices.ContainsFunc(pt.sharers, hit) {
+			continue
+		}
+		for _, o := range pt.sharers {
+			if !hit(o) {
+				partners = append(partners, o)
+			}
+		}
+	}
+	if total == 0 {
+		return partners
 	}
 	for _, s := range shares {
 		p := w.playerByID(s.player)
@@ -555,6 +560,7 @@ func (w *World) shareExperience(now game.Tick, pos world.Pos, xp int64, shares [
 			}
 		}
 	}
+	return partners
 }
 
 // ---- updates --------------------------------------------------------------------
@@ -579,9 +585,11 @@ func (w *World) flushParties(now game.Tick) {
 
 // sendParty sends v its view of pt if it differs from the last one (or pt is dirty).
 // Information audit: of the members v does not see, only name, vocation, level and
-// island travel. Health, mana, "sharing" (alive and fighting) and the indicator are
-// computed from the members v sees. Level and island do travel and may change after a
-// far death (experience loss) or level up; that is accepted.
+// island travel, and whether each would share a kill next to v ("sharing", or why not:
+// shareBlock), which is what the experience of v's kills already tells: a member that
+// is not on v's floor within share_distance is only FAR. Health and mana are of the
+// members v sees. Level and island do travel and may change after a far death
+// (experience loss) or level up; that is accepted.
 func (w *World) sendParty(now game.Tick, pt *party, v *Player) {
 	changed := pt.dirty || len(v.partyView) != len(pt.members)
 	// view reuses v.partyView's array: element i is compared before it is overwritten.
@@ -589,21 +597,20 @@ func (w *World) sendParty(now game.Tick, pt *party, v *Player) {
 	sharing := 0
 	w.partyBuf = w.partyBuf[:0]
 	if pt.shared {
-		w.partyBuf = w.sharers(now, pt, world.Pos{}, v, w.partyBuf)
+		w.partyBuf = w.sharers(now, pt, v.pos, w.partyBuf)
 	}
 	for i, o := range pt.members {
 		pv := partyView{id: o.id, level: o.level, inView: o == v || v.Knows(o.id), island: w.islandBuf[i]}
 		if pv.inView {
 			pv.health = healthPercent(o.health, o.maxHealth)
 			pv.mana = healthPercent(o.mana, o.maxMana)
-			pv.sharing = pt.shared && slices.Contains(w.partyBuf, o)
-			if pv.sharing {
+		}
+		if pt.shared {
+			if pv.sharing = slices.Contains(w.partyBuf, o); pv.sharing {
 				sharing++
-			} else if pt.shared {
+			} else {
 				pv.block = w.shareBlock(now, pt, v, o)
 			}
-		} else if pt.shared {
-			pv.block = pb.ShareBlock_SHARE_BLOCK_FAR
 		}
 		if !changed && (i >= len(v.partyView) || v.partyView[i] != pv) {
 			changed = true
