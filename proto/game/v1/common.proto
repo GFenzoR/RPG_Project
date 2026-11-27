@@ -96,6 +96,16 @@ message ItemMods {
   uint32 refine = 3;
   string remains_of = 4;
   string body_of = 5;
+  // Remains only (remains_of or body_of): the way the creature faced when it died, NORTH,
+  // EAST, SOUTH or WEST (the server turns a diagonal into EAST or WEST). The client draws
+  // the corpse fallen that way and plays the fall toward it (docs/05 "Restos"). It stays
+  // with the remains when they are dragged. UNSPECIFIED (a server from before it, or an
+  // item that is not remains): the client draws it fallen facing south.
+  Direction facing = 6;
+  // A player's body (body_of): the sex of data/looks.yaml `sexes` its owner had when it
+  // died; the client draws the body of a woman or a man. Empty (an older server): the
+  // client falls back on the sex it saw that player alive with, a man's if it never did.
+  string body_sex = 7;
 }
 
 // LocalizedText is player-visible text sent as an i18n key plus parameters

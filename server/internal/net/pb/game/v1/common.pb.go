@@ -659,12 +659,22 @@ func (x *ItemStack) GetMods() *ItemMods {
 // is ("body of <player>"). The server sets them when it makes the remains; a client never
 // sends them as a choice, only back as part of the item it means.
 type ItemMods struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Attribute     string                 `protobuf:"bytes,1,opt,name=attribute,proto3" json:"attribute,omitempty"`
-	Value         int32                  `protobuf:"varint,2,opt,name=value,proto3" json:"value,omitempty"`
-	Refine        uint32                 `protobuf:"varint,3,opt,name=refine,proto3" json:"refine,omitempty"`
-	RemainsOf     string                 `protobuf:"bytes,4,opt,name=remains_of,json=remainsOf,proto3" json:"remains_of,omitempty"`
-	BodyOf        string                 `protobuf:"bytes,5,opt,name=body_of,json=bodyOf,proto3" json:"body_of,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Attribute string                 `protobuf:"bytes,1,opt,name=attribute,proto3" json:"attribute,omitempty"`
+	Value     int32                  `protobuf:"varint,2,opt,name=value,proto3" json:"value,omitempty"`
+	Refine    uint32                 `protobuf:"varint,3,opt,name=refine,proto3" json:"refine,omitempty"`
+	RemainsOf string                 `protobuf:"bytes,4,opt,name=remains_of,json=remainsOf,proto3" json:"remains_of,omitempty"`
+	BodyOf    string                 `protobuf:"bytes,5,opt,name=body_of,json=bodyOf,proto3" json:"body_of,omitempty"`
+	// Remains only (remains_of or body_of): the way the creature faced when it died, NORTH,
+	// EAST, SOUTH or WEST (the server turns a diagonal into EAST or WEST). The client draws
+	// the corpse fallen that way and plays the fall toward it (docs/05 "Restos"). It stays
+	// with the remains when they are dragged. UNSPECIFIED (a server from before it, or an
+	// item that is not remains): the client draws it fallen facing south.
+	Facing Direction `protobuf:"varint,6,opt,name=facing,proto3,enum=game.v1.Direction" json:"facing,omitempty"`
+	// A player's body (body_of): the sex of data/looks.yaml `sexes` its owner had when it
+	// died; the client draws the body of a woman or a man. Empty (an older server): the
+	// client falls back on the sex it saw that player alive with, a man's if it never did.
+	BodySex       string `protobuf:"bytes,7,opt,name=body_sex,json=bodySex,proto3" json:"body_sex,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -730,6 +740,20 @@ func (x *ItemMods) GetRemainsOf() string {
 func (x *ItemMods) GetBodyOf() string {
 	if x != nil {
 		return x.BodyOf
+	}
+	return ""
+}
+
+func (x *ItemMods) GetFacing() Direction {
+	if x != nil {
+		return x.Facing
+	}
+	return Direction_DIRECTION_UNSPECIFIED
+}
+
+func (x *ItemMods) GetBodySex() string {
+	if x != nil {
+		return x.BodySex
 	}
 	return ""
 }
@@ -1039,14 +1063,16 @@ const file_game_v1_common_proto_rawDesc = "" +
 	"\tItemStack\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\rR\x06itemId\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\rR\x05count\x12%\n" +
-	"\x04mods\x18\x03 \x01(\v2\x11.game.v1.ItemModsR\x04mods\"\x8e\x01\n" +
+	"\x04mods\x18\x03 \x01(\v2\x11.game.v1.ItemModsR\x04mods\"\xd5\x01\n" +
 	"\bItemMods\x12\x1c\n" +
 	"\tattribute\x18\x01 \x01(\tR\tattribute\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value\x12\x16\n" +
 	"\x06refine\x18\x03 \x01(\rR\x06refine\x12\x1d\n" +
 	"\n" +
 	"remains_of\x18\x04 \x01(\tR\tremainsOf\x12\x17\n" +
-	"\abody_of\x18\x05 \x01(\tR\x06bodyOf\"M\n" +
+	"\abody_of\x18\x05 \x01(\tR\x06bodyOf\x12*\n" +
+	"\x06facing\x18\x06 \x01(\x0e2\x12.game.v1.DirectionR\x06facing\x12\x19\n" +
+	"\bbody_sex\x18\a \x01(\tR\abodySex\"M\n" +
 	"\rLocalizedText\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12*\n" +
 	"\x06params\x18\x02 \x03(\v2\x12.game.v1.TextParamR\x06params\"\xa3\x01\n" +
@@ -1135,13 +1161,14 @@ var file_game_v1_common_proto_depIdxs = []int32{
 	5,  // 2: game.v1.ItemLocation.container:type_name -> game.v1.ContainerSlot
 	4,  // 3: game.v1.ActionTarget.pos:type_name -> game.v1.Position
 	9,  // 4: game.v1.ItemStack.mods:type_name -> game.v1.ItemMods
-	11, // 5: game.v1.LocalizedText.params:type_name -> game.v1.TextParam
-	8,  // 6: game.v1.TextParam.item:type_name -> game.v1.ItemStack
-	7,  // [7:7] is the sub-list for method output_type
-	7,  // [7:7] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	0,  // 5: game.v1.ItemMods.facing:type_name -> game.v1.Direction
+	11, // 6: game.v1.LocalizedText.params:type_name -> game.v1.TextParam
+	8,  // 7: game.v1.TextParam.item:type_name -> game.v1.ItemStack
+	8,  // [8:8] is the sub-list for method output_type
+	8,  // [8:8] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_game_v1_common_proto_init() }
