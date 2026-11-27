@@ -867,6 +867,27 @@ enum SharedExperience {
   SHARED_EXPERIENCE_INACTIVE = 3;
 }
 
+// ShareBlock is why a member does not share experience right now, as the viewer sees it:
+// the first reason that applies, in this order. UNSPECIFIED while the member shares or
+// shared experience is off.
+enum ShareBlock {
+  SHARE_BLOCK_UNSPECIFIED = 0;
+  // The viewer does not see the member: too far (or on another floor).
+  SHARE_BLOCK_FAR = 1;
+  SHARE_BLOCK_DEAD = 2;
+  // It did not fight within balance.yaml party.contribution_ms (hit a monster, healed a
+  // member or was attacked by a monster).
+  SHARE_BLOCK_IDLE = 3;
+  // Its level is too far below the highest of the members that fight nearby
+  // (party.level_gap_always and party.level_range_pct).
+  SHARE_BLOCK_LEVEL = 4;
+  // Another character of its account already shares. Sent only to a viewer of that
+  // account: for anyone else the member has no reason (UNSPECIFIED).
+  SHARE_BLOCK_ACCOUNT = 5;
+  // It qualifies, but no other member does: sharing needs two.
+  SHARE_BLOCK_ALONE = 6;
+}
+
 // PartyUpdate is the full state of the player's party: sent when it changes (members,
 // leader, shared experience) and at most once per balance.yaml party.update_ms while
 // what a member sees of the others changes. An update with no members means the player
@@ -900,6 +921,8 @@ message PartyMember {
   string island = 8;
   // The member qualifies for shared experience right now (see SharedExperience).
   bool sharing = 9;
+  // Why not, when sharing is false and shared experience is on.
+  ShareBlock share_block = 10;
 }
 
 // PartyInvitation tells a player that inviter_id invited it to a party. It can answer

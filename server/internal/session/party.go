@@ -64,6 +64,7 @@ type partyView struct {
 	mana    uint32
 	island  string
 	sharing bool
+	block   pb.ShareBlock
 }
 
 // initParty converts balance.yaml party to ticks.
@@ -396,7 +397,7 @@ func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, viewer *Player,
 	}
 	n := 0
 	for _, o := range dst {
-		if o.level*100 < top*pc.LevelRangePct && top-o.level > pc.LevelGapAlways {
+		if !pc.InLevelRange(o.level, top) {
 			continue
 		}
 		if o.accountID != 0 && sameAccount(dst[:n], o.accountID) {
@@ -420,6 +421,77 @@ func sameAccount(ps []*Player, acc int64) bool {
 		}
 	}
 	return false
+}
+
+// shareBlock tells why o, a member of pt that v sees and that is not among the sharers v
+// sees, does not share: the first reason of sharers that leaves it out. Information
+// audit: every reason comes from what v already sees of o (health, level, whether it
+// fights), but that two characters are of one account is told only to that account;
+// anyone else gets no reason for the second one.
+func (w *World) shareBlock(now game.Tick, pt *party, v, o *Player) pb.ShareBlock {
+	if o.health <= 0 {
+		return pb.ShareBlock_SHARE_BLOCK_DEAD
+	}
+	if !w.contributed(now, o) {
+		return pb.ShareBlock_SHARE_BLOCK_IDLE
+	}
+	// The same candidates as sharers with a viewer: active members that v sees.
+	pc := w.cfg.Balance.Party
+	top := 0
+	for _, q := range pt.members {
+		if (q == v || v.Knows(q.id)) && q.health > 0 && w.contributed(now, q) {
+			top = max(top, q.level)
+		}
+	}
+	if !pc.InLevelRange(o.level, top) {
+		return pb.ShareBlock_SHARE_BLOCK_LEVEL
+	}
+	if o.accountID != 0 {
+		for _, q := range pt.members {
+			if q == o {
+				break
+			}
+			if q.accountID == o.accountID && (q == v || v.Knows(q.id)) && q.health > 0 && w.contributed(now, q) &&
+				pc.InLevelRange(q.level, top) {
+				if v.accountID != o.accountID {
+					return pb.ShareBlock_SHARE_BLOCK_UNSPECIFIED
+				}
+				return pb.ShareBlock_SHARE_BLOCK_ACCOUNT
+			}
+		}
+	}
+	return pb.ShareBlock_SHARE_BLOCK_ALONE
+}
+
+// questSharers returns the players that get quest credit for a kill at pos besides
+// those that damaged the monster (shares): the members that share experience with one
+// of them right now. The eligibility is that of the shared pot (sharers: party.shared,
+// alive, on the floor and within share_distance, contributed, level range, one per
+// account), so a member that is far, dead, idle or out of level range gets nothing, and
+// nobody is listed twice. Call it before the kill pays its experience: a level up must
+// not change who shared.
+func (w *World) questSharers(now game.Tick, pos world.Pos, shares []damageShare) []*Player {
+	var out []*Player
+	var seen []*party
+	for _, s := range shares {
+		p := w.playerByID(s.player)
+		if p == nil || p.party == nil || !p.party.shared || slices.Contains(seen, p.party) {
+			continue
+		}
+		sh := w.sharers(now, p.party, pos, nil, nil)
+		if !slices.Contains(sh, p) {
+			// p does not share (too far, out of level range): another damager of its
+			// party may still do.
+			continue
+		}
+		seen = append(seen, p.party)
+		for _, o := range sh {
+			if !slices.Contains(out, o) && !slices.ContainsFunc(shares, func(d damageShare) bool { return d.player == o.id }) {
+				out = append(out, o)
+			}
+		}
+	}
+	return out
 }
 
 // shareExperience pays def experience xp of a kill at pos, split by damage (shares).
@@ -527,7 +599,11 @@ func (w *World) sendParty(now game.Tick, pt *party, v *Player) {
 			pv.sharing = pt.shared && slices.Contains(w.partyBuf, o)
 			if pv.sharing {
 				sharing++
+			} else if pt.shared {
+				pv.block = w.shareBlock(now, pt, v, o)
 			}
+		} else if pt.shared {
+			pv.block = pb.ShareBlock_SHARE_BLOCK_FAR
 		}
 		if !changed && (i >= len(v.partyView) || v.partyView[i] != pv) {
 			changed = true
@@ -556,7 +632,7 @@ func (w *World) sendParty(now game.Tick, pt *party, v *Player) {
 	for i, o := range pt.members {
 		pv := view[i]
 		u.Members[i] = &pb.PartyMember{CreatureId: o.id, Name: o.name, Vocation: o.vocation.ID, Level: uint32(max(o.level, 0)),
-			InView: pv.inView, HealthPercent: pv.health, ManaPercent: pv.mana, Island: pv.island, Sharing: pv.sharing}
+			InView: pv.inView, HealthPercent: pv.health, ManaPercent: pv.mana, Island: pv.island, Sharing: pv.sharing, ShareBlock: pv.block}
 	}
 	v.emit(&pb.ServerMessage{Message: &pb.ServerMessage_PartyUpdate{PartyUpdate: u}})
 }

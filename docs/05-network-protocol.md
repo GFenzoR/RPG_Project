@@ -1537,10 +1537,15 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   Lo reciben el que la cobra y los miembros de su grupo; cualquier otro que mira recibe 0.
   El cliente escribe `client.party.xp_bonus` ("126 (+6 grupo)").
 - **`PartyMember{creature_id, name, vocation, level, in_view, health_percent,
-  mana_percent, island, sharing}`**. Auditoría de información: `health_percent`,
+  mana_percent, island, sharing, share_block}`**. Auditoría de información: `health_percent`,
   `mana_percent` y `sharing` valen 0/falso si `in_view` es falso (el que mira no conoce a esa criatura: fuera
   de la ventana o invisible). Fuera de vista solo viaja la isla (`""` en el mar). El mensaje
-  no tiene posición ni piso.
+  no tiene posición ni piso. `share_block` (campo 10, agregado sin romper nada) es por qué
+  no comparte un miembro con `sharing` falso mientras la experiencia compartida está
+  prendida: `FAR` (no está `in_view`; no dice nada más de él), `DEAD`, `IDLE` (no
+  contribuyó), `LEVEL`, `ACCOUNT` (otro personaje de su cuenta ya comparte; solo se le dice a un miembro de esa misma cuenta, a los demás les llega `UNSPECIFIED`: que dos personajes son de una cuenta no se revela) o `ALONE`
+  (califica, pero no hay otro); `UNSPECIFIED` si comparte o está apagada. Las razones de
+  un miembro a la vista salen de lo que quien mira ya ve o sabe (vida, nivel, si pelea).
 - **Chat:** `Say{channel: PARTY}` → `Message{kind: PARTY, speaker_id, speaker_name, text}`
   sin `pos` a todos los miembros. Sin grupo → `party.none`.
 - Mensajes de sistema: `party.invited`, `party.player_not_found` (`name`),

@@ -168,6 +168,12 @@ func (p Party) SharedEach(pot int64, n int) (each, extra int64) {
 	return each, each - pot/int64(n)
 }
 
+// InLevelRange reports whether a member of that level shares with a highest sharer of
+// level top: at most LevelGapAlways levels below it, or at least LevelRangePct % of it.
+func (p Party) InLevelRange(level, top int) bool {
+	return top-level <= p.LevelGapAlways || level*100 >= top*p.LevelRangePct
+}
+
 // MaxBonusPct is the highest bonus % of the shared pot: the last step.
 func (p Party) MaxBonusPct() int { return p.BonusPct(p.MaxMembers) }
 

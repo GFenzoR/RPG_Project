@@ -410,6 +410,9 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 			owner, best = p, s.amount
 		}
 	}
+	// The members that share this kill's experience also count it for their quests
+	// (kill objectives only: the loot, and so what a collect objective asks, is one).
+	partners := w.questSharers(ctx.Tick, m.pos, m.damage)
 	w.shareExperience(ctx.Tick, m.pos, def.Experience, m.damage)
 	for _, s := range m.damage {
 		if p := w.playerByID(s.player); p != nil {
@@ -417,6 +420,9 @@ func (w *World) killMonster(ctx *game.TickContext, m *Monster) {
 			p.recordEvent(ctx.Tick, eventKill, def.ID, 0, 0)
 			w.tutorialEvent(p, content.TriggerKill, def.ID)
 		}
+	}
+	for _, p := range partners {
+		w.questKill(p, def.ID)
 	}
 
 	// Remains with the loot, on the tile where it died: the container of its family (its

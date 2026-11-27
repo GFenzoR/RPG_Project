@@ -3312,16 +3312,37 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
      murió (Chebyshev). Vivo.
   2. **Contribuyó** en los últimos `contribution_ms` (75 s): hizo daño a un monstruo,
      curó a otro miembro herido, o un monstruo lo atacó (tanquear).
-  3. **Nivel:** al menos `level_range_pct` (70 %) del nivel más alto entre los que cumplen
-     1 y 2, o a lo sumo `level_gap_always` (3) niveles por debajo.
+  3. **Nivel:** a lo sumo `level_gap_always` (5) niveles por debajo del nivel más alto
+     entre los que cumplen 1 y 2, o al menos `level_range_pct` (70 %) de ese nivel. Hasta 5
+     niveles de diferencia se comparte **siempre** (decisión del dueño 2026-11-26: con 3,
+     dos personajes nuevos de niveles 3 y 7 no compartían y parecía que había que ser del
+     mismo nivel); el porcentaje manda más arriba (14 con 20 sí, 13 con 20 no; 70 con 100
+     sí, 69 con 100 no). La cuenta es `content.Party.InLevelRange`.
+
+  La ventana de grupo dice **por qué** no comparte quien no comparte (`ShareBlock`, la
+  primera razón que aplica): muy lejos (el que mira no lo ve), muerto, no está peleando
+  (no cumple 2), nivel muy bajo (no cumple 3), misma cuenta (otro personaje de su cuenta
+  ya comparte) o sin nadie con quien compartir (califica, pero hacen falta dos). Junto a
+  cada nombre va la etiqueta corta, y bajo el indicador la frase del propio jugador, con
+  lo que tiene que hacer ("pégale a un monstruo, cura a un miembro...").
 
   Si comparten dos o más, los shares de daño de los que comparten forman un **pozo** que
   crece con el **bonus de grupo** y se divide en partes iguales entre ellos (también a
   quien no le pegó, como un sanador). Los miembros que no comparten cobran su propio share.
   Si comparte uno solo, no hay pozo: cada uno cobra lo suyo. El share de quien salió del
   mundo (logout o relogueo) se pierde: cuenta en el total pero no lo cobra nadie, así que
-  terminar el monstruo de otro no da su experiencia. Quests: cuenta la muerte quien le
-  hizo daño, como antes.
+  terminar el monstruo de otro no da su experiencia.
+- **Quests en grupo** (decisión del dueño 2026-11-26): la muerte cuenta para los objetivos
+  de **matar** de quien le hizo daño, como siempre, y además de los miembros que
+  **comparten la experiencia** de esa muerte con alguno de ellos (`questSharers`: la
+  misma lista del pozo, calculada antes de pagar la experiencia). Es la misma
+  elegibilidad, sin reglas aparte: experiencia compartida prendida, vivo, en el piso y a
+  `share_distance`, contribuyó, en rango de nivel, uno por cuenta. Así no cuenta para
+  quien está lejos, muerto, parado sin pelear, fuera de rango de nivel o fuera del grupo,
+  ni con la experiencia compartida apagada; nadie cuenta dos veces la misma muerte (el que
+  pegó y además comparte suma una). Los objetivos de **juntar** no se duplican: el botín
+  es uno y va a quien hizo más daño. Las quests de hito (placas, lote 15) no cambian: sus
+  requisitos se revisan sobre las placas, no sobre el grupo.
 - **Bonus de grupo** (`bonus_pct_by_sharers`, decidido por el dueño: hasta +20 %). Solo
   importa **cuántos** comparten, no sus vocaciones:
 

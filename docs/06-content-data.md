@@ -1200,7 +1200,7 @@ party:
   share_distance: 24        # casillas (Chebyshev, mismo piso) desde la muerte del monstruo
   contribution_ms: 75000    # ventana de "contribuyó hace poco"
   level_range_pct: 70       # nivel mínimo, en % del más alto que comparte (anti-carry)
-  level_gap_always: 3       # o a lo sumo estos niveles por debajo
+  level_gap_always: 5       # o a lo sumo estos niveles por debajo (siempre comparten)
   shared_by_default: true   # un grupo nuevo empieza compartiendo (el líder puede apagarla)
   bonus_pct_by_sharers: [5, 10, 15, 20]  # bonus del pozo con 2, 3, 4 y 5+ que comparten;
                             # más que escalones toman el último (el tope). Solo cuenta
