@@ -581,7 +581,7 @@ func (w *World) watched(p world.Pos) bool {
 }
 
 // blocksRespawn reports whether what p sees holds respawns back.
-func blocksRespawn(p *Player) bool { return !(p.invisible && p.role >= RoleGM) }
+func blocksRespawn(p *Player) bool { return !p.invisible || p.role < RoleGM }
 
 // monsterCanEnter reports whether a monster may stand on p: walkable, free, outside
 // protection zones and not a tile that stairs, a hole or a teleport leaves from
