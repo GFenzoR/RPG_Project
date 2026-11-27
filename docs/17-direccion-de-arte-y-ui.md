@@ -3322,6 +3322,14 @@ donde quedaba el último frame (el ciervo; 4 px los humanoides).
   cualquier orden) hasta el fin de la caída; el canvas esconde ese sprite del mapa
   (`renderable`, el de más arriba con esa clave: un cadáver igual que ya estaba debajo
   sigue a la vista) y lo muestra en el cuadro en que la caída termina.
+- **Revisión final del lote 20f (2026-11-27):** un volador (murciélago, gaviota) deja de
+  mecerse al morir: baja desde la altura a la que murió y aterriza con la caída, así que
+  también termina sobre los píxeles de su cadáver y con la sombra entera. Dos monstruos
+  iguales que mueren en la misma casilla a la vez esconden cada uno su propio cadáver. Los
+  restos escondidos tampoco proyectan sombra mientras tanto (`object-shadows.ts`). Al
+  cambiar de piso no queda nada escondido: `MapView.setFloor` rehace los sprites. Ningún
+  monstruo puede llamarse `body_male` ni `body_female` (`make spritegen-check`,
+  `bodyClashes`): esos nombres son del cuerpo de un jugador.
 - **Casos de borde:** una criatura que muere a mitad de un paso termina el paso en 120 ms
   (`settle`) y cae en la casilla donde quedan sus restos; con movimiento reducido no hay
   caída (el cuerpo se va y el cadáver está); si los restos llegan tarde o no llegan (una

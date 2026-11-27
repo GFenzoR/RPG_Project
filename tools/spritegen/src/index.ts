@@ -217,12 +217,23 @@ export const UI_ICON = /^ui\/[a-z0-9_]+\/[a-z0-9_]+$/;
  * gap (the client stops at the first missing frame), and monsters of data/monsters with no
  * corpse of their own (no look, death clip nor image to make it from: recipes/corpses.ts).
  */
+/**
+ * Monsters whose corpse would take the path of a player's body (corpses/body_<sex>): the
+ * client finds both by the name after "@" in a map item's key (client corpse-art.ts).
+ */
+export function bodyClashes(ids: readonly string[]): string[] {
+  const bodies = new Set(BODY_SEXES.map(bodyPath));
+  return ids
+    .filter((id) => bodies.has(corpsePath(id)))
+    .map((id) => `${corpsePath(id)}: monster id ${id} is taken by the body of a player`);
+}
+
 export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
   const book = recipesAt(root);
   // A monster's corpse (recipes/corpses.ts), which the client finds by the monster's id.
   const corpses = new Set([...monsterIds(root).map(corpsePath), ...BODY_SEXES.map(bodyPath)]);
-  const problems: string[] = [];
+  const problems: string[] = bodyClashes(monsterIds(root));
   for (const id of monsterIds(root))
     if (!book[corpsePath(id)])
       problems.push(

@@ -626,8 +626,14 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
   }
 
   if (isFlyer(meta)) {
-    const phase = (now + s.seed) % FLY_MS;
-    const lift = FLY_PX + Math.round(FLY_PX * Math.sin((2 * Math.PI * phase) / FLY_MS));
+    // A dying flyer stops bobbing: it comes down from the height it died at and lands with
+    // the fall, so its body ends on the corpse's own pixels like any other.
+    const dead = !Number.isNaN(s.diedAt);
+    const phase = ((dead ? s.diedAt : now) + s.seed) % FLY_MS;
+    const hover = FLY_PX + FLY_PX * Math.sin((2 * Math.PI * phase) / FLY_MS);
+    const ms = fallMs(meta);
+    const left = dead ? (ms > 0 ? Math.max(0, 1 - Math.max(0, now - s.diedAt) / ms) : 0) : 1;
+    const lift = Math.round(hover * left);
     out.y -= lift;
     out.shadow = 1 - lift / (4 * FLY_PX + 2);
     // A single image has no wings to move: it flattens a pixel on every beat instead.

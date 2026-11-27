@@ -136,6 +136,21 @@ describe("ObjectShadows: silhouettes", () => {
     expect(s.skew.x).toBeCloseTo(pose.skewX);
   });
 
+  it("casts nothing for an item hidden for now (remains under a body still falling)", () => {
+    const map = new FakeMap();
+    const corpse = map.add("corpse", 5, 5, tex(64, 64), 0.5);
+    const shadows = layer();
+    shadows.update(map, cast(1, 0.4));
+    const s = shadows.root.children[0] as Sprite;
+    expect(s.visible).toBe(true);
+    corpse.renderable = false; // no new map version: the veil only hides the sprite
+    shadows.update(map, cast(1, 0.4));
+    expect(s.visible).toBe(false);
+    corpse.renderable = true;
+    shadows.update(map, cast(1, 0.4));
+    expect(s.visible).toBe(true);
+  });
+
   it("casts nothing indoors", () => {
     const map = new FakeMap();
     map.add("barrel", 2, 2, tex(32, 32));

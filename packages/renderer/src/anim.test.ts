@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   APPEAR_MS,
+  FLY_MS,
+  FLY_PX,
   DEATH_MS,
   DEATH_SETTLE_MS,
   FEET_LINE,
@@ -425,6 +427,35 @@ describe("procedural motion of single-frame sprites (ANI-5)", () => {
     expect(Math.max(...ys)).toBe(0);
     expect(Math.min(...ys)).toBe(-4);
     expect(stepAt(s, bat, in_, out, 400, 200).skewX).toBe(0);
+  });
+
+  it("lands a flyer as it dies: no bob left when the fall ends, on the corpse's pixels", () => {
+    const DEATH: AnimMeta = {
+      ...STILL,
+      flying: true,
+      actions: { death: { frames: 4, ms: 90, dirs: ["s"] } },
+    };
+    for (const bat of [{ ...STILL, flying: true } as AnimMeta, DEATH]) {
+      const { s, in_, out } = setup();
+      // It dies at the top of its bob, 4 px up.
+      const at = FLY_MS / 4 - (s.seed % FLY_MS) + FLY_MS;
+      in_.now = at;
+      expect(animate(s, bat, in_, out).y).toBe(-2 * FLY_PX);
+      startDeath(s, at, 3);
+      let last = -2 * FLY_PX;
+      const ms = fallMs(bat);
+      for (let el = 0; el <= ms; el += 30) {
+        in_.now = at + el;
+        const y = animate(s, bat, in_, out).y;
+        expect(y).toBeGreaterThanOrEqual(last); // only ever down
+        last = y;
+      }
+      // Fallen, and all through the crossfade: exactly where the corpse lies, full shadow.
+      for (const el of [ms, ms + DEATH_SETTLE_MS / 2, ms + DEATH_SETTLE_MS - 1]) {
+        in_.now = at + el;
+        expect(animate(s, bat, in_, out)).toMatchObject({ y: 3, shadow: 1 });
+      }
+    }
   });
 
   it("tips over clockwise and flattens when it dies, ending as its corpse was drawn", () => {

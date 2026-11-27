@@ -148,6 +148,24 @@ describe("CorpseVeil", () => {
     expect(here.renderable).toBe(true);
   });
 
+  it("hides one body each for two of a kind that die on one tile at once", () => {
+    const veil = new CorpseVeil();
+    const old = item(5, 5, WOLF);
+    const first = item(5, 5, WOLF);
+    const second = item(5, 5, WOLF);
+    const items = [old, first, second];
+    const remains = [laid(5, 5, WOLF, 1000), laid(5, 5, WOLF, 1050)];
+    veil.begin(5, 5, 7, 1000, FALL);
+    veil.begin(5, 5, 7, 1050, FALL);
+    frame(veil, 1100, remains, items);
+    // The two on top are the ones that fall; the body that already lay there stays drawn.
+    expect(items.map((i) => i.renderable)).toEqual([true, false, false]);
+    frame(veil, 1000 + FALL, remains, items);
+    expect(items.map((i) => i.renderable)).toEqual([true, true, false]);
+    frame(veil, 1050 + FALL, remains, items);
+    expect(items.map((i) => i.renderable)).toEqual([true, true, true]);
+  });
+
   it("shows everything again when it is cleared", () => {
     const veil = new CorpseVeil();
     const corpse = item(5, 5, WOLF);

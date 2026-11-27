@@ -124,19 +124,24 @@ export class CorpseVeil {
     const z = this.floor;
     for (const f of this.ended)
       if (f.x === x && f.y === y && f.z === z && f.laid?.key === key) sprite.renderable = true;
-    const falls = this.falls;
-    for (let i = 0; i < falls.length; i++) {
-      const f = falls[i] as Fall;
+    // Two falls with the same remains on one tile (two monsters of a kind dying there in the
+    // same moment) each hide a sprite of their own: the sprites come bottom to top, so the
+    // newest goes to the first of those falls and the one it held passes on to the next.
+    let carry: Veilable | undefined = sprite;
+    for (const f of this.falls) {
       if (f.x !== x || f.y !== y || f.z !== z || f.laid?.key !== key) continue;
-      // Two bodies cannot fall on one tile at once, but two falls there never share a
-      // sprite: the later fall takes the next one up.
-      if (falls.some((o, j) => j < i && o.top === sprite)) continue;
       sprite.renderable = true;
-      f.top = sprite;
+      const held: Veilable | undefined = f.top;
+      f.top = carry;
+      carry = held;
+      if (!carry) break;
     }
   };
 
-  /** Forgets every fall (the floor changed, the canvas is rebuilt): nothing stays hidden. */
+  /**
+   * Forgets every fall (the canvas is destroyed): nothing stays hidden. A change of floor
+   * needs none of this: MapView.setFloor drops every sprite it built, the hidden ones too.
+   */
   clear(): void {
     for (const f of this.falls) if (f.laid) this.ended.push(f);
     this.falls.length = 0;

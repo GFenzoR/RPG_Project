@@ -1,6 +1,8 @@
 // Creatures walk in step with the ground they cover (docs/17 "Criaturas al ritmo de su
 // paso"): the cycle of every body kind against the distance walked, the stride lookup, and
 // what must not cycle (standing, pushed, teleported, a flier's feet).
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   animate,
@@ -98,6 +100,17 @@ function after(
   in_.walkStart = step * ms;
   return animate(s, meta, in_, out);
 }
+
+describe("the body kinds", () => {
+  it("are the ones the atlas packer accepts (tools/spritepack anims.ts), in its order", () => {
+    const src = readFileSync(
+      fileURLToPath(new URL("../../../tools/spritepack/src/anims.ts", import.meta.url)),
+      "utf8",
+    );
+    const list = /export const BODY_GAITS = \[([^\]]*)\]/.exec(src)?.[1] ?? "";
+    expect(list.match(/[a-z_]+/g)).toEqual([...BODY_GAITS]);
+  });
+});
 
 describe("the stride of a creature", () => {
   it("is its own, else its body's default; a flier and an undeclared sprite have none", () => {
