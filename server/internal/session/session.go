@@ -410,8 +410,11 @@ type World struct {
 	quests   *quest.Engine
 	// reachAt is the place of every reach step of the quests (questlog.go); reachBuf is
 	// scratch for reading a player's current ones.
-	reachAt  map[*content.Reach]*reachPlace
-	reachBuf []*content.Reach
+	reachAt map[*content.Reach]*reachPlace
+	// hintTargets is where each quest step can be done, worked out the first time a hint
+	// asks for it (minimap.go, stepTargets).
+	hintTargets map[*content.QuestStepDef][]hintTarget
+	reachBuf    []*content.Reach
 	// sigilRooms and sigilAt (plate tile → its room) are the milestones' plates (sigil.go).
 	sigilRooms []*sigilRoom
 	sigilAt    map[world.Pos]*sigilRoom

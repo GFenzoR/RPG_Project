@@ -680,3 +680,15 @@ func PaceAfterStop(ms int64) (first, second game.Tick) {
 	first = pc.ticks(0, ms)
 	return first, pc.ticks(first+1, ms)
 }
+
+// HintForTest is the ObjectiveHint a character standing at from gets for step of questID
+// (tests only, loop goroutine or a world that is not running).
+func (w *World) HintForTest(charID int64, from world.Pos, questID string, step *content.QuestStepDef) *pb.ObjectiveHint {
+	return w.hintOf(charID, from, questID, step)
+}
+
+// ReachContainsForTest reports whether standing on pos completes reach step r.
+func (w *World) ReachContainsForTest(r *content.Reach, pos world.Pos) bool {
+	pl := w.reachAt[r]
+	return pl != nil && pl.contains(pos)
+}

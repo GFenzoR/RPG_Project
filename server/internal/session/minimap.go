@@ -24,8 +24,9 @@ import (
 // gained bits at most once a second (flushMinimap, bitsets only).
 //
 // Tracked objective: TrackQuest names one active quest; its current step's place (a
-// hint_area of its YAML, or derived from the step: the NPC to talk to, the nearest spawn
-// of the monster, the reach place, the sigil plates) goes to the client as a circle around
+// hint_area of its YAML, or the nearest of the step's real targets, stepTargets: the NPC to
+// talk to, a spawn of the monster to kill or of one that drops the item to collect, the
+// reach place, the sigil plates) goes to the client as a circle around
 // a point near it (quest.FuzzHint), again whenever its quests change or a relocation
 // (stairs, a teleport, a boat, waking up at the temple) may have changed which place is
 // the nearest (hintMoved).
@@ -222,13 +223,8 @@ func (w *World) flushHint(p *Player) {
 		step := w.quests.CurrentStep(p.storage, p.tracked)
 		if step == nil {
 			p.tracked = "" // done, or abandoned: nothing to track
-		} else if c, r, ok := w.stepPlace(p, step); ok {
-			fz := quest.FuzzHint(int(c.X), int(c.Y), r, quest.HintSeed(p.charID, p.tracked, step.ID, int(c.X), int(c.Y), int(c.Z)))
-			h = &pb.ObjectiveHint{QuestId: p.tracked, StepId: step.ID,
-				Center: &pb.Position{X: hintCoord(fz.X, int(c.X)), Y: hintCoord(fz.Y, int(c.Y)), Z: uint32(c.Z)},
-				Radius: uint32(fz.Radius)}
 		} else {
-			h = &pb.ObjectiveHint{QuestId: p.tracked, StepId: step.ID}
+			h = w.hintOf(p.charID, p.pos, p.tracked, step)
 		}
 	}
 	key := hintKey{quest: h.GetQuestId(), step: h.GetStepId(), x: h.GetCenter().GetX(), y: h.GetCenter().GetY(),
@@ -239,6 +235,20 @@ func (w *World) flushHint(p *Player) {
 	p.hintForce = false
 	p.hintSent = key
 	p.emit(&pb.ServerMessage{Message: &pb.ServerMessage_ObjectiveHint{ObjectiveHint: h}})
+}
+
+// hintOf is the ObjectiveHint of step of questID for character charID standing at from:
+// the circle around the nearest of the step's targets, or no centre for a step with no
+// place on this map.
+func (w *World) hintOf(charID int64, from world.Pos, questID string, step *content.QuestStepDef) *pb.ObjectiveHint {
+	c, r, ok := w.stepPlace(from, step)
+	if !ok {
+		return &pb.ObjectiveHint{QuestId: questID, StepId: step.ID}
+	}
+	fz := quest.FuzzHint(int(c.X), int(c.Y), r, quest.HintSeed(charID, questID, step.ID, int(c.X), int(c.Y), int(c.Z)))
+	return &pb.ObjectiveHint{QuestId: questID, StepId: step.ID,
+		Center: &pb.Position{X: hintCoord(fz.X, int(c.X)), Y: hintCoord(fz.Y, int(c.Y)), Z: uint32(c.Z)},
+		Radius: uint32(fz.Radius)}
 }
 
 // hintCoord is a fuzzed coordinate v of a target at t, kept on the map: one that fell off
@@ -267,79 +277,160 @@ type hintKey struct {
 	x, y, z, r  uint32
 }
 
-// stepPlace is where step happens: a point and how many tiles (Chebyshev) around it. A
-// hint_area of the YAML wins; otherwise it comes from what completes the step. ok is false
-// for a step done anywhere (has_item, flag_equals without a hint_area).
-func (w *World) stepPlace(p *Player, step *content.QuestStepDef) (world.Pos, int, bool) {
+// hintTarget is one place where a step can be done: a point and how many tiles
+// (Chebyshev) around it.
+type hintTarget struct {
+	c world.Pos
+	r int
+}
+
+// maxTargetRadius bounds the area of one target: a wider place (a zone that covers half
+// an island) is marked by the part of it around its anchor, so the circle stays readable
+// and still holds tiles where the step is done.
+const maxTargetRadius = quest.MaxHintRadius / 2
+
+// stepPlace is where a player at from does step: the nearest of its targets (its own floor
+// first; stepTargets), a point and how many tiles (Chebyshev) around it. ok is false for a step with
+// no place on this map.
+func (w *World) stepPlace(from world.Pos, step *content.QuestStepDef) (world.Pos, int, bool) {
+	best, bestD, found := hintTarget{}, 0, false
+	for _, t := range w.stepTargets(step) {
+		d := chebyshev(from, t.c) + absInt(int(from.Z)-int(t.c.Z))*1_000_000
+		if !found || d < bestD {
+			best, bestD, found = t, d, true
+		}
+	}
+	return best.c, best.r, found
+}
+
+// stepTargets is every place where step can be done, each one a real target: a hint_area
+// of the YAML wins; otherwise the NPC to talk to, every spawn of the monster to kill,
+// every spawn of a monster that drops the item to collect, the NPC whose dialog sets the
+// flag, the reach place (each rectangle of a zone with a tile to stand on, on each of its
+// floors) or the sigil plates. Nothing of it changes after the world starts (spawns, NPCs
+// and zones are the map's), so it is worked out once per step.
+func (w *World) stepTargets(step *content.QuestStepDef) []hintTarget {
+	if ts, ok := w.hintTargets[step]; ok {
+		return ts
+	}
+	ts := w.findTargets(step)
+	if w.hintTargets == nil {
+		w.hintTargets = map[*content.QuestStepDef][]hintTarget{}
+	}
+	w.hintTargets[step] = ts
+	return ts
+}
+
+func (w *World) findTargets(step *content.QuestStepDef) []hintTarget {
 	if a := step.HintArea; a != nil {
 		if c, ok := worldPos(content.Position{X: a.X, Y: a.Y, Z: a.Z}); ok {
-			return c, a.Radius, true
+			return []hintTarget{{c, a.Radius}}
 		}
-		return world.Pos{}, 0, false
+		return nil
 	}
+	var ts []hintTarget
 	cw := step.CompleteWhen
 	switch {
 	case cw.DialogAction != nil:
 		// An NPC stands where the map placed it for good (npc.go): its place never moves.
 		for _, n := range w.npcs {
 			if n.def.ID == cw.DialogAction.NPC {
-				return n.pos, 1, true
+				ts = append(ts, hintTarget{n.pos, 1})
+			}
+		}
+	case cw.FlagEquals != nil:
+		for _, n := range w.npcs {
+			if setsFlag(n.def, cw.FlagEquals.Key) {
+				ts = append(ts, hintTarget{n.pos, 1})
 			}
 		}
 	case cw.Kill != nil:
-		return w.nearestSpawn(p.pos, cw.Kill.Monster)
+		ts = w.spawnTargets(func(monster string) bool { return monster == cw.Kill.Monster })
+	case cw.HasItem != nil:
+		ts = w.spawnTargets(func(monster string) bool {
+			k := w.kinds[monster]
+			if k == nil {
+				return false
+			}
+			for _, l := range k.def.Loot {
+				if l.Item == cw.HasItem.Item && l.Chance > 0 {
+					return true
+				}
+			}
+			return false
+		})
 	case cw.Reach != nil:
 		pl := w.reachAt[cw.Reach]
 		if pl == nil {
 			break
 		}
-		if z := pl.zone; z != nil && len(z.Rects) > 0 && len(z.Floors) > 0 {
-			x0, y0, x1, y1 := 0xFFFF, 0xFFFF, 0, 0
-			for _, r := range z.Rects {
-				x0, y0 = min(x0, int(r.X)), min(y0, int(r.Y))
-				x1, y1 = max(x1, int(r.X)+int(r.W)-1), max(y1, int(r.Y)+int(r.H)-1)
-			}
-			floor := z.Floors[0]
-			for _, f := range z.Floors {
-				if f == p.pos.Z {
-					floor = f
+		if pl.zone == nil {
+			ts = append(ts, hintTarget{pl.center, pl.radius})
+			break
+		}
+		for _, f := range pl.zone.Floors {
+			for _, r := range pl.zone.Rects {
+				x0, y0 := int(r.X), int(r.Y)
+				x1, y1 := x0+int(r.W)-1, y0+int(r.H)-1
+				// The anchor: the tile to stand on nearest the rectangle's middle.
+				if c, ok := w.standNear(x0, y0, x1, y1, f); ok {
+					ts = append(ts, hintTarget{c, min(max(x1-x0, y1-y0)/2+1, maxTargetRadius)})
 				}
 			}
-			return world.Pos{X: uint16((x0 + x1) / 2), Y: uint16((y0 + y1) / 2), Z: floor}, max(x1-x0, y1-y0)/2 + 1, true
-		}
-		if pl.zone == nil {
-			return pl.center, pl.radius, true
 		}
 	case cw.Sigils != nil:
 		if c, ok := worldPos(content.Position{X: cw.Sigils.X, Y: cw.Sigils.Y, Z: cw.Sigils.Z}); ok {
-			return c, cw.Sigils.Radius, true
+			ts = append(ts, hintTarget{c, cw.Sigils.Radius})
 		}
 	}
-	return world.Pos{}, 0, false
+	return ts
 }
 
-// nearestSpawn is the spawn of monster nearest to from (its own floor first), with its
-// radius.
-func (w *World) nearestSpawn(from world.Pos, monster string) (world.Pos, int, bool) {
+// setsFlag reports whether an option of npc's dialog sets flag key.
+func setsFlag(npc *content.NPC, key string) bool {
+	for _, node := range npc.Dialog.Nodes {
+		for _, o := range node.Options {
+			for _, a := range o.Action {
+				if a.SetFlag != nil && a.SetFlag.Key == key {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// standNear is the tile of the rectangle x0, y0 to x1, y1 on floor z a player can stand
+// on (as standable) nearest its middle.
+func (w *World) standNear(x0, y0, x1, y1 int, z uint8) (world.Pos, bool) {
+	mx, my := (x0+x1)/2, (y0+y1)/2
 	best, bestD, found := world.Pos{}, 0, false
-	r := 0
+	for y := y0; y <= y1; y++ {
+		for x := x0; x <= x1; x++ {
+			d := max(absInt(x-mx), absInt(y-my))
+			if found && d >= bestD || x < 0 || y < 0 || x > 0xFFFF || y > 0xFFFF {
+				continue
+			}
+			if p := (world.Pos{X: uint16(x), Y: uint16(y), Z: z}); w.m.Walkable(p) && !w.m.MovesOnStep(p) {
+				best, bestD, found = p, d, true
+			}
+		}
+	}
+	return best, found
+}
+
+// spawnTargets is the area of every spawn that keeps a monster want accepts.
+func (w *World) spawnTargets(want func(monster string) bool) []hintTarget {
+	var ts []hintTarget
 	for _, is := range w.m.Islands() {
 		for _, sp := range is.Spawns {
-			has := false
 			for _, m := range sp.Monsters {
-				if m.Monster == monster {
-					has = true
+				if m.Count > 0 && want(m.Monster) {
+					ts = append(ts, hintTarget{sp.Center, int(sp.Radius)})
 					break
 				}
 			}
-			if !has {
-				continue
-			}
-			d := chebyshev(from, sp.Center) + absInt(int(from.Z)-int(sp.Center.Z))*1_000_000
-			if !found || d < bestD {
-				best, bestD, found, r = sp.Center, d, true, int(sp.Radius)
-			}
 		}
 	}
-	return best, r, found
+	return ts
 }
