@@ -295,7 +295,7 @@ func TestDragCorpseKeepsOffDoorsStairsAndHouses(t *testing.T) {
 		if tile := tileOf(cl.take(), gate); len(tile) != 2 || tile[1] != uint32(worldtest.OpenDoor) {
 			t.Fatalf("gate not open: %v", tile)
 		}
-		if got := h.drag(cl, pos(5, 2), 1, onTile(gate)); got != "inventory.corpse_drag" {
+		if got := h.drag(cl, pos(5, 2), 1, onTile(gate)); got != "inventory.corpse_no_place" {
 			t.Errorf("onto an open door: %q", got)
 		}
 		if len(h.w.CorpsesAt(gate)) != 0 || len(h.w.GroundAt(gate)) != 0 || len(h.w.CorpsesAt(pos(5, 2))) != 1 {
@@ -307,7 +307,7 @@ func TestDragCorpseKeepsOffDoorsStairsAndHouses(t *testing.T) {
 		cl, _ := h.join("Dragger", at(4, 3))
 		h.sim.Step()
 		killAll(h)
-		if got := h.drag(cl, pos(4, 2), 1, onTile(stairsDown)); got != "inventory.corpse_drag" {
+		if got := h.drag(cl, pos(4, 2), 1, onTile(stairsDown)); got != "inventory.corpse_no_place" {
 			t.Errorf("onto stairs: %q", got)
 		}
 		if len(h.w.CorpsesAt(pos(4, 2))) != 1 || len(h.w.GroundAt(stairsDown)) != 0 || len(h.w.GroundAt(at3(5, 3, 8))) != 0 {
@@ -321,7 +321,7 @@ func TestDragCorpseKeepsOffDoorsStairsAndHouses(t *testing.T) {
 		cl, _ := h.join("Dragger", at(20, 20))
 		h.sim.Step()
 		killAll(h)
-		if got := h.drag(cl, pos(21, 20), 1, onTile(pos(22, 20))); got != "inventory.corpse_drag" {
+		if got := h.drag(cl, pos(21, 20), 1, onTile(pos(22, 20))); got != "inventory.corpse_no_place" {
 			t.Errorf("into a house: %q", got)
 		}
 		if len(h.w.CorpsesAt(pos(21, 20))) != 1 || len(h.w.GroundAt(pos(22, 20))) != 0 {
