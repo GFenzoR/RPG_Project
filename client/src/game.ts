@@ -419,6 +419,9 @@ interface PoseView {
   id: number;
   ms: number;
   of: number;
+  /** A fall: how long the fall itself lasts, and whether its remains are hidden under it. */
+  fall?: number;
+  veiled?: boolean;
   action: string;
   x: number;
   y: number;

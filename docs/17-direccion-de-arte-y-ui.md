@@ -884,7 +884,7 @@ de un sprite con `death` juega su clip y se desvanece.
 | Volador (`flying: true`) | Oscila ±2 px siempre, y su sombra de contacto se achica cuando sube | 600 ms por ciclo |
 | Atacar | Embestida: avanza 6 px hacia el objetivo y vuelve | 90 ms de ida y 160 ms de vuelta |
 | Recibir golpe | Silueta blanca (textura generada al cargar el atlas) y retroceso de 2 px | 60 ms y después 120 ms |
-| Morir | Destello blanco, se aplasta hasta la mitad del alto contra el piso y se disuelve con tramado ordenado (Bayer 4x4). Después aparece el cadáver que manda el servidor (los restos de su familia: "Hecho: proyectiles, restos por familia y la fuente del canvas") | 400 ms |
+| Morir | Destello, se vuelca un cuarto de vuelta hacia la derecha y se aplasta a 3/5 del alto contra el piso: la pose de su cadáver, que toma su lugar ("Muerte continua (hecho, 2026-11-27)"; antes se aplastaba a la mitad y se disolvía) | 400 ms + 100 ms |
 | Aparecer | La disolución al revés | 300 ms |
 
 ### ANI-6 Atuendos y cosméticos
@@ -3286,6 +3286,59 @@ borra"); en corto:
   la playa abierta, desde barlovento; al abrigo dura hasta el tope), la ola siguiente en
   la arena mojada, o el pie de otra criatura; las más viejas se desvanecen al pasar el tope.
 
+### Muerte continua (hecho, 2026-11-27, rama `feat/death-anim`)
+Pedido del dueño (2026-11-25/27): "cuando un enemigo muere, de repente muere hacia cierta
+dirección y aparece su cuerpo en la otra; debiese ser una animación continua hasta que queda
+el cuerpo en el piso". Lo que pasaba (comprobado en el código y en el atlas): (1) el servidor
+pone los restos en la casilla en el mismo tick de la muerte, así que el cadáver se veía bajo
+el cuerpo que todavía caía; (2) el cuerpo se desvanecía a nada (150 ms, o aplastándose) en
+vez de terminar como el cadáver; (3) el jabalí y el ciervo tienen la caída en las cuatro
+direcciones y su cadáver sale de la del sur: morían mirando al este y el cuerpo aparecía
+tendido hacia el sur; y el cadáver está bajado a la línea de los pies, hasta 5 px lejos de
+donde quedaba el último frame (el ciervo; 4 px los humanoides).
+- **Una sola caída** (`packages/renderer/src/anim.ts` `dying`, `fallMs`): el clip de morir
+  (o el vuelco procedural) dura lo que duraba, el cuerpo no palidece mientras cae y su
+  último frame queda `DEATH_SETTLE_MS` (100 ms) fundiéndose sobre el cadáver, que el mapa
+  ya muestra desde el final de la caída: un fundido de los colores vivos a los del cadáver,
+  sobre los mismos píxeles. Nunca se ve el piso a través.
+- **Termina en la pose del cadáver:** toda muerte se dibuja mirando al sur
+  (`CreatureBody.draw`), la dirección de la que sale el cadáver. `atlas.json` dice dónde
+  descansa el cuerpo caído (`anims.<sprite>.rest`, filas vacías bajo el último frame de
+  `death_s`; `tools/spritepack` `restOf`) y el cliente lo baja frame a frame hasta ahí
+  (`fallShift`, `AnimState.fallY`; un muñeco de capas descansa en la más baja de sus capas,
+  como se compuso su cadáver): el último frame cae píxel por píxel sobre el cadáver
+  (comprobado con los 16 monstruos con clip: la máscara del último frame bajado es la del
+  PNG de `corpses/`). Una sola imagen (la gaviota) se vuelca: un cuarto de vuelta en el
+  sentido del reloj alrededor del centro de su cuadro y aplastada a `TIP_SQUASH` (3/5)
+  contra el borde de abajo, la misma geometría que `tipOver` de spritegen
+  (`tipPlacement`, `Pose.tip`; su `rest` es `tippedRest`, que un test de spritegen compara
+  con `tipOver`). Se vuelca desde el dibujo sin espejar, porque el cadáver no se espeja:
+  una gaviota que miraba al este gira al morir.
+- **El cadáver espera** (`client/src/render/death-fall.ts` `CorpseVeil`, puro y con tests):
+  el mundo anota los restos que un `TileUpdate` deja en una casilla a la vista
+  (`WorldState.remainsLaid`: de un monstruo, `remains_of`, o el cuerpo de un jugador,
+  `body_of`; nunca el mapa tal como llega). Los de ESA muerte son los que llegaron a su
+  casilla desde 150 ms antes de saberse la muerte (los dos mensajes del mismo tick, en
+  cualquier orden) hasta el fin de la caída; el canvas esconde ese sprite del mapa
+  (`renderable`, el de más arriba con esa clave: un cadáver igual que ya estaba debajo
+  sigue a la vista) y lo muestra en el cuadro en que la caída termina.
+- **Casos de borde:** una criatura que muere a mitad de un paso termina el paso en 120 ms
+  (`settle`) y cae en la casilla donde quedan sus restos; con movimiento reducido no hay
+  caída (el cuerpo se va y el cadáver está); si los restos llegan tarde o no llegan (una
+  invocación no deja), el cuerpo igual se va a los 100 ms del final y los restos, cuando
+  llegan, se ven en el acto; lo que ya estaba en el piso al entrar a la vista nunca se
+  esconde. El escondite dura como mucho la caída (menos de un segundo): los restos se pueden
+  abrir y arrastrar (lote 20e) apenas el cuerpo está en el piso. Vale igual para jugadores y
+  NPCs; el cuerpo de un jugador es el item genérico (otro dibujo), así que ahí el fundido
+  es de la caída a ese item, sin alineación.
+- **Decisiones:** la caída siempre al sur, también el jabalí y el ciervo (sus `death_e/n/w`
+  quedan sin usar): hacer un cadáver por dirección pedía que el servidor dijera hacia
+  dónde cayó, y todos los demás monstruos ya caían al sur. Sin tocar servidor ni protocolo.
+- **E2E:** `shotFall` de `e2e/game.spec.ts` retiene los frames y el reloj de la página
+  (`performance.now`) desde el principio de una caída y dibuja tres cuadros de la misma
+  muerte: `11b-death-1-mid`, `11b-death-2-end` y `11b-death-3-corpse` (reemplazan a
+  `11b-death`). `poses().dying` trae `fall` y `veiled`.
+
 ### Cadáveres (hecho, 2026-11-23, rama `feat/corpse-names`)
 Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo el nombre.
 - **De qué sale:** `tools/spritegen/src/recipes/corpses.ts` hace `corpses/<monstruo>`
@@ -3307,8 +3360,9 @@ Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo
   ser cuadrada (`tipOver` la gira un cuarto; otra forma falla en vez de recortarse).
 - **Dónde va:** del tamaño de la criatura (el custodio de 96x96 conserva su huella) y
   con su píxel más bajo donde estaban sus pies (`FEET_LINE` sobre el borde de la
-  casilla). El cliente lo dibuja centrado en la casilla (`corpseArt`, ancla `bc`), así el
-  último frame de la caída, que se desvanece encima, y el cadáver coinciden. Un sprite
+  casilla). El cliente lo dibuja centrado en la casilla (`corpseArt`, ancla `bc`), y baja
+  el cuerpo que cae hasta ahí: el último frame de la caída y el cadáver coinciden píxel
+  por píxel ("Muerte continua"). Un sprite
   `br` más ancho que una casilla se ensancha para que su centro quede en la casilla.
 - **Cómo llega al mapa:** los restos siguen siendo el contenedor de la familia; el item
   trae `mods.remains_of` (docs/05 "Restos") y el cliente lo apila en `MapView` con la

@@ -125,6 +125,28 @@ el punto 5:
     de zancada larga (el sabueso de ceniza, 56 px; el guardián, 52).
   - **Norte y sur.** La misma zancada vale en todas las direcciones; de frente y de
     espaldas los frames de Gemini apenas muestran el paso, así que ahí se nota menos.
+- **Muerte continua (hecho, rama `feat/death-anim`; el dueño el 2026-11-25/27: "muere hacia
+  cierta dirección y aparece su cuerpo en la otra; debiese ser una animación continua")**:
+  la caída termina en la pose y sobre los píxeles del cadáver, que queda escondido hasta
+  que el cuerpo está en el piso (docs/17 "Muerte continua"). Solo cliente y spritepack
+  (`atlas.json` `anims.rest`; hay que correr `make sprites`). Pendiente:
+  - **Mirarlo en `make e2e`:** `11b-death-1-mid`, `-2-end` y `-3-corpse` (tres cuadros de
+    la misma muerte de un lobo): el cuerpo y el cadáver nunca a la vez, y entre el 2 y el 3
+    solo cambia el color. El test no se corrió en su etapa (sin servidores); retiene el
+    reloj de la página, y si fallara por eso, `shotFall` es lo que hay que mirar.
+  - **El jabalí y el ciervo caen siempre al sur** (antes hacia donde miraban, con el
+    cadáver al sur): sus caídas al este, norte y oeste quedan sin usar. Un cadáver por
+    dirección pide un campo del servidor (hacia dónde cayó) y cuatro sprites por monstruo;
+    que lo decida el dueño si el giro al sur al morir le molesta.
+  - **La gaviota** (la única de una sola imagen) gira a su dibujo sin espejar al morir si
+    miraba al este, y mientras se vuelca no proyecta sombra. Un clip de muerte propio lo
+    arregla.
+  - **La sombra del cadáver** (la que proyectan los objetos del mapa) sale con el
+    `TileUpdate`, mientras el cuerpo todavía cae: son unos píxeles bajo el cuerpo.
+  - **El cuerpo de un jugador** sigue siendo el item genérico: la caída se funde a otro
+    dibujo. Un cadáver con el aspecto del jugador es arte y protocolo nuevos.
+  - **Sin oscurecer al caer:** el cuerpo llega al piso con sus colores vivos y los 100 ms
+    del fundido lo llevan a los del cadáver; si se nota el cambio, teñirlo durante la caída.
 - **Nada reaparece a la vista (hecho, rama `feat/unseen-respawn`; el dueño el 2026-11-26: "si
   el jugador está viendo un área el respawn no debiese pasar")**: un monstruo no reaparece
   en una casilla que algún jugador tenga en su ventana entera (31x21 + margen); con
@@ -653,7 +675,7 @@ el punto 5:
   - **Caída hacia otro lado:** el cadáver es siempre la caída al sur; el ciervo y el
     jabalí del motor, que mueren en cuatro direcciones, terminan su caída al oeste o al
     norte y el cadáver aparece mirando al sur.
-  - **E2E:** mirar en `make e2e` el lobo muerto (`11b-death`, `14-respawn`): el cadáver
+  - **E2E:** mirar en `make e2e` el lobo muerto (`11b-death-3-corpse`, `14-respawn`): el cadáver
     del lobo, no el de la familia, y "restos de lobo" en el log y en la ventana.
 - **Unidades métricas y cargas realistas (hecho, rama `feat/metric-units`; el dueño el
   2026-11-23: "todas las unidades y distancias en el sistema métrico"; docs/02

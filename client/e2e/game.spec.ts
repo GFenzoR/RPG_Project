@@ -118,6 +118,107 @@ async function shotPose(
   throw new Error(`no ${kind} pose caught on a screenshot in ${timeout} ms`);
 }
 
+/** What shotFall keeps in the page while it holds the game's frames and its clock. */
+interface FallHold extends PoseHold {
+  /** The page's clock while held (performance.now answers it), ms. */
+  e2eClock?: number | undefined;
+  /** When the body shot died, on that clock. */
+  e2eDied?: number;
+}
+
+/** What shotFall saw on one of its frames: the falling body (none once it is gone). */
+interface FallFrame {
+  falling: boolean;
+  veiled: boolean;
+}
+
+/**
+ * docs/17 "Muerte continua": one death in three close-ups, `<name>-1-mid` (the body half
+ * way down, its remains hidden under it), `<name>-2-end` (the last frame of the fall: the
+ * body in the pose of its corpse, the remains still hidden) and `<name>-3-corpse` (the body
+ * gone, the corpse on the same pixels). A fall lasts 360-600 ms and a screenshot can take
+ * longer, so from the first frames of the fall the test holds requestAnimationFrame AND
+ * the page's clock (performance.now, which the canvas and the world read), and draws each
+ * of the three frames itself at the time it wants. Returns what it saw when it caught the
+ * fall (Caught), as shotPose does.
+ */
+async function shotFall(page: Page, name: string, timeout: number): Promise<Caught> {
+  const handle = await page.waitForFunction(
+    (): (Caught & { id: number; fall: number; of: number }) | false => {
+      const c = window.__rpgClient;
+      const p = c?.poses();
+      if (!c || !p) return false;
+      const first = p.dying.find((x) => x.fall !== undefined && x.ms >= 0 && x.ms < x.fall / 2);
+      if (!first || first.fall === undefined) return false;
+      const w = window as unknown as FallHold;
+      const held: FrameRequestCallback[] = [];
+      w.e2eHeld = held;
+      w.e2eRaf = window.requestAnimationFrame;
+      window.requestAnimationFrame = (cb) => {
+        held.push(cb);
+        return 0;
+      };
+      const now = performance.now();
+      w.e2eClock = now;
+      w.e2eDied = now - first.ms;
+      performance.now = () => w.e2eClock ?? 0;
+      return {
+        id: first.id,
+        fall: first.fall,
+        of: first.of,
+        ids: p.dying.map((x) => x.id),
+        attacks: c.attacks(5_000),
+        departures: c.departures(5_000),
+        at: { x: first.x, y: first.y },
+      };
+    },
+    undefined,
+    { timeout, polling: "raf" },
+  );
+  /** Draws the frame `ms` after the death and says what the body does on it. */
+  const drawAt = (id: number, ms: number): Promise<FallFrame> =>
+    page.evaluate(
+      ({ id, ms }) => {
+        const w = window as unknown as FallHold;
+        w.e2eClock = (w.e2eDied ?? 0) + ms;
+        // The frames held: the game's ticker among them. What they ask for next is held too.
+        for (const cb of (w.e2eHeld ?? []).splice(0)) cb(w.e2eClock);
+        const body = window.__rpgClient?.poses().dying.find((x) => x.id === id);
+        return { falling: body !== undefined, veiled: body?.veiled === true };
+      },
+      { id, ms },
+    );
+  try {
+    const caught = await handle.jsonValue();
+    if (!caught) throw new Error("no fall caught");
+    const mid = await drawAt(caught.id, caught.fall / 2);
+    await closeShot(page, `${name}-1-mid`, caught.at);
+    const end = await drawAt(caught.id, caught.fall - 1);
+    await closeShot(page, `${name}-2-end`, caught.at);
+    const after = await drawAt(caught.id, caught.of + 30);
+    await closeShot(page, `${name}-3-corpse`, caught.at);
+    // The body falls over its hidden remains to the end, then it is gone: the corpse is
+    // what is left (never the two side by side, never a body fading to nothing first).
+    expect(mid.falling).toBe(true);
+    expect(end).toEqual({ falling: true, veiled: true });
+    expect(after.falling).toBe(false);
+    return caught;
+  } finally {
+    await page.evaluate(() => {
+      const w = window as unknown as FallHold;
+      // Back to the real clock (later than the held one: time only goes forward).
+      delete (performance as { now?: unknown }).now;
+      w.e2eClock = undefined;
+      const raf = w.e2eRaf;
+      if (!raf) return;
+      window.requestAnimationFrame = raf;
+      w.e2eRaf = undefined;
+      for (const cb of w.e2eHeld ?? []) window.requestAnimationFrame(cb);
+      w.e2eHeld = [];
+    });
+  }
+}
+
 /** Screenshot `name` of the CLOSE_W x CLOSE_H tiles round tile `at` (inside the page). */
 async function closeShot(page: Page, name: string, at: { x: number; y: number }): Promise<void> {
   const { a, b } = await page.evaluate(({ x, y }) => {
@@ -942,7 +1043,8 @@ test("an arcanist casts a spell with F1 and by its words", async ({ page, playwr
   // A9: bolts (and the wand) until a wolf dies, and its fall on screen: the server's
   // CreatureDisappear says DEATH (docs/17 ANI-7). A lost target is replaced.
   let fell = false;
-  const fall = shotPose(page, "11b-death", "death", 150_000);
+  // The death is one motion (docs/17 "Muerte continua"): three frames of the same fall.
+  const fall = shotFall(page, "11b-death", 150_000);
   fall.then(
     () => {
       fell = true;
