@@ -39,6 +39,21 @@ type PadGame = Pick<Game, "padPress" | "padRelease" | "padStep">;
  * it (the base of the thumb) neither changes the direction nor stops the walk when it lifts.
  */
 const owner = new PointerOwner();
+/** The Game the owning finger walks, to stop it if the pad goes away under the finger. */
+let walking: PadGame | undefined;
+
+/**
+ * The ref of the pad's element (a stable function: Preact calls a new one with null on
+ * every render). With null the pad left the tree: the layout changed or the phone turned
+ * with the thumb on it, and its pointerup will never reach the handlers, so the held
+ * direction is dropped here or the character would walk on alone.
+ */
+export function padUnmounted(el: HTMLElement | null): void {
+  if (el || !owner.held) return;
+  owner.reset();
+  walking?.padRelease();
+  walking = undefined;
+}
 
 /** Frees an owner whose pointer the element no longer holds (the pad was redrawn elsewhere). */
 export function staleOwner(o: PointerOwner, el: HTMLElement): void {
@@ -77,11 +92,13 @@ export function TouchPad(props: { t: Translate; game: PadGame | undefined }): JS
       role="group"
       aria-label={t("client.touch.dpad.label")}
       data-testid="touch-pad"
+      ref={padUnmounted}
       onPointerDown={(e) => {
         const el = e.currentTarget;
         e.preventDefault(); // no focus ring, no text selection, no emulated mouse
         staleOwner(owner, el);
         if (isPalm(e.width, e.height) || !owner.claim(e.pointerId)) return;
+        walking = game;
         el.setPointerCapture(e.pointerId);
         hold(game, el, pointed(el, e));
       }}

@@ -19,6 +19,22 @@ type PadGame = Pick<Game, "padPress" | "padRelease">;
 /** One stick on screen at a time: its finger and the direction it holds. */
 const owner = new PointerOwner();
 let held: Direction | undefined;
+/** The Game the owning finger walks, to stop it if the stick goes away under the finger. */
+let walking: PadGame | undefined;
+
+/**
+ * The ref of the stick's element (stable, see padUnmounted in TouchPad.tsx): with null the
+ * stick left the tree with a finger on it, so the owner, the held direction and the walk
+ * are dropped; otherwise the next stick would skip its first padPress (same direction as
+ * the stale one) and the character would walk on alone.
+ */
+export function stickUnmounted(el: HTMLElement | null): void {
+  if (el || (!owner.held && held === undefined)) return;
+  owner.reset();
+  held = undefined;
+  walking?.padRelease();
+  walking = undefined;
+}
 
 function knobOf(el: HTMLElement): HTMLElement | null {
   return el.querySelector<HTMLElement>(".touch-stick-knob");
@@ -67,11 +83,13 @@ export function TouchStick(props: { t: Translate; game: PadGame | undefined }): 
       role="group"
       aria-label={t("client.touch.stick.label")}
       data-testid="touch-stick"
+      ref={stickUnmounted}
       onPointerDown={(e) => {
         const el = e.currentTarget;
         e.preventDefault(); // no focus ring, no text selection, no emulated mouse
         staleOwner(owner, el);
         if (isPalm(e.width, e.height) || !owner.claim(e.pointerId)) return;
+        walking = game;
         try {
           el.setPointerCapture(e.pointerId);
         } catch {
