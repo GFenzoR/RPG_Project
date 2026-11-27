@@ -207,7 +207,7 @@ function Root(): JSX.Element {
       <TouchOptions
         t={t}
         prefs={touchPrefs}
-        canVibrate={browserVibrate(navigator) !== undefined}
+        canVibrate={browserVibrate(navigator, coarsePointer()) !== undefined}
         effects={effects}
         onChange={(next) => {
           saveTouchPrefs(next, storage);

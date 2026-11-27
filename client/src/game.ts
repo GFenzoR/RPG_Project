@@ -760,7 +760,11 @@ export class Game {
         tile: {
           facts: {
             ...this.groundFacts(x, y, z, item),
-            creature: c && { npc: c.kind === CreatureKind.NPC, self: c.id === this.world.selfId },
+            creature: c && {
+              npc: c.kind === CreatureKind.NPC,
+              self: c.id === this.world.selfId,
+              player: c.kind === CreatureKind.PLAYER,
+            },
           },
           living: living === "breakable" || living === "pushable" ? living : undefined,
           corpse: remains,

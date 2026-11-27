@@ -3716,3 +3716,6 @@ de una pila y los gestos de un teléfono.
 - **Atrás y Escape** (`ui/use-sheets.ts`): una entrada de la History API por hoja abierta,
   así el botón atrás cierra la de arriba y no saca del juego. Solo en teléfono y tablet
   (`tabbed`); el escritorio no cambia. Cada encabezado de hoja lleva `data-sheet-head`.
+  Al salir del juego con hojas abiertas sus entradas se retiran; una hoja que cierra el
+  servidor (intercambio, mercado, baúl) recupera su entrada a los 50 ms si sigue abierta,
+  así un segundo atrás durante el lag vuelve a pedir el cierre y no saca del juego.

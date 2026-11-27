@@ -159,7 +159,8 @@ Un grupo de botones redondos de hierro junto al pulgar que no camina, sobre el m
   después en las de alrededor (`input/context-action.ts`): hablar, atacar, trepar, abrir,
   saquear, leer, romper, empujar (solo de frente y en línea recta) o usar. El ícono cambia
   con la acción y el botón se apaga si no hay nada que hacer. No levanta, come ni equipa lo
-  que haya en el suelo: eso es del menú del item.
+  que haya en el suelo: eso es del menú del item. Tampoco ataca a otro jugador, ni de
+  frente ni alrededor (igual que Atacar): a un jugador se lo ataca tocándolo.
 - **Mirar** (ojo): el siguiente toque en el mapa mira en vez de actuar.
 - **Perseguir** (bota): el mismo interruptor de la ventana de batalla.
 - **Dos hechizos**: los dos primeros slots de la hotbar que tengan uno.
@@ -200,8 +201,10 @@ teclado. "Mantener los controles en pantalla" los fija.
 
 ### Vibración
 `state/haptics.ts`: un pulso corto al recibir un golpe (más largo si es fuerte), al subir de
-nivel y cuando el servidor rechaza un paso. Los golpes se espacian 250 ms. El interruptor
-solo aparece donde `navigator.vibrate` existe (Safari de iOS no vibra).
+nivel y cuando el servidor rechaza un paso. Los golpes se espacian 250 ms y los rechazos
+1 s (el pad sostenido contra una pared no zumba sin pausa). El interruptor solo aparece
+donde `navigator.vibrate` existe y el puntero principal es un dedo (Safari de iOS no vibra;
+Chrome de escritorio tiene la función pero no el motor).
 
 ### Rendimiento en teléfonos
 Al primer arranque, una prueba rápida (`lowEndDevice`: pantalla táctil con 4 GB o menos, o 4
@@ -221,7 +224,7 @@ direcciones, y hay un botón para dejarlo instalado y entrar directo.
 | iPadOS (Safari) | Fullscreen API | Compartir → "Agregar a pantalla de inicio" | "Pantalla completa" e "Instalar como app", que abre los pasos ilustrados |
 | iPhone (Safari y demás) | **No existe para páginas** | Compartir → "Agregar a pantalla de inicio" | Sin botón de pantalla completa; "Instalar como app" abre los pasos, y Opciones explica que es la única forma de perder la barra |
 | Firefox y otros | Fullscreen API | menú del navegador | Solo "Pantalla completa" |
-| Ya instalada (`display-mode` standalone o fullscreen, `navigator.standalone`) | no hace falta | ya está | Ningún botón |
+| Ya instalada (`display-mode` standalone, o fullscreen con puntero táctil: un navegador de escritorio en F11 no cuenta; `navigator.standalone`) | no hace falta | ya está | Ningún botón |
 | App de escritorio (Tauri) | la ventana | es la app | Ningún botón |
 
 - Las reglas son puras en `state/install.ts` (`detectPlatform`, `installOffer`,

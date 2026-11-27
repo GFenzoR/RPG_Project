@@ -30,7 +30,9 @@ export interface ContextChoice {
 /** What the button would do on one tile, or undefined when there is nothing to do there. */
 export function tileContext(t: ContextTile): ContextKind | undefined {
   const c = t.facts.creature;
-  if (c && !c.self) return c.npc ? "talk" : "attack";
+  // Never a player, like the Attack button (input/targeting.ts): a thumb cannot start a PvP
+  // fight by accident. A player is attacked by tapping it; what lies under one is still used.
+  if (c && !c.self && !c.player) return c.npc ? "talk" : "attack";
   if (t.living === "pushable") return t.ahead ? "push" : undefined;
   if (t.living === "breakable") return "break";
   const kind = defaultAction(t.facts);

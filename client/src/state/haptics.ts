@@ -20,11 +20,17 @@ export function hapticPattern(kind: HapticKind): number | number[] {
 
 /** The least time between two vibrations of hits, ms: a pack of wolves must not buzz without end. */
 export const HAPTIC_HIT_GAP_MS = 250;
+/**
+ * The least time between two vibrations of a refusal, ms: the pad held against a wall is
+ * refused at every step and must not buzz without pause.
+ */
+export const HAPTIC_ERROR_GAP_MS = 1000;
 
 export type Vibrate = (pattern: number | number[]) => boolean;
 
 export class Haptics {
   private last = Number.NEGATIVE_INFINITY;
+  private lastError = Number.NEGATIVE_INFINITY;
 
   constructor(
     private readonly vibrate: Vibrate | undefined,
@@ -42,6 +48,10 @@ export class Haptics {
     const hit = kind === "hit" || kind === "heavyHit";
     if (hit && now - this.last < HAPTIC_HIT_GAP_MS) return false;
     if (hit) this.last = now;
+    if (kind === "error") {
+      if (now - this.lastError < HAPTIC_ERROR_GAP_MS) return false;
+      this.lastError = now;
+    }
     try {
       return this.vibrate(hapticPattern(kind));
     } catch {
@@ -50,10 +60,15 @@ export class Haptics {
   }
 }
 
-/** navigator.vibrate bound, or undefined where it does not exist. */
+/**
+ * navigator.vibrate bound, or undefined where it does not exist or the device is not held
+ * in the hand: desktop Chrome has navigator.vibrate and nothing that vibrates, so without
+ * a coarse pointer (`handheld`) there is no vibration and no option for it.
+ */
 export function browserVibrate(
   nav: { vibrate?: (pattern: number | number[]) => boolean } | undefined,
+  handheld: boolean,
 ): Vibrate | undefined {
-  if (!nav || typeof nav.vibrate !== "function") return undefined;
+  if (!handheld || !nav || typeof nav.vibrate !== "function") return undefined;
   return (pattern) => nav.vibrate?.(pattern) ?? false;
 }

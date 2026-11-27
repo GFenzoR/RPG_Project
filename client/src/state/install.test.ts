@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  displayStandalone,
   appModeReduce,
   detectPlatform,
   fullscreenOffer,
@@ -81,6 +82,8 @@ describe("the install button", () => {
     s = appModeReduce(s, { kind: "appinstalled" });
     expect(s.installed).toBe(true);
     expect(installOffer(s, "screen")).toBe("none");
+    // The tab that installed it is still a tab: it keeps its fullscreen button.
+    expect(fullscreenOffer(s)).toBe("enter");
     // A late beforeinstallprompt does not bring it back.
     s = appModeReduce(s, { kind: "beforeinstallprompt" });
     expect(installOffer(s, "options")).toBe("none");
@@ -180,5 +183,19 @@ describe("the fullscreen button", () => {
         ),
       ),
     ).toBe(false);
+  });
+});
+
+describe("the display mode of an installed app", () => {
+  const media =
+    (...on: string[]) =>
+    (q: string) =>
+      on.includes(q);
+
+  it("standalone always; fullscreen only on a touch device (a desktop browser in F11 is a page)", () => {
+    expect(displayStandalone(media("(display-mode: standalone)"))).toBe(true);
+    expect(displayStandalone(media("(display-mode: fullscreen)", "(pointer: coarse)"))).toBe(true);
+    expect(displayStandalone(media("(display-mode: fullscreen)"))).toBe(false);
+    expect(displayStandalone(media("(pointer: coarse)"))).toBe(false);
   });
 });

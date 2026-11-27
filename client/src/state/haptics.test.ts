@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { HAPTIC_HIT_GAP_MS, Haptics, browserVibrate, hapticPattern } from "./haptics.ts";
+import {
+  HAPTIC_ERROR_GAP_MS,
+  HAPTIC_HIT_GAP_MS,
+  Haptics,
+  browserVibrate,
+  hapticPattern,
+} from "./haptics.ts";
 
 describe("haptics", () => {
   it("every pattern is short", () => {
@@ -57,6 +63,19 @@ describe("haptics", () => {
     expect(called).toBe(3);
   });
 
+  it("refusals in a row (the pad held against a wall) buzz once per gap, apart from hits", () => {
+    const h = new Haptics(
+      () => true,
+      () => true,
+    );
+    expect(h.pulse("error", 1000)).toBe(true);
+    expect(h.pulse("error", 1300)).toBe(false);
+    expect(h.pulse("hit", 1300)).toBe(true);
+    expect(h.pulse("error", 1000 + HAPTIC_ERROR_GAP_MS - 1)).toBe(false);
+    expect(h.pulse("error", 1000 + HAPTIC_ERROR_GAP_MS)).toBe(true);
+    expect(h.pulse("levelUp", 1000 + HAPTIC_ERROR_GAP_MS)).toBe(true);
+  });
+
   it("a vibrate that throws is not an error of the game", () => {
     const h = new Haptics(
       () => {
@@ -68,15 +87,20 @@ describe("haptics", () => {
   });
 
   it("browserVibrate is undefined where navigator has none", () => {
-    expect(browserVibrate(undefined)).toBeUndefined();
-    expect(browserVibrate({})).toBeUndefined();
+    expect(browserVibrate(undefined, true)).toBeUndefined();
+    expect(browserVibrate({}, true)).toBeUndefined();
+    // Desktop Chrome has navigator.vibrate and no motor: no vibration, no option.
+    expect(browserVibrate({ vibrate: () => true }, false)).toBeUndefined();
     const seen: unknown[] = [];
-    const v = browserVibrate({
-      vibrate: (p) => {
-        seen.push(p);
-        return true;
+    const v = browserVibrate(
+      {
+        vibrate: (p) => {
+          seen.push(p);
+          return true;
+        },
       },
-    });
+      true,
+    );
     expect(v?.(5)).toBe(true);
     expect(seen).toEqual([5]);
   });

@@ -30,7 +30,10 @@ export interface PlatformEnv {
   maxTouchPoints: number;
   /** navigator.standalone (iOS): launched from the home screen. */
   iosStandalone: boolean;
-  /** display-mode standalone or fullscreen matches: launched as an installed app. */
+  /**
+   * Launched as an installed app: display-mode standalone, or fullscreen on a touch device
+   * (the manifest's display). A desktop browser in F11 also matches fullscreen and is not one.
+   */
   displayStandalone: boolean;
   /** The document can go fullscreen (fullscreenEnabled, or WebKit's prefixed one). */
   fullscreenApi: boolean;
@@ -47,6 +50,18 @@ export function detectPlatform(env: Pick<PlatformEnv, "userAgent" | "maxTouchPoi
   return "other";
 }
 
+/**
+ * Whether the display mode says "installed app". The manifest asks for fullscreen, which an
+ * installed app gets on phones and tablets; a desktop one falls back to standalone, and a
+ * desktop browser in F11 matches fullscreen too, so fullscreen counts only with a finger.
+ */
+export function displayStandalone(matches: (query: string) => boolean): boolean {
+  return (
+    matches("(display-mode: standalone)") ||
+    (matches("(display-mode: fullscreen)") && matches("(pointer: coarse)"))
+  );
+}
+
 /** Running as an installed app (or the desktop app): no browser chrome to lose. */
 export function runsInstalled(
   env: Pick<PlatformEnv, "iosStandalone" | "displayStandalone" | "tauri">,
@@ -54,7 +69,7 @@ export function runsInstalled(
   return env.tauri || env.iosStandalone || env.displayStandalone;
 }
 
-/** What the page remembers between visits (state/app-mode-prefs.ts). */
+/** What the page remembers between visits (state/touch-controls.ts). */
 export interface AppModeMemory {
   /** The player closed the install offer: it stays in Options only. */
   installDismissed: boolean;
@@ -64,7 +79,13 @@ export interface AppModeMemory {
 
 export interface AppModeState {
   platform: Platform;
+  /** The app is installed: launched as one, or installed from this tab a moment ago. */
   installed: boolean;
+  /**
+   * This page runs as the installed app (no browser chrome to lose). A tab that has just
+   * installed the app is still a tab: it keeps its fullscreen button.
+   */
+  standalone: boolean;
   fullscreenApi: boolean;
   /** Chromium fired beforeinstallprompt and the event is kept: prompt() can be called. */
   promptReady: boolean;
@@ -88,6 +109,7 @@ export function initialAppMode(env: PlatformEnv, memory: AppModeMemory): AppMode
   return {
     platform,
     installed: runsInstalled(env),
+    standalone: runsInstalled(env),
     // The Tauri window is the desktop app's business. An iPhone has no fullscreen for
     // pages (only for video), whatever its WebKit answers: never a button that does nothing.
     fullscreenApi: env.fullscreenApi && !env.tauri && platform !== "iphone",
@@ -135,14 +157,14 @@ export function installOffer(s: AppModeState, where: "screen" | "options"): Inst
 
 /**
  * The fullscreen button: enter, leave, or, where pages cannot go fullscreen (iPhone), the
- * hint that only the installed app loses the address bar. Nothing when installed: an
- * installed app already has no browser chrome.
+ * hint that only the installed app loses the address bar. Nothing when running installed:
+ * an installed app already has no browser chrome.
  */
 export type FullscreenOffer = "enter" | "exit" | "install-hint" | "none";
 
 export function fullscreenOffer(s: AppModeState): FullscreenOffer {
   if (s.fullscreen) return "exit";
-  if (s.installed) return "none";
+  if (s.standalone) return "none";
   if (s.fullscreenApi) return "enter";
   return s.platform === "iphone" ? "install-hint" : "none";
 }

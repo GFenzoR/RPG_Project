@@ -2513,7 +2513,6 @@ export async function createGameCanvas(
       hint.remove();
       gestures.reset();
       endTouchWalk();
-      endTouchWalk();
       observer.disconnect();
       window.removeEventListener("resize", resize);
       for (const id of [...sprites.keys()]) dropSprite(id);

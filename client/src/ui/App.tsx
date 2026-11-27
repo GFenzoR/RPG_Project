@@ -2,6 +2,7 @@
 // DOM with Preact over the canvas (client/CLAUDE.md): accessible, translatable and easy to
 // drive from Playwright. Every visible text goes through t().
 import { Haptics, browserVibrate } from "../state/haptics.ts";
+import { coarsePointer } from "../state/touch-prefs.ts";
 import { DEFAULT_TOUCH_PREFS } from "../state/touch-controls.ts";
 import type { TouchPrefs } from "../state/touch-controls.ts";
 import { keepAwake } from "./app-mode.ts";
@@ -662,7 +663,7 @@ function GameScreen(props: {
   useEffect(() => {
     if (!host.current) return undefined;
     const haptics = new Haptics(
-      browserVibrate(typeof navigator === "undefined" ? undefined : navigator),
+      browserVibrate(typeof navigator === "undefined" ? undefined : navigator, coarsePointer()),
       () => hapticsOn.current ?? DEFAULT_TOUCH_PREFS.haptics,
     );
     const g = new Game({

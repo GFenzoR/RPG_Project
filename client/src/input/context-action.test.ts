@@ -9,6 +9,26 @@ const tile = (t: Partial<ContextTile> & { facts?: ContextTile["facts"] }): Conte
 });
 
 describe("tileContext", () => {
+  it("never attacks another player, in front or around; what lies under one is still used", () => {
+    const player = { npc: false, self: false, player: true };
+    expect(tileContext(tile({ facts: { known: true, creature: player } }))).toBeUndefined();
+    const monster = { npc: false, self: false, player: false };
+    // The player faced is skipped: the button goes for the wolf beside.
+    expect(
+      contextAction([
+        tile({ facts: { known: true, creature: player }, ahead: true }),
+        tile({ facts: { known: true } }),
+        tile({ facts: { known: true, creature: monster } }),
+      ]),
+    ).toEqual({ kind: "attack", index: 2 });
+    expect(
+      contextAction([
+        tile({ facts: { known: true } }),
+        tile({ facts: { known: true, creature: player } }),
+      ]),
+    ).toBeUndefined();
+  });
+
   it("talks to an NPC and attacks a monster, never the own player", () => {
     expect(
       tileContext(tile({ facts: { known: true, creature: { npc: true, self: false } } })),

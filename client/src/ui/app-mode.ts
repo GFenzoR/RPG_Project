@@ -4,7 +4,12 @@
 // the event must be kept to call prompt() from the button later. Components read it with
 // useAppMode (ui/AppMode.tsx).
 import { isTauri } from "@tauri-apps/api/core";
-import { UPDATE_EVENT, appModeReduce, initialAppMode } from "../state/install.ts";
+import {
+  UPDATE_EVENT,
+  appModeReduce,
+  displayStandalone,
+  initialAppMode,
+} from "../state/install.ts";
 import type { AppModeEvent, AppModeState, PlatformEnv } from "../state/install.ts";
 import { optionStorage } from "../state/option-storage.ts";
 import { loadAppMode, saveAppMode } from "../state/touch-controls.ts";
@@ -47,8 +52,7 @@ function readEnv(): PlatformEnv {
     userAgent: nav?.userAgent ?? "",
     maxTouchPoints: nav?.maxTouchPoints ?? 0,
     iosStandalone: (nav as { standalone?: boolean } | undefined)?.standalone === true,
-    displayStandalone:
-      matches("(display-mode: standalone)") || matches("(display-mode: fullscreen)"),
+    displayStandalone: displayStandalone(matches),
     fullscreenApi: (doc?.fullscreenEnabled ?? wdoc?.webkitFullscreenEnabled) === true,
     tauri,
   };

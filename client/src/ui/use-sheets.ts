@@ -16,6 +16,14 @@ import type { SheetKind, SheetsOpen } from "./sheets.ts";
 export type SheetClosers = Readonly<Partial<Record<SheetKind, () => void>>>;
 
 /**
+ * How long after a back the History entries are checked against the sheets again, ms. A
+ * sheet the server closes (a trade, the market, the stash) is still open then: its entry
+ * is pushed again, so a second back during the lag asks to close once more instead of
+ * leaving the game in the middle of a trade.
+ */
+export const BACK_RESYNC_MS = 50;
+
+/**
  * Tracks which sheets are open (`open`, `active` false on the desktop: nothing happens) and
  * routes back, Escape and a header swipe to the closer of the top one.
  */
@@ -28,7 +36,7 @@ export function useSheets(open: SheetsOpen, closers: SheetClosers, active: boole
   const key = SHEET_KINDS.map((k) => (open[k] ? "1" : "0")).join("");
 
   // Keep the History entries equal to the stack's depth.
-  useEffect(() => {
+  const sync = (): void => {
     const next = active ? syncStack(stack.current, open) : [];
     stack.current = next;
     const want = historyDepth(next);
@@ -46,7 +54,27 @@ export function useSheets(open: SheetsOpen, closers: SheetClosers, active: boole
     } catch {
       /* History unavailable (a preview): the sheets still close with their buttons. */
     }
-  }, [key, active]);
+  };
+  const syncRef = useRef(sync);
+  syncRef.current = sync;
+  useEffect(sync, [key, active]);
+
+  // The game view goes away with sheets open (logout, a lost connection): their entries
+  // go too, or coming back would need that many dead backs before leaving.
+  useEffect(
+    () => () => {
+      const left = pushed.current;
+      pushed.current = 0;
+      stack.current = [];
+      if (left === 0) return;
+      try {
+        history.go(-left);
+      } catch {
+        /* History unavailable. */
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!active) return undefined;
@@ -61,6 +89,9 @@ export function useSheets(open: SheetsOpen, closers: SheetClosers, active: boole
       if (!top) return;
       stack.current = closeTop(stack.current);
       closersRef.current[top]?.();
+      // Closed here, the next render agrees. Still open then (the server closes it): its
+      // entry comes back.
+      setTimeout(() => syncRef.current(), BACK_RESYNC_MS);
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.code !== "Escape" || e.defaultPrevented) return;
