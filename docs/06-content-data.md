@@ -541,7 +541,13 @@ corpse: remains_fur        # opcional: los restos que deja (por defecto, creatur
   los dibuja con `corpses/<id>`, que `tools/spritegen/src/recipes/corpses.ts` hace para
   cada monstruo de esta carpeta desde su propio arte (el último frame de `death_s`; un
   monstruo con `look`, el humanoide compuesto con sus colores en su último frame de morir;
-  uno de una sola imagen, volcado de costado). Se eligió así y no un item de cadáver por
+  uno de una sola imagen, volcado de costado). Desde el 2026-11-27 son cuatro por
+  monstruo, uno por dirección en que puede caer (`corpses/<id>` al sur y
+  `corpses/<id>_e`, `_n`, `_w`; docs/17 "Un cadáver por dirección"): por eso el `id` de un
+  monstruo no puede ser el de otro más `_e`, `_n` o `_w`, ni `body_male` o `body_female`
+  con o sin ese sufijo (`spritegen check` lo rechaza). Un monstruo cuyo sprite tiene
+  `death_e/n/w` además de `death_s` recibe cadáveres con arte propio en esas direcciones;
+  si solo tiene `death_s`, los otros salen de ese (espejados). Sin cambios en el YAML. Se eligió así y no un item de cadáver por
   monstruo: un item por monstruo duplicaba 21 contenedores iguales (y sus ids y nombres)
   para cambiar solo el dibujo y el nombre, que ya salen del id del monstruo. Agregar un
   monstruo: `make spritegen ONLY=corpses/` escribe su cadáver y lo revisas con

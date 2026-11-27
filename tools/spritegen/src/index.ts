@@ -20,7 +20,7 @@ import { composite } from "./draw.ts";
 import type { Recipe, RecipeBook } from "./recipe.ts";
 import { MAX_ORB_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { RECIPES, recipesAt } from "./recipes/index.ts";
-import { BODY_SEXES, bodyPath, corpsePath, monsterIds } from "./recipes/corpses.ts";
+import { BODY_SEXES, bodyPath, CORPSE_DIRS, corpsePath, monsterIds } from "./recipes/corpses.ts";
 import { renderRecipe, TILE } from "./render.ts";
 import { swayScene, swaySheet, windProblems, windSprites, writeWindSprites } from "./wind.ts";
 import type { SwayScene } from "./wind.ts";
@@ -218,27 +218,44 @@ export const UI_ICON = /^ui\/[a-z0-9_]+\/[a-z0-9_]+$/;
  * corpse of their own (no look, death clip nor image to make it from: recipes/corpses.ts).
  */
 /**
- * Monsters whose corpse would take the path of a player's body (corpses/body_<sex>): the
- * client finds both by the name after "@" in a map item's key (client corpse-art.ts).
+ * Monsters whose corpses would take the path of another's: of a player's body
+ * (corpses/body_<sex>) or of another monster's corpse fallen another way
+ * (corpses/<id>_<e|n|w>). The client finds them all by the name after "@" in a map item's
+ * key (client corpse-art.ts).
  */
 export function bodyClashes(ids: readonly string[]): string[] {
-  const bodies = new Set(BODY_SEXES.map(bodyPath));
+  const taken = new Map<string, string>();
+  for (const sex of BODY_SEXES)
+    for (const dir of CORPSE_DIRS) taken.set(bodyPath(sex, dir), "the body of a player");
+  for (const id of ids)
+    for (const dir of CORPSE_DIRS)
+      if (dir !== "s") taken.set(corpsePath(id, dir), `the corpse of ${id} fallen facing ${dir}`);
   return ids
-    .filter((id) => bodies.has(corpsePath(id)))
-    .map((id) => `${corpsePath(id)}: monster id ${id} is taken by the body of a player`);
+    .filter((id) => taken.has(corpsePath(id)))
+    .map(
+      (id) => `${corpsePath(id)}: monster id ${id} is taken by ${taken.get(corpsePath(id)) ?? ""}`,
+    );
 }
 
 export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
   const book = recipesAt(root);
   // A monster's corpse (recipes/corpses.ts), which the client finds by the monster's id.
-  const corpses = new Set([...monsterIds(root).map(corpsePath), ...BODY_SEXES.map(bodyPath)]);
+  const corpses = new Set(
+    CORPSE_DIRS.flatMap((dir) => [
+      ...monsterIds(root).map((id) => corpsePath(id, dir)),
+      ...BODY_SEXES.map((sex) => bodyPath(sex, dir)),
+    ]),
+  );
   const problems: string[] = bodyClashes(monsterIds(root));
-  for (const id of monsterIds(root))
-    if (!book[corpsePath(id)])
+  // One problem per monster: with no art for the south there is none for any way.
+  for (const id of monsterIds(root)) {
+    const missing = CORPSE_DIRS.find((dir) => !book[corpsePath(id, dir)]);
+    if (missing !== undefined)
       problems.push(
-        `${corpsePath(id)}: monster ${id} has no corpse: it needs a look, a death clip (<sprite>/death_s_<n>) or a square image (<sprite>) to make it from`,
+        `${corpsePath(id, missing)}: monster ${id} has no corpse: it needs a look, a death clip (<sprite>/death_s_<n>) or a square image (<sprite>) to make it from`,
       );
+  }
   for (const p of recipePaths(undefined, book)) {
     const ui = book[p]?.kind === "ui";
     if (ui !== UI_ICON.test(p))

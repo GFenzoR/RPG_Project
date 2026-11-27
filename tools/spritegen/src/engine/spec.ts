@@ -111,6 +111,13 @@ export interface ActionSpec {
   keys: readonly KeySpec[];
   /** Facings to render (default all four). */
   dirs?: readonly Dir[];
+  /**
+   * Per facing, how far (degrees about the vertical axis, the way the facings turn) the
+   * whole figure has turned by the last frame, a little more each frame from none at the
+   * first. A person falling along the screen's depth is foreshortened into a lump: turned
+   * as it falls, it lies across the tile and reads as a body.
+   */
+  turn?: Partial<Record<Dir, number>>;
 }
 
 /**

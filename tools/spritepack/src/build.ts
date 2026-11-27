@@ -13,13 +13,14 @@ import {
   gaitHints,
   layerOver,
   measureFrames,
-  restOf,
+  restsOf,
+  FALL_DIRS,
   stancesOf,
   mirrorImage,
   recolorImage,
   specColumns,
 } from "./anims.ts";
-import type { AnimAction, AnimDir, AnimEntry, AnimMeta } from "./anims.ts";
+import type { AnimAction, AnimDir, AnimEntry, AnimMeta, FallDir } from "./anims.ts";
 import { collectSpriteRefs, listFiles } from "./content.ts";
 import type { SpriteRef } from "./content.ts";
 import { isLicenseFile, registeredPacks } from "./credits.ts";
@@ -515,13 +516,21 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
     );
     if (stance) meta.stance = stance;
     // Where its fallen body rests: the client's fall ends on the corpse sprite.
-    const rest = restOf(
+    // Per facing: `rest` is the south's, `rests` the others where they differ.
+    const rests = restsOf(
       name,
       meta,
       (frame) => resolved.get(frame)?.image,
       aliases.has(name) ? undefined : resolved.get(name)?.image,
     );
+    const rest = rests.s;
     if (rest !== undefined) meta.rest = rest;
+    const other: Partial<Record<FallDir, number>> = {};
+    for (const dir of FALL_DIRS) {
+      const r = rests[dir];
+      if (dir !== "s" && r !== undefined && r !== rest) other[dir] = r;
+    }
+    if (Object.keys(other).length > 0) meta.rests = other;
   }
   index.anims = anims;
   index.tiles = tiles;

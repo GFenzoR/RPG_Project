@@ -631,8 +631,8 @@ export const CAST_KEYS: KeySpec[] = [
 ];
 
 /**
- * Death (4 frames, drawn facing south like today's player): it reels back with its arms
- * thrown out, the knees give way, it tips over and lies on its side.
+ * Death (4 frames, drawn in the four straight facings: index.ts HUMANOID_DEATH_DIRS): it
+ * reels back with its arms thrown out, the knees give way, it tips over and lies on its side.
  */
 export const DEATH_KEYS: KeySpec[] = [
   {

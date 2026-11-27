@@ -76,7 +76,8 @@ animations:
   # ---- engine humanoids (tools/spritegen/src/engine/specs/humanoid, docs/17 "Humanoides del
   # motor"): players, NPCs and humanoid monsters are a body and paper-doll layers over it, each
   # drawn in a neutral ramp and tinted by the client (data/looks.yaml). Frames from files in all
-  # four facings (death only south); bc: feet on the tile; the body stands on the contact shadow
+  # eight facings (death in the four straight ones); bc: feet on the tile; the body stands
+  # on the contact shadow
   # (ellipse), a layer casts none. per_tile: walk frames per tile from the stride, the same
   # in every facing (no per_tile_ns: one cadence, docs/17 "La regla de la zancada"); trim:
   # packed cropped to their opaque box (docs/07); ms: the rig's (spritegen check fails if any of this differs from its spec).

@@ -105,6 +105,11 @@ export interface AnimMeta {
    * it falls dead, so the fall ends on the corpse sprite (docs/17 "Muerte continua").
    */
   rest?: number;
+  /**
+   * The same for a body fallen facing east, north or west, where it differs from `rest`
+   * (restsOf, docs/17 "Un cadáver por dirección").
+   */
+  rests?: Partial<Record<FallDir, number>>;
   actions: Partial<
     Record<
       AnimAction,
@@ -739,6 +744,41 @@ export function restOf(
     return last ? rowsUnder(last) : undefined;
   }
   return single ? tippedRest(single) : undefined;
+}
+
+/** The ways a body falls dead (FallDir of packages/renderer anim.ts). */
+export type FallDir = "s" | "e" | "n" | "w";
+export const FALL_DIRS: readonly FallDir[] = ["s", "e", "n", "w"];
+
+/**
+ * Where the body fallen facing each way rests, as restOf says of the south: the rule of
+ * packages/renderer fallArt, which the client plays the fall with and tools/spritegen makes
+ * the corpses with. A death clip drawn in that facing: its last frame. A clip without that
+ * facing: the south one's (mirrored or not, it rests on the same rows). A single image:
+ * tipped clockwise from the drawing as it is to the south and (mirrored afterwards) to the
+ * north, and from its mirror image to the east and the west.
+ */
+export function restsOf(
+  sprite: string,
+  meta: AnimMeta,
+  frame: (name: string) => Image | undefined,
+  single: Image | undefined,
+): Partial<Record<FallDir, number>> {
+  const out: Partial<Record<FallDir, number>> = {};
+  const death = meta.actions.death;
+  const south = restOf(sprite, meta, frame, single);
+  const flipped = !death && single ? tippedRest(mirrorImage(single)) : undefined;
+  for (const dir of FALL_DIRS) {
+    let rest = south;
+    if (death) {
+      if (dir !== "s" && death.dirs.includes(dir) && death.frames >= 1) {
+        const last = frame(frameName(sprite, "death", dir, death.frames - 1));
+        rest = last ? rowsUnder(last) : undefined;
+      }
+    } else if (dir === "e" || dir === "w") rest = flipped;
+    if (rest !== undefined) out[dir] = rest;
+  }
+  return out;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

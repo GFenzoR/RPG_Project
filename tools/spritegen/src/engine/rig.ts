@@ -71,14 +71,16 @@ export function poseAt(
  * The model-to-view transform of every part (in spec order) for a pose and a facing: each
  * part sits at its joint (`at` plus the pose's `move`) in its parent's frame, turned by its
  * rest rotation and then by the pose's (in the rest-turned frame). Without a facing (an
- * object) the model is drawn as built: x to the right, y away from the camera.
+ * object) the model is drawn as built: x to the right, y away from the camera. `turn`:
+ * degrees more about the vertical axis (ActionSpec.turn).
  */
 export function partTransforms(
   spec: SpriteSpec,
   pose: Map<string, { rot: Vec3; move: Vec3 }>,
   dir?: Dir,
+  turn = 0,
 ): Transform[] {
-  const yaw = dir ? FACING_YAW[dir] + (spec.views?.[dir] ?? 0) : 0;
+  const yaw = dir ? FACING_YAW[dir] + (spec.views?.[dir] ?? 0) + turn : 0;
   const whole = pose.get("*");
   const view: Transform = { rot: rotZ(yaw), pos: ZERO };
   const model = compose(

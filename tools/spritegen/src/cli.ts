@@ -8,8 +8,9 @@
 //        own maths (wind.ts), to review with Read (make sway-preview); with --scene
 //        forest|town, FILE.<n>.png: four moments 350 ms apart of a patch of map with those
 //        plants in the real wind field (gusts crossing it), to compare one with the next
-//   node tools/spritegen/src/cli.ts corpses [--out FILE.png] [--scale N]
-//        every monster standing beside its corpse (recipes/corpses.ts), to review with Read
+//   node tools/spritegen/src/cli.ts corpses [--only ID_PREFIX] [--out FILE.png] [--scale N]
+//        every monster (and a player's body) standing beside its four corpses, fallen facing
+//        south, east, north and west (recipes/corpses.ts), to review with Read
 //   node tools/spritegen/src/cli.ts sheet [--only PREFIX] [--out DIR] [--scale N]
 //        contact sheet (every frame at N x, default 4) and 1x lineup of each engine sprite;
 //        with item icons among them, also icons.slots.png (each in an inventory slot at 2x
@@ -76,7 +77,7 @@ if (
 }
 
 if (command === "corpses") {
-  // Every monster standing beside its corpse, as the client places them (recipes/corpses.ts).
+  // Every monster standing beside its corpses, as the client places them (recipes/corpses.ts).
   const scale = Number(values.scale);
   const out = resolve(values.out ?? join(root, "build", "spritegen", "corpses.png"));
   mkdirSync(dirname(out), { recursive: true });
@@ -84,7 +85,7 @@ if (command === "corpses") {
     out,
     encodePng(
       scaleImage(
-        corpseSheet(root, recipesAt(root)),
+        corpseSheet(root, recipesAt(root), values.only ?? ""),
         Number.isInteger(scale) && scale > 0 ? scale : 2,
       ),
     ),

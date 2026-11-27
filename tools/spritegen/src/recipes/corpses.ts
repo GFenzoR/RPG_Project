@@ -1,19 +1,24 @@
-// The corpse of every monster (docs/02 "Muerte", docs/17 "Cadáveres"): corpses/<monster id>,
-// one per monster of data/monsters, made from the monster's own art, so the remains it
-// leaves are that creature lying dead and not its family's shared body. The server marks
+// The corpses of every monster (docs/02 "Muerte", docs/17 "Cadáveres" and "Un cadáver por
+// dirección"): corpses/<monster id> (fallen facing south) and corpses/<monster id>_<e|n|w>,
+// four per monster of data/monsters, made from the monster's own art, so the remains it
+// leaves are that creature lying dead the way it fell and not its family's shared body. The server marks
 // the family's container item with the monster that fell (ItemMods remains_of) and the
 // client draws this sprite for it (client/src/state/corpse-art.ts). Data drives them: a
 // new monster gets its corpse with `make spritegen`, and the committed-PNG test fails
 // until it has one (tools/spritepack packs every PNG of assets/sprites); a monster with
 // no art to make one from is a problem of `spritegen check` (index.ts checkPaths).
 //
-// How each one is made, deterministically:
+// How each one is made, deterministically, with the rule the client plays the fall with
+// (packages/renderer anim.ts fallArt), so the fall ends on the corpse's pixels:
 // - an engine humanoid (a `look`): its paper doll composed in the last frame of its death
-//   (facing south, as the client draws the fall), with the look's own tints;
-// - a creature with a death clip (<sprite>/death_s_<n>): the clip's last frame, how the
-//   creature fell;
-// - a single image (no clip): the sprite tipped onto its side and flattened against the
-//   floor, the procedural fall's last pose.
+//   in that facing (the engine draws the four), with the look's own tints;
+// - a creature with a death clip in that facing (<sprite>/death_<dir>_<n>: the engine's
+//   boar and stag): the clip's last frame, how the creature fell;
+// - a creature whose death clip faces south only (the hand-made monsters): the last south
+//   frame, as it is for the south and the east, mirrored for the north and the west;
+// - a single image (no clip): the sprite tipped onto its side (clockwise or counter-
+//   clockwise, mirrored or not: four bodies) and flattened against the floor, the
+//   procedural fall's last pose.
 // Art that code draws (the engine's frames, recipes/creatures.ts) is taken from its recipe,
 // drawn when the corpse is, never from its committed PNG: one `make spritegen` after
 // changing a creature (or adding one) writes its frames and the corpse of those frames, in
@@ -27,6 +32,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createImage, decodePng, parseYaml } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
+import { FALL_DIRS, fallArt } from "../../../../packages/renderer/src/anim.ts";
+import type { AnimDir, FallDir } from "../../../../packages/renderer/src/anim.ts";
 import { composeFrame } from "../engine/specs/humanoid/compose.ts";
 import { lookOf, lookTables, wornOf } from "../engine/specs/humanoid/previews.ts";
 import { HUMANOID_LAYERS } from "../engine/specs/humanoid/index.ts";
@@ -37,9 +44,10 @@ import { renderRecipe, TILE } from "../render.ts";
 export const BODY_SEXES = ["male", "female"] as const;
 
 /**
- * The plain person a player's body is drawn as: the server sends the body's owner's name and
- * nothing of the look, so the corpse has the sex the client saw alive (and neutral skin,
- * hair and clothes). The same paper doll, the same last frame of the fall.
+ * The plain person a player's body is drawn as: the server sends the body's owner's name,
+ * sex and the way it fell (ItemMods body_of, body_sex, facing) and nothing else of the look,
+ * so the corpse has neutral skin, hair and clothes. The same paper doll, the same last frame
+ * of the fall.
  */
 const BODY_LOOKS: Record<(typeof BODY_SEXES)[number], Record<string, unknown>> = {
   male: {
@@ -64,11 +72,18 @@ const BODY_WORN = {
   legs: { shape: "trousers", tint: "brown" },
 };
 
-/** The atlas path of a monster's corpse (client/src/state/corpse-art.ts corpseSprite). */
-export const corpsePath = (monster: string): string => `corpses/${monster}`;
+/** The ways a corpse lies (packages/renderer FALL_DIRS): one sprite each. */
+export const CORPSE_DIRS = FALL_DIRS;
 
-/** The atlas path of a player's body of `sex`. */
-export const bodyPath = (sex: string): string => `corpses/body_${sex}`;
+/**
+ * The atlas path of a monster's corpse fallen facing `dir` (client/src/state/corpse-art.ts
+ * corpseSprite): the south one keeps the plain path, the one every older client asks for.
+ */
+export const corpsePath = (monster: string, dir: FallDir = "s"): string =>
+  dir === "s" ? `corpses/${monster}` : `corpses/${monster}_${dir}`;
+
+/** The atlas path of a player's body of `sex` fallen facing `dir`. */
+export const bodyPath = (sex: string, dir: FallDir = "s"): string => corpsePath(`body_${sex}`, dir);
 
 /** Where a standing creature's feet are, px above its tile's bottom (packages/renderer FEET_LINE). */
 export const FEET_LINE = 4;
@@ -98,6 +113,17 @@ export function deaden(img: Image): void {
       d[i + k] = Math.max(0, Math.min(255, (mixed * CORPSE_LIGHT) >> 8));
     }
   }
+}
+
+/** A copy of `src` flipped left to right. */
+export function mirrored(src: Image): Image {
+  const out = createImage(src.width, src.height);
+  for (let y = 0; y < src.height; y++)
+    for (let x = 0; x < src.width; x++) {
+      const s = (y * src.width + x) * 4;
+      out.data.set(src.data.subarray(s, s + 4), (y * src.width + (src.width - 1 - x)) * 4);
+    }
+  return out;
 }
 
 /** Lowest row with an opaque pixel (-1: none). */
@@ -140,6 +166,16 @@ export function tipOver(src: Image): Image {
     }
   }
   return out;
+}
+
+/**
+ * A single image fallen the way `dir` says (fallArt with no clip): mirrored or not, then
+ * tipped clockwise (tipOver) or counter-clockwise (the mirror image of tipping its mirror).
+ */
+export function tipTo(src: Image, dir: FallDir): Image {
+  const art = fallArt(undefined, dir);
+  const from = art.mirror ? mirrored(src) : src;
+  return art.tip === 1 ? tipOver(from) : mirrored(tipOver(mirrored(from)));
 }
 
 /** How wide the corpse of a body `width` px wide anchored `anchor` is (corpseOf). */
@@ -204,15 +240,14 @@ interface Fallen {
   body: () => Image;
 }
 
-/**
- * The fallen body of the creature drawn with `sprite`: the last frame of its death clip
- * facing south, or its single image tipped over. Art of `coded` (the recipes in code) is
- * drawn from its recipe when asked, so it is never an older PNG; other art is the PNG of
- * assets/sprites under `root`. Undefined: nothing to make it from (a single image that is
- * not square cannot be tipped over).
- */
-function fallenOf(root: string, sprite: string, coded: RecipeBook): Fallen | undefined {
-  const clip = `${sprite}/death_s_`;
+/** The last frame of the death clip of `sprite` facing `dir`, if it has one. */
+function lastDeath(
+  root: string,
+  sprite: string,
+  coded: RecipeBook,
+  dir: FallDir,
+): Fallen | undefined {
+  const clip = `${sprite}/death_${dir}_`;
   const codedLast = lastFrame(Object.keys(coded), clip, "");
   const frame = codedLast === undefined ? undefined : coded[`${clip}${codedLast}`];
   if (frame)
@@ -221,23 +256,60 @@ function fallenOf(root: string, sprite: string, coded: RecipeBook): Fallen | und
       height: frame.height ?? TILE,
       body: () => renderRecipe(`${clip}${codedLast ?? 0}`, frame),
     };
-  const dir = join(root, "assets", "sprites", sprite);
-  const fileLast = existsSync(dir) ? lastFrame(readdirSync(dir), "death_s_", ".png") : undefined;
-  if (fileLast !== undefined) {
-    const img = decodePng(readFileSync(join(dir, `death_s_${fileLast}.png`)));
-    return { width: img.width, height: img.height, body: () => img };
+  const folder = join(root, "assets", "sprites", sprite);
+  const prefix = `death_${dir}_`;
+  const fileLast = existsSync(folder) ? lastFrame(readdirSync(folder), prefix, ".png") : undefined;
+  if (fileLast === undefined) return undefined;
+  const img = decodePng(readFileSync(join(folder, `${prefix}${fileLast}.png`)));
+  return { width: img.width, height: img.height, body: () => img };
+}
+
+/**
+ * The fallen body of the creature drawn with `sprite`, fallen facing `dir`, by the client's
+ * own rule (fallArt): the last frame of its death clip in that facing, the south one
+ * (mirrored to the north and the west) when the clip has no such facing, or its single
+ * image tipped over. Art of `coded` (the recipes in code) is drawn from its recipe when
+ * asked, so it is never an older PNG; other art is the PNG of assets/sprites under `root`.
+ * Undefined: nothing to make it from (a single image that is not square cannot be tipped
+ * over). `derived`: no art of its own for that facing.
+ */
+function fallenOf(
+  root: string,
+  sprite: string,
+  coded: RecipeBook,
+  dir: FallDir,
+): (Fallen & { derived: boolean }) | undefined {
+  const dirs: AnimDir[] = CORPSE_DIRS.filter((d) => lastDeath(root, sprite, coded, d));
+  if (dirs.length > 0) {
+    const art = fallArt(dirs, dir);
+    const last = lastDeath(root, sprite, coded, art.clip);
+    if (!last) return undefined; // a clip with no south frames and none facing `dir`
+    const body = last.body;
+    return {
+      ...last,
+      body: art.mirror ? () => mirrored(body()) : body,
+      derived: art.clip !== dir,
+    };
   }
   const recipe = coded[sprite];
   if (recipe) {
     const size = { width: recipe.width ?? TILE, height: recipe.height ?? TILE };
     if (size.width !== size.height) return undefined;
-    return { ...size, body: () => tipOver(renderRecipe(sprite, recipe)) };
+    return { ...size, body: () => tipTo(renderRecipe(sprite, recipe), dir), derived: true };
   }
   const single = join(root, "assets", "sprites", `${sprite}.png`);
   if (!existsSync(single)) return undefined;
   const img = decodePng(readFileSync(single));
   if (img.width !== img.height) return undefined;
-  return { width: img.width, height: img.height, body: () => tipOver(img) };
+  return { width: img.width, height: img.height, body: () => tipTo(img, dir), derived: true };
+}
+
+/**
+ * Which facings of the corpse of the creature drawn with `sprite` are its own art (a death
+ * clip drawn in that facing); the others are derived (mirrored or tipped). docs/17's table.
+ */
+export function ownCorpseDirs(root: string, sprite: string, coded: RecipeBook): FallDir[] {
+  return CORPSE_DIRS.filter((d) => fallenOf(root, sprite, coded, d)?.derived === false);
 }
 
 /** The ids of data/monsters under `root`, sorted by file. */
@@ -269,44 +341,48 @@ export function corpseRecipes(root: string, coded: RecipeBook): RecipeBook {
     tables ??= lookTables(read("data/looks.yaml"));
     const t = tables;
     for (const sex of BODY_SEXES)
-      book[bodyPath(sex)] = recipeOf(64, 64, () =>
-        corpseOf(
-          composeFrame(
-            lookOf(BODY_LOOKS[sex]),
-            wornOf(BODY_WORN),
-            t,
-            "death",
-            "s",
-            HUMANOID_DEATH_FRAMES - 1,
+      for (const dir of CORPSE_DIRS)
+        book[bodyPath(sex, dir)] = recipeOf(64, 64, () =>
+          corpseOf(
+            composeFrame(
+              lookOf(BODY_LOOKS[sex]),
+              wornOf(BODY_WORN),
+              t,
+              "death",
+              dir,
+              HUMANOID_DEATH_FRAMES - 1,
+            ),
+            "bc",
           ),
-          "bc",
-        ),
-      );
+        );
   }
   for (const file of readdirSync(dir)
     .filter((f) => /\.ya?ml$/.test(f))
     .sort()) {
     const m = parseYaml(readFileSync(join(dir, file), "utf8"));
     if (!isObj(m) || typeof m["id"] !== "string") continue;
-    const path = corpsePath(m["id"]);
+    const id = m["id"];
     if (isObj(m["look"])) {
       tables ??= lookTables(read("data/looks.yaml"));
       const t = tables;
       const look = lookOf(m["look"]);
       const worn = wornOf(m["look"]["worn"]);
-      book[path] = recipeOf(64, 64, () =>
-        corpseOf(composeFrame(look, worn, t, "death", "s", HUMANOID_DEATH_FRAMES - 1), "bc"),
-      );
+      for (const dir of CORPSE_DIRS)
+        book[corpsePath(id, dir)] = recipeOf(64, 64, () =>
+          corpseOf(composeFrame(look, worn, t, "death", dir, HUMANOID_DEATH_FRAMES - 1), "bc"),
+        );
       continue;
     }
     const sprite = m["sprite"];
     if (typeof sprite !== "string") continue;
     const anchor = hints.get(sprite) ?? "br";
-    const fallen = fallenOf(root, sprite, coded);
-    if (!fallen) continue;
-    book[path] = recipeOf(corpseWidth(fallen.width, anchor), fallen.height, () =>
-      corpseOf(fallen.body(), anchor),
-    );
+    for (const dir of CORPSE_DIRS) {
+      const fallen = fallenOf(root, sprite, coded, dir);
+      if (!fallen) continue;
+      book[corpsePath(id, dir)] = recipeOf(corpseWidth(fallen.width, anchor), fallen.height, () =>
+        corpseOf(fallen.body(), anchor),
+      );
+    }
   }
   return book;
 }
@@ -328,23 +404,34 @@ function living(root: string, m: Obj): { img: Image; anchor: "bc" | "br" } | und
 }
 
 /**
- * The review sheet of the corpses (cli.ts corpses): one cell per monster on a grass-like
- * floor with the tile grid, the living creature on its tile at the left and its corpse on
- * the tile at the right, both placed as the client places them (centred, feet FEET_LINE
- * above the tile's bottom). 1x; scale it to look.
+ * The review sheet of the corpses (cli.ts corpses): one row per monster (and per player's
+ * body) on a grass-like floor with the tile grid, the living creature on its tile at the
+ * left and its four corpses (fallen facing south, east, north, west) to the right, all
+ * placed as the client places them (centred, feet FEET_LINE above the tile's bottom). 1x;
+ * scale it to look. `only`: the rows whose id starts with it.
  */
-export function corpseSheet(root: string, book: RecipeBook): Image {
+export function corpseSheet(root: string, book: RecipeBook, only = ""): Image {
   const dir = join(root, "data", "monsters");
-  const ids = readdirSync(dir)
+  const monsters = readdirSync(dir)
     .filter((f) => /\.ya?ml$/.test(f))
     .sort()
     .map((f) => parseYaml(readFileSync(join(dir, f), "utf8")))
     .filter(isObj);
-  const CELL_W = 224;
-  const CELL_H = 112;
-  const COLS = 4;
-  const rows = Math.ceil(ids.length / COLS);
-  const sheet = createImage(CELL_W * COLS, CELL_H * rows);
+  const rowsOf: { id: string; alive: Image | undefined }[] = [];
+  for (const m of monsters)
+    if (typeof m["id"] === "string") rowsOf.push({ id: m["id"], alive: living(root, m)?.img });
+  if (existsSync(join(root, "data", "looks.yaml"))) {
+    const t = lookTables(parseYaml(readFileSync(join(root, "data", "looks.yaml"), "utf8")));
+    for (const sex of BODY_SEXES)
+      rowsOf.push({
+        id: `body_${sex}`,
+        alive: composeFrame(lookOf(BODY_LOOKS[sex]), wornOf(BODY_WORN), t, "idle", "s", 0),
+      });
+  }
+  const rows = rowsOf.filter((r) => r.id.startsWith(only));
+  const STEP = 128;
+  const CELL_H = 128;
+  const sheet = createImage(STEP * (1 + CORPSE_DIRS.length), CELL_H * Math.max(1, rows.length));
   for (let y = 0; y < sheet.height; y++)
     for (let x = 0; x < sheet.width; x++) {
       const grid = x % 32 === 0 || y % 32 === 0;
@@ -365,18 +452,16 @@ export function corpseSheet(root: string, book: RecipeBook): Image {
         sheet.data.set(img.data.subarray(s, s + 4), (ty * sheet.width + tx) * 4);
       }
   };
-  ids.forEach((m, i) => {
-    const ox = (i % COLS) * CELL_W;
-    const oy = Math.floor(i / COLS) * CELL_H;
-    const bottom = oy + 96; // the bottom of the cell's third row of tiles
-    const alive = living(root, m);
-    if (alive) put(alive.img, ox + 48, bottom);
-    const recipe = typeof m["id"] === "string" ? book[corpsePath(m["id"])] : undefined;
-    if (recipe) {
+  rows.forEach((row, i) => {
+    const bottom = i * CELL_H + 96; // the bottom of the row's third line of tiles
+    if (row.alive) put(row.alive, 48, bottom);
+    CORPSE_DIRS.forEach((d, k) => {
+      const recipe = book[corpsePath(row.id, d)];
+      if (!recipe) return;
       const img = createImage(recipe.width ?? 32, recipe.height ?? 32);
       recipe.draw(img, () => 0, 0);
-      put(img, ox + 144 + 16, bottom);
-    }
+      put(img, STEP * (k + 1) + 48, bottom);
+    });
   });
   return sheet;
 }

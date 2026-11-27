@@ -168,6 +168,7 @@ export function renderSpec(
 
   let pose = REST;
   let dir: Dir | undefined;
+  let turn = 0;
   if (ref && "loop" in ref) {
     const l = spec.loop;
     if (!l) throw new Error(`${spec.sprite}: no loop`);
@@ -177,8 +178,10 @@ export function renderSpec(
     if (!a) throw new Error(`${spec.sprite}: no ${ref.action} action`);
     pose = poseAt(a, frameTime(ref.action, ref.frame, a.frames), ACTIONS[ref.action].loop);
     dir = ref.dir;
+    // The action's turn in this facing (ActionSpec.turn).
+    if (a.frames > 1) turn = ((a.turn?.[ref.dir] ?? 0) * ref.frame) / (a.frames - 1);
   }
-  const transforms = partTransforms(spec, pose, dir);
+  const transforms = partTransforms(spec, pose, dir, turn);
   // A paper-doll layer (spec.layer): its own parts give pixels (DRAW); the occluders are cast
   // and hide what is behind them but stay transparent (OCCLUDE); the rest is left out.
   const drawn = spec.layer ? new Set(spec.layer.draw) : undefined;

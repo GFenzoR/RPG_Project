@@ -57,14 +57,25 @@ describe("lookLayers", () => {
     expect(layers.find((l) => l.slot === "weapon")?.tint).toBe(0xa8aeb6);
   });
 
-  it("falls facing south whatever way it faced, every layer alike", () => {
-    expect(actionDir("death", "w")).toBe("s");
+  it("falls the way it faced, one of the four straight ones, every layer alike", () => {
+    expect(actionDir("death", "w")).toBe("w");
+    expect(actionDir("death", "s")).toBe("s");
+    // A diagonal falls east or west (anim.ts fallDir): death has no diagonal frames.
+    expect(actionDir("death", "ne")).toBe("e");
+    expect(actionDir("death", "sw")).toBe("w");
     expect(actionDir("walk", "w")).toBe("w");
-    const layers = lookLayers(LOOK, WORN, "w", "death", 3, TABLES);
-    expect(layers.map((l) => l.slot)).toEqual(
-      LAYER_ORDER.s.filter((s) => layers.some((l) => l.slot === s)),
-    );
-    for (const l of layers) expect(l.frame).toMatch(/\/death_s_3$/);
+    expect(actionDir("walk", "ne")).toBe("ne");
+    for (const [faced, fell] of [
+      ["w", "w"],
+      ["n", "n"],
+      ["se", "e"],
+    ] as const) {
+      const layers = lookLayers(LOOK, WORN, faced, "death", 3, TABLES);
+      expect(layers.map((l) => l.slot)).toEqual(
+        LAYER_ORDER[fell].filter((s) => layers.some((l) => l.slot === s)),
+      );
+      for (const l of layers) expect(l.frame.endsWith(`/death_${fell}_3`), l.frame).toBe(true);
+    }
   });
 
   it("draws no layer for a bald head or a shaven face, and hides what a head piece covers", () => {
