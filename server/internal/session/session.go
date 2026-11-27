@@ -330,7 +330,11 @@ type World struct {
 	spawned    bool
 	active     map[uint64]struct{}
 	activeKeys []uint64
-	thinkBuf   []*Monster
+	// spawnEyes and spawnOpts are scratch for a respawn: who sees the spawn's area and the
+	// tiles of it nobody sees (monster.go).
+	spawnEyes []world.Pos
+	spawnOpts []world.Pos
+	thinkBuf  []*Monster
 	// areaTiles and areaHit hold the tiles and the players of a monster's area attack
 	// while it lands (monsterArea).
 	areaTiles []world.Pos

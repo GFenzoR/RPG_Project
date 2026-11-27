@@ -11,6 +11,8 @@ type fakeHost struct {
 	walls     map[Pos]bool
 	creatures map[Pos]bool
 	items     map[Pos]bool
+	// watched are tiles some player has in its view.
+	watched map[Pos]bool
 	// stuck are tiles whose loose items cannot move (no room nearby, remains).
 	stuck   map[Pos]bool
 	cleared []Pos
@@ -21,7 +23,7 @@ type fakeHost struct {
 }
 
 func newHost() *fakeHost {
-	return &fakeHost{walls: map[Pos]bool{}, creatures: map[Pos]bool{}, items: map[Pos]bool{}, stuck: map[Pos]bool{}, block: map[Pos][2]bool{}}
+	return &fakeHost{walls: map[Pos]bool{}, creatures: map[Pos]bool{}, items: map[Pos]bool{}, watched: map[Pos]bool{}, stuck: map[Pos]bool{}, block: map[Pos][2]bool{}}
 }
 
 func (h *fakeHost) Free(p Pos) bool {
@@ -35,6 +37,7 @@ func (h *fakeHost) ClearItems(p Pos) bool {
 	return !h.items[p]
 }
 func (h *fakeHost) Occupied(p Pos) bool              { return h.creatures[p] }
+func (h *fakeHost) Watched(p Pos) bool               { return h.watched[p] }
 func (h *fakeHost) SetBlock(p Pos, move, sight bool) { h.block[p] = [2]bool{move, sight} }
 func (h *fakeHost) TileChanged(p Pos)                { h.changed = append(h.changed, p) }
 func (h *fakeHost) Event(e Event)                    { h.events = append(h.events, e) }
@@ -464,5 +467,65 @@ func TestLooseItemsNeverHoldAnObjectBack(t *testing.T) {
 	}
 	if w.ItemAt(at(10, 10)) != 14 || h.items[at(10, 10)] {
 		t.Fatal("an item in the gateway must not keep the gate open")
+	}
+}
+
+// Nothing comes back in a player's view: a broken crate whose respawn is due stays gone
+// while its tile is watched, keeps the loose items on it where they lie, and stands again
+// on the first retry after the last player looked away.
+func TestRespawnWaitsWhileWatched(t *testing.T) {
+	w, h := setup(t)
+	p := at(1, 1)
+	w.Place(p, 10)
+	w.OnTick(100)
+	if w.OnAttackObject(p, melee(10), rand.New(rand.NewPCG(1, 2))) != HitBroken {
+		t.Fatal("crate did not break")
+	}
+	h.watched[p] = true
+	h.items[p] = true // loot nobody took
+	for tick := uint64(100); tick <= 100+60*tps; tick++ {
+		w.OnTick(tick)
+	}
+	if w.ItemAt(p) != 0 || h.block[p][0] || len(h.cleared) != 0 {
+		t.Fatalf("watched: item %d, cleared %v: the crate came back in sight or moved the loot", w.ItemAt(p), h.cleared)
+	}
+	for _, k := range h.kinds() {
+		if k == EventRespawn {
+			t.Fatal("a respawn event while watched")
+		}
+	}
+	delete(h.watched, p)
+	w.OnTick(100 + 61*tps)
+	if w.ItemAt(p) != 10 || !h.block[p][0] {
+		t.Fatal("crate did not respawn once nobody watched")
+	}
+}
+
+// A pushed boulder goes home only when no player sees the tile it leaves nor its home.
+func TestResetWaitsWhileWatched(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		seen Pos
+	}{{"where it lies", at(6, 5)}, {"its home", at(5, 5)}} {
+		t.Run(c.name, func(t *testing.T) {
+			w, h := setup(t)
+			w.Place(at(5, 5), 13) // boulder: resets after 10 s
+			w.OnTick(1)
+			if w.Push(at(5, 5), 1, 0) != PushMoved {
+				t.Fatal("boulder did not move")
+			}
+			h.watched[c.seen] = true
+			for tick := uint64(1); tick <= 1+30*tps; tick++ {
+				w.OnTick(tick)
+			}
+			if w.ItemAt(at(6, 5)) != 13 || w.ItemAt(at(5, 5)) != 0 {
+				t.Fatal("the boulder went home in sight")
+			}
+			delete(h.watched, c.seen)
+			w.OnTick(1 + 31*tps)
+			if w.ItemAt(at(5, 5)) != 13 || w.ItemAt(at(6, 5)) != 0 {
+				t.Fatal("the boulder did not go home once nobody watched")
+			}
+		})
 	}
 }

@@ -47,6 +47,10 @@ type Host interface {
 	// Occupied reports whether a creature stands on p (a pressure plate's weight, a gate
 	// that cannot close on someone).
 	Occupied(p Pos) bool
+	// Watched reports whether a player has p in its view. Nothing comes back in sight: an
+	// object stands again, or a boulder goes home, only once nobody looks (the host's rule
+	// for its monsters' respawns; it decides who counts, e.g. not invisible staff).
+	Watched(p Pos) bool
 	// SetBlock sets what the object layer of p blocks; the host combines it with what
 	// the map's own items block. Called whenever an object appears, changes or leaves p.
 	SetBlock(p Pos, move, sight bool)

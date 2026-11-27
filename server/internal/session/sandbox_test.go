@@ -2057,18 +2057,31 @@ func TestSandboxLivingWorld(t *testing.T) {
 	if !s.m.Walkable(gate) {
 		t.Fatalf("both plates are held by boulders: the portcullis must be open (%+v)", s.w.LivingObjects())
 	}
-	// Someone goes into the vault; the boulders go home 180 s after the last push and the
-	// portcullis closes behind it. The teleport inside takes it out.
+	// Someone goes into the vault and the others leave. The boulders are due home 180 s
+	// after the last push, but nothing moves in a player's view (docs/02 "Respawns"): the
+	// portcullis stays open while the one inside looks at them.
 	inside, vaultExit := pos(2105, 2067), pos(2104, 2071)
-	in, inP := s.joinChar(session.Character{ID: 5304, AccountID: 5304, Name: "Viva5304",
-		Vocation: "guardian", Level: 8, Health: 200, Mana: 50, HasPos: true, Pos: inside})
+	vaulter := session.Character{ID: 5304, AccountID: 5304, Name: "Viva5304",
+		Vocation: "guardian", Level: 8, Health: 200, Mana: 50, HasPos: true, Pos: inside}
+	in, inP := s.joinChar(vaulter)
 	if inP.Pos() != inside {
 		t.Fatalf("joined at %v, want %v in the vault", inP.Pos(), inside)
 	}
-	s.sim.RunTicks(181 * 20)
-	if s.m.Walkable(gate) {
-		t.Fatalf("the boulders went home: the portcullis must be closed (%+v)", s.w.LivingObjects())
+	for _, cl := range []*fakeClient{cutter, a, b} {
+		s.sim.Command(s.w.Leave(cl))
 	}
+	s.sim.RunTicks(181 * 20)
+	if !s.m.Walkable(gate) {
+		t.Fatalf("the boulders went home in sight of the player in the vault (%+v)", s.w.LivingObjects())
+	}
+	// It logs out in there: nobody looks, the boulders go home and the portcullis closes.
+	// Back in, the teleport inside takes it out.
+	s.sim.Command(s.w.Leave(in))
+	s.sim.RunTicks(5 * 20)
+	if s.m.Walkable(gate) {
+		t.Fatalf("nobody looks, the boulders went home: the portcullis must be closed (%+v)", s.w.LivingObjects())
+	}
+	in, inP = s.joinChar(vaulter)
 	in.take()
 	s.input(in, walkPath(N))
 	s.sim.RunTicks(40)

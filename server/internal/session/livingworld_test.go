@@ -231,8 +231,9 @@ func coinsAround(h *harness, p world.Pos) int {
 	return n
 }
 
-// The loot nobody picks up never holds the crate back: when it stands again, the coins
-// are moved to a tile next to it (none lost, none made).
+// The loot nobody picks up never holds the crate back: when it stands again (nobody
+// looks: who broke it left), the coins are moved to a tile next to it (none lost, none
+// made).
 func TestLivingCrateRespawnsOverItsUntakenLoot(t *testing.T) {
 	crate := pos(3, 2)
 	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
@@ -249,6 +250,7 @@ func TestLivingCrateRespawnsOverItsUntakenLoot(t *testing.T) {
 	if coinsOn(h, crate) != 5 {
 		t.Fatalf("loot on the crate's tile: %d", coinsOn(h, crate))
 	}
+	h.sim.Command(h.w.Leave(cl))
 	h.sim.RunTicks(4*20 + 20) // respawn_seconds, and one retry to spare
 	if s := h.w.LivingObjects()[0]; s.State != "intact" || h.w.Map().Walkable(crate) {
 		t.Fatalf("the crate did not stand again over its loot: %+v", s)
@@ -287,8 +289,9 @@ func TestLivingGateClosesOverALooseItem(t *testing.T) {
 	}
 }
 
-// Cut vines come back after a second, but never under a player: they wait until the
-// tile is free.
+// Cut vines come back after a second, but never under a creature: they wait until the
+// tile is free. The occupant is a staff member walking invisible, the only player whose
+// view does not hold a respawn back (TestLivingRespawnWaitsWhileSeen).
 func TestLivingRespawnWaitsForTheOccupant(t *testing.T) {
 	vines := pos(3, 2)
 	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
@@ -299,6 +302,10 @@ func TestLivingRespawnWaitsForTheOccupant(t *testing.T) {
 	cl, p := armed(h, pos(2, 2), swordID)
 	cl.take()
 	strike(h, cl, vines, lwVinesID)
+	h.sim.Command(gameFunc(func() {
+		h.w.SetRoleForTest(p, session.RoleGM)
+		h.w.SetInvisibleForTest(p, true)
+	}))
 	h.input(cl, walk(E))
 	h.sim.RunTicks(80)
 	if p.Pos() != vines {
@@ -311,6 +318,45 @@ func TestLivingRespawnWaitsForTheOccupant(t *testing.T) {
 	h.sim.RunTicks(80)
 	if s := h.w.LivingObjects()[0]; s.State != "intact" || h.w.Map().Walkable(vines) {
 		t.Fatalf("vines did not come back on the free tile: %+v", s)
+	}
+}
+
+// Nothing of the living world comes back in a player's view: cut vines stay cut while
+// who cut them stands by, and grow back once it is gone. A boulder pushed off its home
+// stays where it was left while a player sees it.
+func TestLivingRespawnWaitsWhileSeen(t *testing.T) {
+	vines, boulder := pos(3, 2), pos(3, 0)
+	h := livingHarness(t, worldtest.Map(t, 0, 0, 7,
+		"......",
+		"......",
+		"......",
+	), map[world.Pos]uint16{vines: lwVinesID, boulder: lwBoulderID})
+	cl, _ := armed(h, pos(2, 2), swordID)
+	other, _ := armed(h, pos(2, 0), 0)
+	cl.take()
+	strike(h, cl, vines, lwVinesID)
+	h.input(other, push(boulder, E))
+	h.sim.RunTicks(601 * 20) // past the vines' second and the boulder's reset_seconds
+	state := func() (string, world.Pos) {
+		var v string
+		var b world.Pos
+		for _, o := range h.w.LivingObjects() {
+			if o.Item == "lw_vines" {
+				v = o.State
+			} else {
+				b = o.Pos
+			}
+		}
+		return v, b
+	}
+	if v, b := state(); v != "gone" || b != pos(4, 0) {
+		t.Fatalf("in sight: vines %q, boulder at %v; want gone and still at 4,0", v, b)
+	}
+	h.sim.Command(h.w.Leave(cl))
+	h.sim.Command(h.w.Leave(other))
+	h.sim.RunTicks(3 * 20)
+	if v, b := state(); v != "intact" || b != boulder {
+		t.Fatalf("nobody looks: vines %q, boulder at %v; want intact and home", v, b)
 	}
 }
 

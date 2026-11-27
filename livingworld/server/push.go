@@ -54,14 +54,15 @@ func (w *World) move(o *object, to Pos) {
 	w.host.TileChanged(to)
 }
 
-// resetPushable puts o back home once no creature stands there (the puzzle starts over);
-// loose items on its home are moved aside (room).
+// resetPushable puts o back home once no creature stands there (the puzzle starts over)
+// and no player sees it leave or arrive: a boulder never jumps in sight, so whoever is
+// still at the puzzle keeps it as it is. Loose items on its home are moved aside (room).
 func (w *World) resetPushable(o *object) {
 	if o.pos == o.home {
 		o.until = 0
 		return
 	}
-	if w.objs[o.home] != nil || !w.room(o.home) {
+	if w.objs[o.home] != nil || w.host.Watched(o.pos) || w.host.Watched(o.home) || !w.room(o.home) {
 		w.schedule(o, w.tick+w.cat.retry)
 		return
 	}

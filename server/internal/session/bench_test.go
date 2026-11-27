@@ -458,3 +458,64 @@ func BenchmarkMinimapRequestBurst(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkRespawnsHeld is the worst case of "nothing respawns in a player's view"
+// (docs/02 "Respawns", docs/07): 1024 monsters dead at once, every tile of every spawn's
+// area in the view of one of 100 players standing still, so every slot retries every 5 s
+// (about 10 a tick), finds its watchers with one query of the spatial index, walks its 49
+// tiles and gives up. The tick does nothing else.
+func BenchmarkRespawnsHeld(b *testing.B) {
+	m := worldtest.Open(b, 0, 0, 256, 256)
+	var spawns []world.Spawn
+	for y := 8; y < 256; y += 16 {
+		for x := 8; x < 256; x += 16 {
+			spawns = append(spawns, world.Spawn{ID: "s", Center: pos(x, y), Radius: 3, RespawnSeconds: 1,
+				Monsters: []world.SpawnMonster{{Monster: "wolf", Count: 4}}})
+		}
+	}
+	m.Islands()[0].Spawns = spawns
+	wolf := wolfDef()
+	wolf.Behavior.Aggressive = false
+	w, err := session.New(session.Config{
+		Map:       m,
+		Balance:   testBalance(),
+		Vocations: testVocations,
+		Monsters:  content.Monsters{"wolf": wolf},
+		Items:     testItems(),
+		Save:      func(session.Snapshot) bool { return true },
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	mv, fight, flush := w.Systems()
+	loop, err := game.New(game.Config{Clock: clock.NewFake(time.Time{}), Rand: rand.New(rand.NewPCG(1, 2)), Systems: []game.System{mv, fight, flush}})
+	if err != nil {
+		b.Fatal(err)
+	}
+	id := int64(0)
+	for y := 10; y < 256; y += 2 * session.ViewHalfH { // the views tile the whole map
+		for x := 16; x < 256; x += 2 * session.ViewHalfW {
+			id++
+			_ = loop.Enqueue(w.Join(session.Character{ID: id, AccountID: id, Name: "P", Vocation: "guardian", Level: 1, Health: 145,
+				HasPos: true, Pos: pos(x, y)}, &discardClient{}))
+		}
+	}
+	loop.Step()
+	_ = loop.Enqueue(game.CommandFunc(func(ctx *game.TickContext) {
+		killer := w.Players()[0]
+		for _, mon := range append([]*session.Monster(nil), w.Monsters()...) {
+			w.DamageMonsterForTest(ctx, mon, killer, 1000)
+		}
+	}))
+	for range 200 { // past respawn_seconds: every slot is due and retrying
+		loop.Step()
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		loop.Step()
+	}
+	b.StopTimer()
+	b.ReportMetric(float64(len(w.Players())), "players")
+	b.ReportMetric(float64(len(w.Monsters())), "monsters")
+}

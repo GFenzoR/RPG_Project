@@ -258,6 +258,9 @@ func (h livingHost) ClearItems(p lw.Pos) bool {
 
 func (h livingHost) Occupied(p lw.Pos) bool { return h.w.occupied(fromLW(p)) }
 
+// Watched is the rule of the monsters' respawns (World.watched, docs/02 "Respawns").
+func (h livingHost) Watched(p lw.Pos) bool { return h.w.watched(fromLW(p)) }
+
 func (h livingHost) SetBlock(p lw.Pos, move, sight bool) {
 	pos := fromLW(p)
 	block := h.w.staticBlock(pos)
