@@ -1086,16 +1086,17 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
     // Every stride inside the run, and only those: the keys come up some time after the
     // last tile of the run is reached, and past it the diagonal may be closed (the walk
     // then slides along one key: a straight stride).
-    const start = from
-      ? after.length -
-        1 -
-        [...after]
+    // The last print before the run, counted from the end; -1 when the list no longer
+    // holds it (it is capped: the oldest prints go), and then every stride counts.
+    const back = from
+      ? [...after]
           .reverse()
           .findIndex(
             (f: { x: number; y: number; side: number }) =>
               f.x === from.x && f.y === from.y && f.side === from.side,
           )
       : -1;
+    const start = back < 0 ? -1 : after.length - 1 - back;
     const inRun = (f: { x: number }): boolean =>
       f.x > (d.x + 0.5) * 32 && f.x < (d.x + d.n - 0.5) * 32;
     let strides = 0;
