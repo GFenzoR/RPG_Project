@@ -450,8 +450,10 @@ test("sandbox: the quest log, a lectern's book and a reward chest that gives onc
     mapBox.x + mapBox.width / 2 + 8 * px,
     mapBox.y + mapBox.height / 2 - 2 * px,
   );
-  await expect(minimap.getByTestId("minimap-dest")).toHaveAttribute("data-x", "2099");
-  await expect(minimap.getByTestId("minimap-dest")).toHaveAttribute("data-y", "2085");
+  // One look for the mark with both coordinates: the walk lasts about a second.
+  await expect(
+    minimap.locator('[data-testid="minimap-dest"][data-x="2099"][data-y="2085"]'),
+  ).toBeAttached();
   await minimap.screenshot({ path: join(shots, "96e-minimap-walk.png") });
   await standsOn(2099, 2085, 7);
   await expect(minimap.getByTestId("minimap-dest")).toHaveCount(0);

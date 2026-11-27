@@ -20,9 +20,25 @@ import (
 // plates), never centred on it, and no step is left without a place. The targets are read
 // from the map and data/ here, not from the session's locator (owner, 2026-11-25: a mark
 // must never point where the objective is not).
+//
+// It walks them twice: on the development map, and on the map production runs (without
+// the sandbox island), where a step must not lean on a target only the sandbox has. The
+// sandbox's own quests (a step whose every target is on a dev island) are left out there.
 func TestEveryObjectiveMarkHoldsARealTarget(t *testing.T) {
+	var sandbox map[string]bool
+	t.Run("dev", func(t *testing.T) { sandbox = walkObjectiveMarks(t, true, nil) })
+	if len(sandbox) == 0 {
+		t.Fatal("no quest of the sandbox island found: is it still dev_only?")
+	}
+	t.Run("production", func(t *testing.T) { walkObjectiveMarks(t, false, sandbox) })
+}
+
+// walkObjectiveMarks checks the mark of every step of every quest but skip on the map
+// built with or without the dev islands, and returns the quests that have a step whose
+// every target is on a dev island.
+func walkObjectiveMarks(t *testing.T, dev bool, skip map[string]bool) map[string]bool {
 	root := filepath.Join("..", "..", "..")
-	m, err := compile.Build(root, compile.Options{DevIslands: true})
+	m, err := compile.Build(root, compile.Options{DevIslands: dev})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,8 +54,9 @@ func TestEveryObjectiveMarkHoldsARealTarget(t *testing.T) {
 	}
 
 	type area struct {
-		c world.Pos
-		r int
+		c   world.Pos
+		r   int
+		dev bool // on a dev island
 	}
 	spawnsOf := func(want func(monster string) bool) []area {
 		var out []area
@@ -47,7 +64,7 @@ func TestEveryObjectiveMarkHoldsARealTarget(t *testing.T) {
 			for _, sp := range is.Spawns {
 				for _, sm := range sp.Monsters {
 					if sm.Count > 0 && want(sm.Monster) {
-						out = append(out, area{sp.Center, int(sp.Radius)})
+						out = append(out, area{sp.Center, int(sp.Radius), is.Dev})
 						break
 					}
 				}
@@ -60,7 +77,7 @@ func TestEveryObjectiveMarkHoldsARealTarget(t *testing.T) {
 		for _, is := range m.Islands() {
 			for _, pl := range is.NPCs {
 				if def := npcs[pl.NPC]; def != nil && want(def) {
-					out = append(out, area{pl.Pos, 0})
+					out = append(out, area{pl.Pos, 0, is.Dev})
 				}
 			}
 		}
@@ -88,7 +105,11 @@ func TestEveryObjectiveMarkHoldsARealTarget(t *testing.T) {
 		froms = append(froms, is.Temple)
 	}
 	steps := 0
+	devOnly := map[string]bool{}
 	for _, q := range cfg.Quests {
+		if skip[q.ID] {
+			continue
+		}
 		for i := range q.Steps {
 			step := &q.Steps[i]
 			steps++
@@ -117,7 +138,7 @@ func TestEveryObjectiveMarkHoldsARealTarget(t *testing.T) {
 					for _, node := range n.Dialog.Nodes {
 						for _, o := range node.Options {
 							for _, a := range o.Action {
-								if a.SetFlag != nil && a.SetFlag.Key == cw.FlagEquals.Key {
+								if a.SetFlag != nil && *a.SetFlag == *cw.FlagEquals {
 									return true
 								}
 							}
@@ -126,7 +147,16 @@ func TestEveryObjectiveMarkHoldsARealTarget(t *testing.T) {
 					return false
 				})
 			case cw.Sigils != nil:
-				valid = []area{{world.Pos{X: uint16(cw.Sigils.X), Y: uint16(cw.Sigils.Y), Z: uint8(cw.Sigils.Z)}, cw.Sigils.Radius}}
+				valid = []area{{world.Pos{X: uint16(cw.Sigils.X), Y: uint16(cw.Sigils.Y), Z: uint8(cw.Sigils.Z)}, cw.Sigils.Radius, false}}
+			}
+			onDev := 0
+			for _, a := range valid {
+				if a.dev {
+					onDev++
+				}
+			}
+			if onDev > 0 && onDev == len(valid) {
+				devOnly[q.ID] = true
 			}
 			if cw.Reach == nil && len(valid) == 0 {
 				t.Errorf("%s/%s: no place on the map where the step can be done", q.ID, step.ID)
@@ -161,6 +191,28 @@ func TestEveryObjectiveMarkHoldsARealTarget(t *testing.T) {
 	}
 	if steps < 30 {
 		t.Fatalf("only %d steps walked: data/quests not loaded?", steps)
+	}
+	return devOnly
+}
+
+// A flag_equals step is done at the NPC that sets the flag to the value the step waits
+// for: one that sets the same key to another value is not a target of its mark.
+func TestSetsFlagComparesTheValue(t *testing.T) {
+	npc := func(value int64) *content.NPC {
+		n := &content.NPC{}
+		n.Dialog.Nodes = map[string]*content.DialogNode{"start": {Options: []content.DialogOption{
+			{Action: content.Actions{{SetFlag: &content.Flag{Key: "ring", Value: value}}}},
+		}}}
+		return n
+	}
+	if !session.SetsFlagForTest(npc(1), "ring", 1) {
+		t.Error("the NPC that sets ring = 1 is not a target of flag_equals ring = 1")
+	}
+	if session.SetsFlagForTest(npc(2), "ring", 1) {
+		t.Error("an NPC that sets ring = 2 is a target of flag_equals ring = 1")
+	}
+	if session.SetsFlagForTest(npc(1), "other", 1) {
+		t.Error("an NPC that sets another flag is a target")
 	}
 }
 

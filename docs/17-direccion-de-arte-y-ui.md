@@ -2174,15 +2174,20 @@ puntos cardinales y la estimación del objetivo seguido (reglas en docs/02 "Mini
   `make ui-preview` lo muestra con una quest seguida fuera del minimapa (la flecha).
 - **Click para ir (2026-11-26, rama `feat/minimap-nav`; reglas en docs/02 "Minimapa"):** un
   click o toque en el minimapa camina hasta esa casilla. `clickTile` (puro) pasa el puntero
-  a casilla en cualquier zoom y con el minimapa corrido; `isMinimapClick` separa el click
-  del arrastre (`CLICK_SLOP_PX`, 4 px: por debajo el mapa tampoco se corre). El camino es
+  a casilla en cualquier zoom y con el minimapa corrido; `pressStart` / `pressMove` /
+  `pressIsClick` (`state/minimap.ts`) separan el click del arrastre (`CLICK_SLOP_PX`, 4 px:
+  por debajo el mapa tampoco se corre; una vez arrastrado ya no es click, aunque se suelte
+  donde empezó). El camino es
   `Steering.walkFar` (`state/steering.ts`) con `findFarPath` (`state/far-path.ts`, A* con
   heap sobre la caja que contiene origen y destino más `FAR_MARGIN`, 40 casillas, tope
-  `FAR_MAX_NODES`): las casillas del mapa que el cliente tiene valen como en un click
+  `FAR_MAX_NODES`; el destino se acerca a `FAR_MAX_REACH`, 256 casillas por eje, y las
+  tablas de la búsqueda se guardan entre búsquedas, así la memoria no crece con la
+  distancia del click): las casillas del mapa que el cliente tiene valen como en un click
   normal, y más allá vale lo explorado que el minimapa no pinta como bloqueo ni agua
   (`minimapPassable`). Sin camino exacto, va a la casilla alcanzable más cercana al click.
   Se vuelve a planear cada `FAR_REPLAN_STEPS` (6) pasos, con el mapa que fue entrando en la
-  vista. Sale como los `Walk` predichos de siempre. La marca del destino es una cruz dorada
+  vista; si esa mirada no encuentra camino (alguien parado en un pasillo, lejos), se
+  conservan los pasos ya planeados, como en un click normal. Sale como los `Walk` predichos de siempre. La marca del destino es una cruz dorada
   (`minimap-dest`, con `data-x` y `data-y`; `MinimapUi.dest`), además del anillo de MOV-7
   sobre el mapa. Solo el piso propio. E2E: `e2e/sandbox.spec.ts` (screenshot
   `96e-minimap-walk`).

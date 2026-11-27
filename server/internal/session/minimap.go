@@ -340,7 +340,7 @@ func (w *World) findTargets(step *content.QuestStepDef) []hintTarget {
 		}
 	case cw.FlagEquals != nil:
 		for _, n := range w.npcs {
-			if setsFlag(n.def, cw.FlagEquals.Key) {
+			if setsFlag(n.def, cw.FlagEquals.Key, cw.FlagEquals.Value) {
 				ts = append(ts, hintTarget{n.pos, 1})
 			}
 		}
@@ -386,12 +386,13 @@ func (w *World) findTargets(step *content.QuestStepDef) []hintTarget {
 	return ts
 }
 
-// setsFlag reports whether an option of npc's dialog sets flag key.
-func setsFlag(npc *content.NPC, key string) bool {
+// setsFlag reports whether an option of npc's dialog sets flag key to value: an NPC that
+// sets the same key to another value does not complete the step.
+func setsFlag(npc *content.NPC, key string, value int64) bool {
 	for _, node := range npc.Dialog.Nodes {
 		for _, o := range node.Options {
 			for _, a := range o.Action {
-				if a.SetFlag != nil && a.SetFlag.Key == key {
+				if a.SetFlag != nil && a.SetFlag.Key == key && a.SetFlag.Value == value {
 					return true
 				}
 			}

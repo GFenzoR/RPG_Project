@@ -357,12 +357,15 @@ si tenemos un objetivo activo, una estimación de dónde está."
 - **Click para ir** (pedido del dueño del 2026-11-26: "si haces click en el minimapa te
   debería llevar para allá"): un click (o un toque) en el minimapa lleva al personaje a esa
   casilla, caminando por lo que ya exploró. Si la casilla está bloqueada (un muro, agua) o
-  sin explorar, va a la casilla alcanzable más cercana a ella. Solo por el piso propio: el
+  sin explorar, va a la casilla alcanzable más cercana a ella. Un click a más de 256
+  casillas (con el minimapa arrastrado lejos) camina hacia allá hasta esa distancia. Si
+  más adelante alguien tapa el paso, sigue hasta llegar ahí y recién entonces busca otro
+  camino. Solo por el piso propio: el
   minimapa no muestra otros pisos y el camino no usa escaleras, agujeros ni
   teletransportes (los rodea, salvo que sean el destino). Una cruz dorada marca el destino
   mientras dura. Lo cancelan una tecla o el pad, un click o el mouse mantenido sobre el
   mapa, Escape, un teletransporte o cambio de piso y el segundo paso rechazado. Arrastrar
-  el minimapa (4 px o más) y los botones de zoom no caminan. El servidor no sabe nada de
+  el minimapa (4 px o más, aunque se suelte donde empezó) y los botones de zoom no caminan. El servidor no sabe nada de
   esto: recibe los mismos `Walk` de siempre, uno por paso, y valida cada uno.
 - **Objetivo seguido:** el diario de misiones tiene "Seguir en el mapa" en cada quest en
   curso (una a la vez). El minimapa muestra una **estimación**, nunca la casilla: un círculo
@@ -379,7 +382,8 @@ si tenemos un objetivo activo, una estimación de dónde está."
   las placas de un hito; o el `hint_area` del paso (docs/06). Con varios lugares posibles
   se marca el más cercano, primero los del piso propio (se vuelve a elegir al cambiar de
   piso, teletransportarse, viajar en barco o despertar en el templo; no al caminar). El
-  radio es el doble del área del objetivo más 4 casillas, 8 como mínimo, y el centro se
+  radio es el doble del área del objetivo más 4 casillas, 8 como mínimo y 24 como máximo
+  (un área de más de 12 casillas lo agranda lo justo para caber entera), y el centro se
   corre dentro del círculo para no delatar el punto exacto. Solo un paso sin ningún lugar
   en el mapa no tiene círculo, y un test recorre todos los pasos de `data/quests` sobre el
   mapa real para que no haya ninguno

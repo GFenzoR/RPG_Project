@@ -1444,12 +1444,16 @@ por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
   El lugar sale del YAML (`hint_area`) o del paso (`stepTargets` de `session/minimap.go`,
   calculado una vez por paso; desde el 2026-11-26 el radio del círculo es el doble del área
   del lugar más 4, mínimo 8): el NPC de un `dialog_action` (los NPCs
-  no se mueven), el de un `flag_equals` es el NPC cuyo diálogo pone esa marca, el de un
+  no se mueven), el de un `flag_equals` es el NPC cuyo diálogo pone esa marca con ese
+  valor, el de un
   `has_item` el área de un spawn de un monstruo que suelta el item, el spawn más cercano
   del monstruo de un `kill` (entre varios lugares, su piso primero; el más
   cercano a donde el jugador empezó a seguir, avanzó la quest o se reubicó por última vez:
-  caminar por el mismo piso no lo recalcula), el lugar de un `reach` (una zona: su
-  rectángulo envolvente), las placas de un `sigils`. La pista no revela mapa: el
+  caminar por el mismo piso no lo recalcula), el lugar de un `reach` (una zona: cada
+  uno de sus rectángulos, anclado en la casilla pisable más cercana a su centro;
+  `findTargets`, `standNear`), las placas de un `sigils`. El radio tiene tope 24, salvo
+  cuando el área del lugar pasa de 12 casillas (un `hint_area` o un spawn ancho): ahí el
+  círculo crece lo necesario para contenerla entera, hasta 24 más el doble del área. La pista no revela mapa: el
   cliente dibuja solo el círculo o la flecha, nunca casillas sin explorar.
 - Todo agregado sin romper nada: un cliente viejo ignora los campos nuevos y un servidor
   viejo nunca los manda.

@@ -17,7 +17,8 @@ import (
 const (
 	// MinHintRadius is the smallest circle sent: a target of one tile still gets one.
 	MinHintRadius = 8
-	// MaxHintRadius bounds the circle (a wide zone is shown as wide as it can be).
+	// MaxHintRadius bounds the circle (a wide zone is shown as wide as it can be), but for a
+	// target area wider than MaxHintRadius/2: FuzzHint grows the circle to hold it whole.
 	MaxHintRadius = 24
 )
 
@@ -31,8 +32,10 @@ type Hint struct {
 // around it (0: one tile), for the given seed (HintSeed). The circle's radius is twice the
 // target's area plus 4 (at least MinHintRadius, at most MaxHintRadius) and its centre is moved
 // away from the target by between a quarter and a half of it, in a direction the seed
-// picks: never 0 tiles, and the whole target area (up to targetRadius tiles around x, y)
-// stays inside the circle when targetRadius is at most MaxHintRadius/2.
+// picks: never 0 tiles. The whole target area (up to targetRadius tiles around x, y)
+// always stays inside the circle: for a targetRadius over MaxHintRadius/2 (a wide
+// hint_area or spawn) the circle grows past MaxHintRadius to hold it, up to
+// MaxHintRadius + 2*targetRadius.
 func FuzzHint(x, y, targetRadius int, seed uint64) Hint {
 	tr := max(targetRadius, 0)
 	r := min(max(2*tr+4, MinHintRadius), MaxHintRadius)

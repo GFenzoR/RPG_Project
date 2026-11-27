@@ -692,3 +692,8 @@ func (w *World) ReachContainsForTest(r *content.Reach, pos world.Pos) bool {
 	pl := w.reachAt[r]
 	return pl != nil && pl.contains(pos)
 }
+
+// SetsFlagForTest reports whether npc's dialog sets flag key to value (setsFlag).
+func SetsFlagForTest(npc *content.NPC, key string, value int64) bool {
+	return setsFlag(npc, key, value)
+}
