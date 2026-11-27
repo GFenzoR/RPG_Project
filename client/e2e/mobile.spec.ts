@@ -7,7 +7,7 @@
 //
 // The devices run on Chromium (Pixel 7, iPad Mini) and, in the "webkit-mobile" project of
 // playwright.config.ts, on WebKit (iPhone 13, iPad Mini): those titles say "(webkit)".
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { devices, expect, test } from "@playwright/test";
 import type { APIRequestContext, Locator, Page } from "@playwright/test";
@@ -16,6 +16,8 @@ import { openWindow } from "./windows.ts";
 import { stepToward } from "./keys.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 import { characterName } from "./names.ts";
+import { formatFindings, touchAudit } from "./touch-audit.ts";
+import type { Insets, TouchFinding } from "./touch-audit.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -1544,5 +1546,215 @@ test.describe("lote 21 app mode on iPhone 13 (webkit)", () => {
     await page.screenshot({ path: join(shots, "mobile-webkit-iphone13-portrait-21-install.png") });
     await page.getByTestId("install-steps-close").tap();
     await expect(steps).toBeHidden();
+  });
+});
+
+// ---- Lote 21 QA (docs/08 "Auditoría táctil", docs/15) -------------------------------------
+// Every screen a finger meets on the way into the game and around its HUD, measured by
+// e2e/touch-audit.ts: 44 px hit areas, no clipped label, nothing off the screen, no
+// sideways scroll and, on Chromium with the insets of a notch and a home bar, nothing under
+// them. The screens no server is needed for are measured by `make ui-preview AUDIT=1`.
+
+const QA: { prefix: string; device: string; browser: string; insets?: Insets }[] = [
+  {
+    prefix: "pixel7-portrait",
+    device: "Pixel 7",
+    browser: "chromium",
+    insets: { top: 32, right: 0, bottom: 24, left: 0 },
+  },
+  {
+    prefix: "pixel7-landscape",
+    device: "Pixel 7 landscape",
+    browser: "chromium",
+    insets: { top: 0, right: 0, bottom: 24, left: 32 },
+  },
+  { prefix: "ipad-mini", device: "iPad Mini", browser: "chromium" },
+  { prefix: "ipad-mini-landscape", device: "iPad Mini landscape", browser: "chromium" },
+  { prefix: "webkit-iphone13-portrait", device: "iPhone 13", browser: "webkit" },
+  { prefix: "webkit-iphone13-landscape", device: "iPhone 13 landscape", browser: "webkit" },
+];
+
+for (const { prefix, device, browser, insets } of QA) {
+  const title =
+    browser === "chromium" ? `lote 21 QA on ${device}` : `lote 21 QA on ${device} (${browser})`;
+  test.describe(title, () => {
+    test.use(deviceOptions(device));
+
+    test("qa: every screen on the way in and around the HUD passes the touch audit", async ({
+      page,
+      playwright,
+    }) => {
+      test.setTimeout(180_000);
+      const errors = watchErrors(page);
+      const who = await newGuardian(playwright, "Qa");
+      // In Puerto: the tutorial's panel and the priestess's dialog are screens to measure.
+      psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${who.name}'`]);
+      const found: { screen: string; findings: TouchFinding[] }[] = [];
+      /** Measures the screen as it is now and keeps its picture. */
+      const measure = async (screen: string): Promise<void> => {
+        await page.screenshot({ path: join(shots, `mobile-qa-${prefix}-${screen}.png`) });
+        const findings = await touchAudit(page, { insets });
+        if (findings.length > 0) found.push({ screen, findings });
+      };
+
+      await page.goto("/play/?lang=es");
+      if (insets) {
+        // The override lives as long as this CDP session: it stays attached to the end.
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets });
+      }
+      const loginForm = page.getByTestId("login-form");
+      await expect(loginForm).toBeVisible();
+      await measure("01-login");
+      // The corner (language, options, full screen, install) is a strip above the title on
+      // a phone: fixed to the corner it lay over the title and the form (a real 384 px one).
+      const vp = page.viewportSize();
+      if (vp && (vp.width <= 640 || vp.height <= 500)) {
+        const corner = await page.locator(".corner").boundingBox();
+        const form = await loginForm.boundingBox();
+        if (!corner || !form) throw new Error("no corner or no form");
+        expect(corner.y + corner.height).toBeLessThanOrEqual(form.y + 1);
+      }
+      await loginForm.getByLabel("Email").fill(who.email);
+      await loginForm.getByLabel("Contraseña").fill(who.password);
+      await loginForm.getByRole("button", { name: "Entrar", exact: true }).tap();
+      const play = page.getByTestId("characters").getByRole("button", { name: "Jugar" });
+      await expect(play).toBeVisible();
+      await measure("02-characters");
+      await play.tap();
+      await page.waitForFunction(() => window.__rpgClient?.ready === true);
+      await expect.poll(() => mapDrawn(page)).toBe(true);
+      errors.length = 0; // the 401 of opening the page without a session cookie
+      await measure("03-hud");
+
+      // Every section of the sheet (upright) or the drawer (on its side); a tablet on its
+      // side is the desktop screen with fingers, which has no sections.
+      const tabs = page.getByTestId("panel-tabs");
+      const toggle = page.getByTestId("panel-toggle");
+      if ((await tabs.count()) > 0 || (await toggle.count()) > 0) {
+        await showTab(page, "inventory");
+        const names = await page
+          .getByTestId("panel-tabs")
+          .locator("[data-tab]")
+          .evaluateAll((els) => els.map((el) => el.getAttribute("data-tab") ?? ""));
+        expect(names.length).toBeGreaterThan(4);
+        for (const name of names) {
+          await showTab(page, name);
+          await opened(page.locator("#side-panel"));
+          await measure(`04-${name}`);
+        }
+        await closeDrawer(page);
+      }
+
+      // The menu (experience, help, language, options, full screen, leave).
+      const menu = page.locator('[data-testid="hud-menu"] > summary');
+      if (await menu.isVisible()) {
+        await menu.tap();
+        await expect(page.getByTestId("hud-menu-close")).toBeVisible();
+        await measure("05-menu");
+        await page.getByTestId("hud-menu-close").tap();
+      }
+
+      // An NPC's dialog, from a tap on her.
+      let priest: { x: number; y: number } | undefined;
+      await expect
+        .poll(async () => {
+          const list = await page.evaluate(() => window.__rpgClient?.npcs() ?? []);
+          priest = list.find((n) => n.contentId === "puerto_priest");
+          return priest !== undefined;
+        })
+        .toBe(true);
+      if (!priest) throw new Error("no priestess");
+      const hide = page.getByTestId("tutorial-hide");
+      if (await hide.isVisible()) {
+        await measure("06-tutorial");
+        await hide.tap();
+      }
+      await tapTile(page, priest.x, priest.y);
+      const dialog = page.getByTestId("dialog");
+      await expect(dialog).toBeVisible();
+      await opened(dialog);
+      await measure("07-dialog");
+
+      expect(
+        found.flatMap((f) => f.findings),
+        found.map((f) => `${f.screen}\n${formatFindings(f.findings)}`).join("\n\n"),
+      ).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+  });
+}
+
+// The numbers of docs/07 "Teléfonos" come from here: Puerto's square (a town: NPCs, torches,
+// the living world) on a Pixel 7 with the CPU four times slower (CDP), five seconds of
+// frames. It writes them down (mobile-qa-performance.json beside the screenshots) and
+// fails only if the game stops drawing: a runner without a GPU draws WebGL in software,
+// so a budget asserted here would measure the runner.
+test.describe("lote 21 QA performance on Pixel 7", () => {
+  test.use(deviceOptions("Pixel 7"));
+
+  test("qa: frame times and memory under a 4x CPU throttle are written down", async ({
+    page,
+    playwright,
+  }) => {
+    test.setTimeout(150_000);
+    const who = await newGuardian(playwright, "Perf");
+    psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${who.name}'`]);
+    await enterGame(page, who.email, who.password);
+    const cdp = await page.context().newCDPSession(page);
+    const sample = (): Promise<{
+      frames: number;
+      fps: number;
+      p50: number;
+      p95: number;
+      worst: number;
+    }> =>
+      page.evaluate(
+        () =>
+          new Promise((done) => {
+            const times: number[] = [];
+            const start = performance.now();
+            const tick = (now: number): void => {
+              times.push(now);
+              if (now - start < 5000) requestAnimationFrame(tick);
+              else {
+                const gaps = times.slice(1).map((t, i) => t - (times[i] ?? t));
+                gaps.sort((a, b) => a - b);
+                const at = (q: number): number =>
+                  Math.round(
+                    (gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * q))] ?? 0) * 10,
+                  ) / 10;
+                done({
+                  frames: gaps.length,
+                  fps: Math.round((gaps.length * 1000) / (now - start)),
+                  p50: at(0.5),
+                  p95: at(0.95),
+                  worst: at(1),
+                });
+              }
+            };
+            requestAnimationFrame(tick);
+          }),
+      );
+    const heapMb = async (): Promise<number> => {
+      await cdp.send("Performance.enable");
+      const { metrics } = await cdp.send("Performance.getMetrics");
+      const used = metrics.find((m) => m.name === "JSHeapUsedSize")?.value ?? 0;
+      return Math.round(used / 1024 / 1024);
+    };
+    const plain = await sample();
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    const throttled = await sample();
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    const report = {
+      device: "Pixel 7 (emulated)",
+      plain,
+      throttled4x: throttled,
+      heapMb: await heapMb(),
+    };
+    writeFileSync(join(shots, "mobile-qa-performance.json"), JSON.stringify(report, null, 1));
+    test.info().annotations.push({ type: "performance", description: JSON.stringify(report) });
+    await page.screenshot({ path: join(shots, "mobile-qa-performance.png") });
+    expect(throttled.frames).toBeGreaterThan(10);
   });
 });

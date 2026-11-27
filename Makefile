@@ -409,7 +409,7 @@ e2e: db-up ## Playwright: editor + client (login, enter, walk); screenshots in *
 # no Postgres (docs/08). ONLY=<scene> for one scene; screenshots in
 # client/e2e/screenshots/actual/ui-preview/.
 ui-preview: ## Screenshots of the game UI at desktop, tablet and phone sizes, without a server
-	node --experimental-strip-types client/e2e/ui-preview.ts $(if $(ONLY),--only $(ONLY)) $(if $(SIZES),--sizes $(SIZES))
+	node --experimental-strip-types client/e2e/ui-preview.ts $(if $(ONLY),--only $(ONLY)) $(if $(SIZES),--sizes $(SIZES)) $(if $(AUDIT),--audit) $(if $(UILANG),--lang $(UILANG)) $(if $(NOTCH),--notch) $(if $(COVERED),--covered)
 
 .PHONY: bots
 # Load test (tools/bots, docs/07-performance-budget.md). Without URL it builds the map and

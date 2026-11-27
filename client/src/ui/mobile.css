@@ -650,6 +650,21 @@
   bottom: 166px;
   max-width: min(20rem, 42%);
 }
+/* A phone on its side inside the browser (the real device pass of lote 21: 748x298 on a
+   Galaxy S22 Ultra, with the address bar and the system buttons taking a quarter of the
+   height): over the pad there is no room left under the minimap's bar, and the log's
+   button went up under it and off the screen. So short, the log stands at the pad's right. */
+@media (max-height: 350px) {
+  .game[data-ui="mobile"][data-flow="row"][data-pad] .chat-glance {
+    bottom: 6px;
+    left: 196px;
+    max-width: min(18rem, 34%);
+  }
+  /* Left-handed: the buttons are in that corner, and the log already stands beside them. */
+  .game[data-mirror][data-ui="mobile"][data-flow="row"][data-pad] .chat-glance {
+    left: calc(2 * var(--touch-btn) + 24px);
+  }
+}
 /* The sheet is up: the log would only show through its edge (or squeezed beside it). */
 .game[data-ui="mobile"][data-sheet] .chat-glance {
   display: none;
@@ -797,19 +812,66 @@
   max-width: min(20rem, calc(100% - 12px));
   max-height: calc(100% - 4.2rem);
 }
+/* On its side the action buttons stand in the right corner, where the hints hung: the
+   buttons drew over the text and over "Skip tutorial" (lote 21 QA). The hints stand at
+   the buttons' left, from the top edge. */
+.game[data-ui="mobile"][data-flow="row"][data-cluster] .tutorial {
+  top: 0.4rem;
+  right: 12.5rem;
+  max-height: calc(100% - 0.8rem);
+}
 .game[data-ui="mobile"] .tutorial-show {
   min-height: 44px;
 }
-/* The presence check and the invitations: over everything on the map, under the top row;
-   their buttons a finger wide. */
-.game[data-ui="mobile"] .presence {
+/* The presence check and the invitations (GameView's .alerts box): one column over the
+   map, under the top row, the check first; their buttons a finger wide. Lote 21 QA: each
+   used to stand at a fixed height, so two that arrived together came one over the other
+   (an invitation takes two or three lines at 390 px), under the action buttons upright
+   and over the pad's right column on a phone on its side. Whatever does not fit scrolls. */
+.game[data-ui="mobile"] .alerts {
+  position: absolute;
   top: 3.6rem;
+  left: 6px;
+  right: 6px;
   z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   max-height: calc(100% - 4.2rem);
+  overflow-y: auto;
+  pointer-events: none;
 }
-.game[data-ui="mobile"][data-flow="row"] .presence {
+/* On its side: between the pad and the action buttons, from the top edge (the minimap's
+   bar and the tray are at the sides). */
+.game[data-ui="mobile"][data-flow="row"] .alerts {
   top: 0.4rem;
+  left: 11.5rem;
+  right: 12.5rem;
   max-height: calc(100% - 0.8rem);
+}
+.game[data-ui="mobile"] .alerts > * {
+  position: static;
+  transform: none;
+  flex: none;
+  width: auto;
+  max-width: 100%;
+  max-height: none;
+  pointer-events: auto;
+}
+.game[data-ui="mobile"] .alerts > .presence {
+  order: -1;
+}
+.game[data-ui="mobile"] .alerts > .invitations:empty {
+  display: none;
+}
+/* The text on its line and the two answers side by side, each half the box. */
+.game[data-ui="mobile"] .alerts .invitation {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.game[data-ui="mobile"] .alerts .invitation p {
+  grid-column: 1 / -1;
 }
 .game[data-ui="mobile"] .presence button,
 .game[data-ui="mobile"] .invitation button,
@@ -818,40 +880,8 @@
   min-height: 44px;
   min-width: 44px;
 }
-/* The invitations stand on the map's bottom edge, over the compact chat (they expire: an
-   answer comes first), the guild's above the party's. */
-.game[data-ui="mobile"] .invitations {
-  bottom: 0.5rem;
-  z-index: 7;
-  width: max-content;
-  max-width: calc(100% - 12px);
-}
-.game[data-ui="mobile"] .guild-invitations {
-  bottom: 5rem;
-}
-.game[data-ui="mobile"][data-flow="column"] .invitations {
-  bottom: 2.6rem;
-}
-.game[data-ui="mobile"][data-flow="column"] .guild-invitations {
-  bottom: 7.2rem;
-}
 /* The death screen fits a phone on its side: it scrolls inside if it must. */
 .game[data-ui="mobile"] .death {
   max-height: calc(100% - 1rem);
   overflow-y: auto;
-}
-/* On its side there is no room to stack them: the presence check takes the middle, clear
-   of the minimap's bar and the tray, and the guild's invitation stands at its right. */
-.game[data-ui="mobile"][data-flow="row"] .presence {
-  left: 6.5rem;
-  transform: none;
-  max-width: calc(100% - 6.5rem - 17.5rem);
-}
-.game[data-ui="mobile"][data-flow="row"] .guild-invitations {
-  top: 3.4rem;
-  bottom: auto;
-  left: auto;
-  right: 6px;
-  transform: none;
-  max-width: 16.5rem;
 }

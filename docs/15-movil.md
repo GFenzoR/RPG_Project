@@ -253,6 +253,83 @@ direcciones, y hay un botón para dejarlo instalado y entrar directo.
   `.game-body`). **Pantalla encendida:** mientras se juega se pide el *wake lock*
   (`keepAwake`), y se vuelve a pedir al regresar a la pestaña.
 
+## QA móvil (lote 21, rama `feat/mobile-qa`)
+
+Sin funciones nuevas: buscar y arreglar lo roto o feo en teléfonos y tablets.
+
+### Cómo se revisa
+- **Auditoría táctil** (`client/e2e/touch-audit.ts`, `docs/08` "Auditoría táctil"): mide
+  áreas de toque de 44 px, textos cortados, controles fuera de pantalla, desplazamiento
+  lateral y áreas seguras. Corre sobre las 49 escenas de `make ui-preview AUDIT=1` en cinco
+  tamaños táctiles (390x844, 844x390, **748x298**, 768x1024, 1024x768), en español y en
+  inglés (`UILANG=en`), y en el juego con los tests "lote 21 QA on …" de
+  `e2e/mobile.spec.ts`.
+- **Hojas de contacto** (`client/e2e/contact-sheet.ts`): todas las capturas de un tamaño en
+  pocas imágenes, para mirarlas de una vez.
+- **Pasada en un teléfono real** (`client/e2e/device-check.ts`, abajo).
+
+### Qué se encontró y se arregló
+| Problema | Dónde | Arreglo |
+|---|---|---|
+| 577 hallazgos de la auditoría en la primera corrida: botones de ícono, casillas de la forja, flechas de página, la × de un item ofrecido y filtros de la tienda de 29 a 41 px de ancho; muestras de color de 32 px; casillas de verificación de 24 px; "Cuenta y seguridad" de 20 px de alto | todos los tamaños | Con puntero grueso, todo `button` y `summary` mide 44 px también de ancho, la etiqueta de una casilla o un radio es el objetivo (44 px) y las muestras miden 44 px (`client.css`, bloque `pointer: coarse`) |
+| El chequeo de presencia, la invitación al grupo y la del gremio se dibujaban una sobre otra, bajo los botones de acción (vertical) y sobre la columna derecha del pad (apaisado) | teléfono y tablet vertical | Van en una sola columna (`.alerts` de `GameView`), el chequeo primero; lo que no entra se desplaza. Apaisado, entre el pad y los botones |
+| Los botones de acción flotaban sobre la hoja o el cajón y se quedaban con los toques (en inglés, la tercera pestaña del diario quedaba bajo "atacar") | teléfono | Se ocultan mientras la hoja o el cajón están abiertos |
+| Modo zurdo, apaisado: los botones de acción quedaban sobre la palanca | 844x390 | `right: auto` en la regla espejada (la de la fila era más específica) |
+| Apaisado: los botones de acción tapaban el texto del tutorial y "Saltar tutorial" | 844x390 | Las pistas cuelgan a la izquierda de los botones |
+| **Teléfono real** apaisado dentro del navegador (748x298): el botón del chat subía bajo la barra del minimapa y salía de la pantalla | Galaxy S22 Ultra | Con menos de 350 px de alto, el chat va a la derecha del pad. `make ui-preview` dibuja ese tamaño |
+| **Teléfono real** (384 px de ancho): la esquina del login ("Pantalla completa", "Instalar como app", idioma, "Opciones") tapaba el nombre del juego, el título "Entrar" y la etiqueta del email; idioma y "Opciones" medían 31 y 32 px de alto | Galaxy S22 Ultra | En pantallas de hasta 640 px de ancho o 500 de alto la esquina es una franja propia arriba del título, con sus áreas seguras; sus controles miden 44 px |
+
+Después de los arreglos la auditoría da **0 hallazgos** en las escenas de la vista previa
+(es y en) y en el teléfono real. Lo que se deja pasar a propósito (`AUDIT_ALLOW`): el menú
+de item de la escena `itemmenu` (es el del mouse), el nombre de un hechizo cortado en su
+slot y el título de una ventana flotante angosta.
+
+### Pasada en un teléfono real
+Hecha el 2026-11-27 en un **Samsung Galaxy S22 Ultra** (SM-S908E, Android 16, Chrome 158,
+1080x2316, tres botones de sistema), por USB. Sin servidor de juego en esa etapa (la regla
+del lote: Docker y el servidor corren una vez al final), así que el teléfono abrió la **vista
+previa** (`build/ui-preview`, la interfaz real con estados inventados y una imagen por mapa)
+y el **build de producción** del cliente (login, manifest y service worker) desde un
+servidor de archivos en la PC, con `adb reverse`.
+
+| Qué | Resultado |
+|---|---|
+| Página en Chrome, vertical | 384x692 px CSS a 2,8125x: más angosta y mucho más baja que el 390x844 de la emulación (barra de estado, de direcciones y botones del sistema) |
+| Página en Chrome, apaisado | **748x298**: la barra de direcciones se queda. Por eso "Pantalla completa" importa tanto en un teléfono |
+| Áreas seguras (`env(safe-area-inset-*)`) en una pestaña | 0 en los cuatro lados: Chrome deja la página fuera del notch y de los botones. A pantalla completa o instalada no se midieron (ver pendientes) |
+| Auditoría táctil | 0 hallazgos en 11 escenas en vertical y 8 en apaisado, después de los dos arreglos de arriba |
+| Cuadros por segundo de la interfaz (sin el canvas del juego) | 59 a 60, peor cuadro 17 a 34 ms |
+| Manifest | 200, `application/manifest+json`; color de tema `#090807` aplicado a la barra de Chrome |
+| Service worker | activo y controlando la página; con el servidor apagado, recargar abre igual el login (el shell en caché) |
+| Instalar | Chrome mandó `beforeinstallprompt`: aparece "Instalar como app". No se instaló (no hace falta para ninguna prueba y es el teléfono personal del dueño) |
+| Pantalla completa | Un toque real en el botón entra (`fullscreenElement`, el botón pasa a "Salir de pantalla completa"); que la barra de direcciones desaparezca no quedó confirmado en la captura |
+| Aviso de versión nueva | Tras un build nuevo apareció "Hay una nueva versión disponible. Recargar" |
+| `navigator.vibrate`, *wake lock* | Existen; no se comprobó que vibre ni que la pantalla no se apague |
+| Teclado virtual | Sin comprobar: al tocar el campo del email, Chrome abrió su hoja de contraseñas guardadas en lugar del teclado, y no se siguió |
+
+Para repetirla (el teléfono con depuración USB y Chrome abierto), en una sola línea cada
+comando:
+
+```
+adb reverse tcp:8080 tcp:8080
+adb forward tcp:9333 localabstract:chrome_devtools_remote
+node --experimental-strip-types client/e2e/device-check.ts --cdp http://localhost:9333 --base http://localhost:8080 --pages "play/?lang=es" --out build/device --tag vertical
+adb forward --remove tcp:9333
+adb reverse --remove-all
+```
+
+El script abre una pestaña propia, mide (tamaño, áreas seguras, modo, cuadros por segundo,
+auditoría), guarda una captura por página y cierra su pestaña; no mira las demás. No uses el
+puerto 9222: suele tenerlo el Chrome de la PC. Con `make ui-preview` hecho, las escenas se
+sirven con cualquier servidor de archivos sobre `build/ui-preview` y `--pages
+"preview/?scene=game&mapx=35&mapy=13&lang=es"`.
+
+### Lo que esta etapa no pudo comprobar
+Sin servidor de juego no se jugó nada de punta a punta en el teléfono ni se corrió
+`make e2e`: los E2E nuevos se escribieron a ciegas, como los de las otras ramas del lote, y
+los corre la etapa final. La lista para el dueño, con los pasos, está en `docs/14`
+("Móvil, QA").
+
 ## Tauri mobile (preparado; compilarlo es 👤)
 
 ### Por qué en `apps/desktop` y no en `apps/mobile`

@@ -483,6 +483,13 @@ body.inspecting [data-testid="game-canvas"] {
   right: 60px;
   bottom: calc(var(--bar-px) + 12px);
 }
+/* With the sheet or the drawer open the buttons leave (lote 21 QA): they floated over it
+   and took the taps meant for what was under them (in English the third tab of the quest
+   log sat under "attack"). The pad stays: it is in the console, clear of the sheet. */
+.game[data-ui="mobile"][data-sheet] .touch-cluster {
+  visibility: hidden;
+  pointer-events: none;
+}
 /* Upright the compact chat log leaves the corner of the buttons free. */
 .game[data-ui="mobile"][data-flow="column"][data-cluster] .chat-glance {
   max-width: calc(100% - 2 * var(--touch-btn) - 30px);
@@ -504,7 +511,11 @@ body.inspecting [data-testid="game-canvas"] {
   left: auto;
   right: 60px;
 }
+/* `right: auto` again: the row's own rule is more specific than the mirror's, and with
+   both sides set the box stretched across the map and its right-to-left columns landed
+   on the stick (lote 21 QA). */
 .game[data-mirror][data-ui="mobile"][data-flow="row"] .touch-cluster {
+  right: auto;
   left: 8px;
   bottom: 12px;
 }
@@ -679,4 +690,28 @@ body.inspecting [data-testid="game-canvas"] {
   flex-wrap: wrap;
   justify-content: flex-end;
   max-width: calc(100vw - 1.5rem);
+}
+/* On a phone the corner is a strip of its own above the title (the real device pass of
+   lote 21, 384 px wide: fixed to the corner, "Full screen" and "Install as an app" lay
+   over the game's name and the heading of the login, and "Options" over the email label).
+   It keeps the safe areas it had as a fixed box. */
+@media (max-width: 640px), (max-height: 500px) {
+  .corner {
+    position: static;
+    max-width: none;
+    padding: calc(0.5rem + env(safe-area-inset-top, 0px))
+      calc(0.75rem + env(safe-area-inset-right, 0px)) 0
+      calc(0.75rem + env(safe-area-inset-left, 0px));
+  }
+  .corner + .brand {
+    margin-top: 0.75rem;
+  }
+}
+@media (pointer: coarse) {
+  .corner button,
+  .corner select,
+  .corner summary {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
