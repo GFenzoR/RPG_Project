@@ -44,3 +44,23 @@ describe("crosshair", () => {
     expect(resolveClick(afterUse(rod, true), wolf)).toEqual({ kind: "none" });
   });
 });
+
+describe("an aimed rune of an item hotkey", () => {
+  const pending: Pending<string> = { kind: "itemType", itemId: 12 };
+
+  it("goes by type on the creature or the tile that is clicked", () => {
+    expect(resolveClick(pending, wolf)).toEqual({
+      kind: "typeOnCreature",
+      itemId: 12,
+      creature: 42,
+    });
+    expect(resolveClick(pending, tile)).toEqual({ kind: "typeOnTile", itemId: 12, pos: tile.pos });
+  });
+
+  it("a plain cast or use drops it", () => {
+    expect(resolveClick(afterCast("frost_lance", false), wolf)).toEqual({
+      kind: "attack",
+      creature: 42,
+    });
+  });
+});

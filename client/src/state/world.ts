@@ -642,6 +642,8 @@ export class WorldState implements TileSource {
   private speech: SpeechSaid[] = [];
   /** Running cooldowns (SpellCooldown) by spell ID and by spell group. */
   readonly spellCooldowns = new Map<string, Cooldown>();
+  /** Units carried of each item type of the item hotkeys, from ItemCounts (all containers). */
+  itemCounts: ReadonlyMap<number, number> = new Map();
   readonly groupCooldowns = new Map<string, Cooldown>();
   log: LogMessage[] = [];
   chat: ChatLine[] = [];
@@ -983,6 +985,9 @@ export class WorldState implements TileSource {
         break;
       case "minimapSectors":
         this.minimap.applySectors(msg.value.sectors, msg.value.answer);
+        break;
+      case "itemCounts":
+        this.itemCounts = new Map(msg.value.counts.map((c) => [c.itemId, c.count]));
         break;
       case "objectiveHint": {
         const h = msg.value;

@@ -4305,6 +4305,60 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
     }
     return seen.size;
   };
+  // Two things of the living world drift over a crown also in the calm between two gusts, and
+  // neither is the crown moving: the pollen that trees give off (ambient particles: the
+  // "reduced effects" option, data-effects, switches them off and leaves the wind alone) and
+  // the leaves that fall from a crown now and then (one 3.4 s in a few tens). So the page
+  // runs with reduced effects while the stillness is read, and only frames taken with no
+  // leaf over the clip, before or after the shot, count.
+  const effects = (reduced: boolean): Promise<void> =>
+    page.evaluate((on) => {
+      if (on) document.documentElement.dataset["effects"] = "reduced";
+      else delete document.documentElement.dataset["effects"];
+    }, reduced);
+  const leafOver = (clip: typeof crown): Promise<boolean> =>
+    page.evaluate(
+      ({ c, tx, ty, sc }) => {
+        const hook = window.__rpgClient;
+        const mid = hook?.tileToClient(tx, ty);
+        if (!hook || !mid) return false;
+        const margin = 16 * sc; // a leaf is a few sprite pixels, drawn around its spot
+        return hook.leafSpots().some((l) => {
+          const x = mid.x + (l.x - (tx + 0.5) * 32) * sc;
+          const y = mid.y + (l.y - (ty + 0.5) * 32) * sc;
+          return (
+            x > c.x - margin &&
+            x < c.x + c.width + margin &&
+            y > c.y - margin &&
+            y < c.y + c.height + margin
+          );
+        });
+      },
+      { c: clip, tx: tree.x, ty: tree.y, sc: scale },
+    );
+  /** How many distinct frames of `clip` in `n` shots 400 ms apart, none with a leaf over it. */
+  const stillFrames = async (
+    clip: typeof crown,
+    n: number,
+    ready?: () => Promise<void>,
+  ): Promise<number> => {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await ready?.();
+      const seen = new Set<string>();
+      let clear = true;
+      for (let i = 0; i < n && clear; i++) {
+        const before = await leafOver(clip);
+        const shot = (await page.screenshot({ clip })).toString("base64");
+        const after = await leafOver(clip);
+        clear = !before && !after;
+        seen.add(shot);
+        if (clear && i < n - 1) await page.waitForTimeout(400);
+      }
+      if (clear) return seen.size;
+      await page.waitForTimeout(700);
+    }
+    throw new Error("a leaf was always over the clip");
+  };
   // The gusts (data/livingworld/wind.yaml): the next front to reach a tile, and whether
   // the map is in the calm between two.
   const gust = (x: number, y: number, min: number) =>
@@ -4331,18 +4385,24 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
   // The calm may already be there on arrival (the gusts run on the server's clock), and
   // then the frames below came while a creature behind the crown (the druid stands north
   // of this tree) was still in the 300 ms fade of its first frame: the settle outlasts it.
+  await effects(true);
   await calm(tree.x, tree.y, 4500);
   await page.waitForTimeout(500);
   await shot(page, `120-wind-plaza-calm-zoom${scale}`);
-  expect(await frames(crown, 5), "the crown stands still between gusts").toBe(1);
+  // (each try waits for a calm with 4.5 s left: a try that met a leaf starts again in one)
+  expect(
+    await stillFrames(crown, 5, () => calm(tree.x, tree.y, 4500)),
+    "the crown stands still between gusts",
+  ).toBe(1);
   // The gust: the crown leans and swings, the foot of the trunk stands.
   // (A gust comes every 45 s or so, and not every one blows hard on this tree: the wait
   // is a minute on average.)
   const blew = await front(tree.x, tree.y, 0.6);
   testInfo.annotations.push({ type: "wind", description: `gust of ${blew.toFixed(2)}` });
-  const [crownFrames, footFrames] = await Promise.all([frames(crown, 6), frames(foot, 6)]);
+  const [crownFrames, footFrames] = await Promise.all([frames(crown, 6), stillFrames(foot, 6)]);
   expect(crownFrames, "the crown bends in the gust").toBeGreaterThan(1);
   expect(footFrames, "the foot of the trunk stands").toBe(1);
+  await effects(false);
   // Still swinging, less and less.
   for (let i = 0; i < 4; i++) {
     await shot(page, `120-wind-plaza-zoom${scale}-${i}`);
@@ -4475,5 +4535,89 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
   // Still standing in the forest: every shot above was of it.
   expect(await self(page)).toMatchObject({ x: stood?.x, y: stood?.y });
   await expect(page.getByTestId("death-screen")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+// Item hotkeys (docs/02 "Teclas rapidas de items"): a ship biscuit dragged from the backpack onto
+// slot 1 of the bar is used with the key 1 even after the backpack's window is closed: the server
+// finds it, the slot's count goes down and the character eats. Not run by the author of the
+// feature (no Docker there): it is the checklist of docs/14 "Teclas rápidas de items".
+test("item hotkeys: drag a biscuit onto slot 1, press 1 with the backpack closed, the count goes down", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  const guardian = await newGuardian(playwright, "Hotkeys");
+  // Puerto's temple square, a backpack (item 48) with five ship biscuits (item 27) in it.
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto', pos_x = 3171, pos_y = 6381, pos_z = 7 WHERE name = '${guardian.name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${guardian.name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, 0, 27, 5 FROM bp;`,
+  ]);
+  await enterGame(page, guardian.email, guardian.password);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  await arrivedNear(page, 3171, 6381, 2);
+
+  const docked = page
+    .getByTestId("inventory")
+    .locator('[data-container-item="backpack"][data-docked]');
+  // A new character of Puerto is in the tutorial, which keeps the backpack closed: a double
+  // click on the equipped backpack opens it under the figure.
+  if ((await docked.count()) === 0)
+    await page
+      .getByTestId("inventory")
+      .getByTestId("slot-backpack")
+      .locator("[data-item]")
+      .dblclick();
+  await expect(docked).toBeVisible();
+  const biscuit = docked.locator('[data-item="ship_biscuit"]');
+  await expect(biscuit).toBeVisible();
+  const slot1 = page.getByTestId("itemkeys").locator('[data-itemkey="1"]');
+  await expect(slot1).toBeVisible();
+  // The slot is empty and says so.
+  await expect(slot1.getByRole("button")).toHaveAccessibleName(/vacía/);
+
+  // Drag it from the backpack onto slot 1 (the real pointer: the game's own drag).
+  const from = await biscuit.boundingBox();
+  const to = await slot1.boundingBox();
+  if (!from || !to) throw new Error("no drag points");
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+  // The server counts all that the character carries (the first ItemCounts after the assignment).
+  await expect(page.getByTestId("itemkey-count-1")).toHaveText("5");
+  await shot(page, "130-item-hotkeys-01-assigned");
+
+  // It is remembered for the character (the saved option) and the backpack's window is closed:
+  // the server still finds the biscuit.
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem("rpg.itemkeys") ?? "{}")),
+  ).toMatchObject({ [guardian.name]: [27, 0, 0, 0, 0, 0] });
+  await docked.getByRole("button", { name: /Cerrar/ }).click();
+  await expect(docked).toBeHidden();
+
+  // The key 1 uses one: the count goes down and the effect happens (the log says it).
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("itemkey-count-1")).toHaveText("4");
+  await expect(page.getByTestId("game-log")).toContainText("Comiste");
+  await shot(page, "130-item-hotkeys-02-used");
+
+  // With a dialog open the digits are the dialog's: pressing 1 uses nothing here (no dialog is
+  // opened by this test; the unit test of Game covers it), and a second press right after the
+  // first is the shared one-second cooldown of items: the count stays.
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("itemkey-count-1")).toHaveText("4");
+  await page.waitForTimeout(1200);
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("itemkey-count-1")).toHaveText("3");
   expect(errors).toEqual([]);
 });

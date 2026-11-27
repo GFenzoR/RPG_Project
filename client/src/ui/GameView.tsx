@@ -32,6 +32,7 @@ import { typingInField } from "../input/keyboard.ts";
 import { motionReduced } from "../state/ui-prefs.ts";
 import { ContainerView, InventoryPanel, itemName } from "./Inventory.tsx";
 import { Hotbar } from "./Hotbar.tsx";
+import { ItemHotbar } from "./ItemHotbar.tsx";
 import { ChatPanel } from "./Chat.tsx";
 import { DialogBox, DialogWindow, ShopWindow } from "./Dialog.tsx";
 import { CraftingWindow, stationTitle } from "./Crafting.tsx";
@@ -180,6 +181,8 @@ export function emptyGameUi(): GameUi {
     pockets: NO_POCKETS,
     containers: [],
     hotkeys: [],
+    itemKeys: [0, 0, 0, 0, 0, 0],
+    itemCounts: new Map(),
     dialog: undefined,
     shop: undefined,
     station: undefined,
@@ -1049,6 +1052,11 @@ export function GameView(props: GameViewProps): JSX.Element {
                 <Hotbar t={t} content={props.content} game={game} ui={ui} margin={0} />
               )
             }
+            itemkeys={
+              props.entered && (
+                <ItemHotbar t={t} content={props.content} game={game} ui={ui} place="bar" />
+              )
+            }
             toolbar={
               <LogoutLock conditions={ui.conditions}>
                 {(seconds) => (
@@ -1161,6 +1169,11 @@ export function GameView(props: GameViewProps): JSX.Element {
               />
             )
           }
+          itemkeys={
+            props.entered && layout.flow === "row" ? (
+              <ItemHotbar t={t} content={props.content} game={game} ui={ui} place="row" />
+            ) : undefined
+          }
           // On its side the pad floats over the map's corner, above the bar.
           pad={props.entered && props.touchPad && layout.flow === "row" ? padControl : undefined}
           tools={
@@ -1237,6 +1250,11 @@ export function GameView(props: GameViewProps): JSX.Element {
             data-testid="mobile-console"
             data-has-pad={props.entered && props.touchPad ? "" : undefined}
           >
+            {props.entered && (
+              <div class="mconsole-items">
+                <ItemHotbar t={t} content={props.content} game={game} ui={ui} place="console" />
+              </div>
+            )}
             {props.entered && props.touchPad && <div class="touch-pad-dock">{padControl}</div>}
             <div class="mconsole-tools">
               {panelTabs}
@@ -1777,6 +1795,12 @@ function HelpBody(props: { t: Translate; touch?: boolean }): JSX.Element {
             <kbd>F1–F12</kbd>
           </dt>
           <dd>{t("client.hotbar.title")}</dd>
+        </div>
+        <div>
+          <dt>
+            <kbd>1–6</kbd>
+          </dt>
+          <dd>{t("client.itemkeys.title")}</dd>
         </div>
       </dl>
       {/* docs/17 UI-1: the windows from the keyboard (their ✥ handle). */}

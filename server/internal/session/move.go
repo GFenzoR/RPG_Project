@@ -72,6 +72,10 @@ func (w *World) input(ctx *game.TickContext, p *Player, msg *pb.ClientMessage) {
 		w.craft(ctx, p, m.Craft)
 	case *pb.ClientMessage_Refine:
 		w.refine(ctx, p, m.Refine)
+	case *pb.ClientMessage_UseItemType:
+		w.useItemType(ctx, p, m.UseItemType)
+	case *pb.ClientMessage_SetItemHotkeys:
+		w.setItemHotkeys(p, m.SetItemHotkeys.GetItemIds())
 	case *pb.ClientMessage_UseItemOn:
 		w.useItemOn(ctx, p, m.UseItemOn)
 	case *pb.ClientMessage_CastSpell:
@@ -604,8 +608,9 @@ func (w *World) flushSystem(ctx *game.TickContext) {
 	w.slow = w.slow[:0]
 	for _, p := range w.players {
 		w.questRecheck(p)
-		w.flushQuestLog(p) // after the recheck: its changes are in this one
-		w.flushHint(p)     // minimap.go: the tracked quest's step may have changed
+		w.flushItemCounts(p) // after the recheck: it marks the tick that changed the inventory
+		w.flushQuestLog(p)   // after the recheck: its changes are in this one
+		w.flushHint(p)       // minimap.go: the tracked quest's step may have changed
 		w.flushMinimap(ctx.Tick, p)
 		w.sendConditions(ctx.Tick, p)
 		if !w.flushPlayer(ctx.Tick, p) {

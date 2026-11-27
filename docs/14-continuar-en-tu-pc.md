@@ -108,6 +108,13 @@ Tres fondos de Gemini que rotan detrás del login y el nombre del juego en letra
 
 ## Pendientes conocidos (no bloquean)
 
+- **Teclas rápidas de items (`feat/item-hotkeys`, docs/02):** hecho y probado con pruebas
+  unitarias, de servidor y la vista previa; **falta correr `make e2e`** (el test "item hotkeys:
+  drag a biscuit onto slot 1…" de `client/e2e/game.spec.ts`, capturas `item-hotkeys-01/02`) y
+  jugarlo a mano en un teléfono: arrastrar con el dedo desde la mochila a una casilla, un toque
+  para usarla, arrastrarla afuera para vaciarla. En el e2e, el nombre accesible del botón de
+  cerrar la mochila acoplada (`/Cerrar/`) está sin verificar.
+
 - **Móvil, QA (lote 21, `feat/mobile-qa`; `docs/15` "QA móvil"):** la auditoría táctil
   (`make ui-preview AUDIT=1`) da 0 hallazgos en español e inglés y en el Galaxy S22 Ultra
   del dueño (vista previa y login del build, por USB). **Lo que falta:**

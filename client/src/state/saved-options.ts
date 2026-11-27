@@ -159,6 +159,27 @@ function tracked(v: unknown): Record<string, string> | undefined {
   return out;
 }
 
+/** rpg.itemkeys: { character name: up to 12 item ids, 0 = empty }. */
+const itemKeysCodec: Codec = {
+  read: (raw) => itemKeys(parse(raw)),
+  write: (v) => {
+    const k = itemKeys(v);
+    return k ? JSON.stringify(k) : undefined;
+  },
+};
+function itemKeys(v: unknown): Record<string, number[]> | undefined {
+  if (!isObject(v)) return undefined;
+  const out: Record<string, number[]> = {};
+  for (const [name, bar] of Object.entries(v).slice(0, 32))
+    if (NAME.test(name) && Array.isArray(bar))
+      out[name] = bar
+        .slice(0, 12)
+        .map((id) =>
+          typeof id === "number" && Number.isInteger(id) && id > 0 && id <= 65535 ? id : 0,
+        );
+  return out;
+}
+
 /** rpg.minimap: { open, scale }. */
 const minimapCodec: Codec = {
   read: (raw) => minimap(parse(raw)),
@@ -306,6 +327,22 @@ export const OPTIONS: readonly OptionDef[] = [
     field: "hotkeys",
     codec: hotkeysCodec,
     personal: true,
+  },
+  {
+    // The item hotkeys 1-6 of each character (docs/02 "Teclas rapidas de items"), by name.
+    id: "item_hotkeys",
+    persistence: "account",
+    storageKey: "rpg.itemkeys",
+    field: "item_keys",
+    codec: itemKeysCodec,
+    personal: true,
+  },
+  {
+    id: "item_hotkeys_tracking",
+    persistence: "session",
+    message: "SetItemHotkeys",
+    reason:
+      "not an option: it tells the server which item types the saved item hotkeys hold, to count them (sent at each login and change)",
   },
   {
     id: "tracked_quest",

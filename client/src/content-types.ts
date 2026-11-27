@@ -466,6 +466,8 @@ export interface ClientContent {
    * tutorial's line about it (docs/02 "Muerte"). Optional so fixtures can leave it out.
    */
   death?: { noviceMaxLevel: number };
+  /** balance.yaml inventory: the shared cooldown of consumables (the item hotkeys' shade). */
+  inventory?: { useCooldownMs: number };
   /** Sounds, event mapping and loops (assets/sounds.yaml, T3.7). */
   sounds: SoundManifest;
   /** The music areas of important quests (data/quests `music`; optional in fixtures). */

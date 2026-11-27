@@ -71,6 +71,7 @@ message ServerMessage {
     MinimapSectors minimap_sectors = 51;
     ObjectiveHint objective_hint = 52;
     WorldClock world_clock = 53;
+    ItemCounts item_counts = 54;
   }
 }
 
@@ -543,6 +544,20 @@ message Inventory {
   repeated EquippedItem slots = 1;
   repeated ItemStack pockets = 2;
   uint32 pocket_slots = 3;
+}
+
+// ItemCounts is how many units of each item type of the item hotkeys (SetItemHotkeys) the
+// character carries in total: equipment, pockets, the backpack and every container inside,
+// open or not (a stack's size; a rune's charges; 1 for anything else). It lists every
+// requested type, 0 for the ones not carried, and goes after SetItemHotkeys and whenever a
+// total changes (a unit used, moved into or out of the character, picked up, dropped...).
+message ItemCounts {
+  repeated ItemCount counts = 1;
+}
+
+message ItemCount {
+  uint32 item_id = 1;
+  uint32 count = 2;
 }
 
 // ContainerOpen opens a container window. container_id is session-local and is what

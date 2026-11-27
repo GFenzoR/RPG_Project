@@ -463,6 +463,40 @@
 .hud-bar .hotbar .edit {
   height: 52px;
 }
+/* The item hotkeys: six slots between the spell hotbar and the toolbar, in the same well. */
+.hud-bar .itemkeys {
+  gap: 3px;
+  padding-left: 6px;
+  border-left: 1px solid var(--ui-iron-900);
+  box-shadow: -1px 0 0 rgb(255 240 210 / 0.05);
+}
+.hud-bar .itemkeys ol {
+  gap: 2px;
+}
+.hud-bar .itemkeys li button,
+.hud-bar .itemkeys li select {
+  width: 36px;
+}
+.hud-bar .itemkeys .edit {
+  width: 22px;
+  height: 52px;
+}
+/* A finger's target (docs/15): 44 px wide on a touch screen of the desktop layout. */
+.game[data-ui="windows"][data-touch] .hud-bar .itemkeys ol {
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  gap: 4px;
+  align-content: center;
+}
+.game[data-ui="windows"][data-touch] .hud-bar .itemkeys li button,
+.game[data-ui="windows"][data-touch] .hud-bar .itemkeys li select {
+  width: 44px;
+  height: 44px;
+}
+/* Two rows of three beside the toolbar's two rows: the spell hotbar keeps the room. */
+.game[data-ui="windows"][data-touch] .hud-bar .itemkeys .edit {
+  display: none;
+}
 
 /* ---- Toolbar: icon buttons that open the windows (Tibia-like, own pixel icons) -------
    Two rows of six beside the hotbar; one row with the icons at 2x where it fits. */

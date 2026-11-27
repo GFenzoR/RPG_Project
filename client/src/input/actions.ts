@@ -18,7 +18,8 @@ export type ActionKind =
   | "equip"
   | "look"
   | "move"
-  | "split";
+  | "split"
+  | "hotkey";
 
 /**
  * What the client knows of an item a menu offers buttons for (docs/17 UI-6): its first
@@ -37,6 +38,8 @@ export interface ItemFacts {
   food?: boolean | undefined;
   /** Equipment not in a slot yet: "Equip" moves it to its slot. */
   equip?: boolean | undefined;
+  /** Food, a potion or a rune: "Assign to a quick key" (an item hotkey, docs/02). */
+  hotkey?: boolean | undefined;
   /** More than one unit: "Move part…". */
   split?: boolean | undefined;
   /** A map fixture nobody carries (a station, a board): nothing to move. */
@@ -115,6 +118,7 @@ export function defaultAction(f: TileFacts): ActionKind | undefined {
 export function itemActions(f: ItemFacts): ActionKind[] {
   const out: ActionKind[] = [itemPrimary(f), "look", "move"];
   if (f.split) out.push("split");
+  if (f.hotkey) out.push("hotkey");
   return out;
 }
 

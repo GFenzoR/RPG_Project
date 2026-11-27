@@ -26,6 +26,8 @@ export function HudBar(props: {
   tray: ComponentChildren;
   /** The spell hotbar (ui/Hotbar.tsx). */
   hotbar: ComponentChildren;
+  /** The item hotkeys (ui/ItemHotbar.tsx), between the hotbar and the toolbar. */
+  itemkeys?: ComponentChildren;
   /** The toolbar (ui/Toolbar.tsx). */
   toolbar: ComponentChildren;
 }): JSX.Element {
@@ -50,6 +52,7 @@ export function HudBar(props: {
         />
         <div class="bar-row">
           <div class="bar-hotbar">{props.hotbar}</div>
+          {props.itemkeys}
           {props.toolbar}
         </div>
       </div>

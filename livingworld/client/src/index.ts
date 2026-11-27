@@ -262,6 +262,11 @@ export interface LivingWorld {
   nextGust(x: number, y: number, now: number, min?: number): GustFront | undefined;
   /** The footprints on the ground now (tests and the E2E hook: read, never keep). */
   footprints(): readonly Footprint[];
+  /**
+   * Where the leaves drawn now are, in sprite pixels of the map (the E2E hook: a test that
+   * watches a patch of the screen for stillness has to know a leaf is falling over it).
+   */
+  leafSpots(): { x: number; y: number }[];
   /** Counts for tests and the debug overlay. */
   stats(): {
     wear: number;
@@ -808,6 +813,15 @@ export function createLivingWorld(
 
     footprints() {
       return prints.prints;
+    },
+
+    leafSpots() {
+      const out: { x: number; y: number }[] = [];
+      for (const l of leaves.leaves) {
+        const pose = LeafSim.pose(l);
+        if (pose.alpha > 0) out.push({ x: pose.x, y: pose.y });
+      }
+      return out;
     },
 
     stats() {

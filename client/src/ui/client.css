@@ -1292,6 +1292,140 @@ body.picking-item .map-hint {
 }
 /* On the desktop the hotbar is in the bottom bar (windows.css), not over the map. */
 
+/* Item hotkeys 1-6 (ui/ItemHotbar.tsx): food, potions and runes by type, next to the spell
+   hotbar. A slot is an icon with its key at the top left and the units carried (the server
+   counts closed containers too) at the bottom right; none carried: greyed out with a 0. */
+.itemkeys {
+  flex: none;
+  display: flex;
+  gap: 0.25rem;
+  align-items: stretch;
+}
+.itemkeys ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.2rem;
+}
+.itemkeys li button,
+.itemkeys li select {
+  position: relative;
+  box-sizing: border-box;
+  width: 40px;
+  height: 52px;
+  padding: 0;
+  font-size: 0.7rem;
+  color: var(--ui-text);
+  overflow: hidden;
+}
+.itemkeys li button {
+  touch-action: none; /* a finger drags a slot away without scrolling */
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background:
+    radial-gradient(circle at 50% 120%, rgb(184 146 63 / 0.22), transparent 70%),
+    var(--ui-stone-800);
+  box-shadow:
+    inset 0 0 0 1px rgb(74 69 64 / 0.8),
+    inset 1px 2px 4px rgb(0 0 0 / 0.75);
+}
+.itemkeys li button:not([data-item-slot]) {
+  background: var(--ui-stone-950);
+  cursor: default;
+}
+.itemkeys li select {
+  font-size: 0.6rem;
+}
+.itemkeys .key {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  font-size: 0.64rem;
+  line-height: 1;
+  color: var(--ui-gold-500);
+  pointer-events: none;
+}
+.itemkeys .sprite {
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.itemkeys .name {
+  font-size: 0.7rem;
+  pointer-events: none;
+}
+.itemkeys .count {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-weight: 700;
+  font-size: 0.7rem;
+  line-height: 1.05;
+  color: var(--ui-text);
+  text-shadow:
+    0 1px 0 #000,
+    1px 0 0 #000,
+    -1px 0 0 #000;
+  pointer-events: none;
+}
+/* None carried: the slot stays (the assignment is kept) but greyed out. */
+.itemkeys li button[data-none] .sprite,
+.itemkeys li button[data-none] .name {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+.itemkeys li button[data-none] .count {
+  color: var(--ui-text-dim);
+}
+.itemkeys .cd {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgb(0 0 0 / 0.68);
+  box-shadow: 0 -1px 0 rgb(226 196 122 / 0.35);
+  pointer-events: none;
+}
+.itemkeys .flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 55%, rgb(255 236 170 / 0.75), transparent 75%);
+  box-shadow: inset 0 0 0 1px var(--ui-gold-300);
+  opacity: 0;
+  animation: hotbar-flash 150ms var(--ui-ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .itemkeys .flash {
+    display: none;
+  }
+}
+:root[data-motion="reduced"] .itemkeys .flash {
+  display: none;
+}
+/* While an item is dragged or picked, the slots that take it glow; one that cannot (a sword)
+   turns red under the pointer. */
+.itemkeys li[data-accepts="yes"] button {
+  box-shadow:
+    inset 0 0 0 1px var(--ui-gold-500),
+    0 0 6px rgb(226 196 122 / 0.55);
+}
+@media (hover: hover) {
+  .itemkeys li[data-accepts="no"]:hover button {
+    box-shadow:
+      inset 0 0 0 1px var(--ui-danger),
+      inset 0 0 8px rgb(200 40 40 / 0.5);
+  }
+}
+.itemkeys .edit {
+  width: 1.8rem;
+  padding: 0;
+}
+
 /* ---- NPC dialog and shop (T1.10; docs/17 UI-8: no scrolling) ---------------------- */
 /* The box spans the map down to the hotbar and lets clicks through; only its windows take
    them. On a desktop the dialog sits at the bottom centre (the map stays visible above);

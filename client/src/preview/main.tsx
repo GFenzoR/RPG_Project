@@ -40,7 +40,9 @@ import {
   withDialog,
   withForge,
   withGroundTip,
+  itemNumber,
   withHeld,
+  withItemKeyDrag,
   withItemMenu,
   withManyOptions,
   withLaterChat,
@@ -145,6 +147,8 @@ function stubGame(icons: Map<string, SpriteIcon>): Game {
     menuPressed: false,
     minimapSource: () => previewMinimap,
     spellCooldown: (id: string) => (id === content.spells[1]?.id ? 0.6 : 0),
+    // The health draught waits for the shared cooldown of items.
+    itemCooldown: (id: number) => (id === itemNumber(content, "health_draught") ? 0.4 : 0),
   };
   return new Proxy({} as Game, {
     get: (_, key) => answers[String(key)] ?? (() => undefined),
@@ -264,6 +268,7 @@ function Preview(props: { game: Game }): JSX.Element {
     });
   if (scene === "inventory") s = withHeld(content, s);
   if (scene === "pockets") s = withPockets(content, s);
+  if (scene === "itemkeys") s = withItemKeyDrag(content, s);
   if (scene === "forge" || scene === "forgerisk") s = withForge(content, s, "pick", now);
   if (scene === "forgeresult") s = withForge(content, s, "result", now);
   // docs/02 "Apariencia": a look being picked (the auburn ponytail), not saved yet.

@@ -1067,25 +1067,32 @@ func (w *World) useItem(ctx *game.TickContext, p *Player, m *pb.UseItem) {
 	case it.def.Container != nil:
 		w.toggleContainer(p, it)
 	case it.def.Consumable != nil:
-		if ctx.Tick < p.nextUse {
-			p.tooEarly(ctx.Tick, antibot.KindItem)
-			p.emit(systemMsg(msgNotReady))
-			return
-		}
-		if w.stomachFull(p, it.def) {
-			p.emit(systemMsg(msgFull)) // nothing eaten: no cooldown either
-			return
-		}
-		p.activePaced(ctx.Tick, antibot.KindItem, p.nextUse)
-		p.nextUse = ctx.Tick + w.useFor
-		def := it.def
-		w.consume(ctx, p, it)
-		w.tutorialEvent(p, content.TriggerUseItem, def.ID)
+		w.useConsumable(ctx, p, it)
 	case it.def.Rune != nil:
 		w.useRune(ctx, p, it, nil) // on the current target, or the caster for a heal
 	default:
 		p.emit(systemMsg(msgCannotUse))
 	}
+}
+
+// useConsumable is the use of a consumable p carries or reaches: the shared cooldown of items,
+// the full stomach, then one unit eaten or drunk. Both a UseItem and an item hotkey (a
+// UseItemType, itemhotkeys.go) end here, so they answer and cost the same.
+func (w *World) useConsumable(ctx *game.TickContext, p *Player, it *Item) {
+	if ctx.Tick < p.nextUse {
+		p.tooEarly(ctx.Tick, antibot.KindItem)
+		p.emit(systemMsg(msgNotReady))
+		return
+	}
+	if w.stomachFull(p, it.def) {
+		p.emit(systemMsg(msgFull)) // nothing eaten: no cooldown either
+		return
+	}
+	p.activePaced(ctx.Tick, antibot.KindItem, p.nextUse)
+	p.nextUse = ctx.Tick + w.useFor
+	def := it.def
+	w.consume(ctx, p, it)
+	w.tutorialEvent(p, content.TriggerUseItem, def.ID)
 }
 
 // consume eats or drinks one unit of a consumable: it heals, restores mana and, food,

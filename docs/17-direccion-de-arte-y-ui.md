@@ -3771,6 +3771,21 @@ con el nombre del juego, por ahora es Neque's Realm pero puede cambiar").
   (`e2e/site.spec.ts`, `e2e/account.spec.ts`); `README.md` y los docs. Los identificadores `rpg-*`
   no cambian.
 - Vista previa: escenas `login` y `characters` de `make ui-preview` (todos los tamaños).
+### Teclas rápidas de items en la barra (2026-11-27, rama `feat/item-hotkeys`)
+Seis casillas de items (1–6) junto a la hotbar de hechizos (`ui/ItemHotbar.tsx`, docs/02):
+- **Escritorio**: en el pozo de la barra, entre la hotbar y la botonera, con un filo de hierro a
+  la izquierda; casillas de 36x52 con el número arriba a la izquierda, el ícono al centro y el
+  total abajo a la derecha. En 960x700 la hotbar de hechizos pasa a deslizarse (1 casilla y las
+  flechas: ya lo hacía con menos ancho); en 1280 y más muestra 5 o todas. En una pantalla
+  táctil de escritorio (tablet apaisada) son dos filas de tres de 44 px, a la altura de las
+  dos filas de la botonera, sin lápiz.
+- **HUD móvil vertical**: una fila de seis de 44 px más el lápiz arriba de la consola (el pad y
+  los botones de sección), a mano de los dos pulgares.
+- **HUD móvil apaisado**: en la línea de la barra, entre la hotbar (que se pagina) y los dos
+  botones; sin lápiz.
+- Las casillas de hechizo de la móvil (`--m-slot`, 48 px) no se achican; lo que cede es
+  cuántas se ven a la vez. Escenas de `make ui-preview`: `game` y `itemkeys` (un item arrastrado
+  sobre la barra: las casillas brillan).
 
 ## 8. Cómo se verifica
 - **Arte:** `spritegen preview` y `spritepack preview`, revisados con Read **a 1x y a 4x**

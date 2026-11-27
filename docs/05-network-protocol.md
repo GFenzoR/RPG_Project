@@ -798,6 +798,8 @@ formularios de otro sitio). Sin `data/cosmetics.yaml` o sin Postgres, las rutas 
 | `CastSpell` | `spell_id` o `words`, `target?` |
 | `UseItem` | `from` (pos, slot o contenedor), `item_id`, `stack_index` |
 | `UseItemOn` | `from`, `item_id`, `stack_index`, `to` (pos o criatura) |
+| `UseItemType` | `item_id`, `to?` (pos o criatura): usa **una unidad de un tipo** de item donde el personaje la lleve (teclas rápidas de items; campo 42) |
+| `SetItemHotkeys` | `item_ids[]` (máx. 12): los tipos de la barra de items cuyos totales quiere el cliente (campo 43) |
 | `MoveItem` | `from`, `item_id`, `stack_index`, `to`, `count` |
 | `LookAt` | `from` (pos, slot o contenedor), `item_id`, `stack_index` |
 | `Say` | `channel` (decir, gritar, susurrar, global, grupo), `text` (máx. 255) |
@@ -1450,6 +1452,32 @@ por fila: el bit `x % 8` del byte `(y * 32 + x) / 8` (x, y dentro del sector).
   login, que lo trae del servidor. Una casilla que vino en una respuesta se pinta con el
   item de la respuesta (el servidor conoce las marcas del mapa que el cliente no tiene);
   la del mapa recibido, solo si no vino.
+- **Teclas rápidas de items** (docs/02 "Teclas rápidas de items"; pedido del dueño del
+  2026-11-27): la barra de abajo guarda **tipos** de item (comida, pociones, runas), y el
+  cliente no ve dentro de los contenedores cerrados; por eso lo resuelve el servidor.
+  - `UseItemType{item_id, to?}` (campo 42 de `ClientMessage`): el servidor busca **la primera
+    pila** que el personaje lleva de ese tipo y hace lo de un `UseItem` normal sobre ella (el
+    mismo código: enfriamiento `inventory.use_cooldown_ms` compartido con `UseItem`, estómago
+    lleno, requisitos de una runa y su enfriamiento de grupo, mensajes iguales). Orden:
+    **bolsillos** (celda 0 primero), después los **slots de equipo** en orden, después los
+    contenedores **en anchura**: los de los slots (la mochila primero) y los que están en los
+    bolsillos, cada uno desde su celda 0, abiertos o no. Solo consumibles y runas
+    (`inventory.cannot_use` para un id desconocido, de equipo, herramienta o contenedor;
+    `inventory.none_carried`, con `item`, si no lleva ninguna unidad). `to` solo lo mira una runa
+    (en una criatura o una casilla, como `UseItemOn`); sin él, va al objetivo actual o al propio
+    lanzador. Mismo límite de tasa de la conexión que `UseItem`; todo en el game loop.
+  - `SetItemHotkeys{item_ids}` (campo 43): reemplaza la lista de tipos que el cliente sigue (máx.
+    `MaxItemHotkeys` = 12; los repetidos, desconocidos o no usables se descartan; vacía = sin
+    totales). El servidor no guarda nada más: la asignación a teclas es del cliente (opción
+    guardada `item_hotkeys`, `item_keys` del documento de la cuenta: por nombre de personaje,
+    hasta 12 ids, 0 = vacío).
+  - `ItemCounts{counts: [{item_id, count}]}` (campo 54 de `ServerMessage`): cuántas unidades de
+    cada tipo seguido lleva el personaje **en total** (equipo, bolsillos, mochila y todo contenedor
+    dentro, abierto o no): el tamaño de una pila, las cargas de una runa, 1 por cualquier otro.
+    Lista todos los tipos pedidos (0 = ninguno llevado). Llega tras `SetItemHotkeys` y cada vez que
+    un total cambia: se recalcula solo en un tick que cambió el inventario del jugador (el mismo
+    aviso que mira `questRecheck`) y se manda solo si algún total difiere del último enviado: sin
+    costo por tick mientras el inventario no cambia.
 - `TrackQuest{quest_id}` (campo 41): sigue una quest **en curso** en el minimapa; vacío, o
   una quest que no está en curso, deja de seguir. El servidor contesta siempre un
   `ObjectiveHint` (campo 52 de `ServerMessage`), también al dejar de seguir y aunque otra

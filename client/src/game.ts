@@ -96,6 +96,17 @@ import {
 } from "./state/items.ts";
 import type { ItemLoc, ItemRef } from "./state/items.ts";
 import { afterCast, afterUse, resolveClick } from "./state/aim.ts";
+import {
+  assignKey,
+  emptyItemKeys,
+  hotkeyUsable,
+  ITEM_HOTKEY_COUNT,
+  itemHotkeySlot,
+  loadItemKeys,
+  saveItemKeys,
+  swapKeys,
+  trackedTypes,
+} from "./state/item-hotkeys.ts";
 import type { Pending } from "./state/aim.ts";
 import { Steering } from "./state/steering.ts";
 import type { SteerInput, StepChoice } from "./state/steering.ts";
@@ -255,6 +266,12 @@ export interface GameUi {
   split?: SplitView | undefined;
   /** The last spell used from the hotbar and when (docs/17 UI-9: its slot flashes). */
   cast?: { spellId: string; at: number } | undefined;
+  /** Item type of each item hotkey 1..6 (0 = empty; state/item-hotkeys.ts). */
+  itemKeys: number[];
+  /** Units carried of each tracked item type, in all containers (the server's ItemCounts). */
+  itemCounts: ReadonlyMap<number, number>;
+  /** The last item hotkey used and when (its slot flashes). */
+  itemUse?: { slot: number; at: number } | undefined;
   /**
    * The item lying on the map tile under the mouse, at page (x, y): its card shows above the
    * tile, `tile` in page coordinates (docs/17 UI-6, ui/ItemTooltip.tsx).
@@ -405,6 +422,8 @@ export interface ClientTestHooks {
   gust(x: number, y: number, min?: number): GustHook | undefined;
   /** The shadows lamps and fires cast now (GameCanvas.lightShadows). */
   lightShadows(): LightShadowHook | undefined;
+  /** The falling leaves, in sprite pixels of the map (GameCanvas.leafSpots). */
+  leafSpots(): { x: number; y: number }[];
   /** How each drawn creature walks now: its stride and the cycles played (GameCanvas.gaits). */
   gaits(): GaitView[];
   /** The footprints on the ground and the own player's last footfalls (GameCanvas.footfalls). */
@@ -451,6 +470,10 @@ interface PoseView {
 
 /** Pointer travel (CSS pixels) that turns a press on a DOM item into a drag. */
 const DRAG_START_PX = 4;
+/** A finger slips more than a mouse: an item hotkey drag by touch starts later. */
+const KEY_DRAG_TOUCH_PX = 24;
+/** Released this far from where it was pressed, off the bar, an item hotkey is cleared. */
+const KEY_CLEAR_PX = 56;
 
 /** How long after a touch press a contextmenu event is taken as the finger's, ms. */
 const TOUCH_CONTEXTMENU_MS = 1500;
@@ -582,6 +605,13 @@ export class Game {
   private itemMenuOpened = false;
   /** The last spell used from the hotbar (its slot flashes, docs/17 UI-9). */
   private cast: { spellId: string; at: number } | undefined;
+  /** The item hotkeys (state/item-hotkeys.ts): item type per slot, 0 = empty. */
+  private itemKeys: number[] = emptyItemKeys();
+  /** The last item hotkey used (its slot flashes) and the last consumable used (cooldown). */
+  private itemUse: { slot: number; at: number } | undefined;
+  private consumedAt = Number.NEGATIVE_INFINITY;
+  /** A press on an item hotkey slot became a drag: its click does nothing. */
+  private keyDragged = false;
   /** The look being picked in the Apariencia window (setLookDraft), not sent yet. */
   private lookDraft: Look | undefined;
   /** The item on the tile the mouse rests on, for its card (docs/17 UI-6). */
@@ -643,6 +673,7 @@ export class Game {
           this.steer.heard(e.message);
           if (e.message.case === "creatureLook") this.lookAnswered(e.message.value.id);
           if (e.message.case === "welcome") this.trackAfterWelcome = true;
+          if (e.message.case === "welcome") this.itemKeysAfterWelcome = true;
           if (e.message.case === "welcome") {
             const saved = this.world.gameOptions;
             if (saved) {
@@ -664,6 +695,17 @@ export class Game {
           if (this.world.heavyHitAt !== heavyBefore) opts.haptic("heavyHit");
           else if (healthBefore !== undefined && health !== undefined && health < healthBefore)
             opts.haptic("hit");
+        }
+        if (this.itemKeysAfterWelcome && this.world.self) {
+          // The item hotkeys are the character's option (by name); the server only needs
+          // the types, to keep their totals (ItemCounts).
+          this.itemKeysAfterWelcome = false;
+          this.itemKeys = loadItemKeys(
+            this.world.self.name,
+            this.opts.content.items,
+            this.opts.storage,
+          );
+          this.sendTracked();
         }
         if (this.trackAfterWelcome && this.world.self) {
           // The tracked quest is not saved by the server (docs/05 TrackQuest): sent again.
@@ -1349,6 +1391,92 @@ export class Game {
     );
   }
 
+  // ---- item hotkeys (docs/02 "Teclas rapidas de items"): the server finds the unit ------
+
+  /** Tells the server which item types the bar holds, so it keeps their totals. */
+  private sendTracked(): void {
+    this.conn.send({ case: "setItemHotkeys", value: { itemIds: trackedTypes(this.itemKeys) } });
+  }
+
+  private saveItemKeys(): void {
+    const name = this.world.self?.name;
+    if (name) saveItemKeys(name, this.itemKeys, this.opts.storage);
+    this.sendTracked();
+    this.publish();
+  }
+
+  /** Puts an item type on slot 0..5 (0 clears it). Only food, potions and runes. */
+  setItemKey(slot: number, itemId: number): void {
+    if (slot < 0 || slot >= ITEM_HOTKEY_COUNT) return;
+    if (itemId > 0 && !hotkeyUsable(this.opts.content.items[itemId])) return;
+    this.itemKeys = assignKey(this.itemKeys, slot, itemId);
+    this.saveItemKeys();
+  }
+
+  /** A drag from one item slot onto another: they swap (onto itself nothing changes). */
+  swapItemKeys(from: number, to: number): void {
+    if (from === to) return;
+    this.itemKeys = swapKeys(this.itemKeys, from, to);
+    this.saveItemKeys();
+  }
+
+  /**
+   * Uses one unit of the item type of slot 0..5 from wherever the character carries it (the
+   * server looks in the pockets and the containers, open or not). An aimed rune waits for the
+   * next click first, like the hotbar's aimed heal.
+   */
+  useItemKey(slot: number): void {
+    const itemId = this.itemKeys[slot] ?? 0;
+    if (itemId <= 0) return;
+    const def = this.opts.content.items[itemId];
+    if (this.world.itemCounts.get(itemId) !== 0) this.itemUse = { slot, at: performance.now() };
+    const aims = this.opts.content.spells.find((s) => s.id === def?.rune?.spell)?.aimsAtPlayer;
+    if (aims === true) {
+      this.toolAt = undefined;
+      this.setPending({ kind: "itemType", itemId });
+    } else {
+      this.sendUseType(itemId); // eating or drinking leaves a pending "use with" or aimed spell be
+    }
+    this.publish();
+  }
+
+  private sendUseType(itemId: number, target?: { creature: number } | { pos: Pos }): void {
+    if (this.opts.content.items[itemId]?.consumable) this.consumedAt = performance.now();
+    this.conn.send({
+      case: "useItemType",
+      value: {
+        itemId,
+        ...(target
+          ? {
+              to: {
+                target:
+                  "creature" in target
+                    ? { case: "creatureId" as const, value: target.creature }
+                    : { case: "pos" as const, value: { ...target.pos } },
+              },
+            }
+          : {}),
+      },
+    });
+  }
+
+  /** Remaining fraction (0..1) of the cooldown an item hotkey waits for. */
+  itemCooldown(itemId: number, now: number): number {
+    const def = this.opts.content.items[itemId];
+    if (def?.rune) return this.spellCooldown(def.rune.spell, now);
+    const total = this.opts.content.inventory?.useCooldownMs ?? 0;
+    if (!def?.consumable || total <= 0) return 0;
+    return Math.max(0, Math.min(1, (this.consumedAt + total - now) / total));
+  }
+
+  /** The menu's "Assign to a quick key" with its slot (the item of the open menu). */
+  menuHotkey(slot: number): void {
+    const m = this.menu;
+    this.menu = undefined;
+    if (m && "ref" in m.target) this.setItemKey(slot, m.target.ref.itemId);
+    this.publish();
+  }
+
   // ---- items (T1.8): the server validates every one of these ---------------------------
 
   useItem(ref: ItemRef): void {
@@ -1480,6 +1608,12 @@ export class Game {
       case "useOn":
         this.useItemOn(action.ref, action.pos);
         break;
+      case "typeOnCreature":
+        this.sendUseType(action.itemId, { creature: action.creature });
+        break;
+      case "typeOnTile":
+        this.sendUseType(action.itemId, { pos: action.pos });
+        break;
       case "none":
         break;
     }
@@ -1604,6 +1738,12 @@ export class Game {
     const cancel = (): void => end();
     const up = (ev: PointerEvent): void => {
       end();
+      // Over an item hotkey slot: the item's type goes there (docs/02, a drag from the bag).
+      const key = this.itemKeyAt(ev.clientX, ev.clientY);
+      if (key !== undefined) {
+        this.setItemKey(key, ref.itemId);
+        return;
+      }
       const to = this.dropTarget(ev.clientX, ev.clientY);
       if (!to || !dragLands(ref, to)) return;
       if (split && splittable(this.opts.content.items[ref.itemId], ref.count)) {
@@ -1632,6 +1772,70 @@ export class Game {
     if (!this.split) return false;
     this.split = undefined;
     return true;
+  }
+
+  /** The item hotkey slot (0..5) under page coordinates, or undefined. */
+  private itemKeyAt(x: number, y: number): number | undefined {
+    const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-drop="itemkey"]');
+    const n = Number(el?.dataset["index"]);
+    return el && Number.isInteger(n) ? n : undefined;
+  }
+
+  /**
+   * A press on an item hotkey slot (ui/ItemHotbar.tsx): dragged away it moves to the slot it
+   * is released on (they swap) or, released anywhere else, is cleared. A plain press is the
+   * slot's own click or tap (useItemKeyTap), which the drag silences.
+   */
+  pressItemKey(slot: number, e: PointerEvent): void {
+    this.keyDragged = false;
+    if ((this.itemKeys[slot] ?? 0) <= 0 || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    const start = e.pointerType === "mouse" ? DRAG_START_PX : KEY_DRAG_TOUCH_PX;
+    const move = (ev: PointerEvent): void => {
+      if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < start) return;
+      this.keyDragged = true;
+    };
+    const up = (ev: PointerEvent): void => {
+      stop();
+      if (!this.keyDragged) return;
+      const to = this.itemKeyAt(ev.clientX, ev.clientY);
+      if (to === slot) {
+        this.keyDragged = false; // back on its own slot: a tap, the click that follows uses it
+      } else if (to !== undefined) {
+        this.swapItemKeys(slot, to);
+      } else if (Math.hypot(ev.clientX - x0, ev.clientY - y0) >= KEY_CLEAR_PX) {
+        this.setItemKey(slot, 0); // dropped well away from the bar: cleared
+      }
+      // A slip a little off the bar changes nothing (and no click follows, so uses nothing).
+    };
+    const stop = (): void => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", stop);
+  }
+
+  /**
+   * A click, tap or key press on an item hotkey slot: with an item picked (the two-tap move)
+   * the item's type is assigned here; else the slot's item is used. A drag just ended on it
+   * does neither.
+   */
+  useItemKeyTap(slot: number): void {
+    if (this.keyDragged) {
+      this.keyDragged = false;
+      return;
+    }
+    const picked = this.picker.picked;
+    if (picked) {
+      this.cancelPick();
+      this.setItemKey(slot, picked.itemId);
+      return;
+    }
+    this.useItemKey(slot);
   }
 
   /** Where a drop at page coordinates lands: a [data-drop] element or a map tile. */
@@ -1875,6 +2079,7 @@ export class Game {
       food: (def?.consumable?.foodMs ?? 0) > 0,
       equip: ref.loc.kind !== "slot" && equipSlot(def) !== undefined,
       split: def?.stackable === true && ref.count > 1,
+      hotkey: hotkeyUsable(def),
       fixed: immovable(def, ref.mods),
       usable:
         def?.door === true ||
@@ -2141,6 +2346,7 @@ export class Game {
   }
 
   private trackAfterWelcome = false;
+  private itemKeysAfterWelcome = false;
 
   /** The minimap's part of GameUi; the own view is explored here, as the server does. */
   private minimapUi(): MinimapUi | undefined {
@@ -2220,6 +2426,9 @@ export class Game {
       selfEquipment: w.self?.equipment,
       zoom: this.zoomView,
       cast: this.cast,
+      itemKeys: this.itemKeys,
+      itemCounts: w.itemCounts,
+      itemUse: this.itemUse,
       groundTip: this.groundTip,
       split: this.split && {
         x: this.split.x,
@@ -2511,6 +2720,7 @@ export class Game {
       sky: () => canvas.sky(),
       gust: (x, y, min) => canvas.gust(x, y, min),
       lightShadows: () => canvas.lightShadows(),
+      leafSpots: () => canvas.leafSpots(),
       footfalls: () => canvas.footfalls(),
       npcs: () =>
         [...world.creatures.values()]
@@ -2746,6 +2956,15 @@ export class Game {
         e.preventDefault();
         return;
       }
+    }
+    // The keys 1-6 use the item hotkeys (an open dialog took its digits above; a focused
+    // select keeps its own keys, as the arrows do: input/keyboard.ts takesText).
+    const itemSlot =
+      e.ctrlKey || e.altKey || e.metaKey || e.shiftKey ? undefined : itemHotkeySlot(e.code);
+    if (itemSlot !== undefined && (e.target as { tagName?: string } | null)?.tagName !== "SELECT") {
+      e.preventDefault();
+      if (!e.repeat) this.useItemKey(itemSlot);
+      return;
     }
     // MOV-2: Ctrl+arrow only turns, as in Tibia (with every step confirmed: WorldState.turn).
     const turnTo = e.ctrlKey ? turnKeyDirection(e.code) : undefined;

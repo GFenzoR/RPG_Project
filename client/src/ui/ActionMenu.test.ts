@@ -477,3 +477,33 @@ describe("the right-click menu (docs/17 UI-6)", () => {
     expect(splitCount(2.7, 12)).toBe(2);
   });
 });
+
+describe('the menu\'s quick key (docs/02 "Teclas rapidas de items")', () => {
+  it("lists the six slots under one entry and assigns the one that is pressed", () => {
+    const slots: number[] = [];
+    const game = {
+      menuPressed: true,
+      menuChoose: () => undefined,
+      closeMenu: () => undefined,
+      menuPress: () => undefined,
+      menuHotkey: (n: number) => void slots.push(n),
+    };
+    const tree = ActionMenu({
+      t,
+      menu: { x: 10, y: 10, title: "pocion", actions: ["use", "look", "hotkey"], mouse: true },
+      game,
+      viewport: { width: 800, height: 600 },
+    });
+    expect(byAttr(tree, "data-action").map((b) => b.props["data-action"])).toEqual([
+      "use",
+      "look",
+      "hotkey",
+      "cancel",
+    ]);
+    const buttons = byAttr(tree, "data-hotkey-slot");
+    expect(buttons.map((b) => b.props["data-hotkey-slot"])).toEqual([1, 2, 3, 4, 5, 6]);
+    click(buttons[3], { detail: 1 });
+    click(buttons[0], { detail: 1 });
+    expect(slots).toEqual([3, 0]);
+  });
+});
