@@ -166,7 +166,7 @@ function collect(arg: { min: number; insets: Insets | null; covered: boolean }):
       // does not scroll) is under the notch or the home bar for good.
       if (band && !side && document.documentElement.scrollHeight > vh + 1) {
         let pinned = false;
-        for (let p: HTMLElement | null = el; p; p = p.parentElement)
+        for (let p: Element | null = el; p; p = p.parentElement)
           if (/(fixed|sticky)/.test(getComputedStyle(p).position)) pinned = true;
         if (!pinned) band = false;
       }
