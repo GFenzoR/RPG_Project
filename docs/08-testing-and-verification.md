@@ -101,7 +101,7 @@ toque (`elementFromPoint`), y reporta:
 Dónde corre:
 
 - **Sin servidor:** `make ui-preview AUDIT=1 SIZES=phone,tablet` audita cada escena en los
-  cuatro tamaños táctiles (teléfono 390x844 y 844x390, tablet 768x1024 y 1024x768), deja el
+  cinco tamaños táctiles (teléfono 390x844, 844x390 y 748x298, tablet 768x1024 y 1024x768), deja el
   detalle en `build/ui-preview/touch-audit-<idioma>.json` y sale con error si hay
   hallazgos. `UILANG=en` cambia el idioma (los textos en inglés tienen otro largo),
   `NOTCH=1` dibuja con las áreas seguras de un teléfono con notch y barra de inicio (y

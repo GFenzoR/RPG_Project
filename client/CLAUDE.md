@@ -1097,6 +1097,23 @@ y la PWA de T5.6 siguen igual.
   antes de cargar), `clusterFits`. Un `.click()` de Playwright es un mouse: después de uno,
   `data-input` es `mouse` y los controles salen atenuados en la captura.
 
+## Notas del QA móvil (lote 21, rama `feat/mobile-qa`; docs/15 "QA móvil")
+- **Auditoría táctil**: `e2e/touch-audit.ts` (`touchAudit(page, { insets, allow, covered })`,
+  `formatFindings`). La usan `e2e/ui-preview.ts` (`--audit`, `--lang`, `--notch`,
+  `--covered`; `make ui-preview AUDIT=1 UILANG=en NOTCH=1 COVERED=1`; `AUDIT_ALLOW` con el
+  motivo de cada excepción), los tests "lote 21 QA on …" de `e2e/mobile.spec.ts` y
+  `e2e/device-check.ts` (un Chrome de Android por CDP). Una pantalla táctil nueva pasa por
+  ella: 44 px de área de toque, sin texto cortado, nada fuera de pantalla.
+- `e2e/contact-sheet.ts`: hojas de contacto de una carpeta de capturas.
+- La vista previa tiene un quinto tamaño táctil, `phone-748x298`: un teléfono apaisado
+  dentro del navegador, medido en uno real.
+- **CSS** (`mobile-css.test.ts` lo fija): con `pointer: coarse` todo `button`/`summary`
+  mide 44 px de ancho y de alto y la etiqueta de un checkbox o radio es el objetivo; un
+  botón más angosto a propósito necesita su regla y su entrada en `AUDIT_ALLOW`.
+  `.alerts` (`GameView`) envuelve invitaciones y chequeo de presencia: `display: contents`
+  salvo en el HUD móvil, donde es una columna. `.touch-cluster` se oculta con `data-sheet`.
+  `.corner` deja de ser `fixed` hasta 640 px de ancho o 500 de alto.
+
 ## Zoom del mapa
 - **Vista ancha** (decisión del dueño, `docs/02` "La vista", `docs/17` UI-4): el servidor
   manda 31x21 (+1) a todos (`Welcome.view_width`/`view_height` → `WorldState.view`,
