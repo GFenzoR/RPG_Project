@@ -93,6 +93,7 @@ inventory.too_far: "Está demasiado lejos."
 inventory.cannot_move: "No puedes mover eso."
 inventory.corpse_drag: "Un cuerpo solo se arrastra a la casilla de al lado, estando junto a él."
 inventory.corpse_not_ready: "Espera un momento antes de arrastrar otro cuerpo."
+inventory.corpse_no_place: "Un cuerpo no se puede dejar ahí."
 inventory.cannot_use: "No puedes usar eso."
 # Fishing and mining (T1.12)
 gather.nothing: "No hay nada que sacar ahí con eso."

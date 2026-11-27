@@ -205,12 +205,14 @@ func (h livingHost) Free(p lw.Pos) bool {
 	return !w.occupied(pos) && len(w.ground[pos]) == 0
 }
 
-// ClearItems moves the loose items of p, one by one, to the closest tile within
+// ClearItems moves the loose items of p and the remains lying there, one by one, to the closest tile within
 // travel.arrival_radius (rings, map order) that a player beside the object walks to (the
 // areas around p: an object never lies in a room's wall, checkLivingRooms), walkable, no
 // house, door, portal entrance nor other object's tile, with room for one more item. A
-// reservation of an item (heldGround) moves with it. Remains stay: they rot on their own
-// (removeCorpse knows them by their tile), and the object waits for them.
+// reservation of an item (heldGround) moves with it. Remains go too (moveCorpse: the same
+// body, loot, owner and decay): players drag them (corpsemove.go), so one left on the
+// home of a boulder or where a rock stands again would hold the object back for as long
+// as somebody kept a body there.
 func (h livingHost) ClearItems(p lw.Pos) bool {
 	w, pos := h.w, fromLW(p)
 	if len(w.ground[pos]) == 0 {
@@ -230,12 +232,16 @@ func (h livingHost) ClearItems(p lw.Pos) bool {
 	}
 	var touched []world.Pos
 	for _, it := range slices.Clone(w.ground[pos]) {
-		if w.isCorpse(it) {
-			continue
-		}
 		q, ok := w.searchRingsIn(from, pos, max(w.arrivalRadius, 1), skip, fits)
 		if !ok {
 			break
+		}
+		if c := w.corpseOf(it); c != nil {
+			w.moveCorpse(c, q)
+			if !slices.Contains(touched, q) {
+				touched = append(touched, q)
+			}
+			continue
 		}
 		held, isHeld := w.heldGround[it]
 		w.detach(it)

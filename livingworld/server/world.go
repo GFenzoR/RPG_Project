@@ -39,10 +39,10 @@ type Host interface {
 	// that blocks (the map's own items, other objects), no creature, no loose item, not
 	// a protection zone, a house or a stairs/teleport entrance.
 	Free(p Pos) bool
-	// ClearItems moves the loose items of p (never a creature's remains: they rot on their
-	// own) to tiles nearby, for an object that stands again, goes home or closes on p: the
+	// ClearItems moves the loose items of p (a creature's remains too: players can drag
+	// them there) to tiles nearby, for an object that stands again, goes home or closes on p: the
 	// loot nobody took, or a coin dropped to jam it, never holds it back. It reports
-	// whether p holds no loose item now (false: no room nearby, or remains still lie).
+	// whether p holds no loose item now (false: no room nearby).
 	ClearItems(p Pos) bool
 	// Occupied reports whether a creature stands on p (a pressure plate's weight, a gate
 	// that cannot close on someone).
