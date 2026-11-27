@@ -32,6 +32,10 @@ const (
 	msgQuestDrop    = "dialog.quest_drop"
 	msgPaid         = "dialog.paid"
 	msgReceivedGold = "dialog.received_gold"
+	// What a finished quest gave, said in words: the experience and each item (the gold
+	// already says msgReceivedGold).
+	msgRewardXP   = "dialog.reward_xp"
+	msgRewardItem = "dialog.reward_item"
 )
 
 const (
@@ -813,6 +817,7 @@ func (h *questHost) ItemCount(item string) int {
 func (h *questHost) Reward(q *content.Quest, r content.QuestReward) {
 	switch {
 	case r.XP > 0:
+		h.p.emit(systemMsg(msgRewardXP, num("amount", int(r.XP))))
 		h.w.gainExperience(h.p, r.XP)
 	case r.Gold > 0:
 		h.w.giveMoney(h.p, r.Gold)
@@ -820,6 +825,7 @@ func (h *questHost) Reward(q *content.Quest, r content.QuestReward) {
 		h.p.emit(systemMsg(msgReceivedGold, num("amount", int(r.Gold))))
 	case r.Item != "":
 		def := h.w.cfg.Items[r.Item]
+		h.p.emit(systemMsg(msgRewardItem, itemParam(def, 1))) // before "on the floor", if it does not fit
 		h.w.econMade(h.p, EconQuest, q.ID, 0, def, 1, h.w.giveItem(h.p, def, 1))
 	}
 }

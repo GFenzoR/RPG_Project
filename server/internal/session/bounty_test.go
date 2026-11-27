@@ -68,6 +68,10 @@ func TestBountyTaskCooldown(t *testing.T) {
 	d = s.talk("bosque_hunter")
 	doneAt := h.sim.Now()
 	d, evs := s.say(d, "npc.bosque_hunter.opt_report_crawlers")
+	// The reward is said in words: the experience here (a bounty pays XP and gold).
+	if !messageKeys(evs)["dialog.reward_xp"] {
+		t.Error("finishing the bounty did not say its experience reward")
+	}
 	if d.Text.Key != "npc.bosque_hunter.crawlers_paid" || !messageKeys(evs)["dialog.quest_completed"] {
 		t.Fatalf("report: %s %v", d.Text.Key, messageKeys(evs))
 	}
