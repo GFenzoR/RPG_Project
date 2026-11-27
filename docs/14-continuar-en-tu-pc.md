@@ -104,6 +104,8 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+
+- **Móvil, ventanas (lote 21, `feat/mobile-windows`)**: faltan los pares como hojas partidas (la hoja con el inventario en la otra mitad o en pestaña), el aviso persistente de item elegido sobre cada hoja, la revisión de todas las escenas de `make ui-preview` en inglés y al 130 % de texto, y hojas propias para opciones, cuenta, selector de personajes y servidor. La pila, atrás, Escape y deslizar para cerrar ya están.
 - **UI móvil (lote 21, `feat/mobile-hud`), lo que falta:** (1) el HUD nuevo no se probó en
   un teléfono real ni con `make e2e` en esta rama (lo corre la etapa final del lote):
   `e2e/mobile.spec.ts` se adaptó a ciegas (la barra en vez del encabezado, la hoja y el

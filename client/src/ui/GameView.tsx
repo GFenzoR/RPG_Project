@@ -49,6 +49,7 @@ import { Minimap } from "./Minimap.tsx";
 import { CreditsLink } from "./CreditsLink.tsx";
 import { PresenceCheck } from "./Presence.tsx";
 import { TutorialPanel } from "./Tutorial.tsx";
+import { useSheets } from "./use-sheets.ts";
 import { PANEL_TABS, TAB_TITLE, isMobile, layoutFor, tabForHighlight } from "./layout.ts";
 import type { Layout, PanelTab } from "./layout.ts";
 import { activeNotices, nextExpiry } from "./notices.ts";
@@ -376,6 +377,32 @@ export function GameView(props: GameViewProps): JSX.Element {
   uiRef.current = ui;
   const gameRef = useRef(game);
   gameRef.current = game;
+  // Phones and small tablets: back gesture, Escape and a swipe on a header close the front
+  // sheet (ui/sheets.ts rules, ui/use-sheets.ts History entries).
+  useSheets(
+    {
+      panel: sheetOpen,
+      dialog: ui.dialog !== undefined,
+      station: ui.station !== undefined,
+      market: ui.market !== undefined,
+      house: ui.house !== undefined,
+      trade: ui.trade !== undefined,
+      stash: ui.stash !== undefined,
+      book: ui.book !== undefined,
+      containers: false,
+    },
+    {
+      panel: () => setSheetOpen(false),
+      dialog: () => gameRef.current?.closeDialog(),
+      station: () => gameRef.current?.closeStation(),
+      market: () => gameRef.current?.marketClose(),
+      house: () => gameRef.current?.houseClose(),
+      trade: () => gameRef.current?.tradeCancel(),
+      stash: () => gameRef.current?.stashClose(),
+      book: () => gameRef.current?.closeBook(),
+    },
+    tabbed && props.entered,
+  );
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.repeat || typingInField(e)) return;
@@ -1119,7 +1146,7 @@ export function GameView(props: GameViewProps): JSX.Element {
             inert={!sheetOpen ? true : undefined}
             aria-label={t(TAB_TITLE[tab])}
           >
-            <header class="sheet-head">
+            <header class="sheet-head" data-sheet-head="">
               {tabs === "sheet" ? panelTabs : <h2>{t(TAB_TITLE[tab])}</h2>}
               {toggle === "sheet" && panelToggle("sheet")}
             </header>

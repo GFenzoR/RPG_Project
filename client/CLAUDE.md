@@ -1046,6 +1046,15 @@ y la PWA de T5.6 siguen igual.
 - **Vista previa**: `make ui-preview ONLY=game,social SIZES=phone,tablet`; en tamaños
   táctiles muestra el pad (`?pad=0` lo quita: escena `mobilenopad`).
 
+## Notas de las hojas móviles (lote 21, rama `feat/mobile-windows`)
+- `ui/sheets.ts` (puro, `sheets.test.ts`): pila de hojas (`syncStack`, `topSheet`, `closeTop`,
+  `raise`), pares con inventario (`pairMode`, `sheetView`) y `isCloseSwipe`.
+- `ui/use-sheets.ts` (`useSheets`, llamado en `GameView` solo con `tabbed && entered`): una
+  entrada de History por hoja, `popstate`/Escape/deslizar sobre `[data-sheet-head]` llaman al
+  cierre de la hoja de arriba (`closeDialog`, `closeStation`, `marketClose`, `houseClose`,
+  `tradeCancel`, `stashClose`, `closeBook`, o la hoja del panel). Un encabezado nuevo de hoja
+  lleva `data-sheet-head`.
+
 ## Zoom del mapa
 - **Vista ancha** (decisión del dueño, `docs/02` "La vista", `docs/17` UI-4): el servidor
   manda 31x21 (+1) a todos (`Welcome.view_width`/`view_height` → `WorldState.view`,

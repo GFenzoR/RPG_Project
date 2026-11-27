@@ -182,7 +182,7 @@ export function DialogView(props: {
       aria-label={props.framed ? undefined : npcName}
     >
       {!props.framed && (
-        <header>
+        <header data-sheet-head="">
           <h2>{npcName}</h2>
           <button
             type="button"
@@ -412,7 +412,7 @@ export function ShopView(props: {
       aria-label={t("client.shop.title")}
     >
       {!props.framed && (
-        <header>
+        <header data-sheet-head="">
           <h2>{t("client.shop.title")}</h2>
           {money}
         </header>

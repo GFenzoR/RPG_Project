@@ -143,7 +143,7 @@ export function TradeWindow(props: Props): JSX.Element | null {
         aria-label={t("client.trade.title")}
       >
         {!props.framed && (
-          <header>
+          <header data-sheet-head="">
             <h2>{t("client.trade.title")}</h2>
           </header>
         )}
@@ -173,7 +173,7 @@ export function TradeWindow(props: Props): JSX.Element | null {
       aria-label={t("client.trade.title")}
     >
       {!props.framed && (
-        <header>
+        <header data-sheet-head="">
           <h2>{t("client.trade.title")}</h2>
           <button
             type="button"

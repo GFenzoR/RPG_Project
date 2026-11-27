@@ -3678,3 +3678,20 @@ Consultadas el 2026-11-17. No se bajó ni se incrustó ninguna imagen de estas p
   https://www.gamedeveloper.com/programming/unet-unity-5-networking-entity-interpolation-part-2-of-6-clientside-input-buffering
 - Fuentes: `METADATA.pb` y `OFL.txt` de cada familia en https://github.com/google/fonts
   (rutas de UI-3).
+
+### UI móvil: las ventanas como hojas (lote 21, rama `feat/mobile-windows`)
+Las ventanas del servidor (diálogo y tienda, crafteo y forja, mercado, casa, intercambio,
+alijo, libros) ya eran hojas con el marco gótico sobre el mapa; este paso les da las reglas
+de una pila y los gestos de un teléfono.
+- **Pila de hojas** (`client/src/ui/sheets.ts`, puro, con tests): una hoja a la vez, la de
+  adelante es la que cierran Escape, el gesto atrás de Android y un deslizamiento hacia
+  abajo sobre su encabezado (`isCloseSwipe`: 72 px y casi vertical, para no confundirlo con
+  el desplazamiento de las pestañas). `syncStack` pone arriba lo recién abierto, `closeTop`
+  deja ver la de abajo.
+- **Pares**: diálogo con tienda, estación (crafteo y forja), intercambio, alijo y
+  contenedores se ven con los bolsillos (`pairMode`: `split` en vertical, `tabs` apaisado);
+  mercado, casa y libros van solos. Las reglas están; dibujar la mitad de inventario junto
+  a cada hoja queda pendiente (docs/14).
+- **Atrás y Escape** (`ui/use-sheets.ts`): una entrada de la History API por hoja abierta,
+  así el botón atrás cierra la de arriba y no saca del juego. Solo en teléfono y tablet
+  (`tabbed`); el escritorio no cambia. Cada encabezado de hoja lleva `data-sheet-head`.

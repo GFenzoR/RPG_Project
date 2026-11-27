@@ -34,7 +34,7 @@ export function HouseWindow(props: Props & { now?: number }): JSX.Element | null
     >
       {/* Framed, the window's title is the house's name (data-testid house-name). */}
       {!props.framed && (
-        <header>
+        <header data-sheet-head="">
           <h2 data-testid="house-name">{t(h.name)}</h2>
           <button
             type="button"
