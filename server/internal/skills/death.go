@@ -45,6 +45,7 @@ func IsNovice(d content.Death, level int) bool {
 // NoviceNotice is the warning a level change owes the player about the novice protection.
 type NoviceNotice int
 
+// The notices of a level change, NoticeNone when it owes none.
 const (
 	NoticeNone      NoviceNotice = iota
 	NoticeLastLevel              // reached the last protected level (novice_max_level)

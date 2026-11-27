@@ -2871,9 +2871,11 @@ test.describe("T4.2 tutorial (server whose start island is Puerto)", () => {
       if (!c) throw new Error("no canvas");
       return c;
     };
-    let c = await tile(prov.x - 2, prov.y - 1);
+    // On the provisioner's own row: the row above is under the tutorial panel since the
+    // backpack step carries the novice paragraph.
+    let c = await tile(prov.x - 2, prov.y);
     await page.mouse.click(c.x, c.y);
-    await arrived(page, prov.x - 2, prov.y - 1);
+    await arrived(page, prov.x - 2, prov.y);
     c = await tile(prov.x, prov.y);
     await page.mouse.click(c.x, c.y, { button: "right" });
     await page
