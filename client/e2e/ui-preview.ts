@@ -121,6 +121,9 @@ const SIZES: Size[] = [
   desktop(960, 700),
   touch("phone-390x844", 390, 844),
   touch("phone-844x390", 844, 390),
+  // A phone on its side inside the browser, as measured on a Galaxy S22 Ultra (lote 21):
+  // the address bar and the system buttons leave 298 px of height.
+  touch("phone-748x298", 748, 298),
   touch("tablet-768x1024", 768, 1024),
   touch("tablet-1024x768", 1024, 768),
 ];

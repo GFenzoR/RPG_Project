@@ -650,6 +650,21 @@
   bottom: 166px;
   max-width: min(20rem, 42%);
 }
+/* A phone on its side inside the browser (the real device pass of lote 21: 748x298 on a
+   Galaxy S22 Ultra, with the address bar and the system buttons taking a quarter of the
+   height): over the pad there is no room left under the minimap's bar, and the log's
+   button went up under it and off the screen. So short, the log stands at the pad's right. */
+@media (max-height: 350px) {
+  .game[data-ui="mobile"][data-flow="row"][data-pad] .chat-glance {
+    bottom: 6px;
+    left: 196px;
+    max-width: min(18rem, 34%);
+  }
+  /* Left-handed: the buttons are in that corner, and the log already stands beside them. */
+  .game[data-mirror][data-ui="mobile"][data-flow="row"][data-pad] .chat-glance {
+    left: calc(2 * var(--touch-btn) + 24px);
+  }
+}
 /* The sheet is up: the log would only show through its edge (or squeezed beside it). */
 .game[data-ui="mobile"][data-sheet] .chat-glance {
   display: none;

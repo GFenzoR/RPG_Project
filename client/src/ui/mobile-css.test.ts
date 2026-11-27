@@ -66,6 +66,16 @@ describe("the mobile style sheets", () => {
     expect(hints).toMatch(/right:\s*12\.5rem/);
   });
 
+  it("move the chat log beside the pad when a phone on its side is very short", () => {
+    // 748x298 on a real phone with the address bar: over the pad it left the screen.
+    const at = mobileCss.indexOf("@media (max-height: 350px) {");
+    expect(at).toBeGreaterThanOrEqual(0);
+    const block = mobileCss.slice(at, mobileCss.indexOf("\n}\n", at));
+    expect(block).toContain('[data-flow="row"][data-pad] .chat-glance');
+    expect(block).toMatch(/bottom:\s*6px/);
+    expect(block).toMatch(/left:\s*196px/);
+  });
+
   it("make what a finger presses 44 px wide as well as tall", () => {
     const block = coarse();
     const wide = /\.game button,\s*\.game summary,\s*\.panel button \{\s*min-width:\s*44px;/;
