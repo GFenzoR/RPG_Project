@@ -2297,6 +2297,18 @@ body.picking-item .map-hint {
   gap: 0.4rem;
   border-radius: 4px;
 }
+/* The corner's panel (login, characters) hangs from a fixed button: with the touch controls
+   of lote 21 it is taller than a 800 px screen, so it scrolls inside the screen instead of
+   leaving its Close button below the edge, where nothing can reach it. */
+.corner .options-panel {
+  max-height: calc(100vh - 4.25rem - env(safe-area-inset-top, 0px));
+  max-height: calc(100dvh - 4.25rem - env(safe-area-inset-top, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.corner .options-panel > * {
+  flex-shrink: 0;
+}
 .options-panel h3 {
   margin: 0 0 0.2rem;
   font-size: 0.8rem;

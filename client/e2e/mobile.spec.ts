@@ -1065,15 +1065,34 @@ for (const { prefix, device, column, insets } of NOTCHED) {
       const canvas = await page.getByTestId("game-canvas").boundingBox();
       if (!canvas) throw new Error("no canvas");
       expect(canvas.x, "zoomed map left").toBeGreaterThanOrEqual(insets.left - 0.5);
-      const press = { x: canvas.x + 6, y: canvas.y + canvas.height / 4 };
+      // Near the left edge of the map, where the HUD leaves room: on a phone on its side
+      // the minimap button, the chat button and the pad line that edge. A fingertip clear
+      // of them all: a touch a few px from a control goes to the control.
+      const press = await page.evaluate(
+        ({ left, top, height }) => {
+          const map = (x: number, y: number): boolean =>
+            document.elementFromPoint(x, y)?.tagName === "CANVAS";
+          const r = 24;
+          for (const dx of [6, 30, 50, 70, 90])
+            for (const f of [0.25, 0.3, 0.35, 0.2, 0.4, 0.15, 0.45, 0.5]) {
+              const x = left + dx;
+              const y = top + height * f;
+              const clear =
+                map(x, y) &&
+                map(x, y - r) &&
+                map(x, y + r) &&
+                map(x + r, y) &&
+                (dx < r || map(x - r, y));
+              if (clear) return { x, y };
+            }
+          return undefined;
+        },
+        { left: canvas.x, top: canvas.y, height: canvas.height },
+      );
+      if (!press) throw new Error("no free spot near the left edge of the map");
       // Centred on the finger the menu would cross the safe area's edge: the margin from
       // that edge decides where it goes.
       expect(press.x - MENU_WIDTH / 2).toBeLessThan(insets.left + 8);
-      const under = await page.evaluate(
-        ({ x, y }) => document.elementFromPoint(x, y)?.tagName ?? "",
-        press,
-      );
-      expect(under, "the press lands on the map").toBe("CANVAS");
       await hold(page, press.x, press.y, 1200);
       const menu = page.getByTestId("action-menu");
       await expect(menu).toBeVisible();
