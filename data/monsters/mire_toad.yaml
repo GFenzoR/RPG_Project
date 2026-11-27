@@ -17,6 +17,7 @@ attacks:
 resistances: { earth: 60, fire: -15, ice: -10 }
 loot:
   - { item: toad_gland, chance: 0.25 }
+  - { item: frog_legs, chance: 0.4, count: [1, 2] }
   - { item: glowcap, chance: 0.3, count: [1, 2] }
   - { item: copper_coin, chance: 0.7, count: [5, 25] }
 tags: [amphibian, swamp, bosque]

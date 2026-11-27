@@ -1322,6 +1322,17 @@ body.picking-item .map-hint {
   font-size: 0.68rem;
   color: var(--ui-gold-500);
 }
+/* The mana a cast costs, in the corner across from the key. */
+.hotbar .mana {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-weight: 700;
+  font-size: 0.68rem;
+  line-height: 1.05;
+  color: var(--ui-mana-300);
+  pointer-events: none;
+}
 /* Two lines at most, with "…": a third ("conjurar runa de arco") was cut through. */
 .hotbar .spell {
   text-align: left;

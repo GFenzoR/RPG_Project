@@ -29,6 +29,7 @@ attacks:
 loot:
   - { item: copper_coin, chance: 0.8, count: [5, 25] }
   - { item: ship_biscuit, chance: 0.3, count: [1, 3] }
+  - { item: salted_jerky, chance: 0.2 }
   - { item: rusty_cutlass, chance: 0.05 }
   - { item: belaying_pin, chance: 0.04 } # lote 11: the retired driftwood club's place
   - { item: sailcloth_cap, chance: 0.04 }

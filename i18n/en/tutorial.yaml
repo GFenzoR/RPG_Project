@@ -2,6 +2,8 @@
 tutorial.step.first_steps: "You wake up in the Temple of the Lantern, in Lanternby. Walk {count} steps with the arrow keys, WASD or by clicking on the ground."
 tutorial.step.meet_priestess: "The temple's priestess welcomes those who come from the sea. Right-click her to talk."
 tutorial.step.open_backpack: "A newcomer already has their vocation's weapon in hand and plain clothes on, and their backpack holds biscuits and a poultice to heal with. Open your backpack with a double click on it in your equipment, or right-click it and pick «Open». What does not fit in it goes to your pockets, the row under your figure."
+# Added under the step while balance death.novice_max_level > 0 (client Tutorial.tsx).
+tutorial.step.open_backpack.novice: "Up to level {level} you have novice protection: if you die you lose neither your backpack nor your equipment, only a little experience and skill."
 tutorial.step.pick_target: "Rats and gulls prowl the harbour, south-east of here. Pick a creature with a right click or from the battle list."
 tutorial.step.first_spell: "Your spells are already on the bar below: the first one on F1. With your target chosen, press F1 or click that slot."
 tutorial.step.first_victory: "Defeat your target. If you get hurt, step back and wait to recover."

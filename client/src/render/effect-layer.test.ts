@@ -254,15 +254,15 @@ describe("EffectLayer projectiles", () => {
     layer.destroy();
   });
 
-  it("draws the floating numbers at the names' scale, nearest-neighbour", () => {
+  it("draws the floating numbers at the names' font size, never scaled", () => {
     const { world, layer, texts } = setup();
     world.floatingTexts.push({ pos: at(0, 0), kind: FloatingTextKind.DAMAGE, amount: 7, start: 0 });
-    layer.draw(0, 7, cam, 4, 3);
+    layer.draw(0, 7, cam, 4, 21);
     const text = texts.children[0] as Text;
-    expect([text.scale.x, text.scale.y]).toEqual([3, 3]);
-    expect(text.textureStyle?.scaleMode).toBe("nearest");
-    layer.draw(10, 7, cam, 1);
+    expect([text.style.fontSize, text.style.fontWeight]).toEqual([21, "700"]);
     expect([text.scale.x, text.scale.y]).toEqual([1, 1]);
+    layer.draw(10, 7, cam, 1, 15);
+    expect(text.style.fontSize).toBe(15);
     layer.destroy();
   });
 });

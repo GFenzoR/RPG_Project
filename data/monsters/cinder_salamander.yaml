@@ -17,6 +17,7 @@ attacks:
 resistances: { fire: 100, earth: 10, ice: -25 }
 loot:
   - { item: salamander_scale, chance: 0.3 }
+  - { item: raw_meat, chance: 0.25 }
   - { item: copper_coin, chance: 0.85, count: [15, 65] }
   - { item: warding_amber, chance: 0.003 } # rare: the forge's protection
 tags: [reptile, lava, volcan]

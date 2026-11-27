@@ -36,6 +36,44 @@ func DeathPenalty(d content.Death, blessings, level int) Penalty {
 	}
 }
 
+// IsNovice reports whether a character of level is under the novice protection
+// (death.novice_max_level): its death costs no equipment or backpack.
+func IsNovice(d content.Death, level int) bool {
+	return d.NoviceMaxLevel > 0 && level <= d.NoviceMaxLevel
+}
+
+// NoviceNotice is the warning a level change owes the player about the novice protection.
+type NoviceNotice int
+
+// The notices of a level change, NoticeNone when it owes none.
+const (
+	NoticeNone      NoviceNotice = iota
+	NoticeLastLevel              // reached the last protected level (novice_max_level)
+	NoticeEnded                  // went past it: the protection is over
+	NoticeRegained               // a lost level brought the character back under it
+)
+
+// NoviceNoticeFor returns the notice for a level change from -> to: the last protected
+// level when a gain reaches novice_max_level, the end when a gain crosses it (a jump over
+// the last level gives only the end), and the protection regained when a loss (a death)
+// comes back to novice_max_level or below.
+func NoviceNoticeFor(d content.Death, from, to int) NoviceNotice {
+	switch {
+	case d.NoviceMaxLevel <= 0 || to == from:
+		return NoticeNone
+	case to < from:
+		if from > d.NoviceMaxLevel && to <= d.NoviceMaxLevel {
+			return NoticeRegained
+		}
+		return NoticeNone
+	case from <= d.NoviceMaxLevel && to > d.NoviceMaxLevel:
+		return NoticeEnded
+	case from < d.NoviceMaxLevel && to == d.NoviceMaxLevel:
+		return NoticeLastLevel
+	}
+	return NoticeNone
+}
+
 // LoseExperience returns xp after losing pct % of it (never below 0, so never below
 // level 1).
 func LoseExperience(xp int64, pct float64) int64 {

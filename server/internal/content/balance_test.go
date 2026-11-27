@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func TestLoadBalanceRepoData(t *testing.T) {
@@ -492,5 +494,122 @@ func TestSpeedPerLevelBounds(t *testing.T) {
 	}
 	if got := (Movement{}).LevelSpeed(205, 80); got != 205 {
 		t.Errorf("without the key: speed %d at level 80, want 205", got)
+	}
+}
+
+// TestAnimalFoodDrops (lote 20d): animals and the humans who carry rations drop food,
+// the undead, constructs and elementals never do, and food stays cheap: its expected
+// sale value per kill never beats the coins the same monster drops.
+func TestAnimalFoodDrops(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "data")
+	ms, err := LoadMonsters(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := LoadItems(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	isFood := func(id string) bool {
+		it := items[id]
+		return it != nil && it.Consumable != nil && it.Consumable.FoodMs > 0
+	}
+	hasFood := func(id string) bool {
+		for _, l := range ms[id].Loot {
+			if isFood(l.Item) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, id := range []string{"wolf", "ash_hound", "bramble_stag", "bristleback_boar", "thieving_gull",
+		"mire_toad", "tide_crab", "ember_wyrmling", "cinder_salamander", "thornling",
+		"coffer_smuggler", "wreck_looter", "obsidian_delver"} {
+		if ms[id] == nil || !hasFood(id) {
+			t.Errorf("%s should drop food", id)
+		}
+	}
+	// Nothing without flesh drops food: every monster tagged undead, construct or elemental
+	// (the tags are read from the YAML; the server does not load them).
+	files, err := filepath.Glob(filepath.Join(dir, "monsters", "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fleshless := 0
+	for _, f := range files {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			ID   string   `yaml:"id"`
+			Tags []string `yaml:"tags"`
+		}
+		if err := yaml.Unmarshal(raw, &doc); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		for _, tag := range doc.Tags {
+			if tag != "undead" && tag != "construct" && tag != "elemental" {
+				continue
+			}
+			fleshless++
+			if ms[doc.ID] == nil {
+				t.Errorf("%s: tagged %s but not loaded", doc.ID, tag)
+			} else if hasFood(doc.ID) {
+				t.Errorf("%s (%s) must not drop food", doc.ID, tag)
+			}
+		}
+	}
+	if fleshless < 3 {
+		t.Errorf("only %d undead, construct or elemental monsters found: are the tags still read?", fleshless)
+	}
+	// Hunting does not replace the stove: a food that only drops (no recipe makes it or
+	// uses it) feeds for less than half of the least cooked food, per unit.
+	recipes, err := LoadRecipes(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inRecipe := map[string]bool{}
+	leastCooked := 0
+	for _, r := range recipes {
+		for _, in := range r.Inputs {
+			inRecipe[in.Item] = true
+		}
+		inRecipe[r.Output.Item] = true
+		if isFood(r.Output.Item) {
+			if ms := items[r.Output.Item].Consumable.FoodMs; leastCooked == 0 || ms < leastCooked {
+				leastCooked = ms
+			}
+		}
+	}
+	if leastCooked == 0 {
+		t.Fatal("no recipe cooks food")
+	}
+	for id, m := range ms {
+		for _, l := range m.Loot {
+			if !isFood(l.Item) || inRecipe[l.Item] || l.Item == "ship_biscuit" {
+				continue // the biscuit is the provisioner's ration, older than this rule
+			}
+			if got := items[l.Item].Consumable.FoodMs; got*2 > leastCooked {
+				t.Errorf("%s drops %s: %d ms of food, more than half of the least cooked food (%d ms)",
+					id, l.Item, got, leastCooked)
+			}
+		}
+	}
+	for id, m := range ms {
+		var food, coins float64
+		for _, l := range m.Loot {
+			lo, hi := l.CountRange()
+			avg := float64(lo+hi) / 2 * l.Chance
+			switch {
+			case l.Item == "copper_coin":
+				coins += avg
+			case isFood(l.Item):
+				food += avg * float64(items[l.Item].Value)
+			}
+		}
+		if food > coins {
+			t.Errorf("%s: food worth %.2f per kill beats its %.2f coins (kill-and-sell loop)", id, food, coins)
+		}
 	}
 }

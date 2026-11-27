@@ -26,6 +26,15 @@ Usa las herramientas MCP `map_*` si están disponibles; si no, `pnpm mapcli ...`
    bloqueados, repetición evidente de decoración.
 9. **Entrega:** `map_patch_create` y PR con los renders y una descripción del área.
 
+## Pisos de edificio
+El piso de un edificio no sale del muro: un suelo `floor: building` (`wooden_floor`) va
+dentro de muros, ventanas o puertas, y en la casilla del muro (el renderer muestra por fuera
+el suelo exterior). La entrada es un hueco de hasta 3 casillas entre dos muros y lleva el
+mismo piso; el porche, el puesto de mercado y el muelle usan `dock_planks`, que no cierra
+un cuarto, y las ruinas un suelo sin `floor`. `make validate` lo comprueba, lados y
+esquinas (docs/03 "Pisos de edificio"). Se arregla con `paint` (meter
+el piso) o `place` (extender el muro), nunca editando el JSON, y se renderiza el área.
+
 ## Plantas y biomas nuevos (selva, pantano, desierto)
 Árboles, arbustos y plantas se mecen con el viento del mundo vivo
 (`livingworld/README.md` "Viento"). Si la zona necesita **plantas nuevas** (palmeras,

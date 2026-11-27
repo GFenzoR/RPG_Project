@@ -674,6 +674,21 @@ Implementado en T3.4 (`server/internal/session/crafting.go`, recetas en `data/re
   la fragua; lingotes → hacha de leñador, pico o hacha forjada en el yunque (con el
   martillo de herrero encima). Cocina: pescado crudo, carne de jabalí y algas → pescado a la
   brasa, jabalí asado y guiso del puerto (más `food_ms` que lo crudo; el guiso cura un poco).
+- **Comida que sueltan los monstruos** (lote 20d, pedido del dueño: "algunos monstruos
+  deberían botar comida, especialmente los animales"). Cada animal deja algo que
+  encaja con él, y los humanos llevan raciones; los no muertos, construcciones y
+  elementales no sueltan nada. Comida nueva (`kind: consumable`, `food_ms`, sin curar; vale
+  2 a 4 de oro, así que nunca supera a las monedas del mismo monstruo, lo comprueba
+  `TestAnimalFoodDrops`): carne cruda (50 s), carne de ciervo (70 s), ancas de sapo (40 s),
+  carne de cangrejo (45 s), bayas de espino (35 s), cecina salada (60 s). Tabla:
+  lobo y sabueso de ceniza, carne cruda 40 % y 35 %; ciervo, carne de ciervo 30 %; jabalí,
+  carne de jabalí 40 % (antes 35 %); gaviota, carne cruda 20 %; sapo, ancas 40 %; cangrejo, carne de
+  cangrejo 40 % y pescado crudo 20 %; cría de dragón, carne cruda 35 % (1 a 3); salamandra,
+  carne cruda 25 %; espinoso, bayas 35 %; contrabandista, saqueador y excavador, cecina
+  (25 %, 20 %, 30 %). Pesan poco (20 a 50 g: porciones, no piezas enteras) porque el presupuesto de carga de `TestHuntLootFits` ya iba justo. **Cazar no reemplaza a la cocina** (revisión final del lote 20d): como pesan tan poco, estas comidas
+  alimentan poco por unidad; una comida que solo se consigue de botín (ninguna receta la produce ni la usa) dura menos
+  de la mitad que la comida cocinada más corta (pescado a la brasa, 150 s), y `TestAnimalFoodDrops` lo comprueba
+  (la galleta de barco, ración del proveedor, queda fuera de la regla). Ninguna tiene receta todavía. Ratas, arañas, murciélagos e insectos no sueltan comida.
 - **Intento:** el servidor comprueba receta, estación en esa casilla, distancia (1 casilla,
   mismo piso), nivel mínimo del oficio, herramienta llevada, ingredientes en los
   contenedores (no lo equipado), capacidad (el peso de los ingredientes cuenta como
@@ -1936,6 +1951,27 @@ Valores iniciales (balance.yaml):
   (`session/death.go` `playerCorpse`; la ventana del cuerpo muestra todos sus lugares).
 - Niveles 1–`novice_max_level` (8): protección de novato: pagan como si tuvieran las 5
   bendiciones (pérdida mínima de XP y skills, sin drop).
+  **Se avisa al jugador** (el dueño el 2026-11-26: murió varias veces sin perder la mochila y
+  creyó que era un fallo; "que te lo digan al principio"). El nivel sale siempre de
+  `death.novice_max_level`, nunca un literal: (1) el tutorial lo dice al principio, en una
+  línea aparte bajo el paso de la mochila (`tutorial.step.open_backpack.novice`, parámetro
+  `{level}` desde el contenido del cliente; `tutorialNoviceNote` busca `<texto del paso>.novice`
+  y no muestra nada si el balance no protege ningún nivel o el dato falta: nunca "hasta el
+  nivel 0"). Quien cierra el tutorial antes de ese paso lo lee en su primera muerte; (2) cada
+  muerte protegida envía `death.novice` antes de `death.died` y pone `novice_until` en
+  `death.died`, con lo que la ventana de muerte (`DeathScreen`) dice hasta qué nivel dura.
+  "Protegida" se decide con los drops finales: si una marca PvP los subió (solo posible si el
+  balance dejara pelear a un novato: hoy `pvp.min_level` 20 > 8), no se promete nada. Una
+  muerte link-dead guarda solo `death.died` para el próximo login: la ventana lo dice igual,
+  la línea del chat se pierde; (3) al subir al último nivel protegido llega
+  `progress.novice_last` y al pasarlo `progress.novice_ended`, con lo que se pierde desde
+  entonces y que las bendiciones (desde el nivel siguiente) lo reducen
+  (`skills.NoviceNoticeFor`; un salto que se salta el último nivel avisa solo del fin); (4) si
+  una muerte sin protección baja al personaje a un nivel protegido, tras `death.died` llega
+  `death.novice_back` (`NoticeRegained`), y al volver a subir se repite `novice_ended`. Los
+  sacerdotes hablan de "tu protección de novato" sin escribir el nivel; su `level_at_least`
+  debe ser `novice_max_level` + 1 (`client/vite/novice.test.ts`). La regla no cambió; sin
+  cambios de proto (son mensajes localizados con parámetros).
 - El cuerpo (`creature_remains`, contenedor, "cuerpo de <jugador>": `ItemMods.body_of`,
   ver "Restos") queda `corpse_ms` en el suelo con lo que cayó;
   durante `corpse_owner_only_ms` solo el dueño puede sacar, usar o meter algo en él (otros

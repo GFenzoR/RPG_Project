@@ -15,6 +15,10 @@ import { HOUSE_DOOR_FRAME } from "@rpg/renderer/decorated";
 import {
   groundDecal,
   groundLook,
+  groundSplit,
+  SPLIT_BITS,
+  splitHalf,
+  splitSide,
   groundTone,
   lookOf,
   resolveTileArt,
@@ -261,6 +265,29 @@ export function renderArea(
       const f = art?.variants ? art.variants[groundLook(art, x, y, floor)] : frameOf(g);
       if (f) drawSprite(img, f, px(x) + T, py(y) + T, scale, undefined, tone);
       else rect(img, px(x), py(y), T, T, MISSING);
+      // Under a wall and on the threshold of a doorway each half shows its side's ground, as
+      // MapView (tile-art.ts groundSplit): the room's floor never shows past the wall.
+      const split = groundSplit(x, y, (ax, ay) => tileAt(ax, ay)?.ground, wallAt);
+      if (split !== 0)
+        for (const bit of SPLIT_BITS) {
+          if ((split & bit) === 0) continue;
+          const side = splitSide(bit);
+          const other = tileAt(x + side.dx, y + side.dy)?.ground ?? "";
+          const oart = artOf(other);
+          const of = oart?.variants ? oart.variants[groundLook(oart, x, y, floor)] : frameOf(other);
+          if (!of) continue;
+          const h = splitHalf(bit);
+          const part: Frame = {
+            page: of.page,
+            x: of.x + Math.round(h.x * of.w),
+            y: of.y + Math.round(h.y * of.h),
+            w: Math.round(h.w * of.w),
+            h: Math.round(h.h * of.h),
+          };
+          const right = px(x) + Math.round((h.x + h.w) * T);
+          const bottom = py(y) + Math.round((h.y + h.h) * T);
+          drawSprite(img, part, right, bottom, scale, undefined, tone);
+        }
       // A decal only inside a field of its ground, as MapView.
       const d = art?.decals ? groundDecal(x, y, floor, art.decals.length) : -1;
       const decal = d >= 0 && inField(x, y, g) ? art?.decals?.[d] : undefined;

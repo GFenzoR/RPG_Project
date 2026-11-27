@@ -1,8 +1,15 @@
 import { createImage, decodePng, fillRect, GLYPH_H, textWidth } from "@rpg/spritepack";
 import type { Image, Rgba } from "@rpg/spritepack";
-import { CHUNK_SIZE, chunkKey, emptyChunk } from "@rpg/map-format";
+import { CHUNK_SIZE, DOORWAY_TILES, chunkKey, emptyChunk } from "@rpg/map-format";
 import type { ContentIndex, ItemInfo, World } from "@rpg/map-format";
-import { groundDecal, groundLook, groundTone, pickVariant, tileHash } from "@rpg/renderer/tile-art";
+import {
+  DOORWAY_TILES as RENDERER_DOORWAY_TILES,
+  groundDecal,
+  groundLook,
+  groundTone,
+  pickVariant,
+  tileHash,
+} from "@rpg/renderer/tile-art";
 import type { TileArt } from "@rpg/renderer/tile-art";
 import { describe, expect, it } from "vitest";
 import { renderArea } from "./render.ts";
@@ -100,6 +107,40 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     expect(at(img, 3, 4)).toEqual([10, 100, 200]); // N
     expect(at(img, 2, 2)).toEqual([20, 100, 200]);
     expect(at(img, 5, 5)).toEqual(toned([0, 80, 0], 5, 5));
+  });
+
+  it("keeps a room's floor inside its wall: the wall's tile shows the ground of each side", () => {
+    // The wall piece is a 10 px post in the middle of its tile, as a side wall is.
+    const sprites: [string, number, number, Rgba][] = [
+      ["ground/grass", 32, 32, [0, 80, 0, 255]],
+      ["ground/boards", 32, 32, [90, 60, 30, 255]],
+      ["walls/thin", 32, 32, [0, 0, 0, 0]],
+    ];
+    for (let m = 0; m < 16; m++) sprites.push([`walls/thin/wall_${m}`, 32, 32, [0, 0, 0, 0]]);
+    const frames = framesOf(sprites);
+    frames.tiles = { "walls/thin": { wall: true } };
+    const w = world("grass", [
+      { x: 3, y: 2, stack: ["wall"] },
+      { x: 3, y: 3, stack: ["wall"] },
+      { x: 3, y: 4, stack: ["wall"] },
+    ]);
+    const chunk = w.islands.get("isle")?.chunks.get(chunkKey(7, 0, 0));
+    if (!chunk) throw new Error("fixture chunk missing");
+    // Boards from the wall's column to the east: the wall's tiles are painted as floor.
+    for (let y = 0; y < CHUNK_SIZE; y++)
+      for (let x = 3; x < CHUNK_SIZE; x++) chunk.ground[y * CHUNK_SIZE + x] = "boards";
+    const c = content([
+      item("grass", "ground/grass"),
+      item("boards", "ground/boards"),
+      item("wall", "walls/thin"),
+    ]);
+    const img = decodePng(renderArea(w, c, frames, opts).png);
+    // The west half of the wall's tile is grass, the east half the room's floor.
+    expect(at(img, 3, 3, 4, 16)).toEqual(toned([0, 80, 0], 3, 3));
+    expect(at(img, 3, 3, 15, 16)).toEqual(toned([0, 80, 0], 3, 3));
+    expect(at(img, 3, 3, 16, 16)).toEqual(toned([90, 60, 30], 3, 3));
+    // No wall, no split: the same column further down is floor to its edge.
+    expect(at(img, 3, 6, 4, 16)).toEqual(toned([90, 60, 30], 3, 6));
   });
 
   it("shows a border piece's look by tile, evenly, as the game does (docs/17 ART-4)", () => {
@@ -278,5 +319,13 @@ describe("renderArea tile art (the game's, docs/17)", () => {
     expect(at(img, 4, 2, 16, 30)).toEqual([250, 220, 0]); // on the ground: the bottom rows
     expect(at(img, 2, 2, 16, 30)).toEqual([120, 80, 40]); // on the crate: 8 px up
     expect(at(img, 2, 2, 16, 22)).toEqual([250, 220, 0]);
+  });
+});
+
+// The validator (map-format floors.ts) and the renderer (tile-art.ts groundSplit) each keep
+// their own copy: neither package depends on the other. A doorway is the same gap in both.
+describe("DOORWAY_TILES", () => {
+  it("is the same in the map validator and in the renderer", () => {
+    expect(DOORWAY_TILES).toBe(RENDERER_DOORWAY_TILES);
   });
 });

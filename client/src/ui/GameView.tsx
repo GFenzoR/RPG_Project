@@ -23,6 +23,7 @@ import {
 } from "../state/chat.ts";
 import type { ChatTab } from "../state/chat.ts";
 import type { ChatLine } from "../state/world.ts";
+import { DeathScreen } from "./DeathScreen.tsx";
 import { NO_POCKETS } from "../state/pockets.ts";
 import { skullId } from "../state/pvp.ts";
 import { markIconStyle } from "../render/marks.ts";
@@ -620,26 +621,7 @@ export function GameView(props: GameViewProps): JSX.Element {
           </p>
         ))}
       </div>
-      {death && (
-        <div
-          class="death"
-          role="alertdialog"
-          aria-labelledby="death-title"
-          data-testid="death-screen"
-        >
-          <h2 id="death-title">{t("client.death.title")}</h2>
-          <p>{t("client.death.experience", { experience: death.experience })}</p>
-          <p>
-            {death.blessings > 0
-              ? t("client.death.blessings", { blessings: death.blessings })
-              : t("client.death.no_blessings")}
-          </p>
-          <p>{t("client.death.temple")}</p>
-          <button type="button" onClick={() => setDeathSeen(death.at)}>
-            {t("client.death.ok")}
-          </button>
-        </div>
-      )}
+      {death && <DeathScreen t={t} death={death} onOk={() => setDeathSeen(death.at)} />}
       {/* The hotbar: in the bottom bar on the desktop (below), over the map elsewhere. */}
       {props.entered && !windowed && (
         <Hotbar
@@ -694,7 +676,13 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && <GuildInvitations t={t} game={game} ui={ui} />}
       {props.entered && <PresenceCheck t={t} game={game} ui={ui} />}
       {props.entered && (
-        <TutorialPanel t={t} game={game} ui={ui} covered={windowed && tutorialCovered(win.state)} />
+        <TutorialPanel
+          t={t}
+          game={game}
+          ui={ui}
+          content={props.content}
+          covered={windowed && tutorialCovered(win.state)}
+        />
       )}
     </>
   );

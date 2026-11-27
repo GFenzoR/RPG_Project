@@ -24,8 +24,7 @@
 //
 // Particles (ART-7, A13): the tiles whose tile art has `particles` are listed per chunk, so
 // the caller can spawn its ambient motes there (forEachEmitter) without scanning the map.
-import { Container, Sprite } from "pixi.js";
-import type { Texture } from "pixi.js";
+import { Container, Rectangle, Sprite, Texture } from "pixi.js";
 import { CHUNK_TILES, tilePixels, visibleChunks } from "./camera.ts";
 import type { Camera, ViewSize } from "./camera.ts";
 import {
@@ -40,8 +39,12 @@ import {
   framesOfLook,
   groundDecal,
   groundLook,
+  groundSplit,
   groundTone,
   indoorTiles,
+  SPLIT_BITS,
+  splitHalf,
+  splitSide,
   lookOf,
   stackElevation,
   tileHash,
@@ -240,6 +243,8 @@ export class MapView {
   private builds = 0;
   /** Which tiles of a chunk object hold a wall (or an item that joins walls). */
   private readonly walls = new WeakMap<ChunkData, Uint8Array>();
+  /** The four halves of a ground texture (groundSplit), made when a wall first needs them. */
+  private readonly halves = new Map<Texture, (Texture | undefined)[]>();
   private readonly joins = new Map<string, boolean>();
   /** Elevation of each tile of a chunk object (ART-8), null when nothing there raises. */
   private readonly heights = new WeakMap<ChunkData, Uint8Array | null>();
@@ -523,6 +528,8 @@ export class MapView {
     for (const e of this.entities) this.itemLayer.removeChild(e);
     this.entities.clear();
     this.root.destroy({ children: true });
+    for (const list of this.halves.values()) for (const t of list) t?.destroy(false);
+    this.halves.clear();
   }
 
   /** Steps every animated sprite to `now`; only a changed frame touches its sprite. */
@@ -552,6 +559,28 @@ export class MapView {
       this.joins.set(id, j);
     }
     return j;
+  }
+
+  /** The half of ground texture `tex` a groundSplit bit shows: a frame on the same source. */
+  private halfOf(tex: Texture, bit: number): Texture {
+    let list = this.halves.get(tex);
+    if (!list) this.halves.set(tex, (list = []));
+    let half = list[bit];
+    if (!half) {
+      const f = tex.frame;
+      const h = splitHalf(bit);
+      half = new Texture({
+        source: tex.source,
+        frame: new Rectangle(
+          f.x + h.x * f.width,
+          f.y + h.y * f.height,
+          h.w * f.width,
+          h.h * f.height,
+        ),
+      });
+      list[bit] = half;
+    }
+    return half;
   }
 
   private wallsOf(data: ChunkData): Uint8Array {
@@ -685,6 +714,11 @@ export class MapView {
     const local = (v: number): number => ((v % CHUNK_TILES) + CHUNK_TILES) % CHUNK_TILES;
     const groundAt = (x: number, y: number): string | null | undefined =>
       chunkAt(x, y)?.ground[local(y) * CHUNK_TILES + local(x)];
+    /** Whether global tile (x, y) holds a wall, reading the neighbour chunk if it must. */
+    const wallAt = (x: number, y: number): boolean => {
+      const c = chunkAt(x, y);
+      return c ? this.wallsOf(c)[local(y) * CHUNK_TILES + local(x)] === 1 : false;
+    };
     /** A decal goes only where the four neighbours are the same ground (no border on it). */
     const inField = (x: number, y: number, id: string): boolean =>
       groundAt(x, y - 1) === id &&
@@ -711,7 +745,33 @@ export class MapView {
         if (art?.particles && (art.particles !== "spray" || edgeOf(data.ground, lx, ly, id)))
           emitters.push(x, y, PARTICLE_KINDS.indexOf(art.particles));
         const inside = under(lx, ly);
-        (inside && roofed ? roofed : ground).addChild(sprite);
+        const layer = inside && roofed ? roofed : ground;
+        layer.addChild(sprite);
+        // Under a wall, and on the threshold of a doorway, each half shows the ground of its
+        // side: the room's floor never shows past the wall (tile-art.ts groundSplit).
+        const split = this.art ? groundSplit(x, y, groundAt, wallAt) : 0;
+        if (split !== 0)
+          for (const bit of SPLIT_BITS) {
+            if ((split & bit) === 0) continue;
+            const side = splitSide(bit);
+            const other = groundAt(x + side.dx, y + side.dy) as string;
+            const oart = this.art?.(other);
+            // An animated ground (water, lava) keeps moving: a half cut from one frame
+            // would stand still beside it, so that side keeps the tile's own ground.
+            if (oart?.frames) continue;
+            let otex = oart?.base ?? this.texture(other);
+            if (oart?.variants) otex = oart.variants[groundLook(oart, x, y, z)] ?? otex;
+            const h = splitHalf(bit);
+            const half = new Sprite({
+              texture: this.halfOf(otex, bit),
+              x: (lx + h.x) * T,
+              y: (ly + h.y) * T,
+              width: h.w * T,
+              height: h.h * T,
+            });
+            half.tint = tint;
+            layer.addChild(half);
+          }
         const d = art?.decals ? groundDecal(x, y, z, art.decals.length) : -1;
         if (art?.decals && d >= 0 && inField(x, y, id)) {
           const decal = new Sprite({ texture: art.decals[d] as Texture, x: lx * T, y: ly * T });
@@ -723,11 +783,6 @@ export class MapView {
       }
     }
     if (decals.length > 0) ground.addChild(...decals);
-    /** Whether global tile (x, y) holds a wall, reading the neighbour chunk if it must. */
-    const wallAt = (x: number, y: number): boolean => {
-      const c = chunkAt(x, y);
-      return c ? this.wallsOf(c)[local(y) * CHUNK_TILES + local(x)] === 1 : false;
-    };
     const items: Sprite[] = [];
     const itemTiles: number[] = [];
     const itemIds: string[] = [];

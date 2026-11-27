@@ -645,6 +645,34 @@ y `make validate` la llaman. Cada error trae archivo, línea (YAML) y posición 
 - Pendiente: alcanzabilidad entre islas por rutas de barco (que desde la isla inicial se
   llegue a todas).
 
+### Pisos de edificio (regla de creación de mapas)
+El piso de un edificio queda **contenido** dentro de él: no sale hacia afuera del muro.
+Un suelo con `ground.floor: building` en `data/items/ground*.yaml` (hoy `wooden_floor`;
+un suelo de interior nuevo lo declara) es piso de cuarto, y `make validate` da error si
+alguno de sus cuatro lados **o de sus cuatro esquinas** da a suelo exterior sin un borde
+(`packages/map-format/src/floors.ts`). Cada uno de los ocho vecinos debe ser otro piso de
+edificio, o tener encima un muro, una ventana o una puerta (item con bloque `door`);
+también vale que la casilla misma lleve el muro o la puerta. Al corregir, se elige por caso
+entre meter el piso (repintar la casilla con `mapcli paint`) o extender el muro (`place`).
+- **El hueco de la entrada es el umbral y lleva el piso del cuarto**, en casas, tiendas y
+  prefabs por igual: una casilla de piso en un hueco recto de hasta 3 casillas entre dos
+  muros, con el exterior al otro lado del hueco, es una entrada y no una fuga (el mismo
+  hueco que el renderer toma por entrada, `DOORWAY_TILES`). Un hueco más ancho sí es fuga.
+- No hay otra excepción: ningún suelo "abierto" cierra un cuarto. Un porche, un muelle, un
+  puente o un puesto de mercado se pintan con un suelo que no es piso de edificio
+  (`dock_planks`), y entre ese suelo y el cuarto va igual el muro o la entrada. Las ruinas
+  usan un suelo sin `floor` (`stone_floor`, tierra).
+- **Bajo el muro, cada lado muestra su suelo.** La casilla del muro se pinta con el piso del
+  cuarto, pero la pieza del muro es más angosta que la casilla: el renderer parte esa
+  casilla por la mitad y dibuja en la mitad que da a otro suelo el suelo de ese vecino
+  (`groundSplit` en `packages/renderer/src/tile-art.ts`; igual en el juego, el editor y
+  `mapcli render`). El umbral de una entrada se parte igual. En el juego y el editor no se corta una mitad
+  de un suelo animado (agua, lava): quedaría quieta al lado del resto; ese lado conserva el
+  suelo de la casilla. Es solo dibujo: el suelo de la
+  casilla para el servidor (velocidad, superficie) sigue siendo el pintado.
+- Al crear una casa o edificio: pinta el piso dentro del muro y en la casilla del muro,
+  deja la entrada como un hueco de hasta 3 casillas, valida y renderiza el área.
+
 ### Mundo vivo
 El validador (`checkLiving` de `packages/map-format`) rechaza un objeto del mundo vivo
 (rompible, empujable o compuerta, y las placas) en una zona de protección, dentro de una casa,

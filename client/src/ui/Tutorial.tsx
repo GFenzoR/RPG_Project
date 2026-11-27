@@ -1,7 +1,25 @@
 import type { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import type { Game, GameUi } from "../game.ts";
+import type { ClientContent } from "../content-types.ts";
 import type { Translate } from "../i18n/i18n.ts";
+
+/**
+ * The step's extra line about the novice protection (docs/02 "Muerte"): the text
+ * `<step text>.novice` with {level} = balance.yaml death.novice_max_level. None for a step
+ * without that text, and none while the level is unknown or 0 (no protection): the panel
+ * never promises a protection "up to level 0".
+ */
+export function tutorialNoviceNote(
+  t: Translate,
+  text: string,
+  content: Pick<ClientContent, "death"> | undefined,
+): string | undefined {
+  const level = content?.death?.noviceMaxLevel ?? 0;
+  const key = `${text}.novice`;
+  if (!(level > 0) || t(key) === key) return undefined;
+  return t(key, { level });
+}
 
 /**
  * The tutorial's hint panel (T4.2), over the map: the current step's text, its progress
@@ -22,6 +40,8 @@ export function TutorialPanel(props: {
    * moves.
    */
   covered?: boolean | undefined;
+  /** For balance.yaml death.novice_max_level, named by a step's novice note. */
+  content?: Pick<ClientContent, "death"> | undefined;
 }): JSX.Element | null {
   const { t } = props;
   const s = props.ui.tutorial;
@@ -48,6 +68,7 @@ export function TutorialPanel(props: {
     props.ui.trade
   )
     return null;
+  const novice = tutorialNoviceNote(t, s.text, props.content);
   if (hiddenStep === s.stepId) {
     return (
       <button
@@ -84,6 +105,7 @@ export function TutorialPanel(props: {
         </button>
       </header>
       <p>{t(s.text, { count: s.count })}</p>
+      {novice !== undefined && <p data-testid="tutorial-novice">{novice}</p>}
       {s.count > 1 && (
         <p class="progress" data-testid="tutorial-progress">
           {t("client.tutorial.progress", { progress: s.progress, count: s.count })}

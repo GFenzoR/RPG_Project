@@ -15,7 +15,7 @@ attacks:
   - { type: melee, min: 0, max: 20, interval_ms: 2000 }
 resistances: { physical: 5, fire: -10 }
 loot:
-  - { item: boar_meat, chance: 0.35, count: [1, 2] }
+  - { item: boar_meat, chance: 0.4, count: [1, 2] }
   - { item: boar_tusk, chance: 0.15 }
   - { item: copper_coin, chance: 0.6, count: [2, 10] }
 tags: [beast, forest, puerto]

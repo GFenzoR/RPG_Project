@@ -575,3 +575,76 @@
   tradeable: true
   consumable: { heal_hp: 250 }
   value: 125
+
+# ---- Animal food: the meat and fruit the creatures drop (content audit, lote 20d) ----
+- id: raw_meat
+  kind: consumable
+  sprite: food/raw_meat
+  name: item.raw_meat.name
+  description: item.raw_meat.desc
+  weight: 40
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 50000 }
+  value: 2
+
+- id: venison
+  kind: consumable
+  sprite: food/venison
+  name: item.venison.name
+  description: item.venison.desc
+  weight: 50
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 70000 }
+  value: 4
+
+- id: frog_legs
+  kind: consumable
+  sprite: food/frog_legs
+  name: item.frog_legs.name
+  description: item.frog_legs.desc
+  weight: 40
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 40000 }
+  value: 2
+
+- id: crab_meat
+  kind: consumable
+  sprite: food/crab_meat
+  name: item.crab_meat.name
+  description: item.crab_meat.desc
+  weight: 40
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 45000 }
+  value: 2
+
+- id: thorn_berries
+  kind: consumable
+  sprite: food/thorn_berries
+  name: item.thorn_berries.name
+  description: item.thorn_berries.desc
+  weight: 20
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 35000 }
+  value: 2
+
+- id: salted_jerky
+  kind: consumable
+  sprite: food/salted_jerky
+  name: item.salted_jerky.name
+  description: item.salted_jerky.desc
+  weight: 30
+  stackable: true
+  max_stack: 100
+  tradeable: true
+  consumable: { food_ms: 60000 }
+  value: 3

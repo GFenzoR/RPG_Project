@@ -28,6 +28,7 @@ resistances: { physical: 5, fire: 30, ice: -10 }
 loot:
   - { item: copper_coin, chance: 0.9, count: [20, 80] }
   - { item: ember_ore, chance: 0.3 }
+  - { item: salted_jerky, chance: 0.3, count: [1, 2] }
   - { item: delver_chart, chance: 0.12, each_player: true } # only while ch3_gate needs it (m4)
   - { item: pickaxe, chance: 0.03 }
   - { item: embersteel_helm, chance: 0.015 }

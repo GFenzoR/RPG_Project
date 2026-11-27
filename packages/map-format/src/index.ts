@@ -104,3 +104,4 @@ export type {
   PlotViolation,
   RenderAreaOptions,
 } from "./patch/plots.ts";
+export { DOORWAY_TILES } from "./floors.ts";

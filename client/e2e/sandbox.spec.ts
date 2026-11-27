@@ -1063,15 +1063,32 @@ test("sandbox footprints: one print per footfall on sand, both feet, straight an
     const stop = await standing();
     await around("99j-footprints-diagonal-trail", stop.x, stop.y);
     const after = (await falls())?.own ?? [];
-    const last = after.at(-1);
-    const prev = after.at(-2);
-    expect(last).not.toEqual(from);
-    if (last && prev) {
-      // A stride on a diagonal: 8 px across and 8 down, give or take the feet's stance.
+    expect(after.at(-1)).not.toEqual(from);
+    // Every stride inside the run, and only those: the keys come up some time after the
+    // last tile of the run is reached, and past it the diagonal may be closed (the walk
+    // then slides along one key: a straight stride).
+    const start = from
+      ? after.findLastIndex((f) => f.x === from.x && f.y === from.y && f.side === from.side)
+      : -1;
+    const inRun = (f: { x: number }): boolean =>
+      f.x > (d.x + 0.5) * 32 && f.x < (d.x + d.n - 0.5) * 32;
+    let strides = 0;
+    for (let i = start + 2; i < after.length; i++) {
+      const prev = after[i - 1];
+      const last = after[i];
+      if (!prev || !last || !inRun(prev) || !inRun(last)) continue;
+      strides++;
+      // A stride on a diagonal is the 16 px of a straight one along the path: 16 / √2 px
+      // across and as many down, give or take the feet's stance (about 4 px, one way for
+      // the left foot and the other for the right: 7.6 and 15.3 px across in turn). The
+      // check used to ask for 8 px of the last pair alone, which only one of the two feet
+      // gives: it passed or failed by which foot landed last.
+      const along = 16 / Math.SQRT2;
       expect(last.side).toBe(-prev.side);
-      expect(Math.abs(Math.abs(last.x - prev.x) - 8)).toBeLessThan(5);
-      expect(Math.abs(Math.abs(last.y - prev.y) - 8)).toBeLessThan(5);
+      expect(Math.abs(Math.abs(last.x - prev.x) - along)).toBeLessThan(5);
+      expect(Math.abs(Math.abs(last.y - prev.y) - along)).toBeLessThan(5);
     }
+    expect(strides).toBeGreaterThan(0);
   } else console.log(`no diagonal run of sand on the beach (${JSON.stringify(runs.diagonals)})`);
 
   // Standing still leaves nothing more.

@@ -18,7 +18,12 @@ const (
 // i18n keys of the progress system messages (i18n/*/client.yaml).
 const (
 	msgLevelUp = "progress.level_up"
-	msgSkillUp = "progress.skill_up"
+	// msgNoviceLast / msgNoviceEnded: the novice protection's last level and its end
+	// (docs/02 "Muerte"), with "level" (novice_max_level) and "blessing_level" (the first
+	// level the blessings are sold at).
+	msgNoviceLast  = "progress.novice_last"
+	msgNoviceEnded = "progress.novice_ended"
+	msgSkillUp     = "progress.skill_up"
 )
 
 // SkillState is one skill of a character as it is loaded and saved: its level and the
@@ -255,6 +260,17 @@ func (w *World) setLevel(p *Player, level int) {
 	p.emit(systemMsg(msgLevelUp,
 		&pb.TextParam{Name: "from", Value: &pb.TextParam_Number{Number: int64(from)}},
 		&pb.TextParam{Name: "level", Value: &pb.TextParam_Number{Number: int64(level)}}))
+	d := w.cfg.Balance.Death
+	novice := []*pb.TextParam{
+		{Name: "level", Value: &pb.TextParam_Number{Number: int64(d.NoviceMaxLevel)}},
+		{Name: "blessing_level", Value: &pb.TextParam_Number{Number: int64(d.NoviceMaxLevel + 1)}},
+	}
+	switch skills.NoviceNoticeFor(d, from, level) {
+	case skills.NoticeLastLevel:
+		p.emit(systemMsg(msgNoviceLast, novice...))
+	case skills.NoticeEnded:
+		p.emit(systemMsg(msgNoviceEnded, novice...))
+	}
 }
 
 // healthBar tells p's observers its new health percent if it changed from before.

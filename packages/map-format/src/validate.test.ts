@@ -160,6 +160,30 @@ const messages = (r: { diagnostics: Parameters<typeof formatDiagnostic>[0][] }):
   r.diagnostics.map(formatDiagnostic);
 
 describe("validateWorld", () => {
+  it("reports a building floor that leaves its walls, on its chunk and tile", () => {
+    const i = mini();
+    const top = must(i.chunks.get(chunkKey(7, 0, 0)));
+    for (let y = 20; y < 24; y++)
+      for (let x = 22; x < 27; x++) {
+        setGround(top, x, y, "wooden_floor");
+        if (x === 22 || x === 26 || y === 20 || y === 23) pushItem(top, x, y, "wooden_wall");
+      }
+    expect(messages(check(i))).toEqual([]);
+    // The floor goes on one tile past the east wall.
+    setGround(top, 27, 21, "wooden_floor");
+    const r = check(i);
+    expect(r.diagnostics.map((d) => [d.file, d.path, d.pos])).toEqual(
+      ["n", "ne", "e", "se", "s"].map(() => [
+        "world/islands/mini/chunks/z07/c0000_0000.json",
+        ["ground", 21],
+        { x: 27, y: 21, z: 7 },
+      ]),
+    );
+    expect(r.diagnostics[2]?.message).toBe(
+      'building floor at 27,21,7 opens to grass on its e side with no wall or door: pull the floor in or extend the wall (docs/03 "Pisos de edificio")',
+    );
+  });
+
   it("accepts a valid island", () => {
     const r = check(mini());
     expect(messages(r)).toEqual([]);

@@ -104,6 +104,36 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Comida de monstruos (hecho, rama `feat/animal-food`; el dueño: "algunos monstruos deberían
+  botar comida, especialmente los animales")**: seis comidas nuevas y 13 monstruos que las
+  sueltan (docs/02 "Oficios", Cocina). Pendiente: sprites propios; por ahora reusan los
+  de Dungeon Crawl (CC0: trozo de carne, fresa, cecina), y carne cruda, de ciervo y de cangrejo
+  comparten el mismo trozo (las ancas usan el trozo verdoso del pack). Sin recetas de cocina para las nuevas todavía.
+- **Pisos de edificio dentro del muro (rama `fix/floor-audit`; el dueño el 2026-11-26:
+  "hay edificios en los que el piso sale hacia afuera del muro")**. La causa era de dibujo:
+  la casilla del muro lleva el piso del cuarto y la pieza del muro lateral es más angosta
+  que la casilla, así que se veía una franja de piso por fuera en todos los edificios. El
+  renderer ahora parte la casilla del muro (y el umbral de una entrada) y dibuja en cada
+  mitad el suelo de su lado (`groundSplit`, docs/03 "Pisos de edificio"). Revisado en
+  `mapcli render` (puerto, bosque, volcán); **falta verlo en el cliente** (`make e2e` del
+  lote). Además `make validate` exige que un suelo `ground.floor: building`
+  (`wooden_floor`) tenga muro, puerta, entrada (hueco de hasta 3 casillas entre dos muros)
+  u otro piso de edificio en cada lado y esquina; el puesto de pruebas pasó a
+  `dock_planks`. Pendiente: los pisos de piedra de interior (`stone_floor`) no se
+  comprueban, porque el mismo suelo es plaza al aire libre (marcarlo `building` da 1124
+  errores en cuatro islas); un suelo de interior propio los cubriría.
+  los cubriría.
+- **Aviso de la protección de novato (hecho, rama `feat/novice-notice`; el dueño el
+  2026-11-26: murió varias veces sin perder la mochila y creyó que era un fallo, "que te lo
+  digan al principio"; docs/02 "Muerte"):** el tutorial lo dice al abrir la mochila, la
+  ventana de muerte y el registro dicen que se aplicó y hasta qué nivel, y al llegar al
+  último nivel protegido y al pasarlo hay un aviso de qué se pierde desde entonces y de las
+  bendiciones. El nivel sale de `death.novice_max_level`. Tras la revisión: la nota del
+  tutorial es una línea aparte (`tutorial-novice`) que no aparece si el balance no protege
+  ningún nivel, una muerte que devuelve al personaje a un nivel protegido lo dice
+  (`death.novice_back`), y un novato que suelta cosas por una marca PvP no recibe el aviso.
+  Falta mirar en el e2e la ventana de muerte de un novato (`death-novice`) y el paso de la
+  mochila del tutorial (el panel tiene un párrafo más: ojo al desborde en móvil).
 - **Viento por ráfagas (hecho, rama `feat/wind-gusts`; el dueño el 2026-11-26, después de
   jugar los lotes 19 y 20: "el movimiento que le agregaste a las plantas es demasiado,
   pareciera que tienen vida o que se están como quemando; tiene que ser un movimiento

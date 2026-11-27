@@ -14,6 +14,8 @@ import {
   WALL_S,
   WALL_W,
   frameAt,
+  groundSplit,
+  splitHalf,
   framePhase,
   framesOfLook,
   indoorTiles,
@@ -395,5 +397,89 @@ describe("indoorTiles (docs/17 ART-5: no sun under a roof)", () => {
     expect(inside(indoorTiles(4, 3, ring), 4)).toHaveLength(16);
     // A town inside ramparts wider than the window is outdoors.
     expect(indoorTiles(4, 1, ring)).toBeNull();
+  });
+});
+
+// The floor of a room never shows past its wall: the tile of a wall is split between the
+// grounds of its two sides.
+describe("groundSplit", () => {
+  // A room of boards (b) with walls (#) on its edge tiles, on grass (.); the south wall has
+  // a doorway at x = 3 and the tile (7, 2) is a spill past the east wall.
+  const rows = ["........", ".bbbbbb.", ".bbbbbbb", ".bbbbbb.", ".bbbbbb.", "........"];
+  const walls = new Set<string>();
+  for (let y = 1; y <= 4; y++)
+    for (let x = 1; x <= 6; x++)
+      if ((x === 1 || x === 6 || y === 1 || y === 4) && !(x === 3 && y === 4))
+        walls.add(`${x},${y}`);
+  const groundAt = (x: number, y: number): string | null | undefined => {
+    const c = rows[y]?.[x];
+    return c === undefined ? undefined : c === "b" ? "boards" : "grass";
+  };
+  const wallAt = (x: number, y: number): boolean => walls.has(`${x},${y}`);
+  const split = (x: number, y: number): number => groundSplit(x, y, groundAt, wallAt);
+
+  it("gives the outer half of a wall's tile to the ground outside", () => {
+    expect(split(1, 2)).toBe(WALL_W);
+    expect(split(6, 3)).toBe(WALL_E);
+    expect(split(4, 1)).toBe(WALL_N);
+    expect(split(4, 4)).toBe(WALL_S);
+    expect(split(1, 1)).toBe(WALL_N | WALL_W);
+    expect(split(6, 4)).toBe(WALL_E | WALL_S);
+  });
+
+  it("splits the threshold of a doorway across the gap, and no other open tile", () => {
+    expect(split(3, 4)).toBe(WALL_S);
+    // Inside the room, on the grass, and on a floor tile that is in no gap.
+    expect(split(3, 3)).toBe(0);
+    expect(split(0, 2)).toBe(0);
+    expect(split(7, 2)).toBe(0);
+    // Grass in a gap between two walls with the same grass on both sides: nothing to show.
+    expect(
+      groundSplit(
+        1,
+        0,
+        () => "grass",
+        (x) => x !== 1,
+      ),
+    ).toBe(0);
+  });
+
+  it("leaves a wall between two tiles of its own ground whole", () => {
+    expect(
+      groundSplit(
+        5,
+        5,
+        () => "boards",
+        (x, y) => x === 5 && y === 5,
+      ),
+    ).toBe(0);
+    // A wall next to another wall: that side is not split, whatever lies under it.
+    expect(split(6, 2)).toBe(0);
+  });
+
+  it("knows nothing of a tile without ground, and never shows a neighbour without one", () => {
+    expect(
+      groundSplit(
+        0,
+        0,
+        () => null,
+        () => true,
+      ),
+    ).toBe(0);
+    expect(
+      groundSplit(
+        0,
+        0,
+        (x, y) => (x === 0 && y === 0 ? "boards" : undefined),
+        (x, y) => x === 0 && y === 0,
+      ),
+    ).toBe(0);
+  });
+
+  it("halves the tile towards each side", () => {
+    expect(splitHalf(WALL_N)).toEqual({ x: 0, y: 0, w: 1, h: 0.5 });
+    expect(splitHalf(WALL_E)).toEqual({ x: 0.5, y: 0, w: 0.5, h: 1 });
+    expect(splitHalf(WALL_S)).toEqual({ x: 0, y: 0.5, w: 1, h: 0.5 });
+    expect(splitHalf(WALL_W)).toEqual({ x: 0, y: 0, w: 0.5, h: 1 });
   });
 });

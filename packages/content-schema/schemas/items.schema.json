@@ -106,7 +106,11 @@
               "type": "integer",
               "minimum": 1
             },
-            "surface": { "$ref": "common.schema.json#/$defs/surface" }
+            "surface": { "$ref": "common.schema.json#/$defs/surface" },
+            "floor": {
+              "description": "building = the floor of a room: the map validator wants every side and corner of it closed by a wall, a door, a doorway (a gap of up to 3 tiles between two walls) or another building floor (docs/03 \"Pisos de edificio\"). A porch, a pier or a stall uses a ground without it.",
+              "enum": ["building"]
+            }
           }
         },
         "weapon": {

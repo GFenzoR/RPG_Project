@@ -1769,6 +1769,21 @@ más: ni HTML ni links. Se dibuja como nodos de texto de Preact, nunca con `inne
 que un `<` en el cuerpo se ve tal cual. Los textos fijos del sitio están en
 `i18n/<lang>/site.yaml` (claves `site.*`).
 
+## Pisos de edificio (`ground.floor`)
+
+- **`ground.floor: building`** en un suelo de `data/items` (opcional; único valor del
+  enum en `items.schema.json`): ese suelo es el piso de un cuarto. Hoy lo declara
+  `wooden_floor`; un suelo de interior nuevo lo declara también. Lo lee solo el validador
+  de mapas (`packages/map-format`, `make validate`): cada lado y esquina de una casilla
+  con ese suelo debe dar a otro piso de edificio, a un muro, a una puerta o ser la entrada.
+  El servidor y el cliente no lo usan. La regla completa está en
+  `docs/03-world-and-maps.md` "Pisos de edificio".
+  ```yaml
+  - id: wooden_floor
+    kind: ground
+    ground: { walkable: true, speed: 100, surface: wood, floor: building }
+  ```
+
 ## Mundo vivo (`data/livingworld/`, lote 17)
 
 Contrato completo, invariantes y cómo agregar: `livingworld/README.md` (`docs/19`). Lo que

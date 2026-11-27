@@ -1,6 +1,8 @@
 package session
 
 import (
+	"time"
+
 	"github.com/GFenzoR/RPG_Project/server/internal/content"
 	"github.com/GFenzoR/RPG_Project/server/internal/game"
 	pb "github.com/GFenzoR/RPG_Project/server/internal/net/pb/game/v1"
@@ -264,6 +266,11 @@ func (w *World) AntiBotEvalMsForTest() int { return w.abCfg.EvalEveryMs }
 // PvPHitForTest lands a physical hit of dmg (before pvp.damage_pct) of a on v (T5.2).
 func (w *World) PvPHitForTest(ctx *game.TickContext, a, v *Player, dmg int) {
 	w.hurtPlayer(ctx, a, v, dmg, ElementPhysical, true)
+}
+
+// SetMarkForTest gives p a PvP mark (murderer or outlaw) until until (loop goroutine).
+func (w *World) SetMarkForTest(p *Player, mark pb.Skull, until time.Time) {
+	p.mark, p.markUntil = mark, until
 }
 
 // PvPStateForTest is what a snapshot would save of p's PvP state.
