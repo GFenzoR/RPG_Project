@@ -29,6 +29,34 @@ func topMods(evs []*pb.ServerMessage, p world.Pos) *pb.ItemMods {
 	return out
 }
 
+// areaMods is the mods of the topmost item the FullMapView in evs has on p, and the index of
+// that tile in the area's palette (-1: an empty tile). What a client that comes into view
+// after the fact is told (docs/05 "Restos").
+func areaMods(t *testing.T, evs []*pb.ServerMessage, p world.Pos) (*pb.ItemMods, int32) {
+	t.Helper()
+	views := find(evs, (*pb.ServerMessage).GetFullMapView)
+	if len(views) == 0 {
+		t.Fatal("no full view")
+	}
+	area := views[0].GetArea()
+	for _, f := range area.GetFloors() {
+		if f.GetZ() != uint32(p.Z) {
+			continue
+		}
+		i := f.GetTiles()[(int(p.Y)-int(area.GetY()))*int(area.GetWidth())+int(p.X)-int(area.GetX())]
+		if i < 0 {
+			return nil, i
+		}
+		items := area.GetPalette()[i].GetItems()
+		if len(items) == 0 {
+			return nil, i
+		}
+		return items[len(items)-1].GetMods(), i
+	}
+	t.Fatalf("the full view has no floor %d", p.Z)
+	return nil, -1
+}
+
 func TestFallFacingIsOneOfFour(t *testing.T) {
 	for d, want := range map[world.Direction]pb.Direction{
 		world.North:     N,
@@ -111,6 +139,23 @@ func TestMonsterRemainsCarryItsFacing(t *testing.T) {
 		t.Fatalf("the four facings were not all tried: %v", seen)
 	}
 
+	// Who walks into view later reads the same from the area's palette: remains fallen
+	// different ways are different tiles of it (the facing is part of what makes two stacks
+	// equal), so none is sent with another's facing.
+	late, _ := h.join("Latecomer", at(6, 3))
+	view := late.take()
+	tiles := map[int32]pb.Direction{}
+	for p, way := range ways {
+		mods, i := areaMods(t, view, p)
+		if mods.GetRemainsOf() != "rat" || mods.GetFacing() != way.want {
+			t.Errorf("who came later saw %v on %v, want the remains of a rat facing %v", mods, p, way.want)
+		}
+		tiles[i] = way.want
+	}
+	if len(tiles) != 4 {
+		t.Errorf("the four facings share palette tiles: %v", tiles)
+	}
+
 	// Dragged a tile away, the remains still lie the way the monster fell: the tile they
 	// land on is sent with the same facing, and the window that opens says it too.
 	var from world.Pos
@@ -141,6 +186,49 @@ func TestMonsterRemainsCarryItsFacing(t *testing.T) {
 	opens := find(cl.take(), (*pb.ServerMessage).GetContainerOpen)
 	if len(opens) != 1 || opens[0].GetMods().GetFacing() != want {
 		t.Errorf("the window of the dragged remains: %v", opens)
+	}
+}
+
+// In the area a client is sent when it comes into view, remains are one tile of the palette
+// per facing: two that fell the same way share it (the comparison reads the facing back
+// from the palette, modsOf; without it no two remains would ever be equal and each would
+// take a tile of its own), two that fell different ways never do.
+func TestRemainsInViewShareAPaletteTileByFacing(t *testing.T) {
+	m := worldtest.Map(t, 0, 0, 7,
+		"############",
+		"#T.........#",
+		"#..........#",
+		"#..........#",
+		"#..........#",
+		"############",
+	)
+	h := dragHarness(t, m, testItems(),
+		spawnAt("rat", 2, 2, 0, 600), spawnAt("rat", 4, 2, 0, 600), spawnAt("rat", 6, 2, 0, 600))
+	h.sim.Step()
+	h.sim.Command(ctxFunc(func(ctx *game.TickContext) {
+		for _, mon := range h.w.Monsters() {
+			p := mon.Pos()
+			dx := 1 // the rats at x 2 and 4 look east, the one at 6 west
+			if p.X == 6 {
+				dx = -1
+			}
+			h.w.FaceForTest(mon, world.Pos{X: uint16(int(p.X) + dx), Y: p.Y, Z: p.Z})
+		}
+	}))
+	killAll(h)
+	late, _ := h.join("Latecomer", at(4, 3))
+	view := late.take()
+	a, ai := areaMods(t, view, pos(2, 2))
+	b, bi := areaMods(t, view, pos(4, 2))
+	c, ci := areaMods(t, view, pos(6, 2))
+	if a.GetFacing() != E || b.GetFacing() != E || c.GetFacing() != W {
+		t.Fatalf("the remains in view face %v, %v, %v, want east, east, west", a.GetFacing(), b.GetFacing(), c.GetFacing())
+	}
+	if ai != bi {
+		t.Errorf("two remains fallen the same way are two palette tiles: %d, %d", ai, bi)
+	}
+	if ai == ci {
+		t.Errorf("remains fallen east and west share palette tile %d", ai)
 	}
 }
 
@@ -181,6 +269,12 @@ func TestPlayerBodyCarriesFacingAndSex(t *testing.T) {
 			}
 			if c.sex != "" && sex != c.sex {
 				t.Errorf("the server kept sex %q of a %q look", sex, c.sex)
+			}
+			// Who comes into view later is told the same (the area's palette).
+			late, _ := h.join("Latecomer", at(41, 41))
+			if mods, _ := areaMods(t, late.take(), body); mods.GetBodyOf() != "Owner" ||
+				mods.GetFacing() != c.turn || mods.GetBodySex() != sex {
+				t.Errorf("who came later saw %v, want Owner's body facing %v, sex %q", mods, c.turn, sex)
 			}
 
 			// Its owner comes back and drags it: the same body, lying the same way.
