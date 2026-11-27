@@ -1537,15 +1537,21 @@ Reglas y números en `02-game-design.md` ("Grupos") y `balance.yaml` `party`.
   Lo reciben el que la cobra y los miembros de su grupo; cualquier otro que mira recibe 0.
   El cliente escribe `client.party.xp_bonus` ("126 (+6 grupo)").
 - **`PartyMember{creature_id, name, vocation, level, in_view, health_percent,
-  mana_percent, island, sharing, share_block}`**. Auditoría de información: `health_percent`,
-  `mana_percent` y `sharing` valen 0/falso si `in_view` es falso (el que mira no conoce a esa criatura: fuera
-  de la ventana o invisible). Fuera de vista solo viaja la isla (`""` en el mar). El mensaje
-  no tiene posición ni piso. `share_block` (campo 10, agregado sin romper nada) es por qué
+  mana_percent, island, sharing, share_block}`**. Auditoría de información: `health_percent` y
+  `mana_percent` valen 0 si `in_view` es falso (el que mira no conoce a esa criatura: fuera
+  de la ventana o invisible). Fuera de vista viajan la isla (`""` en el mar) y si compartiría
+  (`sharing`, `share_block`). El mensaje no tiene posición ni piso. `sharing` es si el
+  miembro compartiría **una presa que muere junto al que mira**: la misma cuenta que el
+  pozo (`sharers` con la posición del que mira: mismo piso, `party.share_distance`), no
+  la vista, que es más chica que `share_distance` en vertical (un miembro a 20 casillas
+  al sur no se ve y sí comparte). No dice más que la experiencia que el que mira ya
+  recibe de sus presas. `share_block` (campo 10, agregado sin romper nada) es por qué
   no comparte un miembro con `sharing` falso mientras la experiencia compartida está
-  prendida: `FAR` (no está `in_view`; no dice nada más de él), `DEAD`, `IDLE` (no
+  prendida: `FAR` (está en otro piso o a más de `party.share_distance` del que mira; no dice nada más de él), `DEAD`, `IDLE` (no
   contribuyó), `LEVEL`, `ACCOUNT` (otro personaje de su cuenta ya comparte; solo se le dice a un miembro de esa misma cuenta, a los demás les llega `UNSPECIFIED`: que dos personajes son de una cuenta no se revela) o `ALONE`
   (califica, pero no hay otro); `UNSPECIFIED` si comparte o está apagada. Las razones de
-  un miembro a la vista salen de lo que quien mira ya ve o sabe (vida, nivel, si pelea).
+  un miembro salen de lo que quien mira ya ve o de lo que el reparto de sus presas ya le
+  dice (vida, nivel, si pelea). El propio jugador nunca recibe `FAR`.
 - **Chat:** `Say{channel: PARTY}` → `Message{kind: PARTY, speaker_id, speaker_name, text}`
   sin `pos` a todos los miembros. Sin grupo → `party.none`.
 - Mensajes de sistema: `party.invited`, `party.player_not_found` (`name`),

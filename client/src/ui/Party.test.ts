@@ -100,11 +100,8 @@ describe("PartyPanel", () => {
     });
     expect(text(byTestId(all, "party-block"))).toBe("client.party.block_you.level");
     const tags = all.filter((v) => v.props["data-testid"] === "party-member-block");
-    expect(tags.map((v) => text(v))).toEqual([
-      "client.party.block.level",
-      "client.party.block.far",
-      "client.party.block.idle",
-    ]);
+    // The player itself has the sentence, not a tag as well.
+    expect(tags.map((v) => text(v))).toEqual(["client.party.block.far", "client.party.block.idle"]);
     // Sharing, or shared experience off: nothing to explain.
     const off = panel({
       leaderId: 1,

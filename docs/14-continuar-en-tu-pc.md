@@ -140,7 +140,12 @@ el punto 5:
     bonus. Las etiquetas largas en la ventana angosta del teléfono no se miraron.
   - Los textos `client.party.help` y `client.party.block_you.level` citan el 5 y el 70 %
     de `balance.yaml`: si cambian los números, cambiar los textos (lo dice un comentario
-    en el YAML; no hay test que lo ate).
+    en el YAML y lo exige `TestPartyTextsQuoteTheBalance`, que falla si un texto es/en no
+    cita los dos números).
+  - **"Muy lejos" ya no es "fuera de vista"** (revisión del lote): el indicador usa la
+    cuenta del pozo con la posición del que mira (mismo piso, `share_distance` 24), así
+    que un miembro a 20 casillas al sur, que no se ve, figura como "Comparte". Para eso
+    `sharing` y `share_block` viajan también de miembros fuera de vista (docs/05).
   - El objetivo de matar se comparte solo con la experiencia compartida prendida y con las
     mismas condiciones (hay que haber peleado en los últimos 75 s): quien solo acompaña
     sin pelear no suma. Si el dueño quiere que baste con estar cerca, es cambiar

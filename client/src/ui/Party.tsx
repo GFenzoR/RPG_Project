@@ -158,7 +158,8 @@ export function PartyPanel(props: {
                   {m.name}
                   {m.id === party.leaderId && <span class="tag">{t("client.party.leader")}</span>}
                   {m.sharing && <span class="tag sharing">{t("client.party.sharing")}</span>}
-                  {blockTag(t, m.block)}
+                  {/* The player's own reason is the sentence above: not twice. */}
+                  {m.id !== ui.selfId && blockTag(t, m.block)}
                 </span>
                 <span class="mlevel">
                   {t(`vocation.${m.vocation}.name`)} · {t("client.party.level", { level: m.level })}

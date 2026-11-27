@@ -3320,11 +3320,21 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
      sí, 69 con 100 no). La cuenta es `content.Party.InLevelRange`.
 
   La ventana de grupo dice **por qué** no comparte quien no comparte (`ShareBlock`, la
-  primera razón que aplica): muy lejos (el que mira no lo ve), muerto, no está peleando
+  primera razón que aplica): muy lejos (en otro piso o a más de `share_distance` del que
+  mira; **no** es "fuera de vista": la vista es más chica que `share_distance`, y un
+  miembro que no se ve pero está en rango figura como "Comparte"), muerto, no está peleando
   (no cumple 2), nivel muy bajo (no cumple 3), misma cuenta (otro personaje de su cuenta
   ya comparte) o sin nadie con quien compartir (califica, pero hacen falta dos). Junto a
   cada nombre va la etiqueta corta, y bajo el indicador la frase del propio jugador, con
-  lo que tiene que hacer ("pégale a un monstruo, cura a un miembro...").
+  lo que tiene que hacer ("pégale a un monstruo, cura a un miembro..."); el propio jugador
+  no lleva además la etiqueta. El indicador responde "¿quién compartiría una presa que
+  muere a mi lado?" (la cuenta del pozo con la posición del que mira); el reparto real
+  se mide desde el monstruo, así que dos miembros muy separados pueden diferir en una
+  presa que cae entre los dos.
+
+  El crédito de quest de quien comparte sin haber pegado es solo el objetivo de matar:
+  no cuenta como "matar" para el tutorial ni para el registro de eventos del jugador
+  (anti-bot), que siguen siendo de quien pegó.
 
   Si comparten dos o más, los shares de daño de los que comparten forman un **pozo** que
   crece con el **bonus de grupo** y se divide en partes iguales entre ellos (también a
@@ -3409,7 +3419,10 @@ Números en `data/balance.yaml` (`party`), nunca en código. Código:
     "126 (+6 grupo)". Esa parte solo la ven el que la cobra y los miembros de su grupo; un
     extraño al lado ve solo "126".
 - **Información (auditoría, `01-architecture.md` "Trampas y anti-bot"):** de cada miembro
-  viajan nombre, vocación, nivel e isla. Vida, maná (en %) y la marca "comparte" solo
+  viajan nombre, vocación, nivel e isla, y si compartiría una presa que muere junto al
+  que mira ("comparte" o la razón; lo mismo que ya le dice la experiencia de sus presas:
+  de un miembro en otro piso o a más de `share_distance` solo llega "muy lejos"). Vida y
+  maná (en %) solo
   mientras está en la vista del que mira (lo que el AOI ya le manda; un invisible no está
   en la vista). Nunca viajan
   la posición, el piso ni la vida de un miembro fuera de vista. Nivel e isla sí viajan, y

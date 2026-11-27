@@ -158,7 +158,8 @@ party:                      # T3.3 (docs/02-game-design.md, "Grupos")
   # member, or a monster's attack taken) within `contribution_ms`, and whose level is at
   # least `level_range_pct` % of the highest of them (or at most `level_gap_always`
   # levels below it, so that low levels can share). The texts client.party.help and
-  # client.party.block_you.level (i18n) quote these two numbers: change them together.
+  # client.party.block_you.level (i18n) quote these two numbers: change them together
+  # (TestPartyTextsQuoteTheBalance fails otherwise).
   share_distance: 24
   contribution_ms: 75000
   level_range_pct: 70

@@ -2753,7 +2753,8 @@ export type PartyMember = Message$1<"game.v1.PartyMember"> & {
   island: string;
 
   /**
-   * The member qualifies for shared experience right now (see SharedExperience).
+   * The member would share a kill next to the viewer right now (see SharedExperience),
+   * in view or not.
    *
    * @generated from field: bool sharing = 9;
    */
@@ -4026,9 +4027,9 @@ export const SharedExperienceSchema: GenEnum<SharedExperience> = /*@__PURE__*/
   enumDesc(file_game_v1_server, 9);
 
 /**
- * ShareBlock is why a member does not share experience right now, as the viewer sees it:
- * the first reason that applies, in this order. UNSPECIFIED while the member shares or
- * shared experience is off.
+ * ShareBlock is why a member would not share the experience of a kill next to the
+ * viewer right now: the first reason that applies, in this order. UNSPECIFIED while the
+ * member shares or shared experience is off.
  *
  * @generated from enum game.v1.ShareBlock
  */
@@ -4039,7 +4040,9 @@ export enum ShareBlock {
   UNSPECIFIED = 0,
 
   /**
-   * The viewer does not see the member: too far (or on another floor).
+   * The member is on another floor or farther than balance.yaml party.share_distance
+   * from the viewer. It does not follow the view: a member out of view (in_view false)
+   * that is within share_distance shares, or has one of the other reasons.
    *
    * @generated from enum value: SHARE_BLOCK_FAR = 1;
    */

@@ -867,12 +867,14 @@ enum SharedExperience {
   SHARED_EXPERIENCE_INACTIVE = 3;
 }
 
-// ShareBlock is why a member does not share experience right now, as the viewer sees it:
-// the first reason that applies, in this order. UNSPECIFIED while the member shares or
-// shared experience is off.
+// ShareBlock is why a member would not share the experience of a kill next to the
+// viewer right now: the first reason that applies, in this order. UNSPECIFIED while the
+// member shares or shared experience is off.
 enum ShareBlock {
   SHARE_BLOCK_UNSPECIFIED = 0;
-  // The viewer does not see the member: too far (or on another floor).
+  // The member is on another floor or farther than balance.yaml party.share_distance
+  // from the viewer. It does not follow the view: a member out of view (in_view false)
+  // that is within share_distance shares, or has one of the other reasons.
   SHARE_BLOCK_FAR = 1;
   SHARE_BLOCK_DEAD = 2;
   // It did not fight within balance.yaml party.contribution_ms (hit a monster, healed a
@@ -919,7 +921,8 @@ message PartyMember {
   uint32 mana_percent = 7;
   // Island id of world/world.yaml where the member is (empty in the open sea).
   string island = 8;
-  // The member qualifies for shared experience right now (see SharedExperience).
+  // The member would share a kill next to the viewer right now (see SharedExperience),
+  // in view or not.
   bool sharing = 9;
   // Why not, when sharing is false and shared experience is on.
   ShareBlock share_block = 10;

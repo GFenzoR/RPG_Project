@@ -663,14 +663,16 @@ func (SharedExperience) EnumDescriptor() ([]byte, []int) {
 	return file_game_v1_server_proto_rawDescGZIP(), []int{9}
 }
 
-// ShareBlock is why a member does not share experience right now, as the viewer sees it:
-// the first reason that applies, in this order. UNSPECIFIED while the member shares or
-// shared experience is off.
+// ShareBlock is why a member would not share the experience of a kill next to the
+// viewer right now: the first reason that applies, in this order. UNSPECIFIED while the
+// member shares or shared experience is off.
 type ShareBlock int32
 
 const (
 	ShareBlock_SHARE_BLOCK_UNSPECIFIED ShareBlock = 0
-	// The viewer does not see the member: too far (or on another floor).
+	// The member is on another floor or farther than balance.yaml party.share_distance
+	// from the viewer. It does not follow the view: a member out of view (in_view false)
+	// that is within share_distance shares, or has one of the other reasons.
 	ShareBlock_SHARE_BLOCK_FAR  ShareBlock = 1
 	ShareBlock_SHARE_BLOCK_DEAD ShareBlock = 2
 	// It did not fight within balance.yaml party.contribution_ms (hit a monster, healed a
@@ -6411,7 +6413,8 @@ type PartyMember struct {
 	ManaPercent   uint32 `protobuf:"varint,7,opt,name=mana_percent,json=manaPercent,proto3" json:"mana_percent,omitempty"`
 	// Island id of world/world.yaml where the member is (empty in the open sea).
 	Island string `protobuf:"bytes,8,opt,name=island,proto3" json:"island,omitempty"`
-	// The member qualifies for shared experience right now (see SharedExperience).
+	// The member would share a kill next to the viewer right now (see SharedExperience),
+	// in view or not.
 	Sharing bool `protobuf:"varint,9,opt,name=sharing,proto3" json:"sharing,omitempty"`
 	// Why not, when sharing is false and shared experience is on.
 	ShareBlock    ShareBlock `protobuf:"varint,10,opt,name=share_block,json=shareBlock,proto3,enum=game.v1.ShareBlock" json:"share_block,omitempty"`

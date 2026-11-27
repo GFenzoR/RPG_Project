@@ -2026,9 +2026,9 @@ test("T3.3: two players form a party from the battle list and see the panel", as
     await expect(page.getByTestId("party-shared")).toContainText(
       "Experiencia compartida: activada, pero ahora nadie comparte",
     );
-    // ...and what to do about it: the player's own reason and a tag next to each name.
+    // ...and what to do about it: the player's own reason and a tag next to the other name.
     await expect(page.getByTestId("party-block")).toContainText("Todavía no compartes: pégale");
-    await expect(page.getByTestId("party-member-block")).toHaveCount(2);
+    await expect(page.getByTestId("party-member-block")).toHaveCount(1);
     await expect(page.getByTestId("party-member-block").first()).toContainText(
       "No comparte: no está peleando",
     );
