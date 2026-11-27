@@ -490,6 +490,12 @@ body.inspecting [data-testid="game-canvas"] {
   visibility: hidden;
   pointer-events: none;
 }
+/* The same under the ☰ menu (the full E2E's capture of lote 21: the six buttons lay over
+   the menu's right half, on "Options" in a wider language). */
+.game[data-ui="mobile"]:has(.mmenu[open]) .touch-cluster {
+  visibility: hidden;
+  pointer-events: none;
+}
 /* Upright the compact chat log leaves the corner of the buttons free. */
 .game[data-ui="mobile"][data-flow="column"][data-cluster] .chat-glance {
   max-width: calc(100% - 2 * var(--touch-btn) - 30px);
