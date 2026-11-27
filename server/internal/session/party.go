@@ -389,84 +389,84 @@ func (w *World) shareNear(at, pos world.Pos) bool {
 // its own damage share. A character without an account (id 0: hand-built test or bot
 // characters) is never merged with another. Fewer than two sharers = no sharing.
 func (w *World) sharers(now game.Tick, pt *party, pos world.Pos, dst []*Player) []*Player {
-	pc := w.cfg.Balance.Party
 	dst = dst[:0]
+	top := w.shareTop(now, pt, pos)
+	for _, o := range pt.members {
+		if _, out := w.leftOut(now, pt, pos, top, o); !out {
+			dst = append(dst, o)
+		}
+	}
+	if len(dst) < 2 {
+		clear(dst)
+		return dst[:0]
+	}
+	return dst
+}
+
+// shareActive reports whether o counts for a kill at pos before the level filter: close
+// enough, alive and fighting.
+func (w *World) shareActive(now game.Tick, o *Player, pos world.Pos) bool {
+	return w.shareNear(o.pos, pos) && o.health > 0 && w.contributed(now, o)
+}
+
+// shareTop is the highest level among the members of pt that are active and close to pos:
+// what the level filter of sharers measures against.
+func (w *World) shareTop(now game.Tick, pt *party, pos world.Pos) int {
 	top := 0
 	for _, o := range pt.members {
-		if w.contributed(now, o) && o.health > 0 && w.shareNear(o.pos, pos) {
-			dst = append(dst, o)
+		if w.shareActive(now, o, pos) {
 			top = max(top, o.level)
 		}
 	}
-	n := 0
-	for _, o := range dst {
-		if !pc.InLevelRange(o.level, top) {
-			continue
-		}
-		if o.accountID != 0 && sameAccount(dst[:n], o.accountID) {
-			continue
-		}
-		dst[n] = o
-		n++
-	}
-	clear(dst[n:])
-	if n < 2 {
-		return dst[:0]
-	}
-	return dst[:n]
+	return top
 }
 
-// sameAccount reports whether one of ps belongs to account acc.
-func sameAccount(ps []*Player, acc int64) bool {
-	for _, q := range ps {
-		if q.accountID == acc {
-			return true
-		}
+// leftOut is the one place that decides who shares a kill at pos: it reports whether o, a
+// member of pt, is left out, and the first reason that leaves it out (top is shareTop).
+// sharers and shareBlock both ask it, so the indicator never tells a reason the split
+// does not follow. SHARE_BLOCK_ACCOUNT: an earlier member of o's account, in join order,
+// already passed every other filter (that one is the account's sharer).
+func (w *World) leftOut(now game.Tick, pt *party, pos world.Pos, top int, o *Player) (pb.ShareBlock, bool) {
+	switch {
+	case !w.shareNear(o.pos, pos):
+		return pb.ShareBlock_SHARE_BLOCK_FAR, true
+	case o.health <= 0:
+		return pb.ShareBlock_SHARE_BLOCK_DEAD, true
+	case !w.contributed(now, o):
+		return pb.ShareBlock_SHARE_BLOCK_IDLE, true
 	}
-	return false
-}
-
-// shareBlock tells why o, a member of pt, is not among the sharers of a kill next to v
-// (sharers at v.pos): the first reason of sharers that leaves it out. Information
-// audit: a reason says no more than the experience v gets from a kill already does
-// (who shared it), but that two characters are of one account is told only to that
-// account; anyone else gets no reason for the second one.
-func (w *World) shareBlock(now game.Tick, pt *party, v, o *Player) pb.ShareBlock {
-	if !w.shareNear(o.pos, v.pos) {
-		return pb.ShareBlock_SHARE_BLOCK_FAR
-	}
-	if o.health <= 0 {
-		return pb.ShareBlock_SHARE_BLOCK_DEAD
-	}
-	if !w.contributed(now, o) {
-		return pb.ShareBlock_SHARE_BLOCK_IDLE
-	}
-	// The same candidates as sharers at v.pos: active members close to v.
 	pc := w.cfg.Balance.Party
-	top := 0
-	for _, q := range pt.members {
-		if w.shareNear(q.pos, v.pos) && q.health > 0 && w.contributed(now, q) {
-			top = max(top, q.level)
-		}
-	}
 	if !pc.InLevelRange(o.level, top) {
-		return pb.ShareBlock_SHARE_BLOCK_LEVEL
+		return pb.ShareBlock_SHARE_BLOCK_LEVEL, true
 	}
 	if o.accountID != 0 {
 		for _, q := range pt.members {
 			if q == o {
 				break
 			}
-			if q.accountID == o.accountID && w.shareNear(q.pos, v.pos) && q.health > 0 && w.contributed(now, q) &&
-				pc.InLevelRange(q.level, top) {
-				if v.accountID != o.accountID {
-					return pb.ShareBlock_SHARE_BLOCK_UNSPECIFIED
-				}
-				return pb.ShareBlock_SHARE_BLOCK_ACCOUNT
+			if q.accountID == o.accountID && w.shareActive(now, q, pos) && pc.InLevelRange(q.level, top) {
+				return pb.ShareBlock_SHARE_BLOCK_ACCOUNT, true
 			}
 		}
 	}
-	return pb.ShareBlock_SHARE_BLOCK_ALONE
+	return pb.ShareBlock_SHARE_BLOCK_UNSPECIFIED, false
+}
+
+// shareBlock tells why o, a member of pt, is not among the sharers of a kill next to v
+// (sharers at v.pos): the reason leftOut gives, or SHARE_BLOCK_ALONE when o passes every
+// filter and there is nobody to share with. Information audit: a reason says no more
+// than the experience v gets from a kill already does (who shared it), but that two
+// characters are of one account is told only to that account; anyone else gets no
+// reason for the second one.
+func (w *World) shareBlock(now game.Tick, pt *party, v, o *Player) pb.ShareBlock {
+	why, out := w.leftOut(now, pt, v.pos, w.shareTop(now, pt, v.pos), o)
+	switch {
+	case !out:
+		return pb.ShareBlock_SHARE_BLOCK_ALONE
+	case why == pb.ShareBlock_SHARE_BLOCK_ACCOUNT && v.accountID != o.accountID:
+		return pb.ShareBlock_SHARE_BLOCK_UNSPECIFIED
+	}
+	return why
 }
 
 // sharePot is the experience the members of one party pool from a kill.

@@ -20,14 +20,14 @@
   respawn_seconds: 60
 
 - id: bosque_toads_west
-  center: { x: 4188, y: 6146, z: 7 }
+  center: { x: 4185, y: 6146, z: 7 }
   radius: 5
   monsters:
     - { monster: mire_toad, count: 6 }
   respawn_seconds: 50
 
 - id: bosque_toads_east
-  center: { x: 4208, y: 6153, z: 7 }
+  center: { x: 4209, y: 6153, z: 7 }
   radius: 5
   monsters:
     - { monster: mire_toad, count: 5 }

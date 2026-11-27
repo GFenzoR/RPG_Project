@@ -918,7 +918,12 @@ empujable manda `PushObject` (`Game.pushAhead`, `WorldState.pushableAhead`).
    está viendo un área el respawn no debiese pasar") y no hay una criatura en ella; si
    no, reintenta cada segundo. La roca espera la vista con tope: a las dos veces su
    `reset_seconds` desde el último empuje (`resetSightHold`) vuelve aunque la miren
-   (invariante 7). Primero se pregunta `Watched`: una casilla vigilada
+   (invariante 7). Los rompibles **no** tienen ese tope, a propósito: uno roto solo abre
+   el paso (enredadera, barricada, telaraña) o deja de dar botín (caja, barril, vasija),
+   nunca encierra ni traba a nadie, así que un jugador quieto a su lado lo deja roto
+   mientras lo mire y eso no rompe nada. Por lo mismo, un rompible no sirve de cerradura
+   de un puzzle que deba rearmarse con gente presente: para eso están las rocas y las
+   compuertas. Primero se pregunta `Watched`: una casilla vigilada
    conserva sus items donde están. Un puzzle no se rearma con alguien mirándolo.
    Los items sueltos de la casilla (el botín que nadie levantó, una moneda tirada para
    trabarlo) se corren antes a una vecina (`ClearItems`), así que nadie traba un objeto,

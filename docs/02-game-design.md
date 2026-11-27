@@ -343,6 +343,12 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
     radio 3–5 y la ventana ±16 x ±11); los spawns vecinos, a 12–20 casillas, reponen en
     sus casillas fuera de su vista. Quien caza tiene que moverse, y al volver encuentra
     los monstruos que vencieron mientras no miraba.
+    **Quests de matar:** las áreas de todos los spawns de un monstruo que una quest pide
+    matar no caben juntas en una sola ventana (33x23), así que un jugador quieto nunca
+    frena todos los respawns de un objetivo de misión
+    (`TestRepoQuestKillsCannotBeHeldBackByOneWatcher`, sobre el mapa real). La excepción son
+    los jefes de una sola sala (`slagbound_warden`): quien espera dentro frena su vuelta y
+    tiene que esperar fuera de su vista.
   - **Pisos.** En la superficie los pisos se ven juntos: quien está en un techo frena el
     spawn de abajo. Bajo tierra solo cuenta el propio piso.
   - **Staff.** Un GM o admin que camina invisible no cuenta (inspecciona sin cambiar el
