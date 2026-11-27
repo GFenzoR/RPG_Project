@@ -1214,3 +1214,335 @@ test("T5.6: at 1280x800 a long name and its experience keep the map at 2x", asyn
   expect(await rememberedZoom(page)).toBeNull();
   expect(errors).toEqual([]);
 });
+
+// ---- Lote 21 (docs/15): touch controls, hybrid input, full screen and install ----------
+
+/** Asks for the analog stick before the page loads (Options → Controls keeps it on the device). */
+async function preferStick(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      window.localStorage.setItem("rpg.touch", JSON.stringify({ pad: "stick" }));
+    } catch {
+      // No storage: the pad stays.
+    }
+  });
+}
+
+/** Every on-screen action button is a 44 px target inside the screen. */
+async function clusterFits(page: Page): Promise<void> {
+  const cluster = page.getByTestId("touch-cluster");
+  await expect(cluster).toBeVisible();
+  const vp = page.viewportSize();
+  if (!vp) throw new Error("no viewport");
+  const buttons = cluster.locator(".touch-action");
+  const n = await buttons.count();
+  expect(n).toBeGreaterThanOrEqual(4);
+  for (let i = 0; i < n; i++) {
+    const box = await buttons.nth(i).boundingBox();
+    if (!box) throw new Error("an action button has no box");
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(vp.width + 1);
+    expect(box.y + box.height).toBeLessThanOrEqual(vp.height + 1);
+  }
+}
+
+const TOUCH21 = DEVICES.filter((d) =>
+  ["pixel7-portrait", "pixel7-landscape", "webkit-iphone13-portrait", "webkit-ipad-mini"].includes(
+    d.prefix,
+  ),
+);
+
+for (const { prefix, device, browser } of TOUCH21) {
+  const title =
+    browser === "chromium"
+      ? `lote 21 touch on ${device}`
+      : `lote 21 touch on ${device} (${browser})`;
+  test.describe(title, () => {
+    test.use(deviceOptions(device));
+
+    test("touch: the stick walks, inspect looks, the attack button targets a wolf", async ({
+      page,
+      playwright,
+    }) => {
+      test.setTimeout(150_000);
+      const errors = watchErrors(page);
+      await preferStick(page);
+      const who = await newGuardian(playwright, "Stick");
+      await enterGame(page, who.email, who.password);
+      errors.length = 0; // the 401 of opening the page without a session cookie
+      const game = page.getByTestId("game");
+      await expect(game).toHaveAttribute("data-input", "touch");
+      await expect(page.getByTestId("touch-pad")).toHaveCount(0);
+      const stick = page.getByTestId("touch-stick");
+      await expect(stick).toBeVisible();
+      await clusterFits(page);
+
+      // The stick: a thumb held toward an open way walks that way, and stops when it lifts.
+      const start = await settled(page);
+      const way = await openDirection(page, start, 3);
+      const box = await stick.boundingBox();
+      if (!box) throw new Error("no stick");
+      const sx = box.x + box.width / 2 + way.dx * box.width * 0.4;
+      const sy = box.y + box.height / 2 + way.dy * box.height * 0.4;
+      await hold(page, sx, sy, 1300);
+      const walked = await settled(page);
+      const along = (walked.x - start.x) * way.dx + (walked.y - start.y) * way.dy;
+      expect(along).toBeGreaterThanOrEqual(1);
+      expect(
+        Math.abs((walked.x - start.x) * way.dy) + Math.abs((walked.y - start.y) * way.dx),
+      ).toBe(0);
+      await expect(stick).not.toHaveAttribute("data-held", /.+/);
+      await page.screenshot({ path: join(shots, `mobile-${prefix}-21-stick.png`) });
+
+      // Inspect: the eye, then a tap on the map looks at that tile and does not walk there.
+      const look = page.getByTestId("touch-look");
+      await look.tap();
+      await expect(look).toHaveAttribute("aria-pressed", "true");
+      await tapTile(page, walked.x - way.dx, walked.y - way.dy);
+      await expect(look).toHaveAttribute("aria-pressed", "false");
+      await expect(
+        page.getByTestId("notices").locator('[data-key^="look."]').first(),
+      ).toBeVisible();
+      const after = await settled(page);
+      expect({ x: after.x, y: after.y }).toEqual({ x: walked.x, y: walked.y });
+
+      // The attack button: back to the start, north to the wolves, and press it until the
+      // client has a target (none is in view at first).
+      await tapTile(page, start.x, start.y);
+      await arrived(page, start.x, start.y);
+      await tapTile(page, start.x, start.y - 5);
+      await arrived(page, start.x, start.y - 5);
+      const attack = page.getByTestId("touch-attack");
+      await expect
+        .poll(
+          async () => {
+            const has = await page.evaluate(() => window.__rpgClient?.target() !== undefined);
+            if (has) return true;
+            const wolves = await page.evaluate(() => (window.__rpgClient?.monsters() ?? []).length);
+            if (wolves > 0) await attack.tap();
+            else {
+              const me = await self(page);
+              const p = await tileClient(page, me.x, me.y - 2);
+              if ((await hitAt(page, p)) === "CANVAS") await page.touchscreen.tap(p.x, p.y);
+            }
+            return page.evaluate(() => window.__rpgClient?.target() !== undefined);
+          },
+          { timeout: 60_000, intervals: [1000] },
+        )
+        .toBe(true);
+      await expect(attack).toHaveAttribute("data-targeting", "");
+      const targeted = await page.evaluate(() => {
+        const id = window.__rpgClient?.target();
+        return (window.__rpgClient?.monsters() ?? []).some((m) => m.id === id);
+      });
+      expect(targeted).toBe(true); // a monster, never a player
+      await page.screenshot({ path: join(shots, `mobile-${prefix}-21-attack.png`) });
+      expect(errors).toEqual([]);
+    });
+
+    test("touch: the context button talks to the NPC beside the player", async ({
+      page,
+      playwright,
+    }) => {
+      const errors = watchErrors(page);
+      const who = await newGuardian(playwright, "Ctx");
+      psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${who.name}'`]);
+      await enterGame(page, who.email, who.password);
+      errors.length = 0;
+      let priest: { id: number; x: number; y: number } | undefined;
+      await expect
+        .poll(async () => {
+          const list = await page.evaluate(() => window.__rpgClient?.npcs() ?? []);
+          priest = list.find((n) => n.contentId === "puerto_priest");
+          return priest !== undefined;
+        })
+        .toBe(true);
+      if (!priest) throw new Error("no priestess");
+      const hide = page.getByTestId("tutorial-hide");
+      if (await hide.isVisible()) {
+        await hide.tap();
+        await expect(page.getByTestId("tutorial-show")).toBeVisible();
+      }
+      // Walk beside her: the nearest walkable tile next to her.
+      const me = await settled(page);
+      const spots: { x: number; y: number }[] = [];
+      for (const [dx, dy] of [
+        [0, 1],
+        [1, 0],
+        [-1, 0],
+        [0, -1],
+      ] as const) {
+        const x = priest.x + dx;
+        const y = priest.y + dy;
+        if (await walkable(page, x, y, me.z)) spots.push({ x, y });
+      }
+      spots.sort(
+        (a, b) =>
+          Math.abs(a.x - me.x) +
+          Math.abs(a.y - me.y) -
+          (Math.abs(b.x - me.x) + Math.abs(b.y - me.y)),
+      );
+      const spot = spots[0];
+      if (!spot) throw new Error("no tile beside the priestess");
+      if (spot.x !== me.x || spot.y !== me.y) {
+        await tapTile(page, spot.x, spot.y);
+        await arrived(page, spot.x, spot.y);
+      }
+      const interact = page.getByTestId("touch-interact");
+      await expect(interact).toHaveAttribute("data-context", "talk");
+      await expect(interact).toBeEnabled();
+      await page.screenshot({ path: join(shots, `mobile-${prefix}-21-context.png`) });
+      await interact.tap();
+      const dialog = page.getByTestId("dialog");
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("heading")).toHaveText("Hermana Liora");
+      await dialog.getByRole("button", { name: "Cerrar" }).tap();
+      await expect(dialog).toBeHidden();
+      expect(errors).toEqual([]);
+    });
+  });
+}
+
+test.describe("lote 21 hybrid input on Pixel 7", () => {
+  test.use(deviceOptions("Pixel 7"));
+
+  test("hybrid: keyboard and mouse play on the phone layout, then fingers, in one session", async ({
+    page,
+    playwright,
+  }) => {
+    test.setTimeout(120_000);
+    const errors = watchErrors(page);
+    const who = await newGuardian(playwright, "Hybrid");
+    await enterGame(page, who.email, who.password);
+    errors.length = 0;
+    const game = page.getByTestId("game");
+    await expect(game).toHaveAttribute("data-ui", "mobile");
+    await expect(game).toHaveAttribute("data-input", "touch");
+    await page.evaluate(() => {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && el !== document.body) el.blur();
+    });
+
+    // Keyboard: an arrow walks one tile on the mobile layout, and the on-screen controls
+    // step back (they stay on screen, dimmed).
+    const start = await settled(page);
+    const way = await openDirection(page, start, 2);
+    const KEYS: Record<string, string> = {
+      east: "ArrowRight",
+      west: "ArrowLeft",
+      south: "ArrowDown",
+      north: "ArrowUp",
+    };
+    const key = KEYS[way.dir];
+    if (!key) throw new Error("no key");
+    await stepToward(page, key, () => page.keyboard.press(key));
+    await arrived(page, start.x + way.dx, start.y + way.dy);
+    await expect(game).toHaveAttribute("data-input", "keyboard");
+    await expect(game).toHaveAttribute("data-controls", "faded");
+    await expect(page.getByTestId("touch-pad")).toBeVisible();
+    await page.screenshot({ path: join(shots, "mobile-pixel7-portrait-21-hybrid-keyboard.png") });
+
+    // The window keys: I opens the inventory section, Escape closes the sheet.
+    await page.keyboard.press("i");
+    await expect(page.locator('[data-pane="inventory"]').first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#side-panel")).toBeHidden();
+
+    // F1 casts the first hotbar slot (when the vocation starts with a spell there).
+    const f1 = await page.locator('[data-hotkey="F1"] button').first().getAttribute("data-spell");
+    if (f1) {
+      await page.keyboard.press("F1");
+      await expect.poll(() => page.evaluate(() => window.__rpgClient?.lastCast())).toBe(f1);
+      await page.keyboard.press("Escape"); // drops the aim of an aimed spell
+    }
+
+    // Mouse: a left click on a tile walks there.
+    const here = await settled(page);
+    const back = await tileClient(page, here.x - way.dx, here.y - way.dy);
+    expect(await hitAt(page, back)).toBe("CANVAS");
+    await page.mouse.click(back.x, back.y);
+    await arrived(page, here.x - way.dx, here.y - way.dy);
+    await expect(game).toHaveAttribute("data-input", "mouse");
+    await expect(game).toHaveAttribute("data-controls", "faded");
+
+    // Fingers again, same session: the controls come back and the pad walks.
+    const again = await settled(page);
+    await tapTile(page, again.x + way.dx, again.y + way.dy);
+    await arrived(page, again.x + way.dx, again.y + way.dy);
+    await expect(game).toHaveAttribute("data-input", "touch");
+    await expect(game).not.toHaveAttribute("data-controls", "faded");
+    const pad = page.getByTestId("touch-pad");
+    const opposite: Record<string, string> = {
+      east: "west",
+      west: "east",
+      south: "north",
+      north: "south",
+    };
+    const dir = opposite[way.dir];
+    if (!dir) throw new Error("no way back");
+    await stepToward(page, dir, () => pad.locator(`[data-dir="${dir}"]`).tap());
+    await arrived(page, again.x, again.y);
+    await page.screenshot({ path: join(shots, "mobile-pixel7-portrait-21-hybrid-touch.png") });
+    expect(errors).toEqual([]);
+  });
+
+  test("app mode: the manifest, full screen and the install button on Chromium", async ({
+    page,
+    request,
+  }) => {
+    const res = await request.get("/manifest.webmanifest");
+    expect(res.ok()).toBe(true);
+    const manifest = (await res.json()) as Record<string, unknown>;
+    expect(manifest["display"]).toBe("fullscreen");
+    expect(manifest["display_override"]).toEqual(["fullscreen", "standalone"]);
+    expect(manifest["start_url"]).toBe("/play/");
+    expect(manifest["orientation"]).toBe("any");
+
+    await page.goto("/play/?lang=es");
+    const mode = page.getByTestId("app-mode").first();
+    await expect(mode).toHaveAttribute("data-platform", "chromium");
+    // No install button until the browser says the app can be installed.
+    await expect(page.getByTestId("install-button")).toHaveCount(0);
+    await page.evaluate(() => window.dispatchEvent(new Event("beforeinstallprompt")));
+    const install = page.getByTestId("install-button");
+    await expect(install).toBeVisible();
+    await expect(install).toHaveAttribute("data-install", "prompt");
+    await page.screenshot({ path: join(shots, "mobile-pixel7-portrait-21-app-mode.png") });
+    // Dismissed, it is remembered across a reload (it stays in Options).
+    await page.getByTestId("install-dismiss").tap();
+    await expect(page.locator('[data-where="screen"] [data-testid="install-button"]')).toHaveCount(
+      0,
+    );
+    await page.reload();
+    await page.evaluate(() => window.dispatchEvent(new Event("beforeinstallprompt")));
+    await expect(page.getByTestId("app-mode").first()).toBeVisible();
+    await expect(page.locator('[data-where="screen"] [data-testid="install-button"]')).toHaveCount(
+      0,
+    );
+    // Installed: no button anywhere.
+    await page.evaluate(() => window.dispatchEvent(new Event("appinstalled")));
+    await expect(page.getByTestId("install-button")).toHaveCount(0);
+  });
+});
+
+test.describe("lote 21 app mode on iPhone 13 (webkit)", () => {
+  test.use(deviceOptions("iPhone 13"));
+
+  test("app mode: an iPhone gets the install steps and no fullscreen button", async ({ page }) => {
+    await page.goto("/play/?lang=es");
+    const mode = page.getByTestId("app-mode").first();
+    await expect(mode).toHaveAttribute("data-platform", "iphone");
+    await expect(page.getByTestId("fullscreen-button")).toHaveCount(0);
+    const install = page.getByTestId("install-button");
+    await expect(install).toHaveAttribute("data-install", "ios-steps");
+    await install.tap();
+    const steps = page.getByTestId("install-steps");
+    await expect(steps).toBeVisible();
+    await expect(steps.locator("li")).toHaveCount(3);
+    await page.screenshot({ path: join(shots, "mobile-webkit-iphone13-portrait-21-install.png") });
+    await page.getByTestId("install-steps-close").tap();
+    await expect(steps).toBeHidden();
+  });
+});

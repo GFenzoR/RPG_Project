@@ -348,6 +348,8 @@ export interface ClientTestHooks {
   /** The battle list as [id, contentId, health %]. */
   battle(): { id: number; contentId: string; health: number }[];
   target(): number | undefined;
+  /** Lote 21: the id of the last spell used from the hotbar or a quick slot, if any. */
+  lastCast(): string | undefined;
   stats(): PlayerStatsState | undefined;
   skills(): SkillState[];
   /** Floating texts that appeared less than `ms` ago. */
@@ -2458,6 +2460,7 @@ export class Game {
       battle: () =>
         world.battleList().map((c) => ({ id: c.id, contentId: c.contentId, health: c.health })),
       target: () => world.target,
+      lastCast: () => this.cast?.spellId,
       stats: () => world.stats,
       skills: () => world.skills,
       floatingTexts: (ms) => {

@@ -56,6 +56,7 @@ import {
 import { InterfaceOptions } from "../ui/InterfaceOptions.tsx";
 import { applyScales } from "../state/ui-prefs.ts";
 import { coarsePointer } from "../state/touch-prefs.ts";
+import { DEFAULT_TOUCH_PREFS } from "../state/touch-controls.ts";
 import { SLOT_KEYS } from "../ui/Inventory.tsx";
 import { STATUS_ORDER } from "../state/status.ts";
 import "../ui/client.css";
@@ -326,8 +327,15 @@ function Preview(props: { game: Game }): JSX.Element {
         languagePicker={settings.language}
         settings={settings}
         touchPad={params.get("pad") !== "0" && coarsePointer()}
+        touchControls={{
+          ...DEFAULT_TOUCH_PREFS,
+          pad: params.get("stick") === "1" ? "stick" : "dpad",
+          mirrored: params.get("mirror") === "1",
+          size: params.get("size") === "large" ? "large" : "normal",
+        }}
         characterName={s.ui.selfName}
-        ui={s.ui}
+        // The context button of the touch cluster shows what it would do (a body ahead).
+        ui={{ ...s.ui, context: "loot" }}
         game={props.game}
         entered={true}
         loadFailed={false}

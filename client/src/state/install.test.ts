@@ -145,6 +145,10 @@ describe("the fullscreen button", () => {
     expect(fullscreenOffer(start({ userAgent: UA.iphone, fullscreenApi: false }))).toBe(
       "install-hint",
     );
+    // Even if its WebKit says the API is there (it is for video only).
+    expect(fullscreenOffer(start({ userAgent: UA.iphone, fullscreenApi: true }))).toBe(
+      "install-hint",
+    );
   });
 
   it("shows nothing installed or in the desktop app, nor without an API elsewhere", () => {

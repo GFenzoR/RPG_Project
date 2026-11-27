@@ -84,11 +84,13 @@ export type AppModeEvent =
   | { kind: "fullscreenAsked"; on: boolean };
 
 export function initialAppMode(env: PlatformEnv, memory: AppModeMemory): AppModeState {
+  const platform = detectPlatform(env);
   return {
-    platform: detectPlatform(env),
+    platform,
     installed: runsInstalled(env),
-    // The Tauri window is the desktop app's business; an iPhone has no API for pages.
-    fullscreenApi: env.fullscreenApi && !env.tauri,
+    // The Tauri window is the desktop app's business. An iPhone has no fullscreen for
+    // pages (only for video), whatever its WebKit answers: never a button that does nothing.
+    fullscreenApi: env.fullscreenApi && !env.tauri && platform !== "iphone",
     promptReady: false,
     fullscreen: false,
     memory,

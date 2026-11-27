@@ -346,9 +346,20 @@ const SCENES = [
   "mobilebattle", // the battle section in the sheet (or drawer)
   "mobilenopad", // without the direction pad (Options): the console is the buttons alone
   "mobilemap", // the minimap unfolded, with the tracked objective
+  // Lote 21 (docs/15): the touch controls in their other shapes.
+  "touchstick", // the analog stick instead of the pad
+  "touchleft", // left-handed and large: the buttons at the left thumb, the stick at the right
 ];
 /** Scenes of the mobile HUD that are the base scene plus taps of this script. */
-const MOBILE_TAPS = ["mobilemenu", "mobilechat", "mobilebattle", "mobilenopad", "mobilemap"];
+const MOBILE_TAPS = [
+  "mobilemenu",
+  "mobilechat",
+  "mobilebattle",
+  "mobilenopad",
+  "mobilemap",
+  "touchstick",
+  "touchleft",
+];
 
 mkdirSync(shots, { recursive: true });
 const browser = await chromium.launch();
@@ -437,7 +448,15 @@ try {
         : scene;
       // docs/17 UI-3: the interface at 125 % with the text at 115 %.
       const scales =
-        scene === "scale" ? "&ui=1.25&text=1.15" : scene === "mobilenopad" ? "&pad=0" : "";
+        scene === "scale"
+          ? "&ui=1.25&text=1.15"
+          : scene === "mobilenopad"
+            ? "&pad=0"
+            : scene === "touchstick"
+              ? "&stick=1"
+              : scene === "touchleft"
+                ? "&stick=1&mirror=1&size=large"
+                : "";
       await page.goto(
         `http://ui.preview/preview/?scene=${sceneParam}&mapx=${mapx}&mapy=${mapy}${scales}`,
       );

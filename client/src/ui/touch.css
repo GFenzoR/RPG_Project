@@ -508,12 +508,16 @@ body.inspecting [data-testid="game-canvas"] {
   left: 8px;
   bottom: 12px;
 }
+/* On the desktop screen the status tray stands over the life orb: the buttons go above it,
+   and the pad takes the corner beside the zoom buttons. */
 .game[data-mirror][data-ui="windows"] .touch-cluster {
   left: 8px;
+  bottom: calc(var(--bar-px) + 96px);
 }
 .game[data-mirror][data-ui="windows"][data-touch] .touch-pad-dock {
   left: auto;
   right: 60px;
+  bottom: calc(var(--bar-px) + 12px);
 }
 .game[data-mirror][data-ui="mobile"][data-cluster] .chat-glance {
   left: calc(2 * var(--touch-btn) + 24px);
@@ -667,4 +671,12 @@ body.inspecting [data-testid="game-canvas"] {
   align-items: center;
   background: var(--ui-stone-800);
   box-shadow: var(--ui-frame-shadow);
+}
+
+/* The corner of the login and character screens holds more now: it wraps instead of
+   leaving the screen of a phone. */
+.corner {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100vw - 1.5rem);
 }
