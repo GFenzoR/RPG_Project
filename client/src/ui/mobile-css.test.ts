@@ -81,7 +81,8 @@ describe("the mobile style sheets", () => {
     const at = touchCss.indexOf("@media (max-width: 640px), (max-height: 500px) {");
     expect(at).toBeGreaterThanOrEqual(0);
     const block = touchCss.slice(at, touchCss.indexOf("\n}\n", at));
-    expect(block).toMatch(/\.corner \{\s*position:\s*static/);
+    // `div.corner`: it must beat client.css's `.corner { position: fixed }`, loaded later.
+    expect(block).toMatch(/div\.corner \{\s*position:\s*static/);
     expect(block).toContain("env(safe-area-inset-top, 0px)");
     expect(touchCss).toMatch(
       /\.corner button,\s*\.corner select,\s*\.corner summary \{\s*min-height:\s*44px/,

@@ -159,8 +159,18 @@ function collect(arg: { min: number; insets: Insets | null; covered: boolean }):
         });
     }
     if (insets) {
-      const under =
-        cy < insets.top || cy > vh - insets.bottom || cx < insets.left || cx > vw - insets.right;
+      const side = cx < insets.left || cx > vw - insets.right;
+      let band = cy < insets.top || cy > vh - insets.bottom;
+      // A page taller than the screen (the character list on a phone on its side) scrolls
+      // what it holds out of the band: only what stays put there (fixed, or a page that
+      // does not scroll) is under the notch or the home bar for good.
+      if (band && !side && document.documentElement.scrollHeight > vh + 1) {
+        let pinned = false;
+        for (let p: HTMLElement | null = el; p; p = p.parentElement)
+          if (/(fixed|sticky)/.test(getComputedStyle(p).position)) pinned = true;
+        if (!pinned) band = false;
+      }
+      const under = side || band;
       if (under)
         out.push({
           kind: "unsafe",

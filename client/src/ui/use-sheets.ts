@@ -33,6 +33,13 @@ export function useSheets(open: SheetsOpen, closers: SheetClosers, active: boole
   const ignore = useRef(0);
   const closersRef = useRef(closers);
   closersRef.current = closers;
+  // The sheets open at the last render. The stack follows in an effect, after the paint:
+  // a key or a back that arrives in between (Escape right after the key that opened the
+  // sheet) reads the top from here, or it would find the stack of before and do nothing.
+  const liveRef = useRef<SheetsOpen | undefined>(undefined);
+  liveRef.current = active ? open : undefined;
+  const top = (): SheetKind | undefined =>
+    topSheet(liveRef.current ? syncStack(stack.current, liveRef.current) : []);
   const key = SHEET_KINDS.map((k) => (open[k] ? "1" : "0")).join("");
 
   // Keep the History entries equal to the stack's depth.
@@ -98,8 +105,8 @@ export function useSheets(open: SheetsOpen, closers: SheetClosers, active: boole
       // After the game's own Escape handling (a menu, an aim, a station): a timeout.
       setTimeout(() => {
         if (e.defaultPrevented) return;
-        const top = topSheet(stack.current);
-        if (top) closersRef.current[top]?.();
+        const k = top();
+        if (k) closersRef.current[k]?.();
       }, 0);
     };
     let start: { x: number; y: number } | undefined;
@@ -111,8 +118,8 @@ export function useSheets(open: SheetsOpen, closers: SheetClosers, active: boole
       const s = start;
       start = undefined;
       if (!s || !isCloseSwipe(e.clientX - s.x, e.clientY - s.y)) return;
-      const top = topSheet(stack.current);
-      if (top) closersRef.current[top]?.();
+      const k = top();
+      if (k) closersRef.current[k]?.();
     };
     window.addEventListener("popstate", onPop);
     window.addEventListener("keydown", onKey);

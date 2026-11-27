@@ -200,6 +200,12 @@
   font-size: 0.6rem;
   line-height: 1.05;
 }
+/* A long word of a spell's name ("demoledor") was 2 px wider than the slot on a tablet and
+   lost its last letter: tighter, and broken rather than cut if it still does not fit. */
+.game[data-ui="mobile"] .hotbar .spell {
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
 .game[data-ui="mobile"] .hotbar .page,
 .game[data-ui="mobile"] .hotbar .edit {
   width: 44px;
