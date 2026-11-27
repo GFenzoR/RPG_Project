@@ -1,0 +1,7 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/title/cave.webp
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-27
+# Modo: Hydrogen
+
+Wide 16:9 background illustration for the title screen of an original top-down fantasy role-playing game set on a misty archipelago. Detailed dark-fantasy pixel art with a limited muted palette (deep teal sea, slate stone, warm amber lantern light), crisp pixels, no blur, no text, no letters, no logo, no watermark, no user interface. Leave the centre-left area calm and dark so a logo and menu buttons can be placed over it. Scene: view from inside a cave mouth looking out at a chain of islands at dawn, glowing mushrooms and roots framing the edges, an old stone stair descending to a small boat, a forge glow on a far volcanic island.

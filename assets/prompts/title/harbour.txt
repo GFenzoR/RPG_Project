@@ -1,0 +1,7 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/title/harbour.webp
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-27
+# Modo: Hydrogen
+
+Wide 16:9 background illustration for the title screen of an original top-down fantasy role-playing game set on a misty archipelago. Detailed dark-fantasy pixel art with a limited muted palette (deep teal sea, slate stone, warm amber lantern light), crisp pixels, no blur, no text, no letters, no logo, no watermark, no user interface. Leave the centre-left area calm and dark so a logo and menu buttons can be placed over it. Scene: a small harbour town at dusk seen from the sea, a stone lighthouse with a lit lantern on a cliff, wooden piers with moored fishing boats, gulls, distant islands with a smoking volcano on the horizon, heavy clouds.

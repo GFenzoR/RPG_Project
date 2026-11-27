@@ -483,6 +483,12 @@ Desde el 2026-11-17 el dueño permite arte y música generados con **su** cuenta
 - **Nada llega a `assets/` sin que alguien lo mire o lo escuche.** Todo sale primero a
   `build/gemini/` (no se commitea).
 
+Arte de pantalla completa (fondos de la pantalla de entrada, 2026-11-27): se pide con
+`gemini_web.py image`, se mira con Read, se convierte a WebP (calidad 90, 1376x768, bien bajo los
+300 KB) en `assets/title/<nombre>.webp`, se acredita con `credit.py <sidecar.json> --asset
+assets/title/<nombre>.webp` (fila en "Generado con IA") y se agrega a `TITLE_ART` de
+`client/src/state/title-art.ts`. No pasa por spritepack: `client/vite/title-art.ts` la sirve.
+
 Arte, de la hoja al sprite:
 1. `python tools/gemini/gemini_web.py image "<prompt>" --name wolf_walk_s [--ref assets/sprites/....png]`
    deja `build/gemini/art/wolf_walk_s.png` y su `.json`. Al prompt se le suman las reglas

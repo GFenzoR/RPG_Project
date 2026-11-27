@@ -147,7 +147,7 @@ animations:
   #
   # ---- single-frame monsters: hints for the procedural motion (ANI-5) -----------------------
   # facing: the side the drawing looks at (mirrored to walk the other way); flying: hovers.
-  creatures/thieving_gull: { body: flyer, facing: left, flying: true }
+  # (none today: the gull, the last, has its sheet below.)
 
   # ---- sprite engine (tools/spritegen/src/engine, docs/17 "Motor de sprites") ---------------
   # Frames rendered from a model in all four facings (no mirror, no facing), 64x64 with the
@@ -162,6 +162,7 @@ animations:
   # Frames from files, assets/sprites/<sprite>/<action>_<dir>_<n>.png: south, north and west
   # drawn, east the west ones mirrored (ANI-1); death only facing south. bc: feet on the
   # tile; ellipse: the renderer's contact shadow (the frames paint none). ms: per frame.
+  creatures/thieving_gull: { body: flyer, mirror: true, anchor: bc, shadow: ellipse, flying: true, ms: { idle: 300, attack: 100, death: 200 } }
   creatures/gloom_bat: { body: flyer, mirror: true, anchor: bc, shadow: ellipse, flying: true, ms: { idle: 300, attack: 100, death: 200 } }
   creatures/mire_toad: { body: hop, stride: 32, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 200 } }
   creatures/moss_spider: { body: many_legs, stride: 16, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }

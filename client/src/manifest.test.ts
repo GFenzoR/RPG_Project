@@ -5,6 +5,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { MANIFEST_TEMPLATE, gameName, renderManifest } from "../vite/brand.ts";
+import { repoRoot } from "../vite/content.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(here, "..", "public");
@@ -26,8 +28,11 @@ interface Manifest {
   icons: ManifestIcon[];
 }
 
+// The file is a template (client/manifest.webmanifest.in): vite/brand.ts fills the game's name
+// in, from the i18n key client.title, and serves it at /manifest.webmanifest.
+const root = repoRoot();
 const manifest = JSON.parse(
-  readFileSync(join(publicDir, "manifest.webmanifest"), "utf8"),
+  renderManifest(readFileSync(join(root, MANIFEST_TEMPLATE), "utf8"), gameName(root)),
 ) as Manifest;
 
 describe("manifest.webmanifest", () => {

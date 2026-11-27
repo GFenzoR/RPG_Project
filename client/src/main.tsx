@@ -52,6 +52,7 @@ import type { MusicState } from "./audio/engine.ts";
 import { loadPrefs } from "./audio/prefs.ts";
 import { optionStorage } from "./state/option-storage.ts";
 import "./ui/client.css";
+import "./ui/title-art.css";
 // Installable web client (T5.6): registers the service worker on import (production only).
 import "./pwa.ts";
 
@@ -275,6 +276,7 @@ function Root(): JSX.Element {
       t={t}
       locale={lang}
       languagePicker={picker}
+      reducedMotion={reducedMotion}
       settings={{
         language: language(),
         sound: <SoundOptions key={syncs} t={t} audio={audio} storage={storage} />,

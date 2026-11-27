@@ -18,6 +18,8 @@ client/
   src/i18n/              carga de textos desde i18n/
   vite/fonts.ts          plugin: fuentes OFL recortadas a woff2 en /fonts/
   vite/credits.ts        créditos de /credits desde assets/CREDITS.md y los CREDITS.csv
+  vite/title-art.ts      plugin: los fondos de la pantalla de entrada (assets/title/) en /title/
+  vite/brand.ts          plugin: el nombre del juego (clave client.title) en los HTML y el manifest
   e2e/                   Playwright: tests y screenshots (y e2e/ui-preview.ts, un script)
 ```
 
@@ -1000,7 +1002,7 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
 - Con pestañas o cajón, `.side-scroll` es `display: contents` y el log del sistema va
   arriba de la pestaña del chat. El escritorio ya no tiene columna lateral (ver "Notas de
   la UI oscura").
-- **PWA:** `public/manifest.webmanifest`, íconos placeholder (`make pwa-icons`,
+- **PWA:** `manifest.webmanifest.in` (plantilla con el nombre; `vite/brand.ts`), íconos placeholder (`make pwa-icons`,
   `tools/spritegen/src/pwa-icons.ts`), `src/sw.ts` (emitido como `/sw.js` por
   `vite.config.ts`) con la política pura de `sw/policy.ts`: nunca `/api`, `/ws`,
   `/healthz`, la música (`/audio/sounds/music/`, docs/07 "Audio") ni otros orígenes;
@@ -2231,3 +2233,12 @@ de estados y placa del nombre").
   sector por pedido; un delta no.
 - Seguir una quest: `Game.trackQuest` (botón `quest-track` del diario), recordado por
   personaje en `localStorage` `rpg.track` y reenviado tras cada `Welcome`.
+
+## Pantalla de entrada (2026-11-27; docs/17 "Hecho: la pantalla de entrada")
+- `ui/TitleBackdrop.tsx` + `state/title-art.ts` (puro, con tests) + `ui/title-art.css`: fondos
+  rotativos detrás del login, el registro y los personajes; `App` le pasa `reducedMotion` (la
+  opción del juego; el sistema lo lee el propio componente). Test id `title-art`
+  (`data-rotates`). `body:has(> #app .title-art)` apaga el fondo del body para que se vea.
+- El nombre del juego es la clave `client.title`: nunca el texto en el código ni en los HTML
+  (`{{game-name}}`, `vite/brand.test.ts` lo vigila). Qué más hay que tocar para renombrar: docs/17.
+- E2E: ningún selector cambió (el nombre sigue siendo `.brand`, `aria-hidden`); no se corrió.

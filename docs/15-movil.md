@@ -13,7 +13,7 @@ Lo marcado con 👤 necesita cuentas, pagos o máquinas del dueño: Claude no pu
 ## PWA (lo que ya funciona)
 
 ### Qué se instala
-- `client/public/manifest.webmanifest`: nombre "Neque's Realm", `display: fullscreen` con
+- `client/manifest.webmanifest.in` (plantilla; `client/vite/brand.ts` pone el nombre del juego desde la clave `client.title` y la sirve como `/manifest.webmanifest`): nombre "Neque's Realm", `display: fullscreen` con
   `display_override: ["fullscreen", "standalone"]` (lote 21: sin interfaz del navegador),
   `orientation: any` (vertical y horizontal), `start_url` y `id` `/play/` (abre el juego,
   no la landing), color de fondo y de tema `#090807` (el `--ui-void` del tema gótico).

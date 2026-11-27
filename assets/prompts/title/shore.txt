@@ -1,0 +1,7 @@
+# Prompt enviado a Gemini (app web, cuenta del dueño). No nombra otros juegos, artistas ni obras.
+# Assets: assets/title/shore.webp
+# Herramienta: Gemini web app (owner's account), gemini_web.py
+# Fecha: 2026-11-27
+# Modo: Hydrogen
+
+Wide 16:9 background illustration for the title screen of an original top-down fantasy role-playing game set on a misty archipelago. Detailed dark-fantasy pixel art with a limited muted palette (deep teal sea, slate stone, warm amber lantern light), crisp pixels, no blur, no text, no letters, no logo, no watermark, no user interface. Leave the centre-left area calm and dark so a logo and menu buttons can be placed over it. Scene: a lone traveller with a backpack and a lantern standing on a rocky shore at night, looking across the water at an island with ancient ruins and a tall forest, a wrecked ship hull on the rocks, moonlight through clouds.

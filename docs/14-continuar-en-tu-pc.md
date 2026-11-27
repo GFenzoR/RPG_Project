@@ -103,6 +103,9 @@ el punto 5:
   mal puesta en el test, a veces del cliente): baja el artefacto `playwright-report`, mira
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
+## Pantalla de entrada (2026-11-27, rama `feat/title-art`)
+Tres fondos de Gemini que rotan detrás del login y el nombre del juego en letra gótica (docs/17 "Hecho: la pantalla de entrada"). El nombre sale de la clave `client.title`; docs/17 lista lo que un cambio de nombre toca a mano. Sin verificar en E2E ni en un teléfono real.
+
 ## Pendientes conocidos (no bloquean)
 
 - **Móvil, QA (lote 21, `feat/mobile-qa`; `docs/15` "QA móvil"):** la auditoría táctil
@@ -193,6 +196,10 @@ el punto 5:
   - **Que el dueño lo mire jugando.** Las zancadas son estimaciones sobre los 4 frames de
     cada monstruo. Si alguno todavía patina (zancada muy larga) o pedalea (muy corta), se
     cambia su `stride` y se corre `make sprites`; no hay código que tocar.
+  - **La gaviota ya tiene su hoja (2026-11-27, `feat/title-art`):** `creatures/thieving_gull/`
+    (Gemini, 64x64): vuelo sur, norte y oeste, quieto, picotazo de perfil y muerte al sur. Sus
+    cadáveres salen ahora del clip (derivado, dos cuerpos). Lo que sigue más abajo sobre su
+    imagen única y su vuelco ya no aplica. Revisar en el juego que vuele al tamaño de antes.
   - **Frames dibujados que faltan.** La gaviota (`creatures/thieving_gull`) sigue con una
     sola imagen, parada y con las alas plegadas: flota, y "bate" achatándose 1 px. Necesita
     un ciclo de vuelo dibujado (3 direcciones, 4 frames), con spritegen o con el Gemini del

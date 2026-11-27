@@ -1,7 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import { repoRoot, rpgContent } from "./vite/content.ts";
+import { rpgBrand } from "./vite/brand.ts";
 import { rpgFonts } from "./vite/fonts.ts";
+import { rpgTitleArt } from "./vite/title-art.ts";
 
 const dir = (rel: string): string => fileURLToPath(new URL(rel, import.meta.url));
 // The game server (HTTP API + /ws). The dev server proxies both, so the page, the API
@@ -23,7 +25,13 @@ const e2eHooks = (command: string): boolean =>
 
 export default defineConfig(({ command }) => ({
   // The UI fonts (docs/17 UI-3) are subset to woff2 and served at /fonts/ (vite/fonts.ts).
-  plugins: [rpgContent(), rpgFonts(repoRoot())],
+  plugins: [
+    rpgContent(),
+    rpgFonts(repoRoot()),
+    // The title screen's pictures (assets/title/) and the game's name for the files without t().
+    rpgTitleArt(repoRoot()),
+    rpgBrand(repoRoot()),
+  ],
   // Two pages (T4.3): the public website at / (index.html: landing, /highscores, /news)
   // and the game at /play/ (play/index.html). The desktop app opens play/index.html.
   // The service worker (src/sw.ts) is a third entry with a fixed name at the root

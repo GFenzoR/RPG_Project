@@ -12,11 +12,8 @@ import { parseManifest } from "./manifest.ts";
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const FRAME = /^(idle|walk|attack|death)_([nesw])_([0-9]+)\.png$/;
 
-/**
- * Monsters still drawn as one frame with the procedural motion of ANI-5. The gull is
- * spritegen art the owner has not decided to swap for its Gemini sheet (docs/14).
- */
-const SINGLE_FRAME = new Set(["creatures/thieving_gull"]);
+/** Monsters still drawn as one frame with the procedural motion of ANI-5: none since the gull got its sheet. */
+const SINGLE_FRAME = new Set<string>();
 
 /** sprite path of every monster in data/monsters. */
 function monsterSprites(): Map<string, string> {
