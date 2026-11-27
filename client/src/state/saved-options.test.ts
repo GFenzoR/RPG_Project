@@ -75,6 +75,7 @@ const everything = (): MemoryStorage =>
     "rpg.chat-opacity": "65",
     "rpg.hotkeys.guardian": JSON.stringify(["arc_bolt", null, "ember_ring"]),
     "rpg.track": JSON.stringify({ "Ana María": "bounty_crawlers" }),
+    "rpg.itemkeys": JSON.stringify({ "Ana María": [64, 0, 68, 0, 0, 0] }),
     "rpg.touchPad": "on",
     "rpg.zoom": "3",
     "rpg.minimap": JSON.stringify({ open: false, scale: 4 }),
@@ -188,6 +189,7 @@ describe("docFromStorage and applyDoc", () => {
       chat_opacity: 65,
       hotkeys: { guardian: ["arc_bolt", null, "ember_ring"] },
       track: { "Ana María": "bounty_crawlers" },
+      item_keys: { "Ana María": [64, 0, 68, 0, 0, 0] },
       devices: {
         desktop: {
           touch_pad: true,
@@ -223,6 +225,7 @@ describe("docFromStorage and applyDoc", () => {
       "rpg.hotkeys.<b>": "[]",
       "rpg.hotkeys.guardian": JSON.stringify(["javascript:alert(1)", "arc_bolt"]),
       "rpg.track": JSON.stringify({ "<i>x</i>": "q", Ana: "Not An Id" }),
+      "rpg.itemkeys": JSON.stringify({ "<i>x</i>": [1], Ana: [70000, -1, 1.5, "x", 68] }),
       "rpg.zoom": "0",
       "rpg.minimap": JSON.stringify({ open: "yes", scale: 2 }),
       "rpg.windows": JSON.stringify({ v: 2, z: [], win: {}, others: {} }),
@@ -232,6 +235,7 @@ describe("docFromStorage and applyDoc", () => {
       v: 1,
       hotkeys: { guardian: [null, "arc_bolt"] },
       track: {},
+      item_keys: { Ana: [0, 0, 0, 0, 68] },
     });
     const target = new MemoryStorage();
     const hostile = {

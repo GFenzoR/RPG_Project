@@ -10,6 +10,7 @@ import type { ClientContent } from "../content-types.ts";
 import type { ActionMenuView, Game } from "../game.ts";
 import type { Translate } from "../i18n/i18n.ts";
 import { halfStack, splitCount } from "../state/items.ts";
+import { ITEM_HOTKEY_COUNT, itemKeyLabel } from "../state/item-hotkeys.ts";
 import { instanceName } from "../state/item-name.ts";
 import { corpseSprite } from "../state/corpse-art.ts";
 import type { ItemRef } from "../state/items.ts";
@@ -168,7 +169,7 @@ export function ActionMenu(props: {
   menu: ActionMenuView;
   game:
     | (Pick<Game, "menuChoose" | "closeMenu" | "menuPress" | "menuPressed"> &
-        Partial<Pick<Game, "menuSplit" | "itemIcon" | "spriteIcon">>)
+        Partial<Pick<Game, "menuSplit" | "menuHotkey" | "itemIcon" | "spriteIcon">>)
     | undefined;
   /** The screen size (window.innerWidth/innerHeight; fixed values in tests). */
   viewport: { width: number; height: number };
@@ -298,6 +299,29 @@ export function ActionMenu(props: {
                   {t("client.touch.split_ok")}
                 </button>
               </form>
+            </details>
+          ) : kind === "hotkey" ? (
+            // "Assign to a quick key": which of the six slots (docs/02 "Teclas rapidas de
+            // items"). Buttons of the touch size, one per slot.
+            <details key={kind} class="touch-menu-split touch-menu-hotkey">
+              <summary role="menuitem" class="touch-menu-action" data-action="hotkey">
+                {t("client.touch.action.hotkey")}
+              </summary>
+              <div class="touch-menu-slots" role="group" aria-label={t("client.itemkeys.pick")}>
+                {Array.from({ length: ITEM_HOTKEY_COUNT }, (_, slot) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    data-hotkey-slot={slot + 1}
+                    aria-label={t("client.itemkeys.assign", { key: itemKeyLabel(slot) })}
+                    onClick={(e) => {
+                      if (counts(e)) game?.menuHotkey?.(slot);
+                    }}
+                  >
+                    {itemKeyLabel(slot)}
+                  </button>
+                ))}
+              </div>
             </details>
           ) : (
             <button

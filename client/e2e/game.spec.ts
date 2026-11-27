@@ -4477,3 +4477,79 @@ test("wind: crowns stand still, a gust bends them over still trunks, reduced mot
   await expect(page.getByTestId("death-screen")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+// Item hotkeys (docs/02 "Teclas rapidas de items"): a ship biscuit dragged from the backpack onto
+// slot 1 of the bar is used with the key 1 even after the backpack's window is closed: the server
+// finds it, the slot's count goes down and the character eats. Not run by the author of the
+// feature (no Docker there): it is the checklist of docs/14 "Teclas rápidas de items".
+test("item hotkeys: drag a biscuit onto slot 1, press 1 with the backpack closed, the count goes down", async ({
+  page,
+  playwright,
+}) => {
+  const errors: string[] = [];
+  const guardian = await newGuardian(playwright, "Hotkeys");
+  // Puerto's temple square, a backpack (item 48) with five ship biscuits (item 27) in it.
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'puerto', pos_x = 3171, pos_y = 6381, pos_z = 7 WHERE name = '${guardian.name}';
+     WITH bp AS (
+       INSERT INTO inventory_items (character_id, slot, item_id)
+       SELECT id, 3, 48 FROM characters WHERE name = '${guardian.name}' RETURNING id, character_id)
+     INSERT INTO inventory_items (character_id, container_id, slot, item_id, count)
+     SELECT character_id, id, 0, 27, 5 FROM bp;`,
+  ]);
+  await enterGame(page, guardian.email, guardian.password);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  await arrived(page, 3171, 6381);
+
+  const docked = page
+    .getByTestId("inventory")
+    .locator('[data-container-item="backpack"][data-docked]');
+  await expect(docked).toBeVisible();
+  const biscuit = docked.locator('[data-item="ship_biscuit"]');
+  await expect(biscuit).toBeVisible();
+  const slot1 = page.getByTestId("itemkeys").locator('[data-itemkey="1"]');
+  await expect(slot1).toBeVisible();
+  // The slot is empty and says so.
+  await expect(slot1.getByRole("button")).toHaveAccessibleName(/vacía/);
+
+  // Drag it from the backpack onto slot 1 (the real pointer: the game's own drag).
+  const from = await biscuit.boundingBox();
+  const to = await slot1.boundingBox();
+  if (!from || !to) throw new Error("no drag points");
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+  // The server counts all that the character carries (the first ItemCounts after the assignment).
+  await expect(page.getByTestId("itemkey-count-1")).toHaveText("5");
+  await shot(page, "item-hotkeys-01-assigned");
+
+  // It is remembered for the character (the saved option) and the backpack's window is closed:
+  // the server still finds the biscuit.
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem("rpg.itemkeys") ?? "{}")),
+  ).toMatchObject({ [guardian.name]: [27, 0, 0, 0, 0, 0] });
+  await docked.getByRole("button", { name: /Cerrar/ }).click();
+  await expect(docked).toBeHidden();
+
+  // The key 1 uses one: the count goes down and the effect happens (the log says it).
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("itemkey-count-1")).toHaveText("4");
+  await expect(page.getByTestId("game-log")).toContainText("Comiste");
+  await shot(page, "item-hotkeys-02-used");
+
+  // With a dialog open the digits are the dialog's: pressing 1 uses nothing here (no dialog is
+  // opened by this test; the unit test of Game covers it), and a second press right after the
+  // first is the shared one-second cooldown of items: the count stays.
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("itemkey-count-1")).toHaveText("4");
+  await page.waitForTimeout(1200);
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("itemkey-count-1")).toHaveText("3");
+  expect(errors).toEqual([]);
+});

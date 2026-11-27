@@ -164,6 +164,17 @@ export function baseScene(content: ClientContent, now: number): Scene {
   ui.target = 11;
   ui.hotkeys = Array.from({ length: 12 }, (_, i) => content.spells[i]?.id);
   ui.hotkeys[5] = undefined;
+  // docs/02 "Teclas rapidas de items": grilled fish, two draughts (the mana one all used up:
+  // greyed out with a 0) and a rune; the last two slots empty.
+  ui.itemKeys = ["grilled_fish", "health_draught", "mana_draught", "arc_rune", "", ""].map((id) =>
+    id ? itemNumber(content, id) : 0,
+  );
+  ui.itemCounts = new Map([
+    [itemNumber(content, "grilled_fish"), 12],
+    [itemNumber(content, "health_draught"), 3],
+    [itemNumber(content, "mana_draught"), 0],
+    [itemNumber(content, "arc_rune"), 8],
+  ]);
   ui.chat = [
     {
       kind: MessageKind.SAY,
@@ -722,6 +733,23 @@ export function withHeld(content: ClientContent, s: Scene): Scene {
     },
   };
   return { ui, name: "inventory" };
+}
+
+/**
+ * docs/02 "Teclas rapidas de items": a health draught of the pockets dragged over the bar: the
+ * slots glow gold (it takes it). The last use was the second slot (its flash).
+ */
+export function withItemKeyDrag(content: ClientContent, s: Scene): Scene {
+  const ui: GameUi = {
+    ...s.ui,
+    dragging: {
+      loc: { kind: "pocket", index: 0 },
+      itemId: itemNumber(content, "health_draught"),
+      stackIndex: 0,
+      count: 3,
+    },
+  };
+  return { ui, name: "itemkeys" };
 }
 
 /**

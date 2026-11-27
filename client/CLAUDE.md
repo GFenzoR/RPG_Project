@@ -2242,3 +2242,25 @@ de estados y placa del nombre").
 - El nombre del juego es la clave `client.title`: nunca el texto en el código ni en los HTML
   (`{{game-name}}`, `vite/brand.test.ts` lo vigila). Qué más hay que tocar para renombrar: docs/17.
 - E2E: ningún selector cambió (el nombre sigue siendo `.brand`, `aria-hidden`); no se corrió.
+## Notas de las teclas rápidas de items (docs/02, rama `feat/item-hotkeys`)
+- `state/item-hotkeys.ts` (puro, con tests): `ITEM_HOTKEY_COUNT` (6), `itemHotkeySlot` (Digit1-6 o
+  Numpad1-6), `hotkeyUsable` (consumible o runa; nunca `fixed`, contenedor ni `useWith`),
+  `assignKey`/`swapKeys`/`trackedTypes`, `slotView` (el total y si queda gris) y
+  `loadItemKeys`/`saveItemKeys` (`rpg.itemkeys`: `{nombre del personaje: [6 ids, 0 = vacío]}`,
+  opción guardada `item_hotkeys` → campo `item_keys` del documento de la cuenta; la clave
+  `session` `item_hotkeys_tracking` declara el `SetItemHotkeys`).
+- `Game`: `itemKeys` se carga al llegar el `Welcome` (hace falta el nombre) y manda
+  `SetItemHotkeys` con los tipos; `setItemKey`/`swapItemKeys`/`useItemKey`/`useItemKeyTap`/
+  `pressItemKey`/`menuHotkey`/`itemCooldown`. `GameUi.itemKeys`, `itemCounts` (de `ItemCounts`,
+  `WorldState.itemCounts`) e `itemUse` (el destello). La tecla 1–6 va después del bloque del
+  diálogo de `onKeyDown` (el diálogo se lleva los dígitos) y de `typingInField`. Una runa que apunta
+  (`spell.aimsAtPlayer`) deja `Pending { kind: "itemType" }` y el clic manda `UseItemType` con su
+  objetivo (`resolveClick`: `typeOnCreature`/`typeOnTile`). El soltar de un arrastre o de un item
+  elegido sobre un `[data-drop="itemkey"]` asigna (`itemKeyAt`); la casilla misma, arrastrada
+  afuera, se vacía (`pressItemKey`; el clic que sigue a un arrastre no usa: `keyDragged`).
+- `ui/ItemHotbar.tsx` (`place`: `bar`, `console` o `row`): el botón de cada casilla lleva
+  `data-itemkey`, `data-testid="itemkey-count-<n>"`, `data-none`, la ficha (`data-tip-item`) y
+  `tapProps`. Lugares: `HudBar` (`itemkeys`), la `.mconsole-items` de la consola vertical y la
+  `.mbar-items` de la barra apaisada (`MobileBar.itemkeys`). `ActionKind` suma `hotkey` (solo el
+  menú de un item del DOM; `ItemFacts.hotkey`).
+- Vista previa: la escena `itemkeys` (`withItemKeyDrag`); el stub de `Game` responde `itemCooldown`.

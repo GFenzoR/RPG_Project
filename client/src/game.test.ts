@@ -13,6 +13,8 @@ import {
   CreatureLookSchema,
   CreatureSchema,
   TileUpdateSchema,
+  DialogOpenSchema,
+  ItemCountsSchema,
   PartyAction,
   create,
 } from "@rpg/protocol";
@@ -339,5 +341,164 @@ describe('Game party invite by name (docs/02 "Grupos")', () => {
     game.partyInvitePrompt(false);
     expect(sent).toEqual([]);
     expect(last?.partyInviting).toBe(false);
+  });
+});
+
+describe('Game item hotkeys (docs/02 "Teclas rapidas de items")', () => {
+  const potion: ItemDef = {
+    ...base,
+    id: "potion",
+    stackable: true,
+    consumable: { healHp: 40, healMp: 0, foodMs: 0 },
+  };
+  const itemContent = {
+    ...content,
+    items: {
+      ...content.items,
+      10: potion,
+      11: { ...base, id: "sword", weapon: { type: "sword", attack: 10, defense: 5, hands: 1 } },
+      12: { ...base, id: "heal_rune", rune: { spell: "heal_other", charges: 3, magicLevel: 1 } },
+      13: { ...base, id: "bolt_rune", rune: { spell: "bolt", charges: 3, magicLevel: 1 } },
+    },
+    spells: [
+      { id: "heal_other", aimsAtPlayer: true, group: "heal", mana: 0, level: 1, vocations: [] },
+      { id: "bolt", aimsAtPlayer: false, group: "attack", mana: 0, level: 1, vocations: [] },
+    ],
+    inventory: { useCooldownMs: 1000 },
+  } as unknown as ClientContent;
+  let last: GameUi | undefined;
+  let game: InstanceType<typeof Game>;
+  let keydown: (e: Partial<KeyboardEvent>) => void;
+
+  const press = (code: string, extra: Partial<KeyboardEvent> = {}): void =>
+    keydown({ code, repeat: false, preventDefault: vi.fn(), target: null, ...extra });
+
+  beforeEach(() => {
+    sent.length = 0;
+    last = undefined;
+    vi.stubGlobal("window", {
+      addEventListener: (type: string, fn: typeof keydown) => {
+        if (type === "keydown") keydown = fn;
+      },
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal("document", { body: { classList: { toggle: vi.fn() } } });
+    game = new Game({
+      host: {} as HTMLElement,
+      content: itemContent,
+      t: (key) => key,
+      locale: "es",
+      sessionToken: "token",
+      vocation: "guardian",
+      entered: vi.fn(),
+      ended: vi.fn(),
+      update: (ui) => {
+        last = ui;
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("assigns only usable items, and tells the server the types it must count", () => {
+    game.setItemKey(0, 10);
+    expect(last?.itemKeys).toEqual([10, 0, 0, 0, 0, 0]);
+    expect(sent.at(-1)).toMatchObject({ case: "setItemHotkeys", value: { itemIds: [10] } });
+    sent.length = 0;
+    game.setItemKey(1, 11); // a sword
+    game.setItemKey(2, 99); // unknown
+    game.setItemKey(9, 10); // no such slot
+    expect(sent).toEqual([]);
+    expect(last?.itemKeys).toEqual([10, 0, 0, 0, 0, 0]);
+    game.setItemKey(3, 10); // the same type moves
+    expect(last?.itemKeys).toEqual([0, 0, 0, 10, 0, 0]);
+    game.swapItemKeys(3, 1);
+    expect(last?.itemKeys).toEqual([0, 10, 0, 0, 0, 0]);
+    game.setItemKey(1, 0);
+    expect(sent.at(-1)).toMatchObject({ case: "setItemHotkeys", value: { itemIds: [] } });
+  });
+
+  it("uses the type by key without saying where it is", () => {
+    game.setItemKey(1, 10);
+    sent.length = 0;
+    press("Digit2");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ case: "useItemType", value: { itemId: 10 } });
+    press("Digit2", { repeat: true }); // a held key does not repeat
+    press("Digit3"); // empty slot
+    press("Digit7"); // not a slot
+    press("Digit2", { ctrlKey: true });
+    press("Digit2", { shiftKey: true });
+    expect(sent).toHaveLength(1);
+    game.useItemKeyTap(1); // a tap on the slot is the same use
+    expect(sent).toHaveLength(2);
+  });
+
+  it("leaves the digits to an open dialog", () => {
+    game.setItemKey(0, 10);
+    deliver?.({
+      tick: 1n,
+      events: [
+        {
+          message: {
+            case: "dialogOpen",
+            value: create(DialogOpenSchema, {
+              dialogId: 1,
+              text: { key: "npc.hello", params: [] },
+              options: [{ optionId: 1, text: { key: "opt.one", params: [] } }],
+            }),
+          },
+        },
+      ],
+    });
+    sent.length = 0;
+    press("Digit1");
+    expect(sent.some((i) => i.case === "useItemType")).toBe(false);
+  });
+
+  it("an aimed rune waits for the click and goes by type with its target", () => {
+    game.setItemKey(0, 12);
+    game.setItemKey(1, 13);
+    sent.length = 0;
+    press("Digit1");
+    expect(sent).toEqual([]); // aiming
+    (game as unknown as { click(t: { creature: number }): void }).click({ creature: 77 });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      case: "useItemType",
+      value: { itemId: 12, to: { target: { case: "creatureId", value: 77 } } },
+    });
+    sent.length = 0;
+    press("Digit2"); // not aimed: at once, on the current target
+    expect(sent[0]).toMatchObject({ case: "useItemType", value: { itemId: 13 } });
+    expect(sent[0]?.value).not.toHaveProperty("to");
+  });
+
+  it("shades a consumable's slot for the shared cooldown", () => {
+    game.setItemKey(0, 10);
+    expect(game.itemCooldown(10, performance.now())).toBe(0);
+    press("Digit1");
+    const left = game.itemCooldown(10, performance.now());
+    expect(left).toBeGreaterThan(0.9);
+    expect(game.itemCooldown(10, performance.now() + 2000)).toBe(0);
+    expect(game.itemCooldown(11, performance.now())).toBe(0);
+  });
+
+  it("shows the totals the server sends", () => {
+    game.setItemKey(0, 10);
+    deliver?.({
+      tick: 2n,
+      events: [
+        {
+          message: {
+            case: "itemCounts",
+            value: create(ItemCountsSchema, { counts: [{ itemId: 10, count: 12 }] }),
+          },
+        },
+      ],
+    });
+    expect(last?.itemCounts.get(10)).toBe(12);
   });
 });

@@ -340,6 +340,7 @@ const SCENES = [
   "itemmenu",
   "inventory",
   "pockets",
+  "itemkeys",
   "inventoryfloat",
   "tooltip",
   "tooltipcoin",

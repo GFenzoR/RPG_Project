@@ -124,11 +124,11 @@
    on it, and under it the hotbar, the panel button and the menu. */
 .mobile-bar[data-flow="row"] {
   height: var(--m-row-h);
-  grid-template-columns: var(--m-orb-col) minmax(0, 1fr) auto var(--m-orb-col);
+  grid-template-columns: var(--m-orb-col) minmax(0, 1fr) auto auto var(--m-orb-col);
   grid-template-rows: 13px minmax(0, 1fr);
   grid-template-areas:
-    "life xp xp mana"
-    "life hot tools mana";
+    "life xp xp xp mana"
+    "life hot items tools mana";
 }
 .mobile-bar[data-flow="row"]::before {
   height: 5px;
@@ -257,6 +257,7 @@
 
 /* ---- The console of an upright screen: the pad and the section buttons -------------- */
 .mconsole {
+  flex-wrap: wrap;
   position: relative;
   z-index: 5;
   flex: none;
@@ -266,6 +267,37 @@
   padding: 2px var(--m-pad) var(--m-pad);
   /* The bar's stone goes on under it. */
   background: linear-gradient(transparent, rgb(0 0 0 / 0.35)), var(--ui-grain), var(--ui-stone-800);
+}
+/* The item hotkeys: a row of their own on top of the console, in reach of both thumbs. */
+.mconsole-items {
+  flex: 1 1 100%;
+  display: flex;
+  justify-content: center;
+}
+.game[data-ui="mobile"] .itemkeys {
+  gap: var(--m-gap);
+}
+.game[data-ui="mobile"] .itemkeys ol {
+  gap: var(--m-gap);
+}
+.game[data-ui="mobile"] .itemkeys li button,
+.game[data-ui="mobile"] .itemkeys li select {
+  width: 44px;
+  height: 44px;
+}
+.game[data-ui="mobile"] .itemkeys .edit {
+  width: 44px;
+  height: 44px;
+}
+/* On its side the item hotkeys are in the bar's one line, between the spell hotbar (which
+   pages) and the two buttons; the pencil waits for the console (drag or the menu assign). */
+.mobile-bar .mbar-items {
+  grid-area: items;
+  align-self: center;
+  margin-left: var(--m-gap);
+}
+.itemkeys[data-place="row"] .edit {
+  display: none;
 }
 .mconsole .touch-pad-dock {
   position: static;

@@ -1170,6 +1170,31 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
     con `creature_remains` (`CorpseItem`, `session/death.go` `playerCorpse`: huesos sobre
     un cuero); el muñeco del jugador tendido es un pendiente (docs/14).
 
+### Teclas rápidas de items (pedido del dueño, 2026-11-27)
+*"Una opción de poner items usables en hotkeys, aprovechando la barra de abajo: una sección de
+hotkeys para poner comida o pociones."* La barra de abajo tiene, junto a la de hechizos
+(F1–F12), **seis casillas de items con las teclas 1 a 6**.
+- **Una casilla es un tipo de item**, no una pila: comida, pociones y runas (lo que `UseItem`
+  come, bebe o lanza; nunca equipo, herramientas que piden una casilla, contenedores ni libros).
+  Muestra el ícono, **cuántas unidades lleva el personaje en total** (los contenedores cerrados
+  cuentan; la carga de una runa cuenta como una unidad) y, con ninguna, queda **gris con un 0**:
+  la asignación se queda. La sombra de abajo es el enfriamiento compartido de los consumibles
+  (`inventory.use_cooldown_ms`) o el del hechizo de la runa.
+- **Usar** (tecla o toque): una unidad de ese tipo, de donde la lleve: primero los bolsillos,
+  después el equipo y los contenedores en anchura (la mochila, y lo que hay dentro, antes que lo
+  de los bolsillos que sea un contenedor). Las mismas reglas que usarlo a mano, sin atajos:
+  enfriamiento, estómago, nivel mágico de la runa, zonas de protección. Una runa de las que se
+  apuntan (curar a otro) pone la mira y la tira el siguiente clic.
+- **Teclas**: 1–6 (también el teclado numérico) cuando no hay diálogo abierto (con uno, los
+  números son sus opciones) ni un campo de texto con el foco; con Ctrl, Alt, Meta o Mayús no.
+- **Asignar**: arrastrar un item de la mochila, los bolsillos o un contenedor a una casilla
+  (mouse o dedo); "Asignar a tecla rápida" del menú del item (con la casilla a elegir); el lápiz
+  de la sección (una lista por casilla); o dos toques (tocar el item y después la casilla).
+  **Vaciar**: arrastrar la casilla afuera, Suprimir/Retroceso con ella enfocada o el lápiz.
+  Arrastrar una casilla sobre otra las intercambia. Un tipo ocupa una sola casilla.
+- **Se guarda por personaje** (opción guardada de la cuenta `item_hotkeys`): vuelve al entrar y
+  en otro dispositivo.
+
 ### Bolsillos (decisión del dueño, 2026-11-19)
 La prueba de Thimblewick del 2026-11-19 mostró que la muerte deja la mochila en el
 cuerpo y que el personaje reaparecía con una mochila nueva gratis (hallazgo M5: sin un

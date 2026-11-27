@@ -273,6 +273,23 @@ body.picking-item [data-drop] {
 .touch-menu-split-form input {
   width: 4.5rem;
 }
+/* "Assign to a quick key": the six slots in a row (44 px for a finger, 30 px for the mouse). */
+.touch-menu-slots {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 4px 4px 2px;
+}
+.touch-menu-slots button {
+  min-height: 44px;
+  padding: 0;
+  font-family: var(--ui-font-title);
+  font-weight: 700;
+  color: var(--ui-gold-300);
+}
+.touch-menu[data-pointer="mouse"] .touch-menu-slots button {
+  min-height: 30px;
+}
 .touch-menu .item-card {
   margin-top: 4px;
   padding-top: 8px;

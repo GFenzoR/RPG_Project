@@ -4,7 +4,12 @@
 import type { Pos } from "./geometry.ts";
 
 /** What waits for the next click: a tool (by its item reference) or an aimed spell. */
-export type Pending<R> = { kind: "item"; ref: R } | { kind: "spell"; spellId: string } | undefined;
+export type Pending<R> =
+  | { kind: "item"; ref: R }
+  | { kind: "spell"; spellId: string }
+  /** An aimed rune of an item hotkey: used by type (UseItemType) on the next click. */
+  | { kind: "itemType"; itemId: number }
+  | undefined;
 
 /** Casting a spell: an aimed one (heal another) waits; any other drops what was pending. */
 export function afterCast<R>(spellId: string, aims: boolean): Pending<R> {
@@ -22,6 +27,8 @@ export type ClickAction<R> =
   | { kind: "castOnCreature"; spellId: string; creature: number }
   | { kind: "castOnTile"; spellId: string; pos: Pos }
   | { kind: "useOn"; ref: R; pos: Pos }
+  | { kind: "typeOnCreature"; itemId: number; creature: number }
+  | { kind: "typeOnTile"; itemId: number; pos: Pos }
   | { kind: "none" };
 
 /**
@@ -37,6 +44,11 @@ export function resolveClick<R>(
     return "creature" in click
       ? { kind: "castOnCreature", spellId: pending.spellId, creature: click.creature }
       : { kind: "castOnTile", spellId: pending.spellId, pos: click.pos };
+  }
+  if (pending?.kind === "itemType") {
+    return "creature" in click
+      ? { kind: "typeOnCreature", itemId: pending.itemId, creature: click.creature }
+      : { kind: "typeOnTile", itemId: pending.itemId, pos: click.pos };
   }
   if (pending?.kind === "item") {
     return "pos" in click ? { kind: "useOn", ref: pending.ref, pos: click.pos } : { kind: "none" };

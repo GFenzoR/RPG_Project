@@ -118,6 +118,26 @@ describe("itemActions", () => {
     expect(itemPrimary({ container: true, equip: true })).toBe("open");
   });
 
+  it("food, potions and runes also offer a quick key, after the rest", () => {
+    expect(itemActions({ container: false, food: true, hotkey: true })).toEqual([
+      "eat",
+      "look",
+      "move",
+      "hotkey",
+    ]);
+    expect(itemActions({ container: false, hotkey: true, split: true })).toEqual([
+      "use",
+      "look",
+      "move",
+      "split",
+      "hotkey",
+    ]);
+    // A tile's menu never does: a quick key is for what is carried.
+    expect(
+      tileActions({ item: { container: false, food: true, hotkey: true }, known: true }),
+    ).toEqual(["eat", "look", "move"]);
+  });
+
   it("a fixture (a station, a board) is used and looked at, never moved", () => {
     expect(tileActions({ item: { container: false, fixed: true }, known: true })).toEqual([
       "use",

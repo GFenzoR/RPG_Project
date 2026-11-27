@@ -44,6 +44,8 @@ export function MobileBar(props: {
   curve?: ExperienceCurve | undefined;
   /** The spell hotbar (ui/Hotbar.tsx). */
   hotbar: ComponentChildren;
+  /** The item hotkeys (ui/ItemHotbar.tsx) in the line of a screen on its side. */
+  itemkeys?: ComponentChildren;
   /** The direction pad (ui/TouchPad.tsx), when Options shows it. */
   pad: ComponentChildren;
   /** The buttons: the panel and the menu (and, upright, the sections and the zoom). */
@@ -75,6 +77,7 @@ export function MobileBar(props: {
         />
       </div>
       <div class="mbar-hotbar">{props.hotbar}</div>
+      {props.itemkeys && <div class="mbar-items">{props.itemkeys}</div>}
       {props.pad && <div class="touch-pad-dock">{props.pad}</div>}
       <div class="mbar-tools">{props.tools}</div>
       <Orb
