@@ -208,7 +208,9 @@ items:
   una casilla es un metro.
 - **`balance.yaml → inventory`** (T1.8): `start_container` (item contenedor con que empieza
   un personaje nuevo), `max_open_containers`, `use_cooldown_ms`, `door_cooldown_ms` (espera
-  entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0) y
+  entre dos usos de una puerta del mapa por un jugador, rechazados o no; mayor que 0),
+  `corpse_move_cooldown_ms` (opcional: espera entre dos arrastres de un cuerpo por un
+  jugador, `02-game-design.md` "Arrastrar un cuerpo"; 0 o ausente, sin espera) y
   `reach` (de 1 a 6: el medio alto de la ventana clásica de 15x11 + 1, lo que nota un
   monstruo; la vista ancha de 31x21 no lo estiró, `02-game-design.md` "La vista"; el esquema
   y `content.MaxReach` lo exigen) y `pocket_slots` (lote 13: los bolsillos propios de todo

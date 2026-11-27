@@ -1112,6 +1112,38 @@ Implementado en T1.8 (`server/internal/session/inventory.go`):
   deja su cuerpo caído (`corpse` en `data/monsters`: la bestia de costado, el artrópodo
   panza arriba, el montón de escoria...); sin `corpse`, los restos por defecto
   (`creature_remains`, que es también el cuerpo de un jugador).
+- **Arrastrar un cuerpo** (pedido del dueño del 2026-11-26: "los cuerpos muertos de los
+  enemigos se deberían poder mover, porque puede caer uno encima de otro"): los restos de
+  una criatura siguen sin poder levantarse, pero se **arrastran** con el mismo gesto que
+  mueve un item (`MoveItem`; `session/corpsemove.go` `dragCorpse`):
+  - **De a una casilla.** El jugador tiene que estar junto al cuerpo (a 1 casilla, o encima)
+    y el destino es una casilla **vecina a donde está el cuerpo**, del mismo piso, caminable
+    y con lugar (`inventory.tile_full`). No se tira lejos como un item liviano: para
+    llevarlo más allá se arrastra otra vez. Entre dos arrastres de un jugador pasan
+    `inventory.corpse_move_cooldown_ms` (300 ms; cada uno manda dos casillas a todos los que
+    miran, como una puerta): antes, `inventory.corpse_not_ready`.
+  - **Sigue siendo el mismo contenedor:** mismo botín, mismo dueño, misma reserva y mismo
+    reloj. Desaparece a los `monster_corpse_ms` (o `corpse_ms`) de la **muerte**, esté
+    donde esté; arrastrarlo no lo renueva. La ventana abierta de quien ya no lo alcanza se
+    cierra (nadie saquea de lejos).
+  - **El cuerpo de un jugador sigue la regla de su botín:** mientras está reservado a quien
+    cayó (`corpse_owner_only_ms`, o la reserva de un guardado pendiente, T5.3) solo ese
+    jugador lo arrastra (`death.corpse_not_owner` para los demás); después, cualquiera.
+    Arrastrarlo no acorta ni alarga la reserva y no deja abrirlo antes.
+  - **Lo que no se puede** (`inventory.corpse_drag`): meterlo en un contenedor, la mochila
+    o un slot (ni llevárselo ni esconderlo); arrastrarlo a la casilla de una **puerta** (no
+    dejaría cerrarla, y uno reservado no lo podría sacar nadie más), a la entrada de una
+    **escalera, un agujero o un teletransporte** (un item ahí cae al otro piso: un cuerpo
+    no cambia de piso) ni a una **casa**. De una de esas casillas sí se saca (una criatura
+    puede morir ahí). A una casilla no caminable, `inventory.not_possible`.
+  - **Varios cuerpos en una casilla:** el arrastrado queda **arriba** de la pila. Se abre
+    el de arriba; arrastrarlo a otra casilla deja a la vista el siguiente (no hay "revisar
+    casilla": el servidor acepta cualquier `stack_index`, pero el cliente solo apunta al de
+    arriba).
+  - **Cliente:** un item fijo con `remains_of` o `body_of` cuenta como movible
+    (`state/items.ts` `immovable`): se arrastra desde el mapa como cualquier item y el menú
+    de la casilla ofrece "Mover". El sprite sigue al cuerpo porque el servidor manda las
+    dos casillas.
 - **Los restos dicen de quién son** (pedido del dueño del 2026-11-23): el contenedor sigue
   siendo el de la familia (mismas reglas de botín, 10 lugares, no se apila ni se levanta),
   pero el servidor lo marca con el monstruo que cayó (`ItemMods.remains_of`, docs/05

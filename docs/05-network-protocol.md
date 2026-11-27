@@ -976,6 +976,14 @@ Reglas de juego en `02-game-design.md` ("Items, equipo e inventario").
   segura" en T5.3), y `portal.no_room` (un item tirado sobre una escalera, un agujero o un
   teletransporte no tiene dónde caer del otro lado).
 - **`MoveItem`:** `count` de 1 al tamaño de la pila para apilables (se ignora en los demás).
+  **Restos de una criatura** (los únicos items no levantables que acepta): solo destino
+  `pos`, una casilla vecina a donde están, con el jugador junto a ellos; si no,
+  `inventory.corpse_drag` (también a una puerta, una casa o la entrada de una escalera, un
+  agujero o un teletransporte), `death.corpse_not_owner` (el cuerpo de otro jugador,
+  todavía reservado) o `inventory.corpse_not_ready` (otro arrastre hace menos de
+  `inventory.corpse_move_cooldown_ms`). Si sale bien llegan los dos `TileUpdate`, y un
+  `ContainerClose` a quien lo tenía abierto y ya no lo alcanza (`02-game-design.md`
+  "Arrastrar un cuerpo"). El mensaje no cambió.
   Destino `pos`: un tile caminable al alcance. Destino `slot` o `container` con un
   contenedor en ese lugar: adentro de ese contenedor. Mover dentro del mismo contenedor
   no reordena (ignorado). Un destino `pos` que es la entrada de una escalera, un agujero

@@ -150,6 +150,19 @@ el punto 5:
     mismas condiciones (hay que haber peleado en los últimos 75 s): quien solo acompaña
     sin pelear no suma. Si el dueño quiere que baste con estar cerca, es cambiar
     `questSharers`.
+- **Arrastrar cuerpos (hecho, rama `feat/movable-corpses`; el dueño el 2026-11-26: "los
+  cuerpos muertos de los enemigos se deberían poder mover, porque puede caer uno encima de
+  otro")**: los restos se arrastran de a una casilla con el gesto de mover un item (docs/02
+  "Arrastrar un cuerpo"). Pendiente:
+  - **Clic sobre un cuerpo:** como ahora es movible, apretar y mover el mouse sobre una
+    casilla con un cuerpo lo arrastra en vez de caminar hacia el cursor (igual que sobre
+    una bolsa tirada); el clic simple sigue caminando. Si molesta al cazar, pedir Mayús o
+    un umbral mayor para los cuerpos.
+  - **Pila de cuerpos:** se llega a cada uno sacando el de arriba; no hay ventana de
+    "revisar casilla" que liste todo lo que hay en una.
+  - **Sin animación de arrastre:** el cuerpo aparece en la casilla nueva (dos `TileUpdate`).
+  - La reserva de un cuerpo dejado durante un guardado pendiente (`heldGround`) se conserva
+    al arrastrarlo, pero no tiene test propio (los tests cubren `corpse_owner_only_ms`).
 - **Comida de monstruos (hecho, rama `feat/animal-food`; el dueño: "algunos monstruos deberían
   botar comida, especialmente los animales")**: seis comidas nuevas y 13 monstruos que las
   sueltan (docs/02 "Oficios", Cocina). Pendiente: sprites propios; por ahora reusan los
