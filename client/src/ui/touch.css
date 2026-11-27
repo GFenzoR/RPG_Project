@@ -161,50 +161,6 @@ body.picking-item [data-drop] {
   border-radius: 8px;
 }
 
-/* ---- placement over the map (App.tsx mounts these inside .viewport) ----
-   The pad docks bottom-left; the hotbar starts after it (PAD_RESERVE_PX in TouchPad.tsx).
-   In portrait the map sits at the top of a taller viewport and both go in the strip under
-   it, so the pad never covers the map.
-   Safe area: .viewport lies inside the padding of .game, which already keeps the game out
-   of the notch, the rounded corners and the home indicator (client.css). The offsets here
-   are from the viewport's edges and never add env(safe-area-inset-*) again: that counted
-   the inset twice on a notched phone on its side. */
-.game[data-pad] .hotbar {
-  left: 162px;
-  transform: none;
-  max-width: calc(100% - 170px);
-}
-/* The strip is the viewport's bottom padding: game-canvas.ts sizes the map to the content
-   box, so a zoomed-in map is cut above the strip and never slides under the pad. */
-.game[data-flow="column"][data-pad] .viewport {
-  align-items: flex-start;
-  box-sizing: border-box;
-  height: min(calc(100vw * 11 / 15 + 154px), 72%);
-  padding-bottom: 154px;
-}
-
-/* Portrait with the pad (Hotbar.tsx `stacked`): right of the pad, the arrows and the edit
-   button on a line of their own above the slots, and narrower slots, so a 412 px phone
-   shows four of them (ui/layout.ts hotbarRoom). */
-.game[data-pad] .hotbar.stacked {
-  flex-direction: column;
-  align-items: flex-start;
-}
-.hotbar-controls {
-  display: flex;
-  gap: 0.25rem;
-  height: 44px;
-}
-.hotbar-controls .page,
-.hotbar-controls .edit {
-  width: 44px;
-  height: 44px;
-}
-.game[data-pad] .hotbar.stacked li button,
-.game[data-pad] .hotbar.stacked li select {
-  /* px, not rem: the root text size (17 px since 2026-11-26) must not cost the fourth slot. */
-  width: 51px;
-}
 /* Over the map and the phone drawer (z-index 8 in client.css), under the windows over the
    map (12: dialog, crafting, market, house, trade). Upright the dialog's sheet can reach
    the pad's last row (iPad Mini, iPhone 13, more with a notch); before, at 20, the pad
@@ -225,20 +181,6 @@ body.picking-item [data-drop] {
   /* Over the map, under the phone drawer (z-index 8 in client.css) and the windows. */
   z-index: 7;
   max-width: min(calc(100% - 16px), 440px);
-}
-
-/* Portrait with the pad: the banner goes in the strip under the map, over the hotbar's
-   arrows and where the zoom buttons were (App.tsx hides them meanwhile), so it never
-   covers the tiles a finger may tap as the destination. */
-.game[data-flow="column"][data-pad] .viewport > .pick-banner {
-  top: auto;
-  bottom: 3.4rem;
-  left: 162px;
-  right: 8px;
-  transform: none;
-  max-width: none;
-  /* Opaque here: the hotbar's arrows under it would show through. */
-  background: var(--panel);
 }
 
 /* ---- map zoom (ZoomButtons.tsx, touch screens) ----
@@ -275,13 +217,6 @@ body.picking-item [data-drop] {
 .zoom-button:focus-visible {
   outline: 2px solid var(--ui-gold-300);
   outline-offset: 1px;
-}
-
-/* Portrait with the pad: side by side in the strip under the map, above the hotbar's
-   arrows (the strip is 154 px: slots, arrows, then these). */
-.game[data-flow="column"][data-pad] .zoom-buttons {
-  flex-direction: row;
-  bottom: 108px;
 }
 
 /* ---- the right-click menu (docs/17 UI-6): compact for the mouse, with the item's card ---- */

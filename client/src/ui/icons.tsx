@@ -430,6 +430,25 @@ export const ICONS = {
     ".....#SSSS#.....",
     "....########....",
   ],
+  // The mobile HUD's menu (options, language, help, leaving): three iron bars, gold studs.
+  menu: [
+    "................",
+    "................",
+    ".##############.",
+    "#o+ssssssssss+o#",
+    "#o-SSSSSSSSSS-o#",
+    ".##############.",
+    ".##############.",
+    "#o+ssssssssss+o#",
+    "#o-SSSSSSSSSS-o#",
+    ".##############.",
+    ".##############.",
+    "#o+ssssssssss+o#",
+    "#o-SSSSSSSSSS-o#",
+    ".##############.",
+    "................",
+    "................",
+  ],
 } as const satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICONS;

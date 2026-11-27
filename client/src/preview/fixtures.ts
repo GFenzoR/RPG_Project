@@ -810,3 +810,34 @@ export function withForge(
 export function withBook(content: ClientContent, s: Scene, item: string): Scene {
   return { ui: { ...s.ui, book: { itemId: itemNumber(content, item), at: 0 } }, name: item };
 }
+
+/**
+ * docs/17 "UI movil": everything that asks for an answer at once, over the map: a party
+ * invitation, a guild invitation and the presence check (none may be covered or cut on a
+ * phone).
+ */
+export function withSocial(s: Scene, now: number): Scene {
+  const ui: GameUi = {
+    ...s.ui,
+    invitations: [{ inviterId: 902, inviterName: "Brisa Molina", until: now + 55_000 }],
+    guildInvitations: [{ guildId: 7n, guildName: "Los Faroleros", until: now + 86_000_000 }],
+    presence: {
+      id: 1,
+      question: "presence.question",
+      swatch: "#3f6fd0",
+      options: [
+        { id: 1, key: "presence.option.white" },
+        { id: 2, key: "presence.option.blue" },
+        { id: 3, key: "presence.option.black" },
+        { id: 4, key: "presence.option.yellow" },
+      ],
+      until: now + 240_000,
+    },
+  };
+  return { ui, name: "social" };
+}
+
+/** Sailing (T3.5): the fade over the map with where the boat goes. */
+export function withVoyage(s: Scene, now: number): Scene {
+  return { ui: { ...s.ui, voyage: { island: "puerto", at: now } }, name: "voyage" };
+}

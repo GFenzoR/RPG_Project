@@ -149,10 +149,6 @@ h3 {
     display: none;
   }
 }
-/* Phones: the name in the header in the interface's type, so more of it fits. */
-.hud.compact .name {
-  font-family: var(--ui-font);
-}
 .panel {
   max-width: 22rem;
   margin: 10vh auto 0;
@@ -389,7 +385,7 @@ form .link.back {
 .load-failed,
 .options-panel,
 .credits-window,
-.hud-menu-body,
+.mmenu-body,
 .invitation,
 .death,
 .tutorial-show {
@@ -462,96 +458,6 @@ form .link.back {
   box-sizing: border-box;
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
     env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-}
-/* The header of tablets and phones is always one line (T5.6): a wrapped header pushed the
-   map down a zoom step. The desktop has no header (docs/17 UI-4: the bottom bar has it
-   all). */
-.hud {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.4rem 0.75rem;
-  background:
-    linear-gradient(rgb(255 240 210 / 0.04), rgb(0 0 0 / 0.25)), var(--ui-grain),
-    var(--ui-stone-800);
-  border-bottom: 2px solid var(--ui-iron-600);
-  box-shadow: 0 1px 0 var(--ui-iron-900);
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  min-width: 0;
-}
-.hud > * {
-  flex-shrink: 0;
-}
-.hud .name {
-  font-family: var(--ui-font-title);
-  font-weight: 700;
-  color: var(--ui-gold-300);
-  flex-shrink: 1;
-  min-width: 3rem;
-  max-width: 16rem;
-}
-/* The name is never cut (docs/17 UI-3 "Nombres"): short of room its font shrinks
-   (ui/fit-text.ts) and, at the floor, it breaks onto more lines. */
-.hud .name[data-fit="wrap"] {
-  white-space: normal;
-  overflow-wrap: anywhere;
-  line-height: 1;
-}
-.hud {
-  position: relative;
-}
-/* Controls help as a button (tablets on their side). */
-.hud .controls-help {
-  display: none;
-  flex: 1;
-}
-.hud .controls-help summary {
-  display: inline-block;
-  cursor: pointer;
-  color: var(--ui-text-muted);
-  font-size: 0.85rem;
-  padding: 0.15rem 0.5rem;
-  border: 1px solid var(--ui-iron-600);
-  border-radius: var(--ui-radius);
-  list-style: none;
-}
-.hud .controls-help summary::-webkit-details-marker {
-  display: none;
-}
-.hud .controls-help[open] summary {
-  color: var(--ui-gold-300);
-}
-.hud .controls-help p {
-  position: absolute;
-  top: 100%;
-  left: 0.75rem;
-  z-index: 30;
-  max-width: 28rem;
-  margin: 0.25rem 0 0;
-  padding: 0.6rem 0.75rem;
-  /* The header is nowrap (one line): the opened help wraps inside its box. */
-  white-space: normal;
-  background: var(--ui-stone-900);
-  border: 2px solid var(--ui-iron-600);
-  box-shadow: var(--ui-frame-shadow);
-  font-size: 0.85rem;
-  line-height: 1.4;
-}
-@media (max-width: 1199px) {
-  .hud .controls-help {
-    display: block;
-  }
-}
-.hud .stat {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.9rem;
-}
-.hud .stat[data-testid="health"] {
-  color: #f08a78;
-}
-.hud .stat[data-testid="mana"] {
-  color: #8fb0f0;
 }
 /* ---- The status tray (docs/17 "Bandeja de estados", ui/StatusTray.tsx) ---------------
    One pixel-art icon per own condition and status (ui/status/<id> of the atlas, its 16x16
@@ -705,25 +611,6 @@ form .link.back {
 .status-time {
   color: var(--ui-text-muted);
   font-variant-numeric: tabular-nums;
-}
-/* The header's row (phones and tablets): it takes the room the line has left, never less
-   than one icon (the header stays one line, with the menu in it); icons that do not fit
-   wrap to a second line that is cut off, so only whole icons show, the most urgent first.
-   Its tooltip hangs under the header. */
-.hud .status-box {
-  flex: 1 1 0;
-  min-width: calc(var(--status-cell) + 6px);
-}
-.hud .status-tray {
-  flex-wrap: wrap;
-  height: var(--status-cell);
-  overflow: hidden;
-  padding: 3px;
-}
-.hud .status-tip {
-  top: 100%;
-  left: 0.5rem;
-  margin-top: 0.25rem;
 }
 .game-body {
   flex: 1;
@@ -3325,30 +3212,6 @@ body.picking-item .map-hint {
   margin-left: auto;
 }
 
-/* Tabs of the side panel. */
-.panel-tabs {
-  display: flex;
-  gap: 0.2rem;
-  overflow-x: auto;
-  flex: none;
-  scrollbar-width: thin;
-}
-.panel-tabs [role="tab"] {
-  flex: 1 0 auto;
-  min-height: 44px;
-  padding: 0.3rem 0.6rem;
-  font-family: var(--ui-font-title);
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--ui-text-muted);
-}
-.panel-tabs [role="tab"][aria-selected="true"] {
-  color: var(--ui-gold-300);
-  background: var(--ui-stone-950);
-  box-shadow:
-    inset 0 0 0 1px var(--ui-iron-600),
-    inset 0 -3px 0 var(--ui-gold-500);
-}
 .game:not([data-panel="sidebar"]) .side {
   gap: 0.5rem;
 }
@@ -3374,156 +3237,6 @@ body.picking-item .map-hint {
   flex: 1;
   min-height: 5rem;
   height: auto;
-}
-
-/* Tablets and small windows with the panel beside the map: a wider column with tabs. */
-.game[data-panel="tabs"][data-flow="row"] .side {
-  width: 17rem;
-}
-/* Portrait (phones, tablets): the map on top at its own aspect, the panel below it. */
-.game[data-flow="column"] .game-body {
-  flex-direction: column;
-}
-.game[data-flow="column"] .viewport {
-  flex: none;
-  height: min(calc(100vw * 11 / 15), 58%);
-}
-.game[data-flow="column"] .side {
-  flex: 1;
-  width: auto;
-  min-height: 0;
-}
-
-/* Phone on its side: the map takes the whole body; the panel is a drawer over its right
-   side, closed until the button in the header opens it. */
-/* The closed drawer waits off the right edge: clip it, or a phone browser widens the page
-   to show it and zooms everything out. */
-.game[data-panel="drawer"] .game-body {
-  overflow: hidden;
-  /* clip, where supported: not even a script or a focused field in the sliding drawer can
-     scroll the body sideways (hidden still can, and the map then stays shifted left). */
-  overflow: clip;
-}
-.game[data-panel="drawer"] .side {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 8;
-  width: min(22rem, 62vw);
-  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.5);
-  transform: translateX(100%);
-  visibility: hidden;
-  transition:
-    transform 180ms ease-out,
-    visibility 0s linear 180ms;
-}
-.game[data-panel="drawer"] .side[data-open] {
-  transform: none;
-  visibility: visible;
-  transition: transform 180ms ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  .game[data-panel="drawer"] .side,
-  .game[data-panel="drawer"] .side[data-open] {
-    transition: none;
-  }
-}
-.hud .panel-toggle {
-  min-height: 2.25rem;
-  font-size: 0.8rem;
-}
-
-/* Compact header (phones): name and bars; the rest goes in the menu. */
-.hud.compact {
-  gap: 0.6rem;
-  padding: 0.3rem 0.5rem;
-}
-.hud.compact .name {
-  max-width: 7rem;
-}
-.hud.compact .stat {
-  font-size: 0.8rem;
-}
-/* The header does not widen the page with a wide font (Linux draws system-ui with DejaVu
-   Sans, far wider than Segoe UI or San Francisco: on CI a 390 px iPhone's header stuck out
-   ~20 px), English or bigger numbers. When it is short of room the name gives way first,
-   down to its 3rem (its font shrinks to fit, ui/fit-text.ts: a name is never cut), and
-   then the level, with an ellipsis; health and mana stay whole (only
-   they and the menu have to fit). Flex shares a shrink by factor x width, so the name's
-   huge factor makes the level wait for it: a hair taken from the level would already show
-   its ellipsis. */
-.hud.compact .name {
-  flex-shrink: 100000;
-}
-.hud.compact .level {
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* The drawer button and the menu sit at the right end, pushed by an auto margin (a spacer
-   item cost one more gap). */
-.hud.compact > .panel-toggle,
-.hud.compact > .hud-menu {
-  margin-inline-start: auto;
-}
-.hud.compact > .panel-toggle + .hud-menu {
-  margin-inline-start: 0;
-}
-.hud-menu summary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
-  box-sizing: border-box;
-  font-size: 1.2rem;
-  cursor: pointer;
-  list-style: none;
-  border: 1px solid var(--muted);
-  border-radius: 0.3rem;
-}
-.hud-menu summary::-webkit-details-marker {
-  display: none;
-}
-.hud-menu-body {
-  position: absolute;
-  top: 100%;
-  right: 0.5rem;
-  z-index: 30;
-  width: min(22rem, calc(100vw - 1rem));
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.6rem;
-  margin-top: 0.25rem;
-  padding: 0.75rem;
-  white-space: normal;
-  border-radius: 0.4rem;
-}
-.hud-menu-body .controls-text {
-  margin: 0;
-  font-size: 0.85rem;
-  line-height: 1.4;
-  color: var(--muted);
-}
-/* The sound panel opens inside the menu, not off its edge. */
-.hud-menu-body .options-panel {
-  position: static;
-  width: auto;
-  max-width: 100%;
-}
-
-/* Hotbar slots on phones: narrower, still more than 44 px tall. */
-.game[data-layout^="phone"] .hotbar li button,
-.game[data-layout^="phone"] .hotbar li select {
-  width: 3.6rem;
-  height: 2.9rem;
-}
-.game[data-layout^="phone"] .hotbar {
-  bottom: 0.25rem;
 }
 
 /* Windows over the map on phones and tablets: a sheet that fits the screen, scrolls

@@ -4,7 +4,7 @@
 // server, no Postgres and no HTTP server: Playwright answers every request from the build.
 // A plain script, not a Playwright test (it has no .spec in its name).
 //
-//   node --experimental-strip-types client/e2e/ui-preview.ts [--no-build] [--only <scene>]
+//   node --experimental-strip-types client/e2e/ui-preview.ts [--no-build] [--only <scene>[,<scene>]] [--sizes <part>[,<part>]]
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { mkdirSync, readFileSync, existsSync } from "node:fs";
@@ -18,7 +18,12 @@ const root = resolve(client, "..");
 const out = join(root, "build", "ui-preview");
 const shots = join(client, "e2e", "screenshots", "actual", "ui-preview");
 const args = process.argv.slice(2);
-const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : undefined;
+// --only takes one scene or several, comma separated; --sizes keeps the sizes whose name
+// has one of its comma separated parts ("phone,tablet": the touch sizes).
+const listArg = (flag: string): string[] | undefined =>
+  args.includes(flag) ? (args[args.indexOf(flag) + 1] ?? "").split(",").filter(Boolean) : undefined;
+const only = listArg("--only");
+const sizes = listArg("--sizes");
 
 /**
  * Puerto's temple square (grass, walls, cobbles, a sign and the market board) in the
@@ -99,6 +104,7 @@ const SIZES: Size[] = [
   touch("phone-390x844", 390, 844),
   touch("phone-844x390", 844, 390),
   touch("tablet-768x1024", 768, 1024),
+  touch("tablet-1024x768", 1024, 768),
 ];
 
 /** rpg.windows of each scene (ui/windows.ts format, version 3); absent = the defaults. */
@@ -331,13 +337,24 @@ const SCENES = [
   // docs/02 "Cuentas": an account without characters goes straight to the form.
   "createfirst",
   "appearance",
+  // docs/17 "UI movil": the states of the mobile HUD (on the desktop sizes they show the
+  // same things on the floating windows' screen).
+  "social", // a party and a guild invitation and the presence check, at once
+  "voyage", // the fade of a boat trip
+  "mobilemenu", // the menu that replaced the header's hamburger (desktop: Options)
+  "mobilechat", // the whole chat, opened from the compact log over the map
+  "mobilebattle", // the battle section in the sheet (or drawer)
+  "mobilenopad", // without the direction pad (Options): the console is the buttons alone
+  "mobilemap", // the minimap unfolded, with the tracked objective
 ];
+/** Scenes of the mobile HUD that are the base scene plus taps of this script. */
+const MOBILE_TAPS = ["mobilemenu", "mobilechat", "mobilebattle", "mobilenopad", "mobilemap"];
 
 mkdirSync(shots, { recursive: true });
 const browser = await chromium.launch();
 try {
-  for (const scene of SCENES.filter((s) => !only || s === only)) {
-    for (const size of SIZES) {
+  for (const scene of SCENES.filter((s) => !only || only.includes(s))) {
+    for (const size of SIZES.filter((z) => !sizes || sizes.some((p) => z.name.includes(p)))) {
       const context = await browser.newContext({ ...size.opts, reducedMotion: "no-preference" });
       await context.route("**/*", async (route) => {
         const url = new URL(route.request().url());
@@ -414,11 +431,13 @@ try {
         "questsdone",
         "questsmilestones",
         "scale",
+        ...MOBILE_TAPS,
       ].includes(scene)
         ? "game"
         : scene;
       // docs/17 UI-3: the interface at 125 % with the text at 115 %.
-      const scales = scene === "scale" ? "&ui=1.25&text=1.15" : "";
+      const scales =
+        scene === "scale" ? "&ui=1.25&text=1.15" : scene === "mobilenopad" ? "&pad=0" : "";
       await page.goto(
         `http://ui.preview/preview/?scene=${sceneParam}&mapx=${mapx}&mapy=${mapy}${scales}`,
       );
@@ -451,6 +470,33 @@ try {
           await tab.click();
           await page.waitForTimeout(150);
         }
+      }
+      // docs/17 "UI movil": the mobile HUD's own states, by the taps a player gives (on the
+      // desktop sizes none of these buttons exists: the scene is the base one).
+      if (scene === "mobilemenu") {
+        const menu = page.locator('[data-testid="hud-menu"] > summary');
+        if (await menu.isVisible()) await menu.click();
+        else await page.getByTestId("options-button").click();
+        await page.waitForTimeout(300);
+      }
+      if (scene === "mobilechat") {
+        const glance = page.getByTestId("chat-glance");
+        if (await glance.isVisible()) {
+          await glance.click();
+          await page.waitForTimeout(300);
+        }
+      }
+      if (scene === "mobilebattle") {
+        const toggle = page.getByTestId("panel-toggle");
+        if (await toggle.isVisible()) await toggle.click();
+        const tab = page.locator('[data-testid="panel-tabs"] [data-tab="battle"]');
+        if (await tab.isVisible()) await tab.click();
+        await page.waitForTimeout(300);
+      }
+      if (scene === "mobilemap") {
+        const fold = page.getByTestId("minimap-fold");
+        if ((await fold.getAttribute("aria-expanded")) === "false") await fold.click();
+        await page.waitForTimeout(300);
       }
       // docs/17 UI-6: the card of an item under the mouse, at once (the Diablo II idea):
       // the sword in the right hand (stats, a requirement), the coins in the backpack (gold).

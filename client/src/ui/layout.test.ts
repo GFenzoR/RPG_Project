@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   BREAKPOINTS,
+  DESKTOP_MIN_WIDTH,
+  MOBILE_HUD,
   PANEL_TABS,
   TAB_TITLE,
   hotbarFit,
   hotbarRoom,
+  consoleColumns,
+  isMobile,
+  mobileHotbarFit,
   layoutFor,
   sliderEnds,
   slotsWidth,
@@ -13,28 +18,37 @@ import {
 
 describe("layoutFor", () => {
   // CSS viewport sizes of real devices and windows.
-  const cases: [string, number, number, string, string, string, boolean][] = [
-    ["desktop 1280x800", 1280, 800, "desktop", "sidebar", "row", false],
-    ["desktop app minimum 960x700", 960, 700, "desktop", "sidebar", "row", false],
-    ["full HD", 1920, 1080, "desktop", "sidebar", "row", false],
-    ["short wide desktop window", 1280, 480, "desktop", "sidebar", "row", false],
-    ["iPad Mini landscape", 1024, 768, "desktop", "sidebar", "row", false],
-    ["iPad Mini portrait", 768, 1024, "tablet", "tabs", "column", true],
-    ["small desktop window", 900, 650, "tablet", "tabs", "row", false],
-    ["Pixel 7 portrait", 412, 915, "phone-portrait", "tabs", "column", true],
-    ["iPhone SE portrait", 375, 667, "phone-portrait", "tabs", "column", true],
-    ["Pixel 7 landscape", 915, 412, "phone-landscape", "drawer", "row", true],
-    ["iPhone SE landscape", 667, 375, "phone-landscape", "drawer", "row", true],
+  const cases: [string, number, number, string, string, string][] = [
+    ["desktop 1280x800", 1280, 800, "desktop", "sidebar", "row"],
+    ["desktop app minimum 960x700", 960, 700, "desktop", "sidebar", "row"],
+    ["full HD", 1920, 1080, "desktop", "sidebar", "row"],
+    ["short wide desktop window", 1280, 480, "desktop", "sidebar", "row"],
+    // Tablets: on their side from 1024 px they take the desktop's floating windows...
+    ["iPad Mini landscape", 1024, 768, "desktop", "sidebar", "row"],
+    ["iPad Air landscape", 1180, 820, "desktop", "sidebar", "row"],
+    // ...and upright, or small on their side, the mobile HUD.
+    ["iPad Mini portrait", 768, 1024, "tablet", "sheet", "column"],
+    ["iPad Air portrait", 820, 1180, "tablet", "sheet", "column"],
+    ["small tablet landscape", 900, 650, "tablet", "drawer", "row"],
+    ["just under the desktop", 959, 700, "tablet", "drawer", "row"],
+    ["Pixel 7 portrait", 412, 915, "phone-portrait", "sheet", "column"],
+    ["iPhone 13 portrait", 390, 844, "phone-portrait", "sheet", "column"],
+    ["iPhone SE portrait", 375, 667, "phone-portrait", "sheet", "column"],
+    ["Pixel 7 landscape", 915, 412, "phone-landscape", "drawer", "row"],
+    ["iPhone 13 landscape", 844, 390, "phone-landscape", "drawer", "row"],
+    ["iPhone SE landscape", 667, 375, "phone-landscape", "drawer", "row"],
   ];
-  for (const [name, w, h, id, panel, flow, compact] of cases) {
+  for (const [name, w, h, id, panel, flow] of cases) {
     it(name, () => {
-      expect(layoutFor(w, h)).toEqual({ id, panel, flow, compactHeader: compact });
+      expect(layoutFor(w, h)).toEqual({ id, panel, flow });
+      expect(isMobile(layoutFor(w, h))).toBe(id !== "desktop");
     });
   }
 
-  it("compacts the header of any narrow window", () => {
-    expect(layoutFor(700, 700).compactHeader).toBe(true);
-    expect(layoutFor(720, 700).compactHeader).toBe(false);
+  it("never gives windows to a screen narrower than the desktop app's minimum", () => {
+    expect(DESKTOP_MIN_WIDTH).toBe(960);
+    for (let w = 320; w < DESKTOP_MIN_WIDTH; w += 40)
+      for (const h of [360, 600, 900, 1200]) expect(isMobile(layoutFor(w, h))).toBe(true);
   });
 
   it("takes the breakpoints as data", () => {
@@ -138,5 +152,47 @@ describe("sliderEnds", () => {
     expect(sliderEnds(600, 300, 900)).toEqual({ prev: true, next: false });
     expect(sliderEnds(599.5, 300, 900)).toEqual({ prev: true, next: false });
     expect(sliderEnds(0, 300, 300)).toEqual({ prev: false, next: false });
+  });
+});
+
+describe("the mobile HUD (docs/17 UI movil)", () => {
+  it("keeps every button a 44 px touch target", () => {
+    expect(MOBILE_HUD.slot).toBeGreaterThanOrEqual(44);
+    expect(MOBILE_HUD.arrow).toBeGreaterThanOrEqual(44);
+    expect(MOBILE_HUD.edit).toBeGreaterThanOrEqual(44);
+    expect(MOBILE_HUD.tool).toBeGreaterThanOrEqual(44);
+  });
+
+  it("upright, the slots take a line of their own: 6 or 7 on a phone, all on a tablet", () => {
+    expect(mobileHotbarFit(320, "column")).toEqual({ visible: 6, slider: true });
+    expect(mobileHotbarFit(360, "column")).toEqual({ visible: 6, slider: true });
+    expect(mobileHotbarFit(375, "column")).toEqual({ visible: 7, slider: true });
+    expect(mobileHotbarFit(390, "column")).toEqual({ visible: 7, slider: true });
+    expect(mobileHotbarFit(412, "column")).toEqual({ visible: 7, slider: true });
+    expect(mobileHotbarFit(768, "column")).toEqual({ visible: 12, slider: false });
+  });
+
+  it("on its side, the slots share the bar with the orbs and the buttons, and page", () => {
+    expect(mobileHotbarFit(568, "row")).toEqual({ visible: 3, slider: true });
+    expect(mobileHotbarFit(667, "row")).toEqual({ visible: 5, slider: true });
+    expect(mobileHotbarFit(844, "row")).toEqual({ visible: 8, slider: true });
+    expect(mobileHotbarFit(915, "row")).toEqual({ visible: 12, slider: false });
+    // A notch on each side (47 px) costs slots, never the bar.
+    expect(mobileHotbarFit(844 - 94, "row")).toEqual({ visible: 7, slider: true });
+  });
+
+  it("a screen on its side always shows more than half the slots a phone holds upright", () => {
+    for (const w of [667, 740, 844, 915])
+      expect(mobileHotbarFit(w, "row").visible).toBeGreaterThanOrEqual(4);
+  });
+
+  it("puts the section buttons beside the pad, or in rows without it", () => {
+    // 9 buttons: the 8 sections and the menu. Beside the 146 px pad of a 390 px phone, 4.
+    expect(consoleColumns(390, 146, 11)).toBe(4);
+    expect(consoleColumns(360, 146, 11)).toBe(4);
+    expect(consoleColumns(320, 146, 11)).toBe(3);
+    expect(consoleColumns(390, 0, 11)).toBe(7);
+    expect(consoleColumns(768, 146, 11)).toBe(11);
+    expect(consoleColumns(100, 146, 11)).toBe(1);
   });
 });

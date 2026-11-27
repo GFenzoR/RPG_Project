@@ -28,7 +28,7 @@ const CHANNELS: { channel: ChatChannel; key: string }[] = [
  */
 const KEYBOARD_SETTLE_MS = 300;
 
-const KIND_CLASS: Partial<Record<MessageKind, string>> = {
+export const KIND_CLASS: Partial<Record<MessageKind, string>> = {
   [MessageKind.SAY]: "say",
   [MessageKind.YELL]: "yell",
   [MessageKind.WHISPER]: "whisper",
