@@ -25,6 +25,13 @@ dialog:
     greet:
       text: npc.puerto_priest.greet
       options:
+        - text: npc.puerto_priest.opt_blessings
+          goto: blessings
+        - text: npc.puerto_priest.opt_heal
+          action: { heal: true }
+          goto: healed
+        - text: npc.puerto_priest.opt_faith
+          goto: faith
         # Chapter 1's island chain (docs/02 "Capítulo 1"): each quest opens with the one before.
         - text: npc.puerto_priest.opt_castaways
           if:
@@ -47,13 +54,6 @@ dialog:
         - text: npc.puerto_priest.opt_wreckers_return
           if: { quest_state: { quest: ch1_wreckers, state: in_progress, step: hear_bosun } }
           goto: wreckers_done
-        - text: npc.puerto_priest.opt_blessings
-          goto: blessings
-        - text: npc.puerto_priest.opt_heal
-          action: { heal: true }
-          goto: healed
-        - text: npc.puerto_priest.opt_faith
-          goto: faith
         - text: dialog.bye
           action: close
     castaways_offer:

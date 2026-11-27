@@ -25,18 +25,18 @@ dialog:
     greet:
       text: npc.puerto_provisioner.greet
       options:
-        - text: npc.puerto_provisioner.opt_castaways
-          if: { quest_state: { quest: ch1_castaways, state: in_progress, step: ask_supplies } }
-          goto: castaways_supplies
-        - text: npc.puerto_provisioner.opt_false_light
-          if: { quest_state: { quest: ch1_false_light, state: in_progress, step: ask_oil } }
-          goto: false_light_oil
         - text: dialog.trade
           action: { open_shop: provisions_shop }
         - text: npc.puerto_provisioner.opt_tools
           goto: tools
         - text: npc.puerto_provisioner.opt_gossip
           goto: gossip
+        - text: npc.puerto_provisioner.opt_castaways
+          if: { quest_state: { quest: ch1_castaways, state: in_progress, step: ask_supplies } }
+          goto: castaways_supplies
+        - text: npc.puerto_provisioner.opt_false_light
+          if: { quest_state: { quest: ch1_false_light, state: in_progress, step: ask_oil } }
+          goto: false_light_oil
         - text: dialog.bye
           action: close
     castaways_supplies:

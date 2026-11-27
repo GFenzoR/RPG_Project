@@ -24,21 +24,6 @@ dialog:
     greet:
       text: npc.puerto_diver.greet
       options:
-        - text: npc.puerto_diver.opt_west_wood
-          if:
-            - { quest_state: { quest: ch1_bosun_trail, state: completed } }
-            - { quest_not_started: ch1_west_wood }
-            - { level_at_least: 5 }
-          goto: west_wood_offer
-        - text: npc.puerto_diver.opt_west_wood_return
-          if: { quest_state: { quest: ch1_west_wood, state: in_progress, step: tell_diver } }
-          goto: west_wood_done
-        - text: npc.puerto_diver.opt_wreckers
-          if:
-            - { quest_state: { quest: ch1_west_wood, state: completed } }
-            - { quest_not_started: ch1_wreckers }
-            - { level_at_least: 6 }
-          goto: wreckers_offer
         - text: npc.puerto_diver.opt_reef
           goto: reef
         - text: npc.puerto_diver.opt_locket
@@ -54,6 +39,21 @@ dialog:
           goto: locket_returned
         - text: npc.puerto_diver.opt_wands
           goto: wands
+        - text: npc.puerto_diver.opt_west_wood
+          if:
+            - { quest_state: { quest: ch1_bosun_trail, state: completed } }
+            - { quest_not_started: ch1_west_wood }
+            - { level_at_least: 5 }
+          goto: west_wood_offer
+        - text: npc.puerto_diver.opt_west_wood_return
+          if: { quest_state: { quest: ch1_west_wood, state: in_progress, step: tell_diver } }
+          goto: west_wood_done
+        - text: npc.puerto_diver.opt_wreckers
+          if:
+            - { quest_state: { quest: ch1_west_wood, state: completed } }
+            - { quest_not_started: ch1_wreckers }
+            - { level_at_least: 6 }
+          goto: wreckers_offer
         - text: dialog.bye
           action: close
     west_wood_offer:

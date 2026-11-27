@@ -967,6 +967,13 @@ Semántica que asume el contenido (la implementa el motor de T1.10):
   pasos nuevos al final o, si van en el medio, asegúrate de que nadie quede trabado en el
   paso que pasa a ocupar su índice (así se insertó `reach_gate` en `ch3_gate`, docs/14).
 
+Varias quests pueden compartir `chapter`: la cadena del Capítulo 1 son seis
+(`ch1_shipwreck` → `ch1_castaways` → `ch1_false_light` → `ch1_bosun_trail` →
+`ch1_west_wood` → `ch1_wreckers`, docs/02 "Historia"). Una quest nueva con
+`chapter: 1` tiene que ofrecerse con `quest_state` `completed` de la última de la
+cadena y mantener la suma de experiencia entre el nivel 8 y el 9
+(`TestIslandQuestChain`).
+
 Ejemplos reales: `data/quests/ch1_shipwreck.yaml` (Capítulo 1), la cadena del Capítulo 2
 (`ch2_roots` → `ch2_coffer`, T3.6: la segunda se ofrece con `quest_state` de la primera
 `completed` y su propio `level_at_least`; entregas con `has_item` + `take_item` con

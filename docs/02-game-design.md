@@ -2868,6 +2868,42 @@ que la da distingue si está disponible o si todavía espera. Las tareas de caza
 y Cinderstead están en "Tareas" (abajo); la de práctica de Thimblewick espera tres
 minutos (docs/16).
 
+**Capítulo 1 "Náufrago" (Velmara; cadena ampliada el 2026-11-26 por pedido del dueño).**
+Seis quests encadenadas, todo en datos (`data/quests/ch1_*.yaml` y los diálogos de los
+NPCs de Lanternby): cada una se ofrece cuando la anterior está `completed`. La regla de
+ritmo: **la experiencia de las quests sola, sin contar ninguna muerte, lleva a un personaje
+nuevo al nivel 8** (4704 XP) y no llega al 9; del 8 al **10**, que es lo que pide el barco
+a Selvaine (`data/boat_routes.yaml`, `puerto_to_bosque`: nivel 10 y `ch1_shipwreck`),
+se sube cazando. Ninguna recompensa vale mucho más de un nivel y medio al entregarla.
+
+| # | Quest | La da | Pasos | XP | Monedas | Solo quests (XP → nivel) | Con las muertes que pide |
+|---|---|---|---|---|---|---|---|
+| 1 | `ch1_shipwreck` "El naufragio" | Maren Holt | 6 lobos, 5 murciélagos, Doran, bitácora a Maren | 800 | 150 | 800 → 4,70 | 5,16 |
+| 2 | `ch1_castaways` "Los que llegaron a la orilla" | Hermana Liora | 6 cangrejos marinos, mantas de Tilde, volver | 500 | 60 | 1300 → 5,40 | 6,00 |
+| 3 | `ch1_false_light` "La luz falsa" | Hermana Liora | llegar a la punta al este de Grakkun, preguntar a Tilde por el aceite, volver | 550 | 80 | 1850 → 6,04 | 6,45 |
+| 4 | `ch1_bosun_trail` "El rastro del contramaestre" | Doran Pike | 8 murciélagos, llegar bajo el socavón de Saltwrack (piso 8), volver | 800 | 120 | 2650 → 6,69 | 7,20 |
+| 5 | `ch1_west_wood` "Por detrás de Saltwrack" | Corvo | 6 jabalíes cerdosos, llegar al borde norte del bosque del oeste, volver | 900 | 150 | 3550 → 7,31 | 7,93 |
+| 6 | `ch1_wreckers` "Los del farol" | Corvo | 3 saqueadores, llegar al casco del Alba Tardía, hablar con Liora | 1250 | 250 | 4800 → 8,04 | 8,63 |
+
+La historia sigue la del naufragio sin cambiarla: los sobrevivientes duermen en el templo;
+un grumete vio la luz falsa en la punta de piedra al este de la mina; el aceite de esa
+hoguera lo compraron los saqueadores de Saltwrack; al contramaestre, único testigo, lo
+subieron por el socavón de la playa; se lo espía desde el bosque del oeste y se lo rescata
+distrayendo a los saqueadores. Edric cuenta que quien pagó el triple por el cofre pagó
+también la hoguera y se fue con él en el bote sin bandera: el gancho del Capítulo 2 queda
+igual. No hay items, monstruos, NPCs ni mapas nuevos. Maren no da las quests nuevas (su
+saludo ya tiene las 9 opciones que admite el esquema): al cerrar la bitácora manda al
+jugador al templo. La primera recompensa (800 XP) quedó como estaba: son 1,63 niveles
+contando sus 11 muertes, la más grande de la cadena; las nuevas dan menos de un nivel
+cada una. Contando las muertes que la propia cadena pide (1295 XP), un personaje termina
+en 6095 XP, nivel 8,63, y le faltan unas 3600 XP de caza para el 10. Las secundarias de
+la isla siguen aparte: `diver_locket` (nivel 8, 900 XP) y `foreman_ore` (nivel 10).
+Lo vigila `TestIslandQuestChain` (`server/internal/sim/balance_island_chain_test.go`,
+determinista; `DEBUG_BALANCE=1` imprime la tabla): la cadena es una sola línea desde
+`ch1_shipwreck` con todas las quests de `chapter: 1`, suma entre el nivel 8 y el 9,
+ningún `min_level` ni `level_at_least` de quien la da supera lo que dan las quests
+anteriores, y la ruta de salida pide nivel 10.
+
 **Capítulo 2 "Raíces" (T3.6, Selvaine).** Lo da Velia Musgo, la druida de Ivernel,
 a quien terminó el Capítulo 1. Dos quests encadenadas, todo en datos
 (`data/quests/ch2_*.yaml`, `data/npcs/bosque_druid.yaml`):

@@ -163,6 +163,17 @@ el punto 5:
   - **Sin animación de arrastre:** el cuerpo aparece en la casilla nueva (dos `TileUpdate`).
   - La reserva de un cuerpo dejado durante un guardado pendiente (`heldGround`) se conserva
     al arrastrarlo, pero no tiene test propio (los tests cubren `corpse_owner_only_ms`).
+- **Quests de la primera isla (hecho, rama `feat/island-quests`; el dueño el 2026-11-26: la
+  historia gusta pero es corta, las quests solas tienen que llevar al nivel 8 y del 8 al 10
+  se caza)**. Antes: una sola quest (`ch1_shipwreck`, 800 XP = nivel 4 solo con quests);
+  la salida ya pedía nivel 10 en datos (`data/boat_routes.yaml`). Ahora el Capítulo 1 son
+  seis quests encadenadas (4800 XP = nivel 8,04; tabla en docs/02 "Historia", test
+  `TestIslandQuestChain`). Pendiente: jugarla entera a mano (los puntos `reach` de la
+  punta, el socavón, el borde del bosque y el casco pasan `make validate`, pero nadie los
+  caminó); las pistas del relato (cenizas, farol roto, el hombre atado) solo están en los
+  textos de los pasos, sin objetos en el mapa ni un NPC para Edric; Maren no nombra las
+  quests nuevas salvo al cerrar la bitácora (su saludo está en el tope de 9 opciones);
+  un personaje que ya terminó `ch1_shipwreck` ve la cadena nueva al hablar con Liora.
 - **Comida de monstruos (hecho, rama `feat/animal-food`; el dueño: "algunos monstruos deberían
   botar comida, especialmente los animales")**: seis comidas nuevas y 13 monstruos que las
   sueltan (docs/02 "Oficios", Cocina). Pendiente: sprites propios; por ahora reusan los

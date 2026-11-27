@@ -23,15 +23,6 @@ dialog:
     greet:
       text: npc.puerto_foreman.greet
       options:
-        - text: npc.puerto_foreman.opt_bosun_trail
-          if:
-            - { quest_state: { quest: ch1_false_light, state: completed } }
-            - { quest_not_started: ch1_bosun_trail }
-            - { level_at_least: 5 }
-          goto: bosun_trail_offer
-        - text: npc.puerto_foreman.opt_bosun_trail_return
-          if: { quest_state: { quest: ch1_bosun_trail, state: in_progress, step: tell_foreman } }
-          goto: bosun_trail_done
         - text: npc.puerto_foreman.opt_ch1_bosun
           if: { quest_state: { quest: ch1_shipwreck, state: in_progress, step: talk_foreman } }
           action: { give_item: bosun_logbook }
@@ -58,6 +49,15 @@ dialog:
           goto: ore_delivered
         - text: npc.puerto_foreman.opt_mine
           goto: mine
+        - text: npc.puerto_foreman.opt_bosun_trail
+          if:
+            - { quest_state: { quest: ch1_false_light, state: completed } }
+            - { quest_not_started: ch1_bosun_trail }
+            - { level_at_least: 5 }
+          goto: bosun_trail_offer
+        - text: npc.puerto_foreman.opt_bosun_trail_return
+          if: { quest_state: { quest: ch1_bosun_trail, state: in_progress, step: tell_foreman } }
+          goto: bosun_trail_done
         - text: dialog.bye
           action: close
     bosun_trail_offer:
