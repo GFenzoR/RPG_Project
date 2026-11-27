@@ -706,10 +706,26 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   nuevo) se borra. Un fantasma tapado por una criatura más alta queda tapado (sin copia
   translúcida desde el 2026-11-26).
 - **Muerte continua** (docs/17, rama `feat/death-anim`): la caída termina en la pose del
-  cadáver y se funde sobre él `DEATH_SETTLE_MS` (100 ms); ya no se desvanece a nada. Toda
-  muerte se dibuja al sur (`CreatureBody.draw`), bajada `CreatureBody.fallY` px
-  (`fallShift` con `rest` de `atlas.json`); una sola imagen se vuelca (`Pose.tip`,
-  `tipPlacement`). `render/death-fall.ts` (puro, con tests): `CorpseVeil` esconde
+  cadáver y se funde sobre él `DEATH_SETTLE_MS` (100 ms); ya no se desvanece a nada. El
+  cuerpo baja `CreatureBody.fallY(dir)` px (`fallShift` con `rest`/`rests` de
+  `atlas.json`, `restFor`); una sola imagen se vuelca (`Pose.tip`, `tipPlacement`).
+- **Un cadáver por dirección** (docs/17, rama `feat/corpse-dirs`): la caída ya no es al sur.
+  `AnimState.fallDir` (`s`, `e`, `n`, `w`; `startDeath(s, now, fallY, dir)`) y `fallArt` de
+  `packages/renderer/src/anim.ts` deciden los frames (los de esa dirección, o los del sur
+  espejados al norte y al oeste si la muerte solo se dibujó al sur) y el sentido del vuelco
+  de una imagen; spritegen hace cada cadáver con la misma regla. Los restos traen
+  `ItemMods.facing` y `body_sex` (`ItemMods.facing`/`bodySex` del cliente,
+  `state/mods.ts`); `state/corpse-art.ts`: `corpseDir`, la clave `<item>@<quién>[/<e|n|w>]`
+  (`mapItemKey`, `parseMapItemKey`, `keyFallDir`), `corpseSprite(quién, dir)` y los
+  respaldos (`corpseSpriteIn`: esa dirección, el sur, la familia). El canvas (`leave`,
+  `followRemains`) hace caer el cuerpo hacia donde miraba y, apenas `CorpseVeil` conoce los
+  restos de esa muerte (`FallHandle.laid`, de `begin` o de un `update` posterior), hacia
+  donde dice su clave. `WorldState.withBodySex` solo adivina el sexo si el servidor no lo
+  mandó. `hasEightFacings` no cuenta la muerte (los humanoides caen en cuatro direcciones
+  y siguen girando en ocho). Hook E2E: `poses().dying[]` trae `way` y `corpseWay`.
+  `render/fall-atlas.test.ts` compara la caída con el cadáver sobre el atlas real (se
+  salta sin `make sprites`).
+- Lo demás de la muerte continua: `render/death-fall.ts` (puro, con tests): `CorpseVeil` esconde
   (`renderable`) los restos de esa muerte (`WorldState.remainsLaid`, de un `TileUpdate`)
   mientras dura la caída y nunca más; `settle` termina el paso de quien muere caminando.
   Con movimiento reducido no hay fantasma de caída.

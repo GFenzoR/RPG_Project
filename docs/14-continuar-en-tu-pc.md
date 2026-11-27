@@ -204,13 +204,43 @@ el punto 5:
     de zancada larga (el sabueso de ceniza, 56 px; el guardián, 52).
   - **Norte y sur.** La misma zancada vale en todas las direcciones; de frente y de
     espaldas los frames de Gemini apenas muestran el paso, así que ahí se nota menos.
+- **Un cadáver por dirección (hecho, rama `feat/corpse-dirs`; el dueño el 2026-11-27:
+  "tienes que dibujar un cadáver por dirección, si no sería muy raro que siempre caen
+  igual")**: cada criatura cae hacia donde miraba y su cadáver queda como cayó (docs/17 "Un
+  cadáver por dirección"). Servidor y protocolo (`ItemMods.facing` y `body_sex`, docs/05
+  "Restos"), spritegen (92 cadáveres, la muerte de los humanoides en cuatro direcciones),
+  spritepack (`anims.rests`) y cliente. Hay que correr `make gen` y `make sprites`.
+  Pendiente:
+  - **Correr `make e2e`** (no se corrió en la rama: otro lote tenía Docker y los puertos):
+    mirar `11b-death-1-mid`, `-2-end` y `-3-corpse` (un lobo: cuerpo y cadáver caídos hacia
+    el mismo lado, el cadáver espejado si el lobo miraba al norte o al oeste) y `14-respawn`
+    (el cuerpo del jugador). `shotFall` ahora falla si la caída y el cadáver no van hacia
+    el mismo lado; si falla ahí, mirar `followRemains` de `render/game-canvas.ts` (la caída
+    toma la dirección de los restos cuando llegan) y `poses().dying[].way`/`corpseWay`.
+  - **Arte de Gemini:** las 14 criaturas de Gemini solo tienen la muerte al sur; sus otros
+    cadáveres son ese y su espejo (dos distintos, no cuatro). Pedirle a Gemini
+    `death_e_<n>`, `death_n_<n>` y `death_w_<n>` de cada una (mismos tamaños y cantidad de
+    frames que su `death_s`) y dejarlos en `assets/sprites/creatures/<id>/`: `make
+    spritegen && make sprites` hace el resto, sin tocar código (y el test de la tabla de
+    docs/17 en `tools/spritegen/src/recipes/corpses.test.ts` hay que actualizarlo). Al
+    morir mirando al norte o al este, una de esas criaturas pasa a su frame de frente
+    antes de caer, como siempre.
+  - **La gaviota** sigue siendo una imagen volcada (cuatro vuelcos distintos ahora).
+  - **Los cuerpos al este y al oeste de las personas** giran mientras caen para quedar en
+    diagonal (`HUMANOID_DEATH_TURN`); si al dueño no le gusta el giro, son dos números.
+  - **El cuerpo de un jugador** lleva el sexo y la dirección, todavía no su piel, pelo ni
+    ropa.
+  - **Revisión de código del servidor:** el diff de `server/` y `proto/` de esta rama no
+    pasó por el subagente `code-reviewer` (esta etapa no lanza agentes): le toca a la
+    revisión del lote.
 - **Cuerpo humano del jugador (hecho, rama `feat/human-corpse`; el dueño el 2026-11-26)**:
   el cuerpo de un jugador es una persona tendida (`corpses/body_male|female`, docs/17 "El
   cuerpo de un jugador"), apilada sobre la caída continua. Solo cliente y spritegen; hay
   que correr `make sprites`. Pendiente: mirar en `make e2e` la muerte de un jugador (el
   cuerpo debe seguir la pose de la caída). Limitación conocida: lleva el sexo, no la
-  piel, el pelo ni la ropa del muerto (el servidor solo manda su nombre); un cuerpo cuyo
-  dueño no se vio vivo sale de hombre. Arreglo completo: que `ItemMods` lleve el `look`.
+  piel, el pelo ni la ropa del muerto. Desde `feat/corpse-dirs` el sexo lo manda el
+  servidor (`ItemMods.body_sex`): ya no depende de haber visto vivo al dueño. Arreglo
+  completo: que `ItemMods` lleve el `look`.
 - **Muerte continua (hecho, rama `feat/death-anim`; el dueño el 2026-11-25/27: "muere hacia
   cierta dirección y aparece su cuerpo en la otra; debiese ser una animación continua")**:
   la caída termina en la pose y sobre los píxeles del cadáver, que queda escondido hasta
@@ -220,17 +250,14 @@ el punto 5:
     la misma muerte de un lobo): el cuerpo y el cadáver nunca a la vez, y entre el 2 y el 3
     solo cambia el color. El test no se corrió en su etapa (sin servidores); retiene el
     reloj de la página, y si fallara por eso, `shotFall` es lo que hay que mirar.
-  - **El jabalí y el ciervo caen siempre al sur** (antes hacia donde miraban, con el
-    cadáver al sur): sus caídas al este, norte y oeste quedan sin usar. Un cadáver por
-    dirección pide un campo del servidor (hacia dónde cayó) y cuatro sprites por monstruo;
-    que lo decida el dueño si el giro al sur al morir le molesta.
-  - **La gaviota** (la única de una sola imagen) gira a su dibujo sin espejar al morir si
-    miraba al este, y mientras se vuelca no proyecta sombra. Un clip de muerte propio lo
-    arregla.
+  - **El jabalí y el ciervo caen siempre al sur:** resuelto en `feat/corpse-dirs` (un
+    cadáver por dirección, arriba).
+  - **La gaviota** (la única de una sola imagen) mientras se vuelca no proyecta sombra. Un
+    clip de muerte propio lo arregla.
   - **La sombra del cadáver** (la que proyectan los objetos del mapa) sale con el
     `TileUpdate`, mientras el cuerpo todavía cae: son unos píxeles bajo el cuerpo.
-  - **El cuerpo de un jugador** sigue siendo el item genérico: la caída se funde a otro
-    dibujo. Un cadáver con el aspecto del jugador es arte y protocolo nuevos.
+  - **El cuerpo de un jugador** ya es una persona tendida, por sexo y dirección; con el
+    aspecto del jugador (piel, pelo, ropa) sería arte y protocolo nuevos.
   - **Sin oscurecer al caer:** el cuerpo llega al piso con sus colores vivos y los 100 ms
     del fundido lo llevan a los del cadáver; si se nota el cambio, teñirlo durante la caída.
 - **Nada reaparece a la vista (hecho, rama `feat/unseen-respawn`; el dueño el 2026-11-26: "si
@@ -758,9 +785,7 @@ el punto 5:
   - **El cuerpo de un jugador con su muñeco tendido:** hoy es `creature_remains`
     (`CorpseItem`, huesos sobre un cuero) con su nombre. Haría falta su aspecto en `ItemMods` (o el `CreatureLook` del muerto) y
     componer las capas en el último frame de morir en el cliente (como `look-preview`).
-  - **Caída hacia otro lado:** el cadáver es siempre la caída al sur; el ciervo y el
-    jabalí del motor, que mueren en cuatro direcciones, terminan su caída al oeste o al
-    norte y el cadáver aparece mirando al sur.
+  - **Caída hacia otro lado:** resuelto en `feat/corpse-dirs` (un cadáver por dirección).
   - **E2E:** mirar en `make e2e` el lobo muerto (`11b-death-3-corpse`, `14-respawn`): el cadáver
     del lobo, no el de la familia, y "restos de lobo" en el log y en la ventana.
 - **Unidades métricas y cargas realistas (hecho, rama `feat/metric-units`; el dueño el
