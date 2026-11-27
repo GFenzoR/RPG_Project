@@ -1304,3 +1304,118 @@ test("sandbox light shadows: indoors, underground and by a lamp at night", async
   }
   expect(errors).toEqual([]);
 });
+
+// docs/17 "Criaturas al ritmo de su paso" (owner, 2026-11-27: monsters must not slide or
+// float): by the pens two different monsters walk, and for each the walk cycle the client
+// plays within a step advances by the distance it is drawn moving over its sprite's stride
+// (assets/sprites.yaml `body`, `stride`), whatever its speed. The screenshot is taken with
+// both mid-step.
+test("sandbox creature walk: two different monsters cycle by the distance they cover over their stride", async ({
+  page,
+  playwright,
+}) => {
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  const who = await newGuardian(playwright, "Rastreador");
+  psql([
+    databaseUrl,
+    "-c",
+    `UPDATE characters SET town = 'pruebas' WHERE name = '${who.name}';
+     UPDATE accounts SET role = 'gm' WHERE email = lower('${who.email}');`,
+  ]);
+  await enterGame(page, who);
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  page.on("pageerror", (e) => errors.push(e.message));
+  const say = page.getByTestId("say").getByRole("textbox");
+  // The hunting trail under the pens of the rats and the wolves.
+  await say.fill("/tp 2083 2081 7");
+  await say.press("Enter");
+  await expect
+    .poll(
+      async () => {
+        const s = await page.evaluate(() => window.__rpgClient?.self());
+        return s && !s.pending && !s.walking ? `${s.x},${s.y}` : "moving";
+      },
+      { timeout: 20_000 },
+    )
+    .toBe("2083,2081");
+  await say.blur();
+
+  // Every monster by the pens says how it walks.
+  await expect
+    .poll(
+      async () => {
+        const g = (await page.evaluate(() => window.__rpgClient?.gaits())) ?? [];
+        return new Set(
+          g.filter((m) => m.stride !== undefined && m.walkFrames > 0).map((m) => m.contentId),
+        ).size;
+      },
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThanOrEqual(2);
+
+  // Two samples of one step for each of two different kinds of monster, frame by frame.
+  interface Pair {
+    contentId: string;
+    stride: number;
+    cycles: number;
+    px: number;
+  }
+  const pairs = await page.evaluate(
+    () =>
+      new Promise<Pair[]>((resolve) => {
+        interface First {
+          step: number;
+          cycles: number;
+          x: number;
+          y: number;
+        }
+        const first = new Map<number, First>();
+        const done = new Map<string, Pair>();
+        const until = performance.now() + 60_000;
+        const tick = (): void => {
+          for (const m of window.__rpgClient?.gaits() ?? []) {
+            if (!m.moving || m.step === undefined || m.stride === undefined || m.walkFrames === 0)
+              continue;
+            const f = first.get(m.id);
+            if (!f || f.step !== m.step) {
+              first.set(m.id, { step: m.step, cycles: m.cycles, x: m.x, y: m.y });
+              continue;
+            }
+            const px = Math.hypot(m.x - f.x, m.y - f.y);
+            if (px >= 8 && !done.has(m.contentId))
+              done.set(m.contentId, {
+                contentId: m.contentId,
+                stride: m.stride,
+                cycles: m.cycles - f.cycles,
+                px,
+              });
+          }
+          if (done.size >= 2 || performance.now() > until) resolve([...done.values()]);
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  expect(pairs.length, JSON.stringify(pairs)).toBeGreaterThanOrEqual(2);
+  for (const p of pairs) {
+    // The cycle played is the ground covered over the stride (a slide correction of the
+    // drawing aside: a few hundredths of a cycle).
+    expect(p.cycles, JSON.stringify(p)).toBeGreaterThan(0);
+    expect(Math.abs(p.cycles - p.px / p.stride), JSON.stringify(p)).toBeLessThan(0.08);
+  }
+  expect(new Set(pairs.map((p) => p.stride)).size, "two different strides").toBe(2);
+
+  // Both kinds mid-step in one frame.
+  await page.waitForFunction(
+    () =>
+      new Set((window.__rpgClient?.gaits() ?? []).filter((m) => m.moving).map((m) => m.contentId))
+        .size >= 2,
+    undefined,
+    { timeout: 60_000 },
+  );
+  await shot(page, "91b-creature-walk");
+  expect(errors).toEqual([]);
+});

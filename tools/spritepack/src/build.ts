@@ -10,6 +10,7 @@ import {
   ANIM_ACTIONS,
   ANIM_DIRS,
   frameName,
+  gaitHints,
   layerOver,
   measureFrames,
   stancesOf,
@@ -365,6 +366,7 @@ export function buildAtlas(root: string, opts: BuildOptions = {}): BuildResult {
       shadow: entry?.shadow ?? "baked",
       ...(entry?.facing ? { facing: entry.facing } : {}),
       ...(entry?.flying ? { flying: true } : {}),
+      ...gaitHints(entry),
       actions: found?.actions ?? {},
     };
     if (!r && found) aliases.set(name, found.base);
@@ -699,6 +701,7 @@ function buildLayered(
     shadow: entry.shadow,
     ...(entry.facing ? { facing: entry.facing } : {}),
     ...(entry.flying ? { flying: true } : {}),
+    ...gaitHints(entry),
     actions: {},
   };
   const recolored = new Map<string, Image>();

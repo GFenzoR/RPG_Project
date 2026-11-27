@@ -47,10 +47,12 @@ import {
   newPose,
   screenToTile,
   screenToWorld,
+  isFlyer,
   startAttack,
   startDeath,
   startHit,
   startVanish,
+  strideOf,
   tilePixels,
   tileToScreen,
   VANISH_MS,
@@ -363,6 +365,11 @@ export interface GameCanvas {
    * length.
    */
   poses(): { attacking: PoseTime[]; dying: PoseTime[]; vanishing: PoseTime[] };
+  /**
+   * E2E (docs/17 "Criaturas al ritmo de su paso"): how each drawn creature walks now, by
+   * the model's clock: where it is drawn, the walk cycles it has played and its stride.
+   */
+  gaits(): GaitView[];
   /** E2E (docs/17 UI-11): the speech bubbles on screen now, by speaker. */
   bubbles(): { id: number; style: BubbleStyle; lines: string[] }[];
   /**
@@ -395,6 +402,28 @@ export interface GameCanvas {
   /** The <canvas> element (drop target for items dragged onto the map). */
   readonly element: HTMLCanvasElement;
   destroy(): void;
+}
+
+/**
+ * How one drawn creature walks (GameCanvas.gaits): its sprite's body and stride (sprite px
+ * per walk cycle; undefined for a flier or a sprite that declares none), whether a step is
+ * being walked (`step`: its start), the cycles played so far within the clip (the steps
+ * before plus this one's share) and the frame drawn, and where the model draws it, in
+ * sprite px of the map.
+ */
+export interface GaitView {
+  id: number;
+  contentId: string;
+  body: string | undefined;
+  stride: number | undefined;
+  flying: boolean;
+  walkFrames: number;
+  moving: boolean;
+  step: number | undefined;
+  cycles: number;
+  frame: number;
+  x: number;
+  y: number;
 }
 
 /** How far into an animation a creature is (GameCanvas.poses, for the E2E). */
@@ -2266,6 +2295,41 @@ export async function createGameCanvas(
       const st = animStates.get(id);
       const figure = sprites.get(id)?.figure;
       return st && figure ? { facing: st.facing, eight: figure.eight } : undefined;
+    },
+    gaits() {
+      const now = performance.now();
+      const out: GaitView[] = [];
+      for (const [id, st] of animStates) {
+        const c = world.creatures.get(id);
+        const figure = sprites.get(id)?.figure;
+        if (!c || !figure) continue;
+        const meta = figure.clips.meta;
+        const w = world.activeWalk(c, now);
+        // The step the animation is counting: one it has not seen yet is not walked.
+        const moving =
+          w !== undefined &&
+          now >= w.start &&
+          now < w.start + w.duration &&
+          st.walkStart === w.start;
+        const frames = Math.max(1, meta?.actions.walk?.frames ?? 1);
+        const t = moving ? (now - w.start) / w.duration : 0;
+        const p = world.drawPos(c, now);
+        out.push({
+          id,
+          contentId: c.contentId,
+          body: meta?.body,
+          stride: strideOf(meta),
+          flying: isFlyer(meta),
+          walkFrames: meta?.actions.walk?.frames ?? 0,
+          moving,
+          step: moving ? w.start : undefined,
+          cycles: (st.walkPhase + t * (moving ? st.walkPer : 0)) / frames,
+          frame: st.walkFrame,
+          x: p.x * T,
+          y: p.y * T,
+        });
+      }
+      return out;
     },
     poses() {
       const now = performance.now();

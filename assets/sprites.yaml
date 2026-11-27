@@ -136,38 +136,46 @@ animations:
   worn/weapon_bow: { anchor: bc, shadow: none, trim: true, per_tile: 8, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
   worn/weapon_crossbow: { anchor: bc, shadow: none, trim: true, per_tile: 8, ms: { idle: 500, attack: 90, shoot: 100, cast: 130, death: 150 } }
 
+  # ---- how a creature walks (docs/17 "Criaturas al ritmo de su paso") -----------------------
+  # body: biped | quadruped | many_legs | slither | hop | flyer. stride: the sprite px of
+  # ground one walk cycle covers (default: its body's, DEFAULT_STRIDE of packages/renderer
+  # anim.ts). The walk frames advance with the distance walked over the stride, at any speed;
+  # a sprite without walk frames gets its body's procedural gait on the same phase; a flyer
+  # beats its wings by time and has no stride. Every monster and NPC sprite says its body
+  # (tools/spritepack monsters.test.ts).
+  #
   # ---- single-frame monsters: hints for the procedural motion (ANI-5) -----------------------
   # facing: the side the drawing looks at (mirrored to walk the other way); flying: hovers.
-  creatures/thieving_gull: { facing: left, flying: true }
+  creatures/thieving_gull: { body: flyer, facing: left, flying: true }
 
   # ---- sprite engine (tools/spritegen/src/engine, docs/17 "Motor de sprites") ---------------
   # Frames rendered from a model in all four facings (no mirror, no facing), 64x64 with the
   # feet on the tile (bc) over the contact shadow. ms: the rig's ms per frame of each action
   # (spritegen check fails if they differ from its spec).
-  creatures/bristleback_boar: { anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 90, death: 120 } }
-  creatures/bramble_stag: { anchor: bc, shadow: ellipse, ms: { idle: 550, attack: 90, death: 130 } }
+  creatures/bristleback_boar: { body: quadruped, stride: 32, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 90, death: 120 } }
+  creatures/bramble_stag: { body: quadruped, stride: 40, anchor: bc, shadow: ellipse, ms: { idle: 550, attack: 90, death: 130 } }
   # The forge echo, an ember spirit in a smith's shape (it was a Dungeon Crawl fire elemental).
-  npcs/forge_echo: { anchor: bc, shadow: ellipse, flying: true, ms: { idle: 420 } }
+  npcs/forge_echo: { body: flyer, anchor: bc, shadow: ellipse, flying: true, ms: { idle: 420 } }
 
   # ---- monsters drawn with the owner's Gemini (assets/CREDITS.md "Generado con IA") ---------
   # Frames from files, assets/sprites/<sprite>/<action>_<dir>_<n>.png: south, north and west
   # drawn, east the west ones mirrored (ANI-1); death only facing south. bc: feet on the
   # tile; ellipse: the renderer's contact shadow (the frames paint none). ms: per frame.
-  creatures/gloom_bat: { mirror: true, anchor: bc, shadow: ellipse, flying: true, ms: { idle: 300, attack: 100, death: 200 } }
-  creatures/mire_toad: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 200 } }
-  creatures/moss_spider: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
-  creatures/thornling: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 130, death: 220 } }
-  creatures/tide_crab: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
-  creatures/bilge_rat: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 100, death: 180 } }
-  creatures/wolf: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
-  creatures/hollow_crawler: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
-  creatures/ore_beetle: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, death: 200 } }
+  creatures/gloom_bat: { body: flyer, mirror: true, anchor: bc, shadow: ellipse, flying: true, ms: { idle: 300, attack: 100, death: 200 } }
+  creatures/mire_toad: { body: hop, stride: 32, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 200 } }
+  creatures/moss_spider: { body: many_legs, stride: 16, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
+  creatures/thornling: { body: biped, stride: 24, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 130, death: 220 } }
+  creatures/tide_crab: { body: many_legs, stride: 14, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
+  creatures/bilge_rat: { body: quadruped, stride: 20, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 100, death: 180 } }
+  creatures/wolf: { body: quadruped, stride: 40, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
+  creatures/hollow_crawler: { body: slither, stride: 22, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, attack: 110, death: 200 } }
+  creatures/ore_beetle: { body: many_legs, stride: 14, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 500, death: 200 } }
   # Karvask. The warden, the Chapter 3 boss, is 96x96: a head and a half above a person.
-  creatures/ash_hound: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 400, attack: 100, death: 200 } }
-  creatures/cinder_salamander: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 200 } }
-  creatures/slag_golem: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 700, attack: 140, death: 240 } }
-  creatures/ember_wyrmling: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 220 } }
-  creatures/slagbound_warden: { mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 700, attack: 150, death: 260 } }
+  creatures/ash_hound: { body: quadruped, stride: 56, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 400, attack: 100, death: 200 } }
+  creatures/cinder_salamander: { body: quadruped, stride: 26, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 200 } }
+  creatures/slag_golem: { body: biped, stride: 30, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 700, attack: 140, death: 240 } }
+  creatures/ember_wyrmling: { body: quadruped, stride: 32, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 600, attack: 120, death: 220 } }
+  creatures/slagbound_warden: { body: biped, stride: 52, mirror: true, anchor: bc, shadow: ellipse, ms: { idle: 700, attack: 150, death: 260 } }
 
 # Map tile art (docs/17 ART-3, ART-4, ART-7; tools/spritepack tiles.ts). Ground looks
 # (<sprite>/var_<n>), animation frames (<sprite>/frame_<n>), wall pieces (<sprite>/wall_<mask>)

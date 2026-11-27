@@ -50,6 +50,10 @@ export interface AnimEntry {
   actions: Map<AnimAction, ActionSpec>;
   facing?: "left" | "right";
   flying?: boolean;
+  /** How its body walks (docs/17 "Criaturas al ritmo de su paso"); see BODY_GAITS. */
+  body?: BodyGait;
+  /** Sprite px of ground one walk cycle covers (default: its body's, in the renderer). */
+  stride?: number;
   shadow: Shadow;
   /**
    * Frames from files only (no layers): the west frames of an action stand in for its
@@ -89,6 +93,8 @@ export interface AnimMeta {
   shadow: Shadow;
   facing?: "left" | "right";
   flying?: boolean;
+  body?: BodyGait;
+  stride?: number;
   /**
    * Where it stands, per facing (measureStance): the ground line of its standing pose and
    * the span of what touches the ground. The shadows start there (docs/17 ART-5).
@@ -107,6 +113,18 @@ export interface AnimMeta {
  * and the columns (from the frame's left edge, x1 exclusive) its lowest rows span.
  */
 export type Stance = [foot: number, x0: number, x1: number];
+
+/** The kinds of body a creature walks with (BodyGait of packages/renderer anim.ts). */
+export const BODY_GAITS = ["biped", "quadruped", "many_legs", "slither", "hop", "flyer"] as const;
+export type BodyGait = (typeof BODY_GAITS)[number];
+
+/** The `body` and `stride` of an entry, as atlas.json carries them. */
+export function gaitHints(entry: AnimEntry | undefined): { body?: BodyGait; stride?: number } {
+  return {
+    ...(entry?.body ? { body: entry.body } : {}),
+    ...(entry?.stride !== undefined ? { stride: entry.stride } : {}),
+  };
+}
 
 const LPC_ROWS = { n: 0, w: 1, s: 2, e: 3 } as const;
 const LPC_FRAME = { w: 64, h: 64 } as const;
@@ -196,6 +214,8 @@ const ENTRY_KEYS = new Set([
   "actions",
   "facing",
   "flying",
+  "body",
+  "stride",
   "shadow",
   "mirror",
   "anchor",
@@ -257,6 +277,18 @@ export function parseAnimEntry(
   if (raw["flying"] !== undefined) {
     if (typeof raw["flying"] === "boolean") entry.flying = raw["flying"];
     else fail("flying must be true or false");
+  }
+  const body = raw["body"];
+  if (body !== undefined) {
+    if ((BODY_GAITS as readonly unknown[]).includes(body)) entry.body = body as BodyGait;
+    else fail(`body must be one of ${BODY_GAITS.join(", ")}`);
+  }
+  const stride = raw["stride"];
+  if (stride !== undefined) {
+    if (typeof stride !== "number" || !Number.isFinite(stride) || stride <= 0)
+      fail("stride must be a number > 0 (sprite px one walk cycle covers)");
+    else if (entry.flying || entry.body === "flyer") fail("stride: a flier has none");
+    else entry.stride = stride;
   }
   const layers = raw["layers"];
   if (layers === undefined) {
