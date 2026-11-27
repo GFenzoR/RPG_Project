@@ -215,8 +215,16 @@ el punto 5:
     mirar `11b-death-1-mid`, `-2-end` y `-3-corpse` (un lobo: cuerpo y cadáver caídos hacia
     el mismo lado, el cadáver espejado si el lobo miraba al norte o al oeste) y `14-respawn`
     (el cuerpo del jugador). `shotFall` ahora falla si la caída y el cadáver no van hacia
-    el mismo lado; si falla ahí, mirar `followRemains` de `render/game-canvas.ts` (la caída
-    toma la dirección de los restos cuando llegan) y `poses().dying[].way`/`corpseWay`.
+    el mismo lado; si falla ahí, mirar `followRemains` y `CorpseVeil.claim` de
+    `render/death-fall.ts` (la caída toma la dirección de los restos de esa criatura cuando
+    llegan) y `poses().dying[].way`/`corpseWay`. Es requisito antes del merge: la revisión
+    de la rama (2026-11-27) cubrió `server/` y `proto/`, y `fall-atlas.test.ts` ya maneja
+    el `CreatureBody` real, pero el canvas entero solo lo ve el E2E.
+  - **Salto a mitad de caída (cosmético):** si el monstruo giró en el tick en que murió y
+    el `TileUpdate` de sus restos se procesa uno o más cuadros después de la muerte, el
+    cuerpo empieza a caer hacia donde el cliente lo tenía y cambia de clip y de espejo
+    cuando llegan los restos. Arreglarlo sería demorar el inicio de la caída hasta tener
+    los restos (hasta `LAID_BEFORE_MS`), a cambio de un retraso en toda muerte.
   - **Arte de Gemini:** las 14 criaturas de Gemini solo tienen la muerte al sur; sus otros
     cadáveres son ese y su espejo (dos distintos, no cuatro). Pedirle a Gemini
     `death_e_<n>`, `death_n_<n>` y `death_w_<n>` de cada una (mismos tamaños y cantidad de
@@ -225,7 +233,10 @@ el punto 5:
     docs/17 en `tools/spritegen/src/recipes/corpses.test.ts` hay que actualizarlo). Al
     morir mirando al norte o al este, una de esas criaturas pasa a su frame de frente
     antes de caer, como siempre.
-  - **La gaviota** sigue siendo una imagen volcada (cuatro vuelcos distintos ahora).
+  - **La gaviota** sigue siendo una imagen volcada (cuatro vuelcos distintos ahora). Como
+    es una sola imagen que en vida se espeja para mirar al otro lado, en el primer frame
+    de la muerte puede darse vuelta de golpe: la caída se dibuja con el espejo de su
+    cadáver (`fallArt`), no con el que tenía viva. Se va con sus frames dibujados.
   - **Los cuerpos al este y al oeste de las personas** giran mientras caen para quedar en
     diagonal (`HUMANOID_DEATH_TURN`); si al dueño no le gusta el giro, son dos números.
   - **El cuerpo de un jugador** lleva el sexo y la dirección, todavía no su piel, pelo ni

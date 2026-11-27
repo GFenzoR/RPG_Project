@@ -3330,17 +3330,26 @@ caída "siempre al sur"; todo lo demás de esas dos secciones sigue igual.
   distinguen. Una figura viva sigue girando en ocho direcciones (`hasEightFacings` no
   cuenta la muerte).
 - **Dónde descansa cada caída:** `atlas.json` `anims.<sprite>.rest` sigue siendo la del sur
-  y `rests` trae las de este, norte y oeste cuando son distintas (`restsOf` de
+  y `rests` trae las de este, norte y oeste cuando son distintas (`restsOf`, que usa el
+  `fallArt` de `packages/renderer` importado, no una copia de la regla, de
   `tools/spritepack`; `restFor` en el cliente). `CreatureBody.fallY(dir)` baja el cuerpo
   hasta ahí (un muñeco, a la más baja de sus capas en esa dirección).
-- **El cliente** (`render/game-canvas.ts` `leave` y `followRemains`): al morir, el cuerpo
+- **El cliente** (`render/game-canvas.ts` `leave`; `render/death-fall.ts` `followRemains`,
+  puro y con tests): al morir, el cuerpo
   empieza a caer hacia donde el cliente lo tenía mirando; los restos que el servidor dejó
   en esa casilla tienen la última palabra: `CorpseVeil.begin` devuelve la caída
   (`FallHandle`) y, en cuanto conoce sus restos (ya al empezar, si el `TileUpdate` llegó
   antes que la muerte; si no, en el cuadro en que llega), la caída toma la dirección de su
   clave (`keyFallDir`). Los dos mensajes salen del mismo tick, así que el cambio, si lo
-  hay, cae en el primer frame de la caída. Una muerte sin restos (una invocación) cae
-  hacia donde miraba. `AnimState.fallDir` + `fallArt` deciden frames, espejo y sentido del
+  hay, cae en el primer frame de la caída (si el `TileUpdate` se procesa uno o más
+  cuadros después, el cuerpo cambia de clip y de espejo a mitad de la caída: un salto
+  solo cosmético, el servidor manda). Una muerte sin restos (una invocación) cae
+  hacia donde miraba. **De quién son los restos:** la caída sabe quién murió
+  (`remainsWho`: el id del monstruo, `body_<sexo>` de un jugador) y solo toma restos de
+  esa criatura (`remainsAre`), y entre varios los que llegaron más cerca del momento de
+  la muerte; un cadáver arrastrado a esa casilla en el mismo instante no es el suyo (ni
+  lo esconde ni cae hacia él), y si llegó antes que los propios, la caída lo suelta en
+  cuanto estos llegan. `AnimState.fallDir` + `fallArt` deciden frames, espejo y sentido del
   vuelco; `CreatureBody.draw` elige los frames.
 - **El mapa** (`state/corpse-art.ts`): la clave de `MapView` de unos restos caídos a otro
   lado que el sur termina en `/<e|n|w>` (`40@wolf/e`, `41@body_female/w`; al sur, la clave
@@ -3356,8 +3365,11 @@ caída "siempre al sur"; todo lo demás de esas dos secciones sigue igual.
   las cuatro direcciones (64 casos), el último frame de la caída como lo dibuja el cliente
   (`fallArt`, `fallShift`, `restsOf`) con el PNG del cadáver, píxel por píxel, y el vuelco
   de una imagen en las cuatro direcciones contra `tipPlacement`.
-  `client/src/render/fall-atlas.test.ts` hace lo mismo contra el atlas real después de
-  `make sprites` (sin atlas se salta): 64 casos de monstruos con clip y 24 de muñecos (los
+  `client/src/render/fall-atlas.test.ts` lo comprueba contra el atlas real con el
+  renderer del cliente (los clips de `spriteClips`, un `CreatureBody` de verdad, la pose
+  de `animate` al terminar una muerte empezada con `startDeath` y `CreatureBody.draw`;
+  compara dónde quedaría cada sprite de Pixi con el cadáver) después de `make sprites`
+  (sin atlas se salta en local y FALLA en CI, que arma el atlas antes de vitest): 64 casos de monstruos con clip y 24 de muñecos (los
   4 humanoides y los 2 cuerpos, todas sus capas juntas) con 0 píxeles de diferencia, y la
   gaviota a un píxel de redondeo.
 - **Atlas:** de 11.185 a 11.914 sprites (+729: 660 frames de muerte de los humanoides y 69

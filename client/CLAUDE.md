@@ -717,14 +717,17 @@ Si cambia el render a propósito, actualiza las imágenes de referencia en el mi
   `ItemMods.facing` y `body_sex` (`ItemMods.facing`/`bodySex` del cliente,
   `state/mods.ts`); `state/corpse-art.ts`: `corpseDir`, la clave `<item>@<quién>[/<e|n|w>]`
   (`mapItemKey`, `parseMapItemKey`, `keyFallDir`), `corpseSprite(quién, dir)` y los
-  respaldos (`corpseSpriteIn`: esa dirección, el sur, la familia). El canvas (`leave`,
-  `followRemains`) hace caer el cuerpo hacia donde miraba y, apenas `CorpseVeil` conoce los
+  respaldos (`corpseSpriteIn`: esa dirección, el sur, la familia). El canvas (`leave`, con
+  `followRemains` de `render/death-fall.ts`) hace caer el cuerpo hacia donde miraba y, apenas `CorpseVeil` conoce los
   restos de esa muerte (`FallHandle.laid`, de `begin` o de un `update` posterior), hacia
   donde dice su clave. `WorldState.withBodySex` solo adivina el sexo si el servidor no lo
   mandó. `hasEightFacings` no cuenta la muerte (los humanoides caen en cuatro direcciones
   y siguen girando en ocho). Hook E2E: `poses().dying[]` trae `way` y `corpseWay`.
-  `render/fall-atlas.test.ts` compara la caída con el cadáver sobre el atlas real (se
-  salta sin `make sprites`).
+  Una caída solo toma restos de la criatura que murió (`remainsWho` al canvas, `remainsAre`
+  en `CorpseVeil.claim`), los más cercanos a su muerte: nunca un cadáver arrastrado a esa
+  casilla. `render/fall-atlas.test.ts` compara la caída con el cadáver sobre el atlas real
+  manejando el `CreatureBody` y el `animate` de verdad (se salta sin `make sprites`; en CI,
+  que arma el atlas antes de vitest, falla si falta).
 - Lo demás de la muerte continua: `render/death-fall.ts` (puro, con tests): `CorpseVeil` esconde
   (`renderable`) los restos de esa muerte (`WorldState.remainsLaid`, de un `TileUpdate`)
   mientras dura la caída y nunca más; `settle` termina el paso de quien muere caminando.
