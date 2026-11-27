@@ -7,7 +7,7 @@
 //
 // The devices run on Chromium (Pixel 7, iPad Mini) and, in the "webkit-mobile" project of
 // playwright.config.ts, on WebKit (iPhone 13, iPad Mini): those titles say "(webkit)".
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { devices, expect, test } from "@playwright/test";
 import type { APIRequestContext, Locator, Page } from "@playwright/test";
@@ -1606,6 +1606,15 @@ for (const { prefix, device, browser, insets } of QA) {
       const loginForm = page.getByTestId("login-form");
       await expect(loginForm).toBeVisible();
       await measure("01-login");
+      // The corner (language, options, full screen, install) is a strip above the title on
+      // a phone: fixed to the corner it lay over the title and the form (a real 384 px one).
+      const vp = page.viewportSize();
+      if (vp && (vp.width <= 640 || vp.height <= 500)) {
+        const corner = await page.locator(".corner").boundingBox();
+        const form = await loginForm.boundingBox();
+        if (!corner || !form) throw new Error("no corner or no form");
+        expect(corner.y + corner.height).toBeLessThanOrEqual(form.y + 1);
+      }
       await loginForm.getByLabel("Email").fill(who.email);
       await loginForm.getByLabel("Contraseña").fill(who.password);
       await loginForm.getByRole("button", { name: "Entrar", exact: true }).tap();
@@ -1675,3 +1684,77 @@ for (const { prefix, device, browser, insets } of QA) {
     });
   });
 }
+
+// The numbers of docs/07 "Teléfonos" come from here: Puerto's square (a town: NPCs, torches,
+// the living world) on a Pixel 7 with the CPU four times slower (CDP), five seconds of
+// frames. It writes them down (mobile-qa-performance.json beside the screenshots) and
+// fails only if the game stops drawing: a runner without a GPU draws WebGL in software,
+// so a budget asserted here would measure the runner.
+test.describe("lote 21 QA performance on Pixel 7", () => {
+  test.use(deviceOptions("Pixel 7"));
+
+  test("qa: frame times and memory under a 4x CPU throttle are written down", async ({
+    page,
+    playwright,
+  }) => {
+    test.setTimeout(150_000);
+    const who = await newGuardian(playwright, "Perf");
+    psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${who.name}'`]);
+    await enterGame(page, who.email, who.password);
+    const cdp = await page.context().newCDPSession(page);
+    const sample = (): Promise<{
+      frames: number;
+      fps: number;
+      p50: number;
+      p95: number;
+      worst: number;
+    }> =>
+      page.evaluate(
+        () =>
+          new Promise((done) => {
+            const times: number[] = [];
+            const start = performance.now();
+            const tick = (now: number): void => {
+              times.push(now);
+              if (now - start < 5000) requestAnimationFrame(tick);
+              else {
+                const gaps = times.slice(1).map((t, i) => t - (times[i] ?? t));
+                gaps.sort((a, b) => a - b);
+                const at = (q: number): number =>
+                  Math.round(
+                    (gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * q))] ?? 0) * 10,
+                  ) / 10;
+                done({
+                  frames: gaps.length,
+                  fps: Math.round((gaps.length * 1000) / (now - start)),
+                  p50: at(0.5),
+                  p95: at(0.95),
+                  worst: at(1),
+                });
+              }
+            };
+            requestAnimationFrame(tick);
+          }),
+      );
+    const heapMb = async (): Promise<number> => {
+      await cdp.send("Performance.enable");
+      const { metrics } = await cdp.send("Performance.getMetrics");
+      const used = metrics.find((m) => m.name === "JSHeapUsedSize")?.value ?? 0;
+      return Math.round(used / 1024 / 1024);
+    };
+    const plain = await sample();
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    const throttled = await sample();
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    const report = {
+      device: "Pixel 7 (emulated)",
+      plain,
+      throttled4x: throttled,
+      heapMb: await heapMb(),
+    };
+    writeFileSync(join(shots, "mobile-qa-performance.json"), JSON.stringify(report, null, 1));
+    test.info().annotations.push({ type: "performance", description: JSON.stringify(report) });
+    await page.screenshot({ path: join(shots, "mobile-qa-performance.png") });
+    expect(throttled.frames).toBeGreaterThan(10);
+  });
+});

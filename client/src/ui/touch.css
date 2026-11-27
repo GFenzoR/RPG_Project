@@ -691,3 +691,27 @@ body.inspecting [data-testid="game-canvas"] {
   justify-content: flex-end;
   max-width: calc(100vw - 1.5rem);
 }
+/* On a phone the corner is a strip of its own above the title (the real device pass of
+   lote 21, 384 px wide: fixed to the corner, "Full screen" and "Install as an app" lay
+   over the game's name and the heading of the login, and "Options" over the email label).
+   It keeps the safe areas it had as a fixed box. */
+@media (max-width: 640px), (max-height: 500px) {
+  .corner {
+    position: static;
+    max-width: none;
+    padding: calc(0.5rem + env(safe-area-inset-top, 0px))
+      calc(0.75rem + env(safe-area-inset-right, 0px)) 0
+      calc(0.75rem + env(safe-area-inset-left, 0px));
+  }
+  .corner + .brand {
+    margin-top: 0.75rem;
+  }
+}
+@media (pointer: coarse) {
+  .corner button,
+  .corner select,
+  .corner summary {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

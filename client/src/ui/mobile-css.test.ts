@@ -76,6 +76,18 @@ describe("the mobile style sheets", () => {
     expect(block).toMatch(/left:\s*196px/);
   });
 
+  it("lay the corner of the login out as a strip above the title on a phone", () => {
+    // Fixed to the corner it covered the title and the form on a real 384 px phone.
+    const at = touchCss.indexOf("@media (max-width: 640px), (max-height: 500px) {");
+    expect(at).toBeGreaterThanOrEqual(0);
+    const block = touchCss.slice(at, touchCss.indexOf("\n}\n", at));
+    expect(block).toMatch(/\.corner \{\s*position:\s*static/);
+    expect(block).toContain("env(safe-area-inset-top, 0px)");
+    expect(touchCss).toMatch(
+      /\.corner button,\s*\.corner select,\s*\.corner summary \{\s*min-height:\s*44px/,
+    );
+  });
+
   it("make what a finger presses 44 px wide as well as tall", () => {
     const block = coarse();
     const wide = /\.game button,\s*\.game summary,\s*\.panel button \{\s*min-width:\s*44px;/;
