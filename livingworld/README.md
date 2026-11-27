@@ -868,6 +868,7 @@ El módulo pide lo demás a un `Host` que implementa el pegamento:
 | `Free(pos)` | casilla caminable (mapa y objetos), sin criatura, sin items sueltos, sin zona de protección, casa, entrada de portal ni puerta (ni abierta: se cerraría sobre el objeto, y en el umbral de una puerta con llave podría encerrar una sala) |
 | `ClearItems(pos)` | corre los items sueltos de la casilla (nunca unos restos de criatura: se pudren solos) a la casilla más cercana dentro de `travel.arrival_radius` a la que llega a pie quien está junto al objeto, caminable, sin casa, puerta, entrada de portal ni otro objeto, y con lugar; la reserva de un item (`heldGround`) va con él. Dice si la casilla quedó sin items sueltos |
 | `Occupied(pos)` | hay una criatura (jugador, monstruo o NPC) |
+| `Watched(pos)` | algún jugador tiene la casilla en su vista (la regla de los respawns del servidor, docs/02 "Respawns": la ventana entera, los pisos que se ven juntos; el staff invisible no cuenta). El módulo no sabe de jugadores ni de ventanas: solo pregunta |
 | `SetBlock(pos, move, sight)` | combina lo que bloquea el objeto con lo que bloquean los items del mapa (`world.Map.SetBlockFlags`): A*, monstruos, línea de visión y el cliente lo ven igual |
 | `TileChanged(pos)` | manda el `TileUpdate` a quien ve la casilla |
 | `Event(e)` | manda `LivingObjectEvent` a quien ve la casilla |
@@ -911,8 +912,12 @@ empujable manda `PushObject` (`Game.pushAhead`, `WorldState.pushableAhead`).
 4. **Nada se duplica.** El botín se tira una vez por rotura (golpear los restos no hace
    nada) y se crea en el suelo como el de un monstruo: un item, un lugar. Lo que se levanta
    sigue el camino normal de inventario y guardado.
-5. **Nada aparece encima de algo.** Un objeto roto reaparece, y uno empujado vuelve a su
-   lugar, solo cuando no hay una criatura en la casilla; si no, reintenta cada segundo.
+5. **Nada aparece encima de algo, ni a la vista.** Un objeto roto reaparece, y uno
+   empujado vuelve a su lugar, solo cuando ningún jugador ve la casilla (`Watched`; para
+   la roca, ni donde está ni su lugar: decisión del dueño del 2026-11-26, "si el jugador
+   está viendo un área el respawn no debiese pasar") y no hay una criatura en ella; si
+   no, reintenta cada segundo. Primero se pregunta `Watched`: una casilla vigilada
+   conserva sus items donde están. Un puzzle no se rearma con alguien mirándolo.
    Los items sueltos de la casilla (el botín que nadie levantó, una moneda tirada para
    trabarlo) se corren antes a una vecina (`ClearItems`), así que nadie traba un objeto,
    una roca ni una compuerta abierta tirando algo encima; solo unos restos de criatura,
@@ -956,7 +961,7 @@ El arte es propio (motor de sprites); no hay assets de terceros nuevos.
     by: [melee, any_attack, fire]   # melee | any_attack | tool:axe | tool:pick | fire
     becomes: weathered_crate_debris # restos caminables, o none
     debris_seconds: 20              # los restos se desvanecen (≤ respawn_seconds)
-    respawn_seconds: 240            # vuelve a estar, si la casilla está libre
+    respawn_seconds: 240            # vuelve a estar, si nadie la ve y la casilla está libre
     loot: [{ item: gold_coin, chance: 0.6, count: [2, 9] }]
     effect: wood                    # wood | stone | plant | web | clay (partículas)
     sound: woodcutting              # al romperse; hit_sound al golpearlo

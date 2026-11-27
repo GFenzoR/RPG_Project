@@ -329,15 +329,32 @@ Tibia). Diseño de la pantalla en `17-direccion-de-arte-y-ui.md` (UI-4).
 - **PvP:** la visión es la ventana entera, igual para todos. Quien juega con el mapa
   acercado (o en un teléfono, que por defecto muestra menos) tiene en la lista de batalla
   todo lo que su cliente conoce. La cámara va centrada en el jugador, sin "mirar adelante".
-- **Respawns:** un monstruo no reaparece en una casilla con algún jugador dentro de su
-  ventana clásica (8 casillas a los lados y 6 arriba y abajo, en los pisos que se ven
-  juntos; `session.watched`), no de la ventana entera. Si fuera la entera, quien caza en
-  un spawn frenaría los respawns de los spawns vecinos (están a unas 12–20 casillas) y la
-  capacidad del mundo (`07`, "Capacidad del mundo", medida con 15x11) quedaría corta. A
-  cambio, un monstruo puede aparecer dentro de lo que ve un jugador, a 9–16 casillas a
-  los lados o 7–11 arriba y abajo. Cada spawn bloqueado reintenta cada 5 s en otra casilla
-  de su radio. Es reversible en una línea (`watched` con `eachObserver`) si el dueño
-  prefiere que nada aparezca a la vista.
+- **Respawns (decisión del dueño del 2026-11-26: "si el jugador está viendo un área el
+  respawn no debiese pasar"):** nada reaparece a la vista. Un monstruo cuyo respawn ya
+  venció no aparece en una casilla que algún jugador tenga dentro de su ventana entera
+  (`Sees`: 31x21 más el margen, en los pisos que se ven juntos; `session.watched`), así
+  que un respawn no le manda `CreatureAppear` a nadie. Reglas:
+  - **Otra casilla del área.** Si hay jugadores mirando parte del área del spawn (su
+    `radius`), el monstruo aparece en una casilla del área que ninguno ve, elegida al azar
+    entre todas las libres (`unseenSpawnTile`). Si la ven entera, el respawn queda vencido
+    y reintenta cada 5 s; aparece en cuanto queda una casilla sin ver.
+  - **Sin tope.** Un lugar vigilado no repone nunca a la vista, por más que se espere. Un
+    jugador AFK parado en un spawn lo deja vacío mientras lo vea entero (los spawns tienen
+    radio 3–5 y la ventana ±16 x ±11); los spawns vecinos, a 12–20 casillas, reponen en
+    sus casillas fuera de su vista. Quien caza tiene que moverse, y al volver encuentra
+    los monstruos que vencieron mientras no miraba.
+  - **Pisos.** En la superficie los pisos se ven juntos: quien está en un techo frena el
+    spawn de abajo. Bajo tierra solo cuenta el propio piso.
+  - **Staff.** Un GM o admin que camina invisible no cuenta (inspecciona sin cambiar el
+    mundo). Un staff visible sí, y también un jugador invisible por cualquier otro medio.
+  - **Mundo vivo.** Lo mismo para los objetos que vuelven: un objeto roto no vuelve a
+    estar y una roca empujada no vuelve a su lugar mientras alguien los vea ("Mundo vivo").
+  - **Capacidad.** Antes (lote 6) el bloqueo miraba solo la ventana clásica de 15x11 para
+    no frenar a los vecinos; la casilla alternativa lo compensa en parte, pero la
+    "Eficiencia 2/3" de `07` "Capacidad del mundo" se midió con la regla vieja y queda por
+    volver a medir (`07`, "Respawns").
+  Tests: `TestRespawnWaitsForTheWholeView`, `TestRespawnTakesAnUnseenTileOfTheArea`,
+  `TestRespawnWatchedAcrossFloors`, `TestRespawnIgnoresInvisibleStaff`.
 
 ## Minimapa (pedido del dueño del 2026-11-23)
 "Un minimapa como el de Tibia: hay que explorar para verlo, muestra los puntos cardinales y,
@@ -1705,9 +1722,9 @@ números y textos son propios. Hecho en el lote 11, rama `feat/item-forge`
     monstruos comunes no cambian. El custodio pasó a 1800 de vida y 0–60 cuerpo a cuerpo
     para seguir en 30–90 s y 60–200 % de la vida a nivel 44 (71,6 s y 170 %; antes 71,2 s
     y 162 %).
-- Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre si un
-  jugador está dentro de la ventana clásica de 15x11 + 1 alrededor del punto (evita
-  aparecer en la cara; no la vista ancha: "La vista", "Respawns"): se reintenta cada 5 s.
+- Spawns en el mapa con radio, cantidad y tiempo de respawn. El respawn no ocurre en una
+  casilla que algún jugador tenga a la vista (la ventana entera de 31x21 + 1; "La vista",
+  "Respawns"): toma otra casilla del área que nadie vea o, si no hay, reintenta cada 5 s.
 - **Correa** (`balance.yaml combat.monster_leash_tiles`, 6; 0 o sin la clave = sin correa,
   el comportamiento anterior). El **área de casa** de un monstruo es el radio de su spawn
   (distancia Chebyshev al centro); su **área de correa**, ese radio más
@@ -3976,8 +3993,8 @@ para avanzar. Todo el detalle (contrato, datos, números) está en
   objeto (o usando la herramienta sobre él), al ritmo de los oficios. Una forma equivocada
   no gasta el golpe y dice `living.wrong_way`.
 - **Restos.** Roto, deja restos caminables que se desvanecen (`debris_seconds`) y vuelve a
-  estar `respawn_seconds` después de romperse, solo si no hay una criatura en su casilla
-  (si no, lo intenta cada segundo). Los items sueltos que haya ahí (el botín que nadie
+  estar `respawn_seconds` después de romperse, solo si ningún jugador ve su casilla
+  ("Respawns") y no hay una criatura en ella (si no, lo intenta cada segundo). Los items sueltos que haya ahí (el botín que nadie
   levantó, una moneda tirada para trabarlo) se corren a una casilla vecina libre; solo
   unos restos de criatura, que se pudren solos, lo hacen esperar.
 - **Botín.** Algunos tienen una tabla chica (monedas, una galleta, una poción, seda): se tira

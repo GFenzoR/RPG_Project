@@ -104,6 +104,25 @@ el punto 5:
   el trace del reintento y arréglalo, no lo dejes. Detalle en docs/08 "E2E en la CI".
 
 ## Pendientes conocidos (no bloquean)
+- **Nada reaparece a la vista (hecho, rama `feat/unseen-respawn`; el dueño el 2026-11-26: "si
+  el jugador está viendo un área el respawn no debiese pasar")**: un monstruo no reaparece
+  en una casilla que algún jugador tenga en su ventana entera (31x21 + margen); con
+  jugadores mirando parte del área del spawn aparece en una casilla del área que nadie ve,
+  y si la ven entera queda vencido y reintenta cada 5 s. Sin tope: un lugar vigilado no
+  repone. El staff invisible no cuenta. Lo mismo en el mundo vivo (`Host.Watched`): un
+  objeto roto no vuelve y una roca empujada no vuelve a su lugar mientras alguien los vea
+  (docs/02 "Respawns", `livingworld/README.md`). Pendiente:
+  - **Capacidad del mundo sin volver a medir:** quien caza en un spawn frena ahora las
+    casillas de los vecinos que ve; falta `make bots` contra un servidor real y revisar la
+    XP/h (docs/07 "Respawns"). Si el dueño nota zonas vacías con varios jugadores, las
+    perillas son `count`, `respawn_seconds` y la distancia entre spawns.
+  - **Para que el dueño lo confirme:** (1) un jugador AFK parado en medio de un spawn lo
+    deja vacío (no se puso tope de tiempo); (2) la bóveda de Thimblewick: las rocas ya no
+    vuelven a su lugar (ni el rastrillo se cierra) mientras alguien las vea, así que nadie
+    queda encerrado con el servidor andando; (3) la enredadera cortada no vuelve a crecer
+    mientras alguien mire.
+  - **El desgaste del pasto** (senderos) sigue recuperándose a la vista: es gradual y no
+    es un objeto que reaparece; no se tocó.
 - **Comida de monstruos (hecho, rama `feat/animal-food`; el dueño: "algunos monstruos deberían
   botar comida, especialmente los animales")**: seis comidas nuevas y 13 monstruos que las
   sueltan (docs/02 "Oficios", Cocina). Pendiente: sprites propios; por ahora reusan los
@@ -2123,14 +2142,10 @@ el punto 5:
     y el resto en `--ui-void`; quedó el canvas lleno hasta los bordes con casillas
     fraccionarias, centrado en el jugador (como el zoom de antes). Revisarlo en el playtest
     con la UI oscura.
-  - **Respawns y la vista ancha, para que lo confirme el dueño:** un monstruo no reaparece
-    con un jugador dentro de la ventana clásica de 15x11 + 1 (`session.watched`), como
-    antes de la vista ancha. Con la ventana entera, quien caza en un spawn frenaba los
-    respawns de los vecinos (están a 12–20) y la capacidad del mundo (docs/07) quedaba
-    optimista sin medirlo. El costo: un monstruo puede aparecer dentro de lo que se ve, a
-    9–16 casillas a los lados o 7–11 arriba y abajo. Si el dueño prefiere que nada aparezca a la vista, es una línea
-    (`watched` con `eachObserver`) más medir la capacidad (telemetría o un test
-    espacial) y ajustar respawns y distancias.
+  - **Respawns y la vista ancha (resuelto el 2026-11-26, rama `feat/unseen-respawn`):** el
+    dueño lo confirmó jugando ("si el jugador está viendo un área el respawn no debiese
+    pasar"): el bloqueo volvió a la ventana entera, ver "Nada reaparece a la vista" en
+    "Pendientes conocidos".
   - **El cliente a 31x21 sin medir:** a 1x se dibujan unas 650 casillas por capa (165 con
     15x11) más las etiquetas. Anotar FPS y draw calls a 1x y a la escala por defecto en
     1920x1080 (docs/07 "Vista ancha"); pide un navegador real con GPU.

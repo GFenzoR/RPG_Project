@@ -204,8 +204,10 @@ Coordenadas `x,y,z`. Todo el piso 7 salvo el sótano.
      pegado a él te da siempre. Con dos personajes, el que está en la línea o al lado del
      otro (el espinoso) también se quema. Las
      invocaciones y la furia del custodio están en la forja de Karvask.
-   - Los monstruos no reaparecen donde un jugador los ve: si vacías un corral, aléjate
-     (unas 8 casillas al sur de su abertura basta) hasta que vuelvan.
+   - Los monstruos no reaparecen donde un jugador los ve (la pantalla entera: 16
+     casillas a los lados, 11 arriba y abajo): si vacías un corral, aléjate hasta que
+     salga de la pantalla, entero o en parte (reaparecen en la parte que no ves), y
+     vuelve.
    - Los monstruos salen de los corrales por la abertura y te siguen unas casillas por el
      sendero, pero no más allá de su correa: si te alejas, te sueltan, recuperan toda la
      vida y vuelven caminando a su corral.
@@ -306,13 +308,15 @@ Al norte del templo, entre la costa y los corrales (tabla de arriba; reglas en
    Ctrl+click): cada golpe tira astillas verdes; a la cuarta a mano limpia (antes con un
    arma) se corta, deja tallos cortados y entras al jardín. Rompe la caja, el barril y la
    vasija (a veces dejan monedas o una poción en el suelo) y corta la telaraña. Los restos
-   se desvanecen a los 15–30 s; párate sobre la casilla de la enredadera cuando le toque
-   volver (180 s): espera a que salgas.
+   se desvanecen a los 15–30 s; la enredadera vuelve a los 180 s, pero nunca a la vista:
+   aléjate hasta que salga de la pantalla y vuelve.
 2. **Rastrillo.** Camina contra la roca musgosa de 2101,2070 desde el oeste (tecla →): se
    desliza a la placa de 2102,2070. Después la de 2105,2071 desde el sur (tecla ↑) hacia la
    placa de 2105,2070. Con las dos placas presionadas el rastrillo (2105,2068) se abre; si
    sacas una roca, se cierra (no sobre ti). Las rocas vuelven solas a su lugar 3 min después
-   del último empuje. Si te quedas adentro cuando se cierra (o tras un reinicio), el
+   del último empuje, cuando nadie las ve (ni a su lugar): mientras estés ahí el rastrillo
+   sigue abierto. Si quedas adentro con el rastrillo cerrado (saliste del juego ahí, o
+   tras un reinicio), el
    teleport de 2105,2066 te deja afuera, en 2104,2071.
 3. **Herramientas.** La roca agrietada solo se parte con un pico (usa el pico sobre ella);
    con la espada dice que así no se rompe. La barricada y el matorral ceden a golpes, al
