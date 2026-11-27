@@ -153,6 +153,18 @@ export interface AnimMeta {
   /** Hovers: bobs all the time and never hops. */
   flying?: boolean;
   /**
+   * How its body walks (assets/sprites.yaml `body`, docs/17 "Criaturas al ritmo de su paso"):
+   * it picks the default stride and the procedural gait of a sprite without walk frames.
+   * Absent: the older rule, a whole clip (or one hop) per perTile.
+   */
+  body?: BodyGait;
+  /**
+   * Sprite pixels of ground one walk cycle covers (assets/sprites.yaml `stride`); absent,
+   * the default of its `body` (DEFAULT_STRIDE). The cycle advances with the distance
+   * walked over it, so a planted foot holds its ground point at any speed.
+   */
+  stride?: number;
+  /**
    * Where it stands, per facing (tools/spritepack measureStance): [foot, x0, x1], the
    * transparent rows under the lowest pixel of its standing pose and the columns (from the
    * frame's left edge, x1 exclusive) its lowest rows span. `foot` above is the lowest reach
@@ -164,6 +176,51 @@ export interface AnimMeta {
 }
 
 export type Stance = readonly [foot: number, x0: number, x1: number];
+
+/**
+ * The kinds of body a creature walks with: two legs, four, many (spiders, crabs, beetles),
+ * a body dragged in waves, a jumper, and a flier (wings beat by time, it never plants a foot).
+ */
+export type BodyGait = "biped" | "quadruped" | "many_legs" | "slither" | "hop" | "flyer";
+export const BODY_GAITS: readonly BodyGait[] = [
+  "biped",
+  "quadruped",
+  "many_legs",
+  "slither",
+  "hop",
+  "flyer",
+];
+
+/** Sprite pixels a tile measures: the distance of one straight step. */
+export const STEP_PX = 32;
+
+/**
+ * Ground one walk cycle covers, sprite px, for a body without its own `stride`: a biped's
+ * two steps (the engine humanoid's: a tile), a walking beast's four footfalls, the quick
+ * short cycle of many legs, one wave of a dragged body, one jump. A flier has none.
+ */
+export const DEFAULT_STRIDE: Readonly<Record<BodyGait, number>> = {
+  biped: 32,
+  quadruped: 40,
+  many_legs: 16,
+  slither: 24,
+  hop: 32,
+  flyer: 0,
+};
+
+/** Whether it flies: wings by time, a bob, and never a footfall. */
+export const isFlyer = (meta: AnimMeta | undefined): boolean =>
+  meta?.flying === true || meta?.body === "flyer";
+
+/**
+ * The stride of a creature, sprite px per walk cycle: its own, else its body's default;
+ * undefined for a flier and for a sprite that declares neither (the older per-tile rule).
+ */
+export function strideOf(meta: AnimMeta | undefined): number | undefined {
+  if (!meta || isFlyer(meta)) return undefined;
+  if (meta.stride !== undefined && meta.stride > 0) return meta.stride;
+  return meta.body ? DEFAULT_STRIDE[meta.body] : undefined;
+}
 
 /**
  * The stance of `meta` facing `dir`: its own, else the south one, else any; undefined for
@@ -191,6 +248,12 @@ export const BREATH_PERIOD_MS = 1600;
 export const BREATH_SPREAD_MS = 800;
 export const FLY_PX = 2;
 export const FLY_MS = 600;
+/** A flier's wings: ms per frame of its walk clip, moving or hovering (never by distance). */
+export const WING_BEAT_MS = 90;
+/** A flier of a single image: it flattens 1 px for half of every FLAP_MS (the wing beat). */
+export const FLAP_MS = 240;
+/** The rise of a walker without walk frames between two footfalls, sprite px. */
+export const STEP_BOB_PX = 1;
 export const LUNGE_PX = 6;
 export const LUNGE_OUT_MS = 90;
 export const LUNGE_BACK_MS = 160;
@@ -474,11 +537,21 @@ export function animate(s: AnimState, meta: AnimMeta | undefined, in_: AnimInput
     }
   }
 
-  if (meta?.flying) {
+  if (isFlyer(meta)) {
     const phase = (now + s.seed) % FLY_MS;
     const lift = FLY_PX + Math.round(FLY_PX * Math.sin((2 * Math.PI * phase) / FLY_MS));
     out.y -= lift;
     out.shadow = 1 - lift / (4 * FLY_PX + 2);
+    // A single image has no wings to move: it flattens a pixel on every beat instead.
+    if (
+      Number.isNaN(s.diedAt) &&
+      !meta?.actions.walk &&
+      !meta?.actions.idle &&
+      (now + s.seed) % FLAP_MS < FLAP_MS / 2
+    ) {
+      out.scaleY *= (top - 1) / top;
+      out.scaleX *= (top + 1) / top;
+    }
   }
 
   const sinceHit = now - s.hitAt;
@@ -522,39 +595,110 @@ function walking(
   out: Pose,
 ): void {
   const walk = meta?.actions.walk;
-  if (walk && walk.frames > 0) {
+  const clip = walk !== undefined && walk.frames > 0 ? walk : undefined;
+  if (isFlyer(meta)) {
+    // Wings beat by time, flying on or hovering between two steps; no foot ever lands.
+    if (clip) {
+      out.action = "walk";
+      out.frame = wingFrame(s, clip, in_.now);
+    }
+    return;
+  }
+  const stride = strideOf(meta);
+  if (clip) {
     out.action = "walk";
     // ANI-2: by distance, so feet do not slide when the speed changes; between chained
     // steps (t undefined, within IDLE_AFTER_MS) the last frame stays (ANI-3).
     if (t !== undefined) {
-      s.walkPhase %= walk.frames;
-      const per = walkPerStep(walk, in_);
+      s.walkPhase %= clip.frames;
+      const per = walkPerStep(clip, in_, stride);
       s.walkPer = per;
       const at = s.walkPhase + t * per;
-      s.walkFrame = Math.floor(at) % walk.frames;
-      out.walk = (at % walk.frames) / walk.frames;
+      s.walkFrame = Math.floor(at) % clip.frames;
+      out.walk = (at % clip.frames) / clip.frames;
+      if (meta?.body === "slither") wave(in_, out.walk, top, out);
     }
     out.frame = s.walkFrame;
     return;
   }
-  if (meta?.flying || t === undefined) return;
-  out.walk = t;
-  // ANI-5: a hop per tile, the top leaning 1 px towards the move, a squash on landing.
-  out.y -= Math.round(HOP_PX * Math.sin(Math.PI * t));
+  if (t === undefined) return;
+  if (stride === undefined) {
+    out.walk = t;
+    // ANI-5: a hop per tile, the top leaning 1 px towards the move, a squash on landing.
+    hop(in_, t, top, out);
+    return;
+  }
+  // No walk frames, a known stride: the procedural gait of its body, by distance. The
+  // phase is kept in cycles (a clip of one frame), so it carries on across tiles.
+  s.walkPhase %= 1;
+  const per = stepPx(in_) / stride;
+  s.walkPer = per;
+  const p = (s.walkPhase + t * per) % 1;
+  out.walk = p;
+  switch (meta?.body) {
+    case "hop":
+      hop(in_, p, top, out);
+      break;
+    case "slither":
+      wave(in_, p, top, out);
+      break;
+    case "many_legs":
+      // Eight quick footfalls a cycle: the body trembles a pixel between them.
+      out.y -= Math.floor(p * 8) % 2;
+      break;
+    default:
+      // Two legs or four: the body rises between two footfalls (at 0 and at half the
+      // cycle, where the gaits of the living world plant the feet) and leans into the move.
+      out.y -= Math.round(STEP_BOB_PX * Math.abs(Math.sin(2 * Math.PI * p)));
+      if (in_.moveDx !== 0) out.skewX = -in_.moveDx * Math.asin(1 / top);
+  }
+}
+
+/** One jump from take-off (0) to landing (1): the arc, the lean and the squash at both ends. */
+function hop(in_: AnimInput, p: number, top: number, out: Pose): void {
+  out.y -= Math.round(HOP_PX * Math.sin(Math.PI * p));
   if (in_.moveDx !== 0) out.skewX = -in_.moveDx * Math.asin(1 / top);
-  if (t < 0.15 || t > 0.85) {
+  if (p < 0.15 || p > 0.85) {
     out.scaleY = (top - 1) / top;
     out.scaleX = (top + 1) / top;
   }
 }
 
 /**
- * Walk frames one step plays, by distance (ANI-2): a diagonal step, a tile across and a
- * tile down the screen, plays the length of both, hypot(perTile, perTileNS); a straight
- * one, perTileNS facing north or south (the 3/4 view, specs/humanoid) and perTile
- * otherwise (the stride is the drawn facing's).
+ * A dragged body's wave at `p` of its cycle: moving across the screen it stretches and
+ * gathers a pixel (never leaving the ground); moving up, down or diagonally it sways a
+ * pixel from side to side.
  */
-export function walkPerStep(walk: AnimActionMeta, in_: AnimInput): number {
+function wave(in_: AnimInput, p: number, top: number, out: Pose): void {
+  const w = Math.round(Math.sin(2 * Math.PI * p));
+  if (w === 0) return;
+  if (in_.moveDy === 0) {
+    out.scaleX = (top + w) / top;
+    out.scaleY = (top - w) / top;
+  } else {
+    out.x += w;
+  }
+}
+
+/** The frame of a flier's wing clip at `now` (by time, a phase per creature). */
+function wingFrame(s: AnimState, clip: AnimActionMeta, now: number): number {
+  return Math.floor(Math.max(0, now + s.seed) / WING_BEAT_MS) % clip.frames;
+}
+
+/** Sprite pixels the step being drawn covers: a tile, or its diagonal. */
+function stepPx(in_: AnimInput): number {
+  return in_.moveDx !== 0 && in_.moveDy !== 0 ? STEP_PX * Math.SQRT2 : STEP_PX;
+}
+
+/**
+ * Walk frames one step plays, by distance (ANI-2). With a `stride` (sprite px per cycle,
+ * strideOf): the clip's frames times the step's length over it, the same in every facing.
+ * Without one, the older rule: a diagonal step, a tile across and a tile down the screen,
+ * plays the length of both, hypot(perTile, perTileNS); a straight one, perTileNS facing
+ * north or south (the 3/4 view, specs/humanoid) and perTile otherwise.
+ */
+export function walkPerStep(walk: AnimActionMeta, in_: AnimInput, stride?: number): number {
+  if (stride !== undefined && stride > 0) return (walk.frames * stepPx(in_)) / stride;
   const across = walk.perTile ?? walk.frames;
   const down = walk.perTileNS ?? across;
   if (in_.moveDx !== 0 && in_.moveDy !== 0) return Math.max(1, Math.hypot(across, down));
@@ -563,11 +707,14 @@ export function walkPerStep(walk: AnimActionMeta, in_: AnimInput): number {
 
 /**
  * Walk cycles one step plays (the footprints' spacing, livingworld): a clip's frames per
- * step over its frames; without a walk clip, the one hop of a step.
+ * step over its frames; without a walk clip, the step's length over its stride, or the one
+ * hop of a step for a sprite that declares none.
  */
 export function walkCyclesPerStep(meta: AnimMeta | undefined, in_: AnimInput): number {
   const walk = meta?.actions.walk;
-  return walk && walk.frames > 0 ? walkPerStep(walk, in_) / walk.frames : 1;
+  const stride = strideOf(meta);
+  if (walk && walk.frames > 0) return walkPerStep(walk, in_, stride) / walk.frames;
+  return stride === undefined ? 1 : stepPx(in_) / stride;
 }
 
 function idle(
@@ -585,7 +732,16 @@ function idle(
     out.frame = Math.floor(((now + s.seed) % cycle) / clip.ms);
     return;
   }
-  if (meta?.actions.walk || meta?.flying) return; // a walk clip's frame 0 stands still
+  const walk = meta?.actions.walk;
+  if (isFlyer(meta)) {
+    // Hovering without an idle clip this way: the wings keep beating.
+    if (walk && walk.frames > 0) {
+      out.action = "walk";
+      out.frame = wingFrame(s, walk, now);
+    }
+    return;
+  }
+  if (walk) return; // a walk clip's frame 0 stands still
   // ANI-5 breathing: 1 px taller for BREATH_MS every 1.6-2.4 s, phase by creature.
   const period = BREATH_PERIOD_MS + (s.seed % BREATH_SPREAD_MS);
   if ((now + s.seed) % period < BREATH_MS) out.scaleY = (top + 1) / top;
