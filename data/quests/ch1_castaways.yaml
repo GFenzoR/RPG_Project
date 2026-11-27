@@ -1,0 +1,24 @@
+id: ch1_castaways
+name: quest.ch1_castaways.name
+chapter: 1
+min_level: 3
+notes: >-
+  Main line, Chapter 1, second quest of the island chain (docs/02 "Capítulo 1"): after
+  ch1_shipwreck, from puerto_priest. The survivors sleep in the temple; the tide still
+  brings the wreck's goods to the east shore, where the tide crabs (level 5) tear them
+  apart. Route: east shore -> puerto_provisioner (blankets and biscuit) -> puerto_priest.
+  The chain's quest experience alone carries a new character to level 8
+  (sim/balance_island_chain_test.go).
+steps:
+  - id: clear_crabs
+    description: quest.ch1_castaways.step_clear_crabs
+    complete_when: { kill: { monster: tide_crab, count: 6 } }
+  - id: ask_supplies
+    description: quest.ch1_castaways.step_ask_supplies
+    complete_when: { dialog_action: { npc: puerto_provisioner, node: castaways_supplies } }
+  - id: return_priest
+    description: quest.ch1_castaways.step_return_priest
+    complete_when: { dialog_action: { npc: puerto_priest, node: castaways_done } }
+rewards:
+  - { xp: 500 }
+  - { gold: 60 }

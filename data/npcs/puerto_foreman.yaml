@@ -15,13 +15,23 @@ look:
     feet: { shape: boots, tint: dark_leather }
 notes: >-
   Stands at the old mine entrance (surface). Hands over the bosun's logbook in Chapter 1
-  and gives the foreman_ore side quest.
+  gives the foreman_ore side quest, and gives ch1_bosun_trail, the fourth quest of
+  Chapter 1's island chain.
 dialog:
   start: greet
   nodes:
     greet:
       text: npc.puerto_foreman.greet
       options:
+        - text: npc.puerto_foreman.opt_bosun_trail
+          if:
+            - { quest_state: { quest: ch1_false_light, state: completed } }
+            - { quest_not_started: ch1_bosun_trail }
+            - { level_at_least: 5 }
+          goto: bosun_trail_offer
+        - text: npc.puerto_foreman.opt_bosun_trail_return
+          if: { quest_state: { quest: ch1_bosun_trail, state: in_progress, step: tell_foreman } }
+          goto: bosun_trail_done
         - text: npc.puerto_foreman.opt_ch1_bosun
           if: { quest_state: { quest: ch1_shipwreck, state: in_progress, step: talk_foreman } }
           action: { give_item: bosun_logbook }
@@ -50,6 +60,23 @@ dialog:
           goto: mine
         - text: dialog.bye
           action: close
+    bosun_trail_offer:
+      text: npc.puerto_foreman.bosun_trail_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: ch1_bosun_trail }
+          goto: bosun_trail_accepted
+        - text: dialog.decline
+          goto: greet
+    bosun_trail_accepted:
+      text: npc.puerto_foreman.bosun_trail_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    bosun_trail_done:
+      text: npc.puerto_foreman.bosun_trail_done
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
     ch1_logbook:
       text: npc.puerto_foreman.ch1_logbook
       options:

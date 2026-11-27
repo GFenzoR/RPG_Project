@@ -1,0 +1,23 @@
+id: ch1_west_wood
+name: quest.ch1_west_wood.name
+chapter: 1
+min_level: 5
+notes: >-
+  Main line, Chapter 1, fifth quest of the island chain: after ch1_bosun_trail, from
+  puerto_diver. The looters watch the beach road, so the way to their camp is the west
+  wood, whose bristleback boars (level 7) they have been hunting and enraging. Route: the
+  boars of the west wood -> the wood's north edge, over the beach of Saltwrack (the bosun
+  is seen tied by the hull) -> puerto_diver.
+steps:
+  - id: thin_boars
+    description: quest.ch1_west_wood.step_thin_boars
+    complete_when: { kill: { monster: bristleback_boar, count: 6 } }
+  - id: scout_camp
+    description: quest.ch1_west_wood.step_scout_camp
+    complete_when: { reach: { x: 3125, y: 6352, z: 7, radius: 3 } }
+  - id: tell_diver
+    description: quest.ch1_west_wood.step_tell_diver
+    complete_when: { dialog_action: { npc: puerto_diver, node: west_wood_done } }
+rewards:
+  - { xp: 900 }
+  - { gold: 150 }

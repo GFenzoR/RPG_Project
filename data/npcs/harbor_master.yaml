@@ -26,6 +26,8 @@ notes: >-
   coins (the greeting has no room for a tenth option, and neither has ch1_offer: two per
   vocation plus the refusal).
   A new vocation needs its own branch here.
+  The chapter goes on with the other islanders (ch1_castaways and the four after it,
+  docs/02 "Capítulo 1"): her ch1_coffer text sends the player to puerto_priest.
 dialog:
   start: greet
   nodes:

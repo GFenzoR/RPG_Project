@@ -1,0 +1,24 @@
+id: ch1_false_light
+name: quest.ch1_false_light.name
+chapter: 1
+min_level: 4
+notes: >-
+  Main line, Chapter 1, third quest of the island chain: after ch1_castaways, from
+  puerto_priest. A survivor saw the false light on the north spit, east of the old mine
+  (the tide crabs' rocks), not on the lantern point. Route: the spit (the ashes of a fire
+  and spilled lamp oil, told by the next step's text) -> puerto_provisioner (who bought
+  the oil: the looters of Saltwrack) -> puerto_priest. No kills: a walking quest between
+  two hunts.
+steps:
+  - id: search_spit
+    description: quest.ch1_false_light.step_search_spit
+    complete_when: { reach: { x: 3214, y: 6326, z: 7, radius: 5 } }
+  - id: ask_oil
+    description: quest.ch1_false_light.step_ask_oil
+    complete_when: { dialog_action: { npc: puerto_provisioner, node: false_light_oil } }
+  - id: tell_priest
+    description: quest.ch1_false_light.step_tell_priest
+    complete_when: { dialog_action: { npc: puerto_priest, node: false_light_done } }
+rewards:
+  - { xp: 550 }
+  - { gold: 80 }

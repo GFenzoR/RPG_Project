@@ -16,13 +16,29 @@ look:
 notes: >-
   Retired reef diver on the beach near the wreck. Lore about the sunken empire, the
   diver_locket side quest and a small shop: the casters' wands and staffs of bands 1-3
-  (T3.1, lote 11).
+  (T3.1, lote 11). Gives the last two quests of Chapter 1's island chain, ch1_west_wood
+  and ch1_wreckers (docs/02 "Capítulo 1").
 dialog:
   start: greet
   nodes:
     greet:
       text: npc.puerto_diver.greet
       options:
+        - text: npc.puerto_diver.opt_west_wood
+          if:
+            - { quest_state: { quest: ch1_bosun_trail, state: completed } }
+            - { quest_not_started: ch1_west_wood }
+            - { level_at_least: 5 }
+          goto: west_wood_offer
+        - text: npc.puerto_diver.opt_west_wood_return
+          if: { quest_state: { quest: ch1_west_wood, state: in_progress, step: tell_diver } }
+          goto: west_wood_done
+        - text: npc.puerto_diver.opt_wreckers
+          if:
+            - { quest_state: { quest: ch1_west_wood, state: completed } }
+            - { quest_not_started: ch1_wreckers }
+            - { level_at_least: 6 }
+          goto: wreckers_offer
         - text: npc.puerto_diver.opt_reef
           goto: reef
         - text: npc.puerto_diver.opt_locket
@@ -40,6 +56,35 @@ dialog:
           goto: wands
         - text: dialog.bye
           action: close
+    west_wood_offer:
+      text: npc.puerto_diver.west_wood_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: ch1_west_wood }
+          goto: west_wood_accepted
+        - text: dialog.decline
+          goto: greet
+    west_wood_accepted:
+      text: npc.puerto_diver.west_wood_accepted
+      options:
+        - { text: dialog.bye, action: close }
+    west_wood_done:
+      text: npc.puerto_diver.west_wood_done
+      options:
+        - { text: dialog.back, goto: greet }
+        - { text: dialog.bye, action: close }
+    wreckers_offer:
+      text: npc.puerto_diver.wreckers_offer
+      options:
+        - text: dialog.accept
+          action: { start_quest: ch1_wreckers }
+          goto: wreckers_accepted
+        - text: dialog.decline
+          goto: greet
+    wreckers_accepted:
+      text: npc.puerto_diver.wreckers_accepted
+      options:
+        - { text: dialog.bye, action: close }
     reef:
       text: npc.puerto_diver.reef
       options:

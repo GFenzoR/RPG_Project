@@ -5,7 +5,7 @@ min_level: 1
 notes: >-
   Main line, Chapter 1 "Náufrago". Started by harbor_master. Route: town -> wolf field
   (levels 1-4) -> old mine entrance (gloom bats, levels 3-6) -> puerto_foreman -> back to
-  harbor_master. Expected finish around level 6-7. The ending reveals that the wreck looters
+  harbor_master. Expected finish around level 5. The ending reveals that the wreck looters
   shipped a sealed coffer to the forest island: hook for Chapter 2. The vocation-specific
   reward (iron sword or its value, 150 coins) is a give_item/give_gold in harbor_master's dialog.
 steps:

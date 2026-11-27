@@ -1,0 +1,26 @@
+id: ch1_wreckers
+name: quest.ch1_wreckers.name
+chapter: 1
+min_level: 6
+notes: >-
+  Main line, Chapter 1, last quest of the island chain: after ch1_west_wood, from
+  puerto_diver. The player draws the wreck looters (level 10: only three, the chapter's
+  hardest fight) while the diver and the fishermen carry the bosun out through the wood.
+  Route: the looters of Saltwrack -> the hull of the wreck -> puerto_priest, in whose
+  temple the bosun tells who paid for the false light: the same stranger that paid for
+  the sealed coffer and sailed with it to the forest island (Chapter 2). With this quest
+  the chain's experience reaches level 8; the boat asks for level 10
+  (data/boat_routes.yaml), so the last two levels are hunted.
+steps:
+  - id: draw_looters
+    description: quest.ch1_wreckers.step_draw_looters
+    complete_when: { kill: { monster: wreck_looter, count: 3 } }
+  - id: reach_hull
+    description: quest.ch1_wreckers.step_reach_hull
+    complete_when: { reach: { x: 3120, y: 6331, z: 7, radius: 4 } }
+  - id: hear_bosun
+    description: quest.ch1_wreckers.step_hear_bosun
+    complete_when: { dialog_action: { npc: puerto_priest, node: wreckers_done } }
+rewards:
+  - { xp: 1250 }
+  - { gold: 250 }
