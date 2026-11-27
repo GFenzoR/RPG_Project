@@ -122,7 +122,10 @@ type object struct {
 	st    state
 	hp    int
 	until uint64 // tick of the next change (debris fades, respawn, reset); 0 none
-	seq   int    // its index in World.order (ties of the timers go in placement order)
+	// sightUntil is the tick a pushed object stops waiting for players to look away before
+	// it goes home (resetPushable, resetSightHold).
+	sightUntil uint64
+	seq        int // its index in World.order (ties of the timers go in placement order)
 	// plates linked to a gate.
 	plates []Pos
 }

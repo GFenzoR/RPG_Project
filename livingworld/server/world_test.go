@@ -501,6 +501,42 @@ func TestRespawnWaitsWhileWatched(t *testing.T) {
 	}
 }
 
+// A player locked in behind a boulder (it cannot push it back: a push needs the tile behind
+// it) sees it all the time. Sight holds the reset only for resetSightHold reset times from
+// the last push: then the boulder goes home in view and the way is open again.
+func TestResetDoesNotWaitForEverWhileWatched(t *testing.T) {
+	w, h := setup(t)
+	w.Place(at(5, 5), 13) // boulder: resets after 10 s
+	w.OnTick(1)
+	if w.Push(at(5, 5), 1, 0) != PushMoved {
+		t.Fatal("boulder did not move")
+	}
+	h.watched[at(6, 5)], h.watched[at(5, 5)] = true, true
+	limit := uint64(1 + resetSightHold*10*tps)
+	for tick := uint64(1); tick < limit; tick++ {
+		w.OnTick(tick)
+	}
+	if w.ItemAt(at(6, 5)) != 13 {
+		t.Fatal("the boulder went home in sight before the hold ran out")
+	}
+	for tick := limit; tick <= limit+tps; tick++ { // the retry is every second
+		w.OnTick(tick)
+	}
+	if w.ItemAt(at(5, 5)) != 13 || w.ItemAt(at(6, 5)) != 0 {
+		t.Fatal("a watched boulder never went home: whoever is behind it stays locked in")
+	}
+	// A new push starts the hold again.
+	if w.Push(at(5, 5), 1, 0) != PushMoved {
+		t.Fatal("boulder did not move again")
+	}
+	for tick := limit + tps + 1; tick <= limit+tps+15*tps; tick++ {
+		w.OnTick(tick)
+	}
+	if w.ItemAt(at(6, 5)) != 13 {
+		t.Fatal("the hold did not start again with the new push")
+	}
+}
+
 // A pushed boulder goes home only when no player sees the tile it leaves nor its home.
 func TestResetWaitsWhileWatched(t *testing.T) {
 	for _, c := range []struct {
@@ -515,14 +551,14 @@ func TestResetWaitsWhileWatched(t *testing.T) {
 				t.Fatal("boulder did not move")
 			}
 			h.watched[c.seen] = true
-			for tick := uint64(1); tick <= 1+30*tps; tick++ {
+			for tick := uint64(1); tick <= 1+18*tps; tick++ {
 				w.OnTick(tick)
 			}
 			if w.ItemAt(at(6, 5)) != 13 || w.ItemAt(at(5, 5)) != 0 {
 				t.Fatal("the boulder went home in sight")
 			}
 			delete(h.watched, c.seen)
-			w.OnTick(1 + 31*tps)
+			w.OnTick(1 + 19*tps)
 			if w.ItemAt(at(5, 5)) != 13 || w.ItemAt(at(6, 5)) != 0 {
 				t.Fatal("the boulder did not go home once nobody watched")
 			}
