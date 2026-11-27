@@ -16,6 +16,8 @@ import { openWindow } from "./windows.ts";
 import { stepToward } from "./keys.ts";
 import { databaseUrl, serverURL } from "../playwright.config.ts";
 import { characterName } from "./names.ts";
+import { formatFindings, touchAudit } from "./touch-audit.ts";
+import type { Insets, TouchFinding } from "./touch-audit.ts";
 
 const shots = join(import.meta.dirname, "screenshots", "actual");
 mkdirSync(shots, { recursive: true });
@@ -1546,3 +1548,130 @@ test.describe("lote 21 app mode on iPhone 13 (webkit)", () => {
     await expect(steps).toBeHidden();
   });
 });
+
+// ---- Lote 21 QA (docs/08 "Auditoría táctil", docs/15) -------------------------------------
+// Every screen a finger meets on the way into the game and around its HUD, measured by
+// e2e/touch-audit.ts: 44 px hit areas, no clipped label, nothing off the screen, no
+// sideways scroll and, on Chromium with the insets of a notch and a home bar, nothing under
+// them. The screens no server is needed for are measured by `make ui-preview AUDIT=1`.
+
+const QA: { prefix: string; device: string; browser: string; insets?: Insets }[] = [
+  {
+    prefix: "pixel7-portrait",
+    device: "Pixel 7",
+    browser: "chromium",
+    insets: { top: 32, right: 0, bottom: 24, left: 0 },
+  },
+  {
+    prefix: "pixel7-landscape",
+    device: "Pixel 7 landscape",
+    browser: "chromium",
+    insets: { top: 0, right: 0, bottom: 24, left: 32 },
+  },
+  { prefix: "ipad-mini", device: "iPad Mini", browser: "chromium" },
+  { prefix: "ipad-mini-landscape", device: "iPad Mini landscape", browser: "chromium" },
+  { prefix: "webkit-iphone13-portrait", device: "iPhone 13", browser: "webkit" },
+  { prefix: "webkit-iphone13-landscape", device: "iPhone 13 landscape", browser: "webkit" },
+];
+
+for (const { prefix, device, browser, insets } of QA) {
+  const title =
+    browser === "chromium" ? `lote 21 QA on ${device}` : `lote 21 QA on ${device} (${browser})`;
+  test.describe(title, () => {
+    test.use(deviceOptions(device));
+
+    test("qa: every screen on the way in and around the HUD passes the touch audit", async ({
+      page,
+      playwright,
+    }) => {
+      test.setTimeout(180_000);
+      const errors = watchErrors(page);
+      const who = await newGuardian(playwright, "Qa");
+      // In Puerto: the tutorial's panel and the priestess's dialog are screens to measure.
+      psql([databaseUrl, "-c", `UPDATE characters SET town = 'puerto' WHERE name = '${who.name}'`]);
+      const found: { screen: string; findings: TouchFinding[] }[] = [];
+      /** Measures the screen as it is now and keeps its picture. */
+      const measure = async (screen: string): Promise<void> => {
+        await page.screenshot({ path: join(shots, `mobile-qa-${prefix}-${screen}.png`) });
+        const findings = await touchAudit(page, { insets });
+        if (findings.length > 0) found.push({ screen, findings });
+      };
+
+      await page.goto("/play/?lang=es");
+      if (insets) {
+        // The override lives as long as this CDP session: it stays attached to the end.
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets });
+      }
+      const loginForm = page.getByTestId("login-form");
+      await expect(loginForm).toBeVisible();
+      await measure("01-login");
+      await loginForm.getByLabel("Email").fill(who.email);
+      await loginForm.getByLabel("Contraseña").fill(who.password);
+      await loginForm.getByRole("button", { name: "Entrar", exact: true }).tap();
+      const play = page.getByTestId("characters").getByRole("button", { name: "Jugar" });
+      await expect(play).toBeVisible();
+      await measure("02-characters");
+      await play.tap();
+      await page.waitForFunction(() => window.__rpgClient?.ready === true);
+      await expect.poll(() => mapDrawn(page)).toBe(true);
+      errors.length = 0; // the 401 of opening the page without a session cookie
+      await measure("03-hud");
+
+      // Every section of the sheet (upright) or the drawer (on its side); a tablet on its
+      // side is the desktop screen with fingers, which has no sections.
+      const tabs = page.getByTestId("panel-tabs");
+      const toggle = page.getByTestId("panel-toggle");
+      if ((await tabs.count()) > 0 || (await toggle.count()) > 0) {
+        await showTab(page, "inventory");
+        const names = await page
+          .getByTestId("panel-tabs")
+          .locator("[data-tab]")
+          .evaluateAll((els) => els.map((el) => el.getAttribute("data-tab") ?? ""));
+        expect(names.length).toBeGreaterThan(4);
+        for (const name of names) {
+          await showTab(page, name);
+          await opened(page.locator("#side-panel"));
+          await measure(`04-${name}`);
+        }
+        await closeDrawer(page);
+      }
+
+      // The menu (experience, help, language, options, full screen, leave).
+      const menu = page.locator('[data-testid="hud-menu"] > summary');
+      if (await menu.isVisible()) {
+        await menu.tap();
+        await expect(page.getByTestId("hud-menu-close")).toBeVisible();
+        await measure("05-menu");
+        await page.getByTestId("hud-menu-close").tap();
+      }
+
+      // An NPC's dialog, from a tap on her.
+      let priest: { x: number; y: number } | undefined;
+      await expect
+        .poll(async () => {
+          const list = await page.evaluate(() => window.__rpgClient?.npcs() ?? []);
+          priest = list.find((n) => n.contentId === "puerto_priest");
+          return priest !== undefined;
+        })
+        .toBe(true);
+      if (!priest) throw new Error("no priestess");
+      const hide = page.getByTestId("tutorial-hide");
+      if (await hide.isVisible()) {
+        await measure("06-tutorial");
+        await hide.tap();
+      }
+      await tapTile(page, priest.x, priest.y);
+      const dialog = page.getByTestId("dialog");
+      await expect(dialog).toBeVisible();
+      await opened(dialog);
+      await measure("07-dialog");
+
+      expect(
+        found.flatMap((f) => f.findings),
+        found.map((f) => `${f.screen}\n${formatFindings(f.findings)}`).join("\n\n"),
+      ).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+  });
+}

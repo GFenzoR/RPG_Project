@@ -2250,6 +2250,11 @@ body.picking-item .map-hint {
   font-size: 0.72rem;
   color: var(--muted);
 }
+/* The box of the invitations and the presence check: only a phone held upright lays it
+   out (mobile.css); here its children place themselves. */
+.alerts {
+  display: contents;
+}
 .invitations {
   position: absolute;
   bottom: 4.5rem;
@@ -3349,8 +3354,35 @@ body.picking-item .map-hint {
   .game summary,
   .panel button,
   .panel input,
-  .panel select {
+  .panel select,
+  .panel summary {
     min-height: 44px;
+  }
+  /* As wide as tall (lote 21, the touch audit of docs/08): an icon button, a slot of the
+     forge, a page arrow or the x of an offered item was 29 to 41 px wide. */
+  .game button,
+  .game summary,
+  .panel button {
+    min-width: 44px;
+  }
+  button.look-choice.swatch {
+    width: 44px;
+    min-width: 44px;
+  }
+  .panel summary {
+    display: flex;
+    align-items: center;
+  }
+  /* A checkbox or a radio is pressed through its label: the label is the target. */
+  .game label:has(> input[type="checkbox"]),
+  .game label:has(> input[type="radio"]),
+  .panel label:has(> input[type="checkbox"]),
+  .panel label:has(> input[type="radio"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    min-width: 44px;
   }
   .game input[type="checkbox"],
   .game input[type="radio"] {

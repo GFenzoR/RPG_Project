@@ -750,9 +750,15 @@ export function GameView(props: GameViewProps): JSX.Element {
       {props.entered && !windowed && ui.book && (
         <BookWindow key={ui.book.at} t={t} content={props.content} game={game} ui={ui} />
       )}
-      {props.entered && <PartyInvitations t={t} game={game} ui={ui} />}
-      {props.entered && <GuildInvitations t={t} game={game} ui={ui} />}
-      {props.entered && <PresenceCheck t={t} game={game} ui={ui} />}
+      {/* One box for what asks for an answer: on a phone held upright they stack under the
+          top row (mobile.css); everywhere else the box does not exist (display: contents). */}
+      {props.entered && (
+        <div class="alerts">
+          <PartyInvitations t={t} game={game} ui={ui} />
+          <GuildInvitations t={t} game={game} ui={ui} />
+          <PresenceCheck t={t} game={game} ui={ui} />
+        </div>
+      )}
       {props.entered && (
         <TutorialPanel
           t={t}

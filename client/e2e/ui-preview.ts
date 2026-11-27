@@ -7,11 +7,13 @@
 //   node --experimental-strip-types client/e2e/ui-preview.ts [--no-build] [--only <scene>[,<scene>]] [--sizes <part>[,<part>]]
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdirSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import type { BrowserContextOptions } from "@playwright/test";
+import { formatFindings, touchAudit } from "./touch-audit.ts";
+import type { Insets, TouchFinding } from "./touch-audit.ts";
 
 const client = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(client, "..");
@@ -24,6 +26,15 @@ const listArg = (flag: string): string[] | undefined =>
   args.includes(flag) ? (args[args.indexOf(flag) + 1] ?? "").split(",").filter(Boolean) : undefined;
 const only = listArg("--only");
 const sizes = listArg("--sizes");
+// --audit: the touch audit (e2e/touch-audit.ts, docs/08) of every scene at the touch sizes;
+// findings go to build/ui-preview/touch-audit.json and the script exits 1 with any.
+// --lang es|en picks the language; --notch draws each touch size with the safe-area insets
+// of a phone with a notch and a home bar (and the audit checks nothing sits under them).
+const audit = args.includes("--audit");
+const lang = listArg("--lang")?.[0] ?? "es";
+const notch = args.includes("--notch");
+// --covered: also list big enough controls that something covers in part (to hunt overlaps).
+const covered = args.includes("--covered");
 
 /**
  * Puerto's temple square (grass, walls, cobbles, a sign and the market board) in the
@@ -87,6 +98,8 @@ const TYPES: Record<string, string> = {
 interface Size {
   name: string;
   opts: BrowserContextOptions;
+  /** A touch size: the audit runs here, and --notch gives it these insets. */
+  insets?: Insets;
 }
 const desktop = (w: number, h: number): Size => ({
   name: `${w}x${h}`,
@@ -95,6 +108,11 @@ const desktop = (w: number, h: number): Size => ({
 const touch = (name: string, w: number, h: number): Size => ({
   name,
   opts: { viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true },
+  // A notch on the short side at the top (or at the left, on its side) and a home bar.
+  insets:
+    w < h
+      ? { top: 47, right: 0, bottom: 34, left: 0 }
+      : { top: 0, right: 47, bottom: 21, left: 47 },
 });
 const SIZES: Size[] = [
   desktop(1920, 1080),
@@ -350,6 +368,17 @@ const SCENES = [
   "touchstick", // the analog stick instead of the pad
   "touchleft", // left-handed and large: the buttons at the left thumb, the stick at the right
 ];
+/**
+ * What the touch audit lets through, each with its reason. Keep it short: a finding is a
+ * bug until someone decides otherwise.
+ */
+const AUDIT_ALLOW: { scene?: string; re: RegExp }[] = [
+  // The item menu of this scene is the one a mouse opens (30 px rows, at the cursor); a
+  // long press opens the 44 px one, which e2e/mobile-qa.spec.ts measures in the game.
+  { scene: "itemmenu", re: /^tap button\.touch-menu-action/ },
+];
+const findings: { scene: string; size: string; found: TouchFinding[] }[] = [];
+
 /** Scenes of the mobile HUD that are the base scene plus taps of this script. */
 const MOBILE_TAPS = [
   "mobilemenu",
@@ -422,6 +451,11 @@ try {
         });
       });
       const page = await context.newPage();
+      const insets = notch ? size.insets : undefined;
+      if (insets) {
+        const cdp = await context.newCDPSession(page);
+        await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets });
+      }
       const windows = WINDOWS[scene];
       await page.addInitScript((w) => {
         localStorage.clear();
@@ -458,7 +492,7 @@ try {
                 ? "&stick=1&mirror=1&size=large"
                 : "";
       await page.goto(
-        `http://ui.preview/preview/?scene=${sceneParam}&mapx=${mapx}&mapy=${mapy}${scales}`,
+        `http://ui.preview/preview/?scene=${sceneParam}&mapx=${mapx}&mapy=${mapy}${scales}&lang=${lang}`,
       );
       await page.waitForSelector(".game, .panel");
       await page.evaluate(() => document.fonts.ready);
@@ -593,7 +627,16 @@ try {
           await page.waitForTimeout(300);
         }
       }
-      await page.screenshot({ path: join(shots, `${scene}-${size.name}.png`) });
+      const suffix = (lang === "es" ? "" : `-${lang}`) + (notch ? "-notch" : "");
+      await page.screenshot({ path: join(shots, `${scene}-${size.name}${suffix}.png`) });
+      if (audit && size.insets) {
+        const found = await touchAudit(page, {
+          allow: AUDIT_ALLOW.filter((a) => !a.scene || a.scene === scene).map((a) => a.re),
+          insets,
+          covered,
+        });
+        if (found.length > 0) findings.push({ scene, size: size.name, found });
+      }
       await context.close();
     }
   }
@@ -601,3 +644,17 @@ try {
   await browser.close();
 }
 console.log(`ui-preview: screenshots in ${shots}`);
+if (audit) {
+  writeFileSync(
+    join(out, `touch-audit-${lang}${notch ? "-notch" : ""}.json`),
+    JSON.stringify(findings, null, 1),
+  );
+  for (const f of findings)
+    console.log(`
+${f.scene} @ ${f.size}
+${formatFindings(f.found)}`);
+  const total = findings.reduce((n, f) => n + f.found.length, 0);
+  console.log(`
+touch audit (${lang}${notch ? ", notch" : ""}): ${total} finding(s)`);
+  if (total > 0) process.exitCode = 1;
+}

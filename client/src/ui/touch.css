@@ -483,6 +483,13 @@ body.inspecting [data-testid="game-canvas"] {
   right: 60px;
   bottom: calc(var(--bar-px) + 12px);
 }
+/* With the sheet or the drawer open the buttons leave (lote 21 QA): they floated over it
+   and took the taps meant for what was under them (in English the third tab of the quest
+   log sat under "attack"). The pad stays: it is in the console, clear of the sheet. */
+.game[data-ui="mobile"][data-sheet] .touch-cluster {
+  visibility: hidden;
+  pointer-events: none;
+}
 /* Upright the compact chat log leaves the corner of the buttons free. */
 .game[data-ui="mobile"][data-flow="column"][data-cluster] .chat-glance {
   max-width: calc(100% - 2 * var(--touch-btn) - 30px);
