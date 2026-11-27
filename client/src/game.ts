@@ -1022,7 +1022,7 @@ export class Game {
    * A click on the minimap (docs/17 "Minimapa"): walks to tile x, y of the own floor, or
    * to the reachable tile nearest to it, over what the character has explored. Only
    * normal Walk steps go out (Steering.walkFar); a key, the pad, a click on the map or
-   * Escape end it. Nothing while a window of the server or the death screen has the game.
+   * Escape end it. Nothing on the death screen.
    */
   minimapWalk(x: number, y: number): void {
     if (this.world.death || !this.world.self) return;

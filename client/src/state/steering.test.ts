@@ -9,6 +9,7 @@ import {
   TileSchema,
   create,
 } from "@rpg/protocol";
+import { FAR_MAX_REACH, farScratchCells } from "./far-path.ts";
 import { describe, expect, it } from "vitest";
 import type { ClientContent } from "../content-types.ts";
 import { delta } from "./geometry.ts";
@@ -597,12 +598,61 @@ describe('Steering: a click on the minimap (docs/17 "Minimapa")', () => {
     expect(ROUTE_REFUSALS).toBe(2);
   });
 
+  /** A monster shows up at tile x, y of the world (it was not there when the way was planned). */
+  const appear = (w: WorldState, x: number, y: number): void =>
+    w.apply(
+      {
+        case: "creatureAppear",
+        value: {
+          $typeName: "game.v1.CreatureAppear",
+          creature: create(CreatureSchema, {
+            id: 77,
+            kind: CreatureKind.MONSTER,
+            name: "m",
+            pos: { x: X0 + x, y: Y0 + y, z: 7 },
+            speed: 100,
+          }),
+        },
+      },
+      0,
+    );
+
   it("looks again every FAR_REPLAN_STEPS steps: a creature seen on the way is walked round", () => {
-    const w = world(["@.........", ".........."]);
+    // Two corridors that only meet at both ends; the way planned takes the upper one.
+    const w = world(["@...........", ".##########.", "............"]);
     const s = far();
-    s.walkFar(w, { x: X0 + 9, y: Y0 }, 0);
-    const sent = run(w, s, 0, 8000);
-    expect(self(w).pos).toEqual(at(9, 0));
+    expect(s.walkFar(w, { x: X0 + 11, y: Y0 }, 0)).toEqual(at(11, 0));
+    appear(w, 9, 0); // shuts the upper corridor far ahead
+    const seen: string[] = [];
+    const sent = run(w, s, 0, 20000, () => {
+      seen.push(`${self(w).pos.x - X0},${self(w).pos.y - Y0}`);
+      return {};
+    });
+    expect(self(w).pos).toEqual(at(11, 0));
     expect(sent.length).toBeGreaterThan(FAR_REPLAN_STEPS);
+    // It turned back at the look after FAR_REPLAN_STEPS steps, not at the creature.
+    expect(seen).toContain(`${FAR_REPLAN_STEPS},0`);
+    expect(seen).not.toContain("8,0");
+    expect(seen).toContain("5,2");
+  });
+
+  it("a block far ahead with no way round does not end the walk before it gets there", () => {
+    const w = world(["@............"]);
+    const s = far();
+    expect(s.walkFar(w, { x: X0 + 12, y: Y0 }, 0)).toEqual(at(12, 0));
+    appear(w, 10, 0); // someone stands in the corridor, far ahead
+    run(w, s, 0, 20000);
+    // The steps planned stay until the next one is shut: it ends in front of the block.
+    expect(self(w).pos).toEqual(at(9, 0));
+    expect(s.farGoal).toBeUndefined();
+  });
+
+  it("a click farther than FAR_MAX_REACH tiles walks toward it, never planning that far", () => {
+    const w = world(["@......."]);
+    const s = far();
+    // The minimap dragged to another island: the way known ends at x = 20.
+    expect(s.walkFar(w, { x: X0 + 40_000_000, y: Y0 + 10_000_000 }, 0)).toEqual(at(20, 0));
+    expect(s.farGoal).toEqual(at(20, 0));
+    expect(farScratchCells()).toBeLessThanOrEqual((FAR_MAX_REACH + 81) ** 2);
   });
 });

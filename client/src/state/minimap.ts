@@ -454,6 +454,45 @@ export function isMinimapClick(x0: number, y0: number, x1: number, y1: number): 
   return Math.hypot(x1 - x0, y1 - y0) < CLICK_SLOP_PX;
 }
 
+/** A pointer held on the minimap: one gesture, a click or a drag (pressStart). */
+export interface MinimapPress {
+  id: number;
+  button: number;
+  /** Where the press began. */
+  x0: number;
+  y0: number;
+  /** Where the map was last dragged to. */
+  x: number;
+  y: number;
+  /** It left the click's slop once: a drag from then on, wherever it is released. */
+  moved: boolean;
+}
+
+export function pressStart(id: number, button: number, x: number, y: number): MinimapPress {
+  return { id, button, x0: x, y0: y, x, y, moved: false };
+}
+
+/**
+ * The press after the pointer moved to x, y, and the pixels the map is dragged by (none
+ * while it is still a click: the map does not move under it).
+ */
+export function pressMove(
+  p: MinimapPress,
+  x: number,
+  y: number,
+): { press: MinimapPress; dx: number; dy: number } {
+  if (!p.moved && isMinimapClick(p.x0, p.y0, x, y)) return { press: p, dx: 0, dy: 0 };
+  return { press: { ...p, x, y, moved: true }, dx: x - p.x, dy: y - p.y };
+}
+
+/**
+ * Whether the press released at x, y is a click that walks there: the main button, and
+ * it never dragged the map (a drag that comes back to where it began is still a drag).
+ */
+export function pressIsClick(p: MinimapPress, x: number, y: number): boolean {
+  return p.button === 0 && !p.moved && isMinimapClick(p.x0, p.y0, x, y);
+}
+
 /**
  * The tile under a pointer at clientX, clientY over the minimap whose box on the page is
  * `box` (it may be drawn at another size than the view's pixels), or undefined outside it.

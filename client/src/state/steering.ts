@@ -10,7 +10,7 @@ import type { ServerMessage } from "@rpg/protocol";
 import { delta, samePos, step } from "./geometry.ts";
 import type { Pos } from "./geometry.ts";
 import { stepChoices, towardDirection } from "./motion.ts";
-import { findFarPath } from "./far-path.ts";
+import { clampFarGoal, findFarPath } from "./far-path.ts";
 import { findPath } from "./path.ts";
 import { movesOnStep, pathPassable } from "./portals.ts";
 import type { Portals } from "./portals.ts";
@@ -164,7 +164,8 @@ export class Steering {
    * A click on the minimap (docs/17 "Minimapa"): walks to `goal` on the own floor over
    * the map the client holds and, beyond it, the explored tiles of the minimap
    * (SteerConfig.farPassable). A goal that cannot be reached (a wall, water, unexplored)
-   * becomes the reachable tile nearest to it. Every step is a predicted Walk like a
+   * becomes the reachable tile nearest to it, and one farther than FAR_MAX_REACH tiles
+   * (the minimap dragged away) the tile that far toward it. Every step is a predicted Walk like a
    * click's on the map, so a key, the pad, a click or the mouse held on the map, a
    * teleport or a second refusal end it the same way; cancelFar is Escape. Returns where
    * it leads, or undefined when there is nowhere nearer to go.
@@ -174,7 +175,7 @@ export class Steering {
     world.retryWalk();
     const s = world.self;
     if (!s) return undefined;
-    const to = { x: goal.x, y: goal.y, z: s.pos.z };
+    const to = { ...clampFarGoal(s.pos, goal), z: s.pos.z };
     const path = this.planFar(world, s.pos, to, []);
     const end = { x: path.end.x, y: path.end.y, z: s.pos.z };
     const reachable = path.steps.length > 0;
@@ -323,13 +324,11 @@ export class Steering {
       if (!this.replan(world, r, s.pos)) return undefined;
     } else if (r.far && (r.sincePlan ?? 0) >= FAR_REPLAN_STEPS) {
       // The map that came into view may say more than the minimap did (a creature, a
-      // hole): look again, without spending the route's replans. No way now: it ends.
+      // hole): look again, without spending the route's replans. No way now (someone
+      // stands in a doorway far ahead, say): the steps planned stay, like a click's route,
+      // which plans again only when its next step closes.
       const steps = this.planFar(world, s.pos, r.goal, r.avoid);
-      if (!steps.exact || steps.steps.length === 0) {
-        this.route = undefined;
-        return undefined;
-      }
-      r.steps = steps.steps;
+      if (steps.exact && steps.steps.length > 0) r.steps = steps.steps;
       r.sincePlan = 0;
     }
     const dir = r.steps[0];

@@ -20,6 +20,38 @@ const DIRS = [
 export const FAR_MARGIN = 40;
 /** Expanded-node cap of one search (the minimap at its widest shows 160x160 tiles). */
 export const FAR_MAX_NODES = 40000;
+/**
+ * How far from the start a far route leads, per axis: the minimap can be dragged any
+ * distance, and the search's memory grows with the box that holds both ends.
+ */
+export const FAR_MAX_REACH = 256;
+
+/**
+ * `to` brought within `reach` tiles of `from` on each axis, along the straight line
+ * between them (a click farther away walks toward it).
+ */
+export function clampFarGoal(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  reach = FAR_MAX_REACH,
+): { x: number; y: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const far = Math.max(Math.abs(dx), Math.abs(dy));
+  if (!(far > reach)) return { x: to.x, y: to.y };
+  const k = reach / far;
+  return { x: from.x + Math.round(dx * k), y: from.y + Math.round(dy * k) };
+}
+
+// The search's tables, kept between searches (a far route plans again every few steps)
+// and grown when a bigger box asks for it.
+let scratch:
+  { g: Float64Array; parent: Int32Array; via: Uint8Array; closed: Uint8Array } | undefined;
+
+/** How many cells the kept tables hold (tests). */
+export function farScratchCells(): number {
+  return scratch?.g.length ?? 0;
+}
 
 export interface FarPath {
   /** The steps from the start to `end`, in order (empty: nowhere nearer to go). */
@@ -35,13 +67,17 @@ export interface FarPath {
  * given), within FAR_MARGIN tiles of the box that holds both. Diagonals cost
  * `diagonalCost` and never cut a blocked corner. A goal that cannot be reached gives the
  * way to the reachable tile nearest to it (straight-line distance, then the shorter way).
+ * A goal farther than `reach` (FAR_MAX_REACH) tiles on an axis is brought that near first
+ * (clampFarGoal), so the tables never grow with the distance; the result is not exact then.
  */
 export function findFarPath(
   from: { x: number; y: number },
-  to: { x: number; y: number },
+  target: { x: number; y: number },
   passable: (x: number, y: number) => boolean,
-  opts: { diagonalCost: number; margin?: number; maxNodes?: number },
+  opts: { diagonalCost: number; margin?: number; maxNodes?: number; reach?: number },
 ): FarPath {
+  const to = clampFarGoal(from, target, opts.reach ?? FAR_MAX_REACH);
+  const clamped = to.x !== target.x || to.y !== target.y;
   const margin = opts.margin ?? FAR_MARGIN;
   const maxNodes = opts.maxNodes ?? FAR_MAX_NODES;
   const x0 = Math.min(from.x, to.x) - margin;
@@ -49,10 +85,18 @@ export function findFarPath(
   const w = Math.max(from.x, to.x) + margin - x0 + 1;
   const h = Math.max(from.y, to.y) + margin - y0 + 1;
   const size = w * h;
-  const g = new Float64Array(size).fill(Infinity);
-  const parent = new Int32Array(size).fill(-1);
-  const via = new Uint8Array(size);
-  const closed = new Uint8Array(size);
+  if (!scratch || scratch.g.length < size) {
+    scratch = {
+      g: new Float64Array(size),
+      parent: new Int32Array(size),
+      via: new Uint8Array(size),
+      closed: new Uint8Array(size),
+    };
+  }
+  const { g, parent, via, closed } = scratch;
+  g.fill(Infinity, 0, size);
+  parent.fill(-1, 0, size);
+  closed.fill(0, 0, size);
   const idx = (x: number, y: number): number => (y - y0) * w + (x - x0);
   const heur = (x: number, y: number): number => {
     const dx = Math.abs(x - to.x);
@@ -154,5 +198,9 @@ export function findFarPath(
   const steps: Direction[] = [];
   for (let n = endI; n !== start && n >= 0; n = parent[n] ?? -1) steps.push(via[n] as Direction);
   steps.reverse();
-  return { steps, end: { x: (endI % w) + x0, y: Math.floor(endI / w) + y0 }, exact: found };
+  return {
+    steps,
+    end: { x: (endI % w) + x0, y: Math.floor(endI / w) + y0 },
+    exact: found && !clamped,
+  };
 }

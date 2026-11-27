@@ -14,6 +14,9 @@ import {
   minimapPassable,
   paintTerrain,
   panBy,
+  pressIsClick,
+  pressMove,
+  pressStart,
   parseHex,
   pixelToTile,
   roughDistance,
@@ -386,6 +389,25 @@ describe("a click on the minimap", () => {
     expect(isMinimapClick(10, 10, 12, 12)).toBe(true);
     expect(isMinimapClick(10, 10, 10 + CLICK_SLOP_PX, 10)).toBe(false);
     expect(isMinimapClick(10, 10, 4, 18)).toBe(false);
+  });
+
+  it("a press released where it began walks; one that dragged the map never does", () => {
+    // down / up: a click.
+    const click = pressStart(1, 0, 50, 50);
+    expect(pressMove(click, 51, 52)).toEqual({ press: click, dx: 0, dy: 0 });
+    expect(pressIsClick(click, 51, 52)).toBe(true);
+    // down / move away / up: the map follows the pointer, nothing walks.
+    let p = pressStart(1, 0, 50, 50);
+    const away = pressMove(p, 80, 50);
+    expect(away).toMatchObject({ dx: 30, dy: 0 });
+    p = away.press;
+    expect(pressIsClick(p, 80, 50)).toBe(false);
+    // ...and back to where it began: still a drag, and the map keeps following it.
+    const back = pressMove(p, 51, 50);
+    expect(back).toMatchObject({ dx: -29, dy: 0 });
+    expect(pressIsClick(back.press, 51, 50)).toBe(false);
+    // The other buttons never walk.
+    expect(pressIsClick(pressStart(1, 2, 50, 50), 50, 50)).toBe(false);
   });
   it("routes only over explored tiles that can be walked", () => {
     const m = new MinimapState();

@@ -16,13 +16,15 @@ import {
   MINIMAP_SCALES,
   clickTile,
   hintMarker,
-  isMinimapClick,
   paintTerrain,
   panBy,
+  pressIsClick,
+  pressMove,
+  pressStart,
   tileToPixel,
   viewTiles,
 } from "../state/minimap.ts";
-import type { MinimapView } from "../state/minimap.ts";
+import type { MinimapPress, MinimapView } from "../state/minimap.ts";
 import { optionStorage } from "../state/option-storage.ts";
 import "./minimap.css";
 
@@ -176,10 +178,8 @@ export function Minimap(props: {
   // Bumped when an unanswered request may go again: the effect below looks once more.
   const [retry, setRetry] = useState(0);
   const canvas = useRef<HTMLCanvasElement>(null);
-  // x0, y0: where the press began (a press that barely moved is a click: it walks there).
-  const drag = useRef<
-    { x: number; y: number; id: number; x0: number; y0: number; button: number } | undefined
-  >(undefined);
+  // A press that never dragged the map is a click: it walks there (state/minimap.ts).
+  const drag = useRef<MinimapPress | undefined>(undefined);
   const update = (p: MinimapPrefs): void => {
     setPrefs(p);
     savePrefs(p);
@@ -273,32 +273,21 @@ export function Minimap(props: {
             class="minimap-map"
             style={{ width: `${MINIMAP_PX}px`, height: `${MINIMAP_PX}px` }}
             onPointerDown={(e) => {
-              drag.current = {
-                x: e.clientX,
-                y: e.clientY,
-                id: e.pointerId,
-                x0: e.clientX,
-                y0: e.clientY,
-                button: e.button,
-              };
+              drag.current = pressStart(e.pointerId, e.button, e.clientX, e.clientY);
               (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
             }}
             onPointerMove={(e) => {
               const d = drag.current;
               if (!d || d.id !== e.pointerId) return;
-              const dx = e.clientX - d.x;
-              const dy = e.clientY - d.y;
-              if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-              // Still a click (isMinimapClick): the map does not move under it.
-              if (isMinimapClick(d.x0, d.y0, e.clientX, e.clientY)) return;
-              drag.current = { ...d, x: e.clientX, y: e.clientY };
-              setPan((p) => panBy(p, dx, dy, prefs.scale));
+              const { press, dx, dy } = pressMove(d, e.clientX, e.clientY);
+              drag.current = press;
+              if (dx !== 0 || dy !== 0) setPan((p) => panBy(p, dx, dy, prefs.scale));
             }}
             onPointerUp={(e) => {
               const d = drag.current;
               drag.current = undefined;
-              if (!d || d.id !== e.pointerId || d.button !== 0) return;
-              if (!isMinimapClick(d.x0, d.y0, e.clientX, e.clientY)) return;
+              if (!d || d.id !== e.pointerId) return;
+              if (!pressIsClick(d, e.clientX, e.clientY)) return;
               const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
               const tile = clickTile(view, box, e.clientX, e.clientY);
               if (tile) game?.minimapWalk(tile.x, tile.y);
