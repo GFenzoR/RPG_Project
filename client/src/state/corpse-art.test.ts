@@ -13,7 +13,7 @@ describe("remainsKeys", () => {
         [1, 40, 9, 41],
         [undefined, { ...plain, remainsOf: "wolf" }, undefined, { ...plain, bodyOf: "Ana" }],
       ),
-    ).toEqual(["40@wolf", "41"]);
+    ).toEqual(["40@wolf", "41@body_male"]);
   });
 });
 

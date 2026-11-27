@@ -33,8 +33,42 @@ import { HUMANOID_LAYERS } from "../engine/specs/humanoid/index.ts";
 import type { Recipe, RecipeBook } from "../recipe.ts";
 import { renderRecipe, TILE } from "../render.ts";
 
+/** The sexes a player's body is drawn in (corpses/body_<sex>, client/src/state/corpse-art.ts). */
+export const BODY_SEXES = ["male", "female"] as const;
+
+/**
+ * The plain person a player's body is drawn as: the server sends the body's owner's name and
+ * nothing of the look, so the corpse has the sex the client saw alive (and neutral skin,
+ * hair and clothes). The same paper doll, the same last frame of the fall.
+ */
+const BODY_LOOKS: Record<(typeof BODY_SEXES)[number], Record<string, unknown>> = {
+  male: {
+    sex: "male",
+    body: "sturdy",
+    skin: "fair",
+    hair: "short",
+    hair_color: "brown",
+    beard: "none",
+  },
+  female: {
+    sex: "female",
+    body: "slender",
+    skin: "fair",
+    hair: "long",
+    hair_color: "brown",
+    beard: "none",
+  },
+};
+const BODY_WORN = {
+  torso: { shape: "tunic", tint: "linen" },
+  legs: { shape: "trousers", tint: "brown" },
+};
+
 /** The atlas path of a monster's corpse (client/src/state/corpse-art.ts corpseSprite). */
 export const corpsePath = (monster: string): string => `corpses/${monster}`;
+
+/** The atlas path of a player's body of `sex`. */
+export const bodyPath = (sex: string): string => `corpses/body_${sex}`;
 
 /** Where a standing creature's feet are, px above its tile's bottom (packages/renderer FEET_LINE). */
 export const FEET_LINE = 4;
@@ -231,6 +265,24 @@ export function corpseRecipes(root: string, coded: RecipeBook): RecipeBook {
   const read = (file: string): unknown => parseYaml(readFileSync(join(root, file), "utf8"));
   let tables: ReturnType<typeof lookTables> | undefined;
   const hints = anchors(root);
+  if (existsSync(join(root, "data", "looks.yaml"))) {
+    tables ??= lookTables(read("data/looks.yaml"));
+    const t = tables;
+    for (const sex of BODY_SEXES)
+      book[bodyPath(sex)] = recipeOf(64, 64, () =>
+        corpseOf(
+          composeFrame(
+            lookOf(BODY_LOOKS[sex]),
+            wornOf(BODY_WORN),
+            t,
+            "death",
+            "s",
+            HUMANOID_DEATH_FRAMES - 1,
+          ),
+          "bc",
+        ),
+      );
+  }
   for (const file of readdirSync(dir)
     .filter((f) => /\.ya?ml$/.test(f))
     .sort()) {

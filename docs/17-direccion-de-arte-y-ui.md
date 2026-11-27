@@ -3374,6 +3374,24 @@ Pedido del dueño: el cuerpo de cada bestia es único, el arte también, no solo
   se achica a ella (`BigIcon` con `shrink`) en vez de salirse a 1x. Si el cliente no
   tiene el nombre del monstruo (`monster.<id>.name`), los restos se llaman como su
   familia (`instanceName`), nunca con la clave cruda.
+- **El cuerpo de un jugador (rama `feat/human-corpse`; el dueño el 2026-11-26: "el cuerpo del
+  jugador debería verse como un humano")**: ya no es el sprite genérico de la familia
+  (`decor/remains_humanoid`) sino una persona tendida: `corpses/body_male` y
+  `corpses/body_female`, hechos por `corpseRecipes` con el mismo muñeco del motor (último
+  cuadro de `death` mirando al sur: la pose en la que termina la caída, así el cambio no se
+  nota) y el mismo oscurecido que los demás cadáveres. **Qué lleva del aspecto:** solo el
+  sexo, con ropa neutra (túnica de lino, pantalón pardo; piel clara, pelo castaño). El
+  servidor manda en los restos el nombre del dueño (`bodyOf`) y nada del aspecto, y no se
+  tocó el protocolo: el cliente recuerda el sexo de cada jugador que ve (`sexByName` en
+  `state/world.ts`, 256 nombres) y lo pone en `mods.bodySex` al guardar la casilla; la clave
+  de `MapView` queda `<item>@body_<sexo>` (`bodyCorpse` en `state/corpse-art.ts`). Un cuerpo
+  cuyo dueño el cliente no vio vivo (ya estaba ahí al llegar) sale de hombre. Piel, pelo y
+  ropa reales del muerto quedarían para un cambio de protocolo (el cuerpo llevaría su
+  `look`) o para componer el muñeco al vuelo en el cliente. Los humanoides de
+  `data/monsters` (con `look`) ya dejaban su cadáver con su propio aspecto. Sombra: el
+  contenedor es de la familia `remains` de `data/livingworld/shadows.yaml` (`length: 0.4`),
+  que ya cubre el cuerpo. No tiene etapas de descomposición: los restos no las tienen
+  (desaparecen al vencer, docs/02 "Muerte").
 - **Revisar:** `node --experimental-strip-types tools/spritegen/src/cli.ts corpses
   [--out FILE.png] [--scale N]`: cada monstruo de pie a la izquierda y su cadáver a la
   derecha, sobre la grilla de casillas, como los pone el cliente. Revisado el 2026-11-24

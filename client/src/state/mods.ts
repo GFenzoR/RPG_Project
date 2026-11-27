@@ -10,6 +10,7 @@ export function modsOf(s: { mods?: ItemMods | undefined } | undefined): ItemMods
   const out: ItemMods = { attribute: m.attribute, value: m.value, refine: m.refine };
   if (m.remainsOf) out.remainsOf = m.remainsOf;
   if (m.bodyOf) out.bodyOf = m.bodyOf;
+  if (m.bodySex) out.bodySex = m.bodySex;
   if (m.attribute === "" && m.value === 0 && m.refine === 0 && !out.remainsOf && !out.bodyOf)
     return undefined;
   return out;

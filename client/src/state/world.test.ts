@@ -934,6 +934,47 @@ describe('minimap colours (docs/02 "Minimapa")', () => {
     expect(w.tile(101, 201, 7)).toBeUndefined();
     coloured(w);
   });
+  it("a player's body is keyed by the sex the player was seen with, a man's when unseen", () => {
+    const w = entered();
+    const seen = (id: number, name: string, sex: string): void =>
+      w.apply(
+        {
+          case: "creatureAppear",
+          value: {
+            creature: create(CreatureSchema, {
+              id,
+              kind: CreatureKind.PLAYER,
+              name,
+              pos: { x: 102, y: 200, z: 7 },
+              look: { sex, body: "sturdy" },
+            }),
+          } as never,
+        },
+        0,
+      );
+    const body = (at: number, name: string): void =>
+      w.apply(
+        {
+          case: "tileUpdate",
+          value: {
+            $typeName: "game.v1.TileUpdate",
+            pos: { $typeName: "game.v1.Position", x: 101, y: 201, z: 7 },
+            tile: create(TileSchema, {
+              items: [create(ItemStackSchema, { itemId: 40, mods: { bodyOf: name } })],
+            }),
+          },
+        },
+        at,
+      );
+    seen(21, "Mira", "female");
+    seen(22, "Brand", "male");
+    body(100, "Mira");
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@body_female");
+    body(200, "Brand");
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@body_male");
+    body(300, "Stranger");
+    expect(w.remainsLaid.at(-1)?.key).toBe("40@body_male");
+  });
   it("a tile update in view changes the remembered colour (a door, a felled tree)", () => {
     const w = entered();
     w.apply(

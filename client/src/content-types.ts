@@ -21,6 +21,11 @@ export interface ItemMods {
   remainsOf?: string;
   /** A player's body: the player's name ("body of <player>"). */
   bodyOf?: string;
+  /**
+   * The sex of that player as the client saw them alive (state/world.ts): not on the wire,
+   * which carries the name alone. What the body is drawn as (state/corpse-art.ts).
+   */
+  bodySex?: string;
 }
 
 export interface ItemDef {

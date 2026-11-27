@@ -20,7 +20,7 @@ import { composite } from "./draw.ts";
 import type { Recipe, RecipeBook } from "./recipe.ts";
 import { MAX_ORB_FRAMES, ORB_ELEMENTS } from "./recipes/effects.ts";
 import { RECIPES, recipesAt } from "./recipes/index.ts";
-import { corpsePath, monsterIds } from "./recipes/corpses.ts";
+import { BODY_SEXES, bodyPath, corpsePath, monsterIds } from "./recipes/corpses.ts";
 import { renderRecipe, TILE } from "./render.ts";
 import { swayScene, swaySheet, windProblems, windSprites, writeWindSprites } from "./wind.ts";
 import type { SwayScene } from "./wind.ts";
@@ -221,7 +221,7 @@ export function checkPaths(root: string): string[] {
   const used = new Set(collectSpriteRefs(root).map((r) => r.sprite));
   const book = recipesAt(root);
   // A monster's corpse (recipes/corpses.ts), which the client finds by the monster's id.
-  const corpses = new Set(monsterIds(root).map(corpsePath));
+  const corpses = new Set([...monsterIds(root).map(corpsePath), ...BODY_SEXES.map(bodyPath)]);
   const problems: string[] = [];
   for (const id of monsterIds(root))
     if (!book[corpsePath(id)])

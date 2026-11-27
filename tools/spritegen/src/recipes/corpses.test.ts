@@ -7,7 +7,16 @@ import { tippedRest, createImage } from "@rpg/spritepack";
 import type { Image } from "@rpg/spritepack";
 import { describe, expect, it } from "vitest";
 import { checkPaths, RECIPES, recipesAt, render, spriteFile } from "../index.ts";
-import { CORPSE_LIGHT, corpseOf, corpsePath, FEET_LINE, monsterIds, tipOver } from "./corpses.ts";
+import {
+  BODY_SEXES,
+  bodyPath,
+  CORPSE_LIGHT,
+  corpseOf,
+  corpsePath,
+  FEET_LINE,
+  monsterIds,
+  tipOver,
+} from "./corpses.ts";
 
 const root = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 
@@ -46,6 +55,26 @@ function rootWith(monsters: Record<string, string>): string {
     writeFileSync(join(dir, "data", "monsters", `${id}.yaml`), `id: ${id}\n${rest}`);
   return dir;
 }
+
+describe("a player's body", () => {
+  it("is a human lying down, one per sex, committed, with its feet where a person's stand", () => {
+    expect(BODY_SEXES).toEqual(["male", "female"]);
+    const imgs = BODY_SEXES.map((sex) => {
+      expect(RECIPES[bodyPath(sex)], sex).toBeDefined();
+      expect(existsSync(spriteFile(root, bodyPath(sex))), `${sex}: run make spritegen`).toBe(true);
+      const img = render(bodyPath(sex));
+      expect([img.width, img.height]).toEqual([64, 64]);
+      expect(lowest(img)).toBe(img.height - 1 - FEET_LINE);
+      return img;
+    });
+    // Two bodies, not one: the woman's has her own shape and hair.
+    expect(Buffer.from(imgs[0]?.data ?? []).equals(Buffer.from(imgs[1]?.data ?? []))).toBe(false);
+  });
+
+  it("is a corpse the checker accepts (no monster of its own)", () => {
+    expect(checkPaths(root).filter((p) => p.startsWith("corpses/body_"))).toEqual([]);
+  });
+});
 
 describe("monster corpses", () => {
   const book = Object.fromEntries(

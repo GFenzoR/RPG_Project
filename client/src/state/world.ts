@@ -259,6 +259,9 @@ export interface DepartureState {
  * key). The canvas hides them while the body that left them still falls (docs/17 "Muerte
  * continua").
  */
+/** How many players' sexes are remembered for their bodies (the oldest seen goes first). */
+const SEX_MEMORY = 256;
+
 export interface RemainsLaid {
   x: number;
   y: number;
@@ -949,6 +952,7 @@ export class WorldState implements TileSource {
         const c = this.creatures.get(msg.value.id);
         if (c) {
           c.look = lookView(msg.value.look);
+          this.noteSex(c.name, c.kind, c.look);
           c.equipment = equipmentView(msg.value.equipment);
           c.lookRev = ++this.lookSeq;
         }
@@ -1311,6 +1315,24 @@ export class WorldState implements TileSource {
     this.trailWear.applyArea(a.x, a.y, a.width, a.height, a.wear);
   }
 
+  /** Who is seen to be a woman or a man, by name: what a body is drawn as (bodySex). */
+  private readonly sexByName = new Map<string, string>();
+
+  /** The mods with the sex of the player a body is of, if the client saw them (bodySex). */
+  private withBodySex(m: ItemMods | undefined): ItemMods | undefined {
+    const sex = m?.bodyOf ? this.sexByName.get(m.bodyOf) : undefined;
+    return m && sex ? { ...m, bodySex: sex } : m;
+  }
+
+  /** Remembers the sex of a player in view (a body is drawn as its owner was). */
+  private noteSex(name: string, kind: CreatureKind, look: Look | undefined): void {
+    if (kind !== CreatureKind.PLAYER || !name || !look) return;
+    this.sexByName.delete(name);
+    this.sexByName.set(name, look.sex);
+    if (this.sexByName.size > SEX_MEMORY)
+      this.sexByName.delete(this.sexByName.keys().next().value as string);
+  }
+
   private setTile(x: number, y: number, z: number, stack: readonly ItemStack[] | undefined): void {
     const items = stack?.map((s) => s.itemId);
     // The minimap remembers the tile's colour past prune() and the next FullMapView.
@@ -1332,7 +1354,9 @@ export class WorldState implements TileSource {
     const i = (y % CHUNK_TILES) * CHUNK_TILES + (x % CHUNK_TILES);
     c.tiles[i] = items;
     c.counts[i] = stack?.some((s) => s.count > 0) ? stack.map((s) => s.count) : undefined;
-    c.mods[i] = stack?.some((s) => modsOf(s)) ? stack.map(modsOf) : undefined;
+    c.mods[i] = stack?.some((s) => modsOf(s))
+      ? stack.map((s) => this.withBodySex(modsOf(s)))
+      : undefined;
     c.data = undefined;
   }
 
@@ -1389,6 +1413,7 @@ export class WorldState implements TileSource {
       worn: wornViewKeep(prev?.worn, c.worn),
       lookRev: prev ? prev.lookRev : ++this.lookSeq,
     });
+    this.noteSex(c.name, c.kind, this.creatures.get(c.id)?.look);
     // Built again only when what the figure is drawn from changed: a FullMapView or a
     // MapSlice (a teleport, another floor) sends every creature in view again.
     const next = this.creatures.get(c.id);

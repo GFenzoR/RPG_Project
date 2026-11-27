@@ -11,9 +11,21 @@ import type { ItemMods } from "../content-types.ts";
 /** The atlas sprite of a monster's corpse. */
 export const corpseSprite = (monster: string): string => `corpses/${monster}`;
 
-/** The MapView key of a tile item: its number, or "<number>@<monster>" for remains. */
+/**
+ * The corpse a player's body is drawn as: "body_<sex>" (tools/spritegen corpses.ts), a person
+ * lying in the last pose of the fall, in plain clothes. A body whose owner was never seen
+ * (it lay there before the client came) is a man's.
+ */
+export const bodyCorpse = (sex: string | undefined): string =>
+  sex === "female" ? "body_female" : "body_male";
+
+/**
+ * The MapView key of a tile item: its number, "<number>@<monster>" for the remains of a
+ * monster and "<number>@body_<sex>" for the body of a player.
+ */
 export function mapItemKey(itemId: number, mods: ItemMods | undefined): string {
-  return mods?.remainsOf ? `${itemId}@${mods.remainsOf}` : String(itemId);
+  if (mods?.remainsOf) return `${itemId}@${mods.remainsOf}`;
+  return mods?.bodyOf ? `${itemId}@${bodyCorpse(mods.bodySex)}` : String(itemId);
 }
 
 /**

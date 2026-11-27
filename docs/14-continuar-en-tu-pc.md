@@ -125,6 +125,13 @@ el punto 5:
     de zancada larga (el sabueso de ceniza, 56 px; el guardián, 52).
   - **Norte y sur.** La misma zancada vale en todas las direcciones; de frente y de
     espaldas los frames de Gemini apenas muestran el paso, así que ahí se nota menos.
+- **Cuerpo humano del jugador (hecho, rama `feat/human-corpse`; el dueño el 2026-11-26)**:
+  el cuerpo de un jugador es una persona tendida (`corpses/body_male|female`, docs/17 "El
+  cuerpo de un jugador"), apilada sobre la caída continua. Solo cliente y spritegen; hay
+  que correr `make sprites`. Pendiente: mirar en `make e2e` la muerte de un jugador (el
+  cuerpo debe seguir la pose de la caída). Limitación conocida: lleva el sexo, no la
+  piel, el pelo ni la ropa del muerto (el servidor solo manda su nombre); un cuerpo cuyo
+  dueño no se vio vivo sale de hombre. Arreglo completo: que `ItemMods` lleve el `look`.
 - **Muerte continua (hecho, rama `feat/death-anim`; el dueño el 2026-11-25/27: "muere hacia
   cierta dirección y aparece su cuerpo en la otra; debiese ser una animación continua")**:
   la caída termina en la pose y sobre los píxeles del cadáver, que queda escondido hasta
